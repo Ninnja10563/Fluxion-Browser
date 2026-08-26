@@ -32,6 +32,7 @@
   style.id = "fluxion-settings-style";
   style.textContent = `
     #fluxion-settings[hidden] { display: none !important; }
+    :root[data-fluxion-settings-visible] #identity-icon-box { display: none !important; }
     #fluxion-settings {
       min-width: 0; flex: 1; display: grid; grid-template-columns: 184px minmax(420px, 720px) 1fr;
       color: var(--fluxion-ink); background: var(--fluxion-bg-raised); overflow: auto;
@@ -158,7 +159,10 @@
   }));
   const homepage = create("input");
   homepage.type = "text";
-  homepage.value = pref.string("browser.startup.homepage", "about:newtab");
+  const savedHomepage = pref.string("browser.startup.homepage", "about:newtab");
+  homepage.value = savedHomepage === pref.string("fluxion.newtab.url", "")
+    ? "about:newtab"
+    : savedHomepage;
   homepage.spellcheck = false;
   homepage.addEventListener("change", () => {
     homepage.value = FluxionSettings.homepage(homepage.value);
@@ -305,6 +309,7 @@
     const visible = isSettingsTab();
     root.hidden = !visible;
     contentDeck.hidden = visible;
+    document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
       const hash = gBrowser.selectedBrowser.currentURI.spec.split("#")[1] || "general";
       showSection(hash === "privacy" ? "privacy" : activeSection);
@@ -321,6 +326,7 @@
     gBrowser.tabContainer.removeEventListener("TabSelect", syncVisibility);
     root.remove();
     style.remove();
+    document.documentElement.removeAttribute("data-fluxion-settings-visible");
   }, { once: true });
   showSection("general");
   syncVisibility();
