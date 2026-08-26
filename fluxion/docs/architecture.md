@@ -2,15 +2,18 @@
 
 ## Decision
 
-Fluxion uses a **Firefox ESR runtime overlay with privileged browser chrome**.
+Fluxion uses a **Firefox/Gecko runtime overlay with privileged browser chrome**.
 The launcher starts a dedicated Firefox profile and asks Firefox's supported
 enterprise autoconfiguration hook to load Fluxion's chrome script into browser
 windows. Web content remains in normal Gecko content processes. Fluxion never
 embeds a webview and does not expose privileged APIs to page JavaScript.
 
-This was selected after inspecting the initial repository (which contained no
-browser source) and the build host (ARM64 Debian with Firefox ESR 140 available
-from its security repository). A full mozilla-central checkout and build is a
+Linux development targets Firefox ESR 140, while macOS preview packaging uses
+Mozilla's current universal Gecko runtime so Apple Silicon and Intel slices can
+be validated together. This was selected after inspecting the initial
+repository (which contained no browser source) and the build host (ARM64 Debian
+with Firefox ESR 140 available from its security repository). A full
+mozilla-central checkout and build is a
 valid long-term distribution path, but it is a poor first milestone: it adds a
 very large source/build dependency before proving Fluxion's interaction model.
 The overlay produces a real usable Gecko browser immediately and its chrome

@@ -9,7 +9,7 @@ fi
 fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 app="$fluxion_root/../.runtime/Fluxion.app"
 output_dir="$fluxion_root/../dist"
-version="0.1.0-preview.1"
+version="0.3.0-preview.1"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

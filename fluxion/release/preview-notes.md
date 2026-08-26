@@ -5,10 +5,20 @@ sidebar, workspaces, navigation, Firefox's mature browser services, a separate
 Fluxion profile, and a native universal launcher with Apple Silicon support.
 
 This is an early development preview, not a stable release. Fluxion is still a
-Firefox-derived runtime overlay, and some Firefox surfaces and branding remain
-while the independent product interface is built out.
+Firefox-derived runtime overlay, and some secondary Gecko preference surfaces
+retain upstream terminology while the independent product interface is built
+out.
 
-Version 0.2 introduces Fluxion's first independent browser-chrome milestone:
+Version 0.3 makes Fluxion workspaces fully persistent and user-manageable:
+
+- create and name workspaces directly from the Flow strip;
+- rename and reorder workspaces through concise native context menus;
+- choose one of five geometric symbols and five restrained accents;
+- drag tabs directly onto workspace destinations;
+- delete workspaces without losing tabs—open pages move to an adjacent space;
+- search for the `New workspace` action from the command palette.
+
+It also includes the version 0.2 independent browser-chrome foundation:
 
 - a restrained navigation skin that retains Gecko's security-aware URL field;
 - a flatter, denser Flow sidebar with a 44px compact rail;
@@ -16,7 +26,9 @@ Version 0.2 introduces Fluxion's first independent browser-chrome milestone:
 - `Cmd/Ctrl+K` search across commands, tabs, workspaces, history, and bookmarks;
 - `Cmd/Ctrl+Shift+A` high-volume open-tab search;
 - a blank new-tab surface with immediate address-field focus;
-- removal of inherited Firefox application icon and permission-dialog branding.
+- native macOS traffic-light controls and a real HTTPS rendering release gate;
+- removal of inherited Firefox startup icon, onboarding, and visible app
+  branding.
 
 ## Install
 
