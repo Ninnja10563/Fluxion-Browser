@@ -13,4 +13,8 @@ cd fluxion
 ./bin/fluxion
 ```
 
+On an Apple Silicon Mac, Fluxion automatically finds `/Applications/Firefox.app`
+and builds a native local `Fluxion.app`. See the project README for the one-time
+Apple Command Line Tools prerequisite.
+
 See the project README for prerequisites and development commands.

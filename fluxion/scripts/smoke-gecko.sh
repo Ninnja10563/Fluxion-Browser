@@ -14,7 +14,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-if [[ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
+if [[ "$(uname -s)" != "Darwin" && -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]]; then
   printf '%s\n' \
     'No graphical display is available.' \
     'Run this check in a desktop session or under Xvfb; unit checks remain headless.' >&2

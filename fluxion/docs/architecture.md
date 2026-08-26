@@ -42,6 +42,7 @@ security and compatibility while producing no product differentiation.
 ```text
 bin/fluxion
   -> isolated Firefox profile
+  -> Linux runtime symlink overlay OR macOS Fluxion.app copy
   -> runtime/fluxion.cfg (privileged startup boundary)
      -> chrome/core/*.js (typed-by-contract state and URL helpers)
      -> chrome/fluxion-chrome.js
@@ -101,10 +102,17 @@ Firefox fork. Security updates can therefore follow the ESR cadence quickly.
 
 Development validation currently runs on Linux ARM64 because that is the
 available host. The chrome layer uses platform-neutral Firefox UI APIs and
-system fonts. macOS is the release priority: packaging will use an application
-bundle, native menu registration, Command-key labels, correct traffic-light
-spacing, and notarization. Windows and Linux use the same product layer with
-platform packaging and title-bar adapters.
+system fonts. The macOS development builder now produces a native
+`Fluxion.app`: it copies (and never edits) the installed Firefox application,
+bundles Fluxion's product layer under `Contents/Resources`, compiles a small
+Finder-safe launcher for the current architecture, and ad-hoc signs the local
+bundle. On Apple Silicon it rejects a Firefox build without an `arm64` slice,
+so M-series Macs do not silently fall back to Rosetta.
+
+A public macOS release still requires an Apple Developer ID, hardened-runtime
+signing, notarization, update metadata, and final traffic-light/menu polish.
+Windows and Linux use the same product layer with platform packaging and
+title-bar adapters.
 
 ## Future local search boundary
 

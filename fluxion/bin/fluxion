@@ -10,6 +10,22 @@ find_firefox() {
     return
   fi
 
+  if [[ "$(uname -s)" == "Darwin" ]]; then
+    local mac_candidate
+    for mac_candidate in \
+      "/Applications/Firefox.app/Contents/MacOS/firefox" \
+      "${HOME:-}/Applications/Firefox.app/Contents/MacOS/firefox" \
+      "/Applications/Firefox Developer Edition.app/Contents/MacOS/firefox" \
+      "${HOME:-}/Applications/Firefox Developer Edition.app/Contents/MacOS/firefox" \
+      "/Applications/Firefox Nightly.app/Contents/MacOS/firefox"; do
+      if [[ -x "$mac_candidate" ]]; then
+        printf '%s\n' "$mac_candidate"
+        return
+      fi
+    done
+    return 1
+  fi
+
   local candidate
   for candidate in firefox-esr firefox; do
     if command -v "$candidate" >/dev/null 2>&1; then
@@ -31,7 +47,7 @@ if [[ -z "$upstream_binary" || ! -x "$upstream_binary" ]]; then
   cat >&2 <<'MESSAGE'
 Fluxion needs a Firefox/Gecko runtime.
 
-Install Firefox ESR with your system package manager, or run:
+Install Mozilla Firefox, or run:
   FLUXION_FIREFOX_BIN=/absolute/path/to/firefox ./bin/fluxion
 
 Chromium-based runtimes are intentionally unsupported.
@@ -39,10 +55,16 @@ MESSAGE
   exit 69
 fi
 
-runtime_binary="$($fluxion_root/scripts/prepare-runtime.sh "$upstream_binary")"
-profile="${FLUXION_PROFILE:-$fluxion_root/../.profiles/default}"
+runtime_binary="$("$fluxion_root/scripts/prepare-runtime.sh" "$upstream_binary")"
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  default_profile="${HOME}/Library/Application Support/Fluxion/Profiles/default"
+else
+  default_profile="$fluxion_root/../.profiles/default"
+fi
+profile="${FLUXION_PROFILE:-$default_profile}"
 mkdir -p "$profile"
 chmod 700 "$profile"
+export FLUXION_PROFILE="$profile"
 
 if [[ "${1:-}" == "--version" ]]; then
   printf 'Fluxion 0.1.0\n'
@@ -53,6 +75,10 @@ fi
 # affecting normal packaged Firefox installations.
 if [[ -n "${FLUXION_LIBRARY_PATH:-}" ]]; then
   export LD_LIBRARY_PATH="$FLUXION_LIBRARY_PATH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  exec "$runtime_binary" "$@"
 fi
 
 exec "$runtime_binary" \

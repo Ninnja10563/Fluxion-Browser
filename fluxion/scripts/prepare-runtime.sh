@@ -9,6 +9,10 @@ fi
 fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 requested="$1"
 
+if [[ "$(uname -s)" == "Darwin" ]]; then
+  exec "$fluxion_root/scripts/prepare-macos-runtime.sh" "$requested"
+fi
+
 # Resolve distro wrapper symlinks but retain actual scripts where applicable.
 resolved="$(readlink -f -- "$requested")"
 if [[ ! -x "$resolved" ]]; then
