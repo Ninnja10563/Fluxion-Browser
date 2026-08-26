@@ -8,6 +8,8 @@
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
+  const searchService = Cc["@mozilla.org/browser/search-service;1"]
+    .getService(Ci.nsISearchService);
 
   const create = (tag, className, text) => {
     const element = document.createElementNS(HTML, tag);
@@ -169,9 +171,9 @@
   searchEngine.appendChild(create("option", "", "Loading search engines…"));
   searchEngine.disabled = true;
   row(general, "Default search engine", "Used for text entered in the address field.", searchEngine);
-  Promise.resolve(Services.search.init()).then(async () => {
-    const engines = await Services.search.getVisibleEngines();
-    const current = Services.search.defaultEngine;
+  Promise.resolve(searchService.init()).then(async () => {
+    const engines = await searchService.getVisibleEngines();
+    const current = searchService.defaultEngine;
     searchEngine.replaceChildren();
     for (const engine of engines) {
       const option = create("option", "", engine.name);
@@ -183,7 +185,7 @@
     searchEngine.addEventListener("change", async () => {
       const engine = engines.find(item => (item.id || item.name) === searchEngine.value);
       if (!engine) return;
-      await Services.search.setDefault(engine, "settings");
+      await searchService.setDefault(engine, Ci.nsISearchService.CHANGE_REASON_USER);
       setNote(`Default search engine changed to ${engine.name}.`, "general");
     });
   }).catch(error => {
