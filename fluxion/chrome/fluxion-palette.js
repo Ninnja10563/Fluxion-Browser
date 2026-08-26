@@ -20,6 +20,7 @@
   let mode = "all";
   let splitSource = null;
   let placesTimer = 0;
+  let memoryRequest = 0;
 
   const create = (tag, className) => {
     const element = document.createElementNS(HTML, tag);
@@ -59,6 +60,12 @@
       color: var(--fluxion-ink); background: transparent; font: inherit; font-size: 14px;
     }
     #fluxion-palette-input::placeholder { color: var(--fluxion-muted); opacity: .8; }
+    #fluxion-palette-status {
+      min-height: 25px; display: flex; align-items: center; padding: 4px 12px;
+      border-bottom: 1px solid var(--fluxion-line); color: var(--fluxion-muted);
+      font-size: 10.5px; letter-spacing: .01em;
+    }
+    #fluxion-palette-status[hidden] { display: none !important; }
     #fluxion-palette-results { overflow-y: auto; padding: 4px; }
     .fluxion-palette-result {
       width: 100%; min-height: 38px; display: grid;
@@ -121,8 +128,11 @@
   const results = create("div");
   results.id = "fluxion-palette-results";
   results.setAttribute("role", "listbox");
+  const status = create("div");
+  status.id = "fluxion-palette-status";
+  status.hidden = true;
   inputRow.append(glyph, input);
-  palette.append(inputRow, results);
+  palette.append(inputRow, status, results);
   layer.appendChild(palette);
   document.body.appendChild(layer);
 
@@ -208,6 +218,46 @@
       },
     ];
     const selectedTab = gBrowser.selectedTab;
+    const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
+    if (!privateWindow && window.FluxionMemory.enabled()) {
+      items.splice(9, 0,
+        {
+          label: "Search Browser Memory", detail: "Rediscover pages with local hybrid search", kind: "Memory",
+          boost: 12, keywords: ["semantic history remember visited page"], run: () => open("memory"),
+        },
+        {
+          label: "Exclude this site from Browser Memory", detail: "Remove this domain from local semantic results", kind: "Privacy",
+          keywords: ["semantic history domain private"], run: async () => {
+            const url = gBrowser.selectedBrowser?.currentURI?.spec;
+            if (!url || !/^https?:/i.test(url)) return;
+            const domain = new URL(url).hostname;
+            if (Services.prompt.confirm(window, "Exclude from Browser Memory", `Exclude ${domain} and its subdomains from Browser Memory?`)) {
+              await window.FluxionMemory.excludeDomain(domain);
+            }
+          },
+        },
+        {
+          label: "Clear Browser Memory", detail: "Delete local vectors and turn memory off", kind: "Privacy",
+          keywords: ["semantic history erase delete disable"], run: async () => {
+            if (Services.prompt.confirm(window, "Clear Browser Memory", "Delete Fluxion’s local semantic index and turn Browser Memory off? Browsing history itself will not be deleted.")) {
+              await window.FluxionMemory.clearAndDisable();
+            }
+          },
+        },
+      );
+    } else if (!privateWindow) {
+      items.splice(9, 0, {
+        label: "Enable Browser Memory", detail: "Build a private semantic index on this Mac", kind: "Memory",
+        keywords: ["semantic history local embeddings remember"], run: async () => {
+          const accepted = Services.prompt.confirm(
+            window,
+            "Enable Browser Memory",
+            "Fluxion will download a local embedding model and build an index from non-private browsing history. Page addresses and history are not sent to an AI provider. Continue?",
+          );
+          if (accepted && await window.FluxionMemory.enable()) open("memory");
+        },
+      });
+    }
     if (selectedTab?.splitview) {
       items.splice(9, 0,
         {
@@ -345,11 +395,8 @@
     const item = visibleItems[index];
     if (!item) return;
     close();
-    try {
-      item.run();
-    } catch (error) {
-      Cu.reportError(error);
-    }
+    try { Promise.resolve(item.run()).catch(Cu.reportError); }
+    catch (error) { Cu.reportError(error); }
   }
 
   function setActive(index) {
@@ -368,16 +415,13 @@
     });
   }
 
-  function render(includePlaces = false) {
-    const search = input.value.trim();
-    visibleItems = FluxionSearch.rankSearchItems(search, allItems(search, includePlaces), 12);
+  function renderItems(items, emptyText) {
+    visibleItems = items;
     activeIndex = Math.min(activeIndex, Math.max(visibleItems.length - 1, 0));
     results.replaceChildren();
     if (!visibleItems.length) {
       const empty = create("div", "fluxion-palette-empty");
-      empty.textContent = mode === "split"
-        ? "No tabs are available for split view"
-        : mode === "tabs" ? "No matching open tabs" : "No matching command or page";
+      empty.textContent = emptyText;
       results.appendChild(empty);
       input.removeAttribute("aria-activedescendant");
       return;
@@ -404,8 +448,64 @@
     setActive(activeIndex);
   }
 
+  async function renderMemory() {
+    const request = ++memoryRequest;
+    const search = input.value.trim();
+    status.hidden = false;
+    status.textContent = window.FluxionMemory.enabled()
+      ? "Local on this Mac · Private windows are never indexed"
+      : "Browser Memory is off";
+    if (search.length < 2) {
+      renderItems([], "Describe a page you remember");
+      return;
+    }
+    results.replaceChildren();
+    const pending = create("div", "fluxion-palette-empty");
+    pending.textContent = "Searching local Browser Memory…";
+    results.appendChild(pending);
+    const response = await window.FluxionMemory.search(search, ui.currentWorkspace());
+    if (request !== memoryRequest || mode !== "memory" || input.value.trim() !== search) return;
+    const stateLabels = {
+      building: "Local index is building · Exact history matches are available now",
+      lexical: "Local semantic model unavailable · Showing exact history matches",
+      ready: "Hybrid match · Exact text, semantic similarity, recency, and workspace",
+      disabled: "Browser Memory is off",
+      private: "Browser Memory is unavailable in private windows",
+    };
+    status.textContent = stateLabels[response.state] || stateLabels.ready;
+    const items = response.results.map(row => ({
+      label: row.title || row.url,
+      detail: row.url,
+      kind: "Memory",
+      run: () => openUrl(row.url),
+    }));
+    renderItems(items, "Nothing relevant was found in Browser Memory");
+  }
+
+  function render(includePlaces = false) {
+    if (mode === "memory") {
+      renderMemory().catch(error => {
+        Cu.reportError(error);
+        if (mode === "memory") renderItems([], "Browser Memory could not be searched");
+      });
+      return;
+    }
+    status.hidden = true;
+    const search = input.value.trim();
+    const items = FluxionSearch.rankSearchItems(search, allItems(search, includePlaces), 12);
+    const emptyText = mode === "split"
+      ? "No tabs are available for split view"
+      : mode === "tabs" ? "No matching open tabs" : "No matching command or page";
+    renderItems(items, emptyText);
+  }
+
   function queuePlaces() {
     window.clearTimeout(placesTimer);
+    if (mode === "memory") {
+      memoryRequest += 1;
+      placesTimer = window.setTimeout(() => render(false), 140);
+      return;
+    }
     render(false);
     if (mode === "all" && input.value.trim().length >= 2) {
       placesTimer = window.setTimeout(() => render(true), 80);
@@ -420,7 +520,9 @@
     input.value = "";
     input.placeholder = mode === "split"
       ? "Choose a tab to place beside this page"
-      : mode === "tabs" ? "Search open tabs" : "Search commands, tabs, history, and bookmarks";
+      : mode === "tabs" ? "Search open tabs"
+        : mode === "memory" ? "What do you remember about the page?"
+          : "Search commands, tabs, history, and bookmarks";
     activeIndex = 0;
     render(false);
     window.requestAnimationFrame(() => input.focus());
@@ -428,6 +530,7 @@
 
   function close() {
     window.clearTimeout(placesTimer);
+    memoryRequest += 1;
     layer.hidden = true;
     input.value = "";
     splitSource = null;

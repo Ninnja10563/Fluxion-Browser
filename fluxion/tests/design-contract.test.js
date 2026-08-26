@@ -8,6 +8,7 @@ const path = require("node:path");
 const root = path.resolve(__dirname, "..");
 const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf8");
 const palette = fs.readFileSync(path.join(root, "chrome/fluxion-palette.js"), "utf8");
+const memory = fs.readFileSync(path.join(root, "chrome/fluxion-memory.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -55,10 +56,27 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.palette\.health/);
   assert.match(macVerifier, /fluxion\.groups\.health/);
   assert.match(macVerifier, /fluxion\.splitview\.health/);
+  assert.match(macVerifier, /fluxion\.memory\.health/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("Browser Memory is optional, local, and unavailable in private windows", () => {
+  assert.match(memory, /PlacesSemanticHistoryManager\.sys\.mjs/);
+  assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
+  assert.match(memory, /fluxion\.memory\.enabled/);
+  assert.match(memory, /places\.semanticHistory\.removeOnStartup/);
+  assert.match(palette, /Private windows are never indexed/);
+  assert.match(palette, /Page addresses and history are not sent to an AI provider/);
+});
+
+test("Browser Memory exposes functional privacy controls", () => {
+  assert.match(palette, /Exclude this site from Browser Memory/);
+  assert.match(palette, /Clear Browser Memory/);
+  assert.match(memory, /DELETE FROM vec_history/);
+  assert.match(memory, /excludedDomains/);
 });
 
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {

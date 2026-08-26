@@ -38,9 +38,10 @@ while (( attempt < 120 )); do
   if [[ -f "$profile/prefs.js" ]] && \
       grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.memory.health", "local-memory-controls-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js"; then
-    printf 'Verified: Fluxion chrome, palette, tab groups, and native split view loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, palette, Browser Memory controls, tab groups, and native split view loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
