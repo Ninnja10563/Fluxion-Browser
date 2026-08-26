@@ -169,7 +169,7 @@
   searchEngine.appendChild(create("option", "", "Loading search engines…"));
   searchEngine.disabled = true;
   row(general, "Default search engine", "Used for text entered in the address field.", searchEngine);
-  Services.search.init().then(async () => {
+  Promise.resolve(Services.search.init()).then(async () => {
     const engines = await Services.search.getVisibleEngines();
     const current = Services.search.defaultEngine;
     searchEngine.replaceChildren();
