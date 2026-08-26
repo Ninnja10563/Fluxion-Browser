@@ -10,7 +10,8 @@ bash -n \
   scripts/prepare-macos-runtime.sh \
   scripts/prepare-runtime.sh \
   scripts/check.sh \
-  scripts/smoke-gecko.sh
+  scripts/smoke-gecko.sh \
+  scripts/verify-macos-app.sh
 node --check chrome/core/url.js
 node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js

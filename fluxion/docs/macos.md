@@ -25,6 +25,10 @@ cd Fluxion-Browser/fluxion
 open ../.runtime/Fluxion.app
 ```
 
+The builder briefly launches an isolated test window and refuses to report
+success unless the **Flow** tab sidebar actually loads. The sidebar appears on
+the left and contains the workspace buttons and vertical tabs.
+
 The initial build copies Firefox and may take a little while. Later launches
 reuse the local application until Firefox or Fluxion source files change.
 
@@ -77,6 +81,24 @@ If Firefox is installed elsewhere:
 
 ```sh
 FLUXION_FIREFOX_BIN="/path/to/Firefox.app/Contents/MacOS/firefox" ./bin/fluxion
+```
+
+If Fluxion opens with Firefox's horizontal tab strip and no left sidebar, pull
+the newest source and force a clean application rebuild:
+
+```sh
+git pull origin main
+cd fluxion
+./scripts/build-macos.sh --clean
+open ../.runtime/Fluxion.app
+```
+
+Do not open `/Applications/Firefox.app`; the generated application is
+`Fluxion-Browser/.runtime/Fluxion.app`. You can rerun the sidebar health check
+directly with:
+
+```sh
+./scripts/verify-macos-app.sh ../.runtime/Fluxion.app
 ```
 
 If the builder reports that Terminal is translated, quit Terminal, select it

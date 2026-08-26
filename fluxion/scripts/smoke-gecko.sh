@@ -25,8 +25,11 @@ FLUXION_PROFILE="$profile" "$fluxion_root/bin/fluxion" \
   "file://$fluxion_root/newtab/index.html" &
 process_id=$!
 
-for _ in $(seq 1 80); do
-  if [[ -f "$profile/prefs.js" ]] && grep -q 'fluxion.workspaces' "$profile/prefs.js"; then
+attempt=0
+while (( attempt < 80 )); do
+  if [[ -f "$profile/prefs.js" ]] && grep -q \
+      'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' \
+      "$profile/prefs.js"; then
     printf 'Gecko loaded Fluxion browser chrome successfully.\n'
     exit 0
   fi
@@ -36,6 +39,7 @@ for _ in $(seq 1 80); do
     exit 1
   fi
   sleep 0.25
+  ((attempt += 1))
 done
 
 printf 'Timed out waiting for Fluxion browser chrome.\n' >&2

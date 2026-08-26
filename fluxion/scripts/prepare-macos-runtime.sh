@@ -55,7 +55,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")"
+signature="$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -70,14 +70,23 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
 
   resources="$runtime_app/Contents/Resources"
   macos="$runtime_app/Contents/MacOS"
-  if [[ ! -d "$resources/defaults/pref" || ! -d "$macos" ]]; then
+  if [[ ! -d "$resources" || ! -d "$macos" ]]; then
     printf 'This Firefox.app has an unsupported directory layout.\n' >&2
     exit 69
   fi
 
+  # Current Firefox macOS bundles no longer ship a physical defaults/pref
+  # directory, but Gecko still scans it when administrators create one.
+  mkdir -p "$resources/defaults/pref"
   cp "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" \
     "$resources/defaults/pref/fluxion-autoconfig.js"
   cp "$fluxion_root/runtime/fluxion.cfg" "$resources/fluxion.cfg"
+  # Keep a second copy beside the executable for Firefox variants that resolve
+  # default preferences and general.config.filename relative to the binary.
+  mkdir -p "$macos/defaults/pref"
+  cp "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" \
+    "$macos/defaults/pref/fluxion-autoconfig.js"
+  cp "$fluxion_root/runtime/fluxion.cfg" "$macos/fluxion.cfg"
 
   bundled_root="$resources/fluxion"
   mkdir -p "$bundled_root"

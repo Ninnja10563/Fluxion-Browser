@@ -41,3 +41,5 @@ controls work and its failure paths have been tested.
 - reduced-motion and accessibility audits
 - performance, battery, memory, and hundreds-of-tabs profiling
 - macOS notarization, Windows signing, Linux packages, and update service
+- signed and notarized Apple Silicon DMGs attached to GitHub Releases for each
+  large, release-worthy milestone (the current prototype will not be released)

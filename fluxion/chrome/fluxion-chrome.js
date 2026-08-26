@@ -471,4 +471,6 @@
   for (const tab of gBrowser.tabs) tabWorkspace(tab);
   switchWorkspace(currentWorkspace);
   render();
+  Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
+  Services.prefs.savePrefFile(null);
 })(window);
