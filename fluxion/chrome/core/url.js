@@ -3,6 +3,7 @@
   "use strict";
 
   const SCHEME = /^[a-z][a-z\d+.-]*:/i;
+  const SAFE_SCHEME = /^(?:https?|ftp|file|about|view-source|moz-extension):/i;
   const DOMAIN = /^(?:localhost|(?:[\p{L}\d-]+\.)+[\p{L}]{2,})(?::\d+)?(?:[/?#]|$)/u;
 
   function normaliseInput(raw) {
@@ -13,7 +14,8 @@
     const value = normaliseInput(raw);
     if (!value) return "about:newtab";
     if (DOMAIN.test(value)) return `https://${value}`;
-    if (SCHEME.test(value)) return value;
+    if (SAFE_SCHEME.test(value)) return value;
+    if (SCHEME.test(value)) return `${searchBase}${encodeURIComponent(value)}`;
     return `${searchBase}${encodeURIComponent(value)}`;
   }
 

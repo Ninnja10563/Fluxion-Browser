@@ -12,11 +12,14 @@
   const PREF_SIDEBAR = "fluxion.sidebar.state";
   const TAB_WORKSPACE = "fluxion-workspace";
   const NEW_TAB_URL = Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab");
+  const ABOUT_URL = Services.prefs.getStringPref("fluxion.about.url", "about:support");
   const SIDEBAR_STATES = ["expanded", "compact", "focus"];
   const cleanup = [];
   let contextTab = null;
   let dragTab = null;
   let renderQueued = false;
+
+  document.documentElement.setAttribute("data-fluxion", "true");
 
   const create = (tag, className) => {
     const element = document.createElementNS(HTML, tag);
@@ -51,48 +54,106 @@
       --fluxion-accent: light-dark(#3f596e, #8ba9bd);
       --fluxion-fast: 140ms cubic-bezier(.2,.7,.2,1);
     }
-    #TabsToolbar { visibility: collapse !important; }
+    #toolbar-menubar, #TabsToolbar, #PersonalToolbar { visibility: collapse !important; }
+    #navigator-toolbox {
+      appearance: none !important; background: var(--fluxion-bg) !important;
+      border: 0 !important; border-bottom: 1px solid var(--fluxion-line) !important;
+    }
+    #nav-bar {
+      min-height: 46px !important; padding: 5px 8px !important;
+      background: var(--fluxion-bg) !important; box-shadow: none !important;
+      border: 0 !important;
+    }
+    #nav-bar-customization-target { align-items: center; gap: 2px; }
+    #nav-bar #firefox-view-button,
+    #nav-bar #fxa-toolbar-menu-button,
+    #nav-bar #save-to-pocket-button,
+    #nav-bar #pocket-button,
+    #nav-bar #sidebar-button,
+    #nav-bar #smartwindow-ask-button,
+    #nav-bar #ip-protection-button { display: none !important; }
+    #nav-bar .toolbarbutton-1 {
+      margin: 0 !important; padding: 0 !important; border-radius: 5px !important;
+    }
+    #nav-bar .toolbarbutton-1 > .toolbarbutton-icon,
+    #nav-bar .toolbarbutton-1 > .toolbarbutton-badge-stack {
+      width: 30px !important; height: 30px !important; padding: 7px !important;
+      border-radius: 5px !important; background: transparent !important;
+    }
+    #nav-bar .toolbarbutton-1:not([disabled]):hover > .toolbarbutton-icon,
+    #nav-bar .toolbarbutton-1:not([disabled]):hover > .toolbarbutton-badge-stack {
+      background: var(--fluxion-hover) !important;
+    }
+    #urlbar-container { margin-inline: 7px !important; padding: 0 !important; }
+    #urlbar { --urlbar-height: 34px; font-size: 13px !important; }
+    #urlbar-background {
+      background: var(--fluxion-bg-raised) !important;
+      border: 1px solid var(--fluxion-line) !important;
+      border-radius: 6px !important; box-shadow: none !important;
+    }
+    #urlbar[focused] > #urlbar-background,
+    #urlbar[open] > #urlbar-background {
+      border-color: color-mix(in srgb, var(--fluxion-accent) 66%, transparent) !important;
+      outline: 2px solid color-mix(in srgb, var(--fluxion-accent) 17%, transparent) !important;
+      outline-offset: -1px !important;
+    }
+    #urlbar-input { font-size: 13px !important; letter-spacing: -.005em; }
+    #urlbar .urlbarView {
+      border: 1px solid var(--fluxion-line) !important; border-radius: 7px !important;
+      background: var(--fluxion-bg-raised) !important;
+      box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
+    }
+    #PanelUI-button { padding-inline-start: 2px !important; }
+    #appMenu-fxa-status2,
+    #appMenu-fxa-separator,
+    #appMenu-new-ai-window-button,
+    #appMenu-chats-history-button,
+    #appMenu-update-banner { display: none !important; }
+    #browser { background: var(--fluxion-bg); }
     #fluxion-flow {
-      width: 248px; min-width: 248px; max-width: 248px;
+      width: 232px; min-width: 232px; max-width: 232px;
       color: var(--fluxion-ink); background: var(--fluxion-bg);
       border-inline-end: 1px solid var(--fluxion-line);
       font: menu; font-size: 12px; overflow: hidden;
       transition: width var(--fluxion-fast), min-width var(--fluxion-fast), max-width var(--fluxion-fast);
     }
-    #fluxion-flow[data-state="compact"] { width: 52px; min-width: 52px; max-width: 52px; }
-    #fluxion-flow[data-state="focus"] { width: 5px; min-width: 5px; max-width: 5px; cursor: e-resize; }
+    #fluxion-flow[data-state="compact"] { width: 44px; min-width: 44px; max-width: 44px; }
+    #fluxion-flow[data-state="focus"] { width: 3px; min-width: 3px; max-width: 3px; cursor: e-resize; }
     #fluxion-flow[data-state="focus"] > * { opacity: 0; pointer-events: none; }
     #fluxion-flow[data-state="focus"]:hover { background: var(--fluxion-accent); }
     #fluxion-flow * { box-sizing: border-box; }
     .fluxion-header {
-      min-height: 43px; display: flex; align-items: center; gap: 7px;
-      padding: 7px 8px; border-bottom: 1px solid var(--fluxion-line);
+      min-height: 38px; display: flex; align-items: center; gap: 6px;
+      padding: 5px 7px; border-bottom: 1px solid var(--fluxion-line);
     }
     .fluxion-mark {
-      width: 26px; height: 26px; flex: none; display: grid; place-items: center;
+      width: 24px; height: 24px; flex: none; display: grid; place-items: center;
       color: var(--fluxion-ink);
     }
-    .fluxion-mark svg { width: 21px; height: 21px; }
-    .fluxion-name { font-weight: 650; letter-spacing: -.01em; flex: 1; white-space: nowrap; }
+    .fluxion-mark svg { width: 18px; height: 18px; }
+    .fluxion-name { font-weight: 600; letter-spacing: -.005em; flex: 1; white-space: nowrap; }
     .fluxion-icon-button, .fluxion-close, .fluxion-audio {
       border: 0; padding: 0; color: inherit; background: transparent; border-radius: 4px;
       display: grid; place-items: center; cursor: default;
     }
-    .fluxion-icon-button { width: 26px; height: 26px; font-size: 17px; }
+    .fluxion-icon-button { width: 24px; height: 24px; font-size: 15px; }
     .fluxion-icon-button:hover, .fluxion-close:hover, .fluxion-audio:hover { background: var(--fluxion-hover); }
     .fluxion-icon-button:focus-visible, .fluxion-tab:focus-visible, .fluxion-workspace:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
-    .fluxion-workspaces { display: flex; gap: 3px; padding: 7px 8px 6px; }
+    .fluxion-workspaces { display: flex; gap: 8px; padding: 6px 9px 5px; }
     .fluxion-workspace {
-      min-width: 0; height: 27px; flex: 1; border: 0; border-radius: 4px;
+      position: relative; min-width: 0; height: 25px; flex: 1; border: 0; border-radius: 0;
       color: var(--fluxion-muted); background: transparent; font: inherit;
       font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
-    .fluxion-workspace:hover { color: var(--fluxion-ink); background: var(--fluxion-hover); }
+    .fluxion-workspace:hover { color: var(--fluxion-ink); }
     .fluxion-workspace[aria-pressed="true"] {
-      color: var(--fluxion-ink); background: var(--fluxion-selected); font-weight: 600;
-      box-shadow: inset 0 -2px var(--workspace-accent, var(--fluxion-accent));
+      color: var(--fluxion-ink); background: transparent; font-weight: 600;
+    }
+    .fluxion-workspace[aria-pressed="true"]::after {
+      content: ""; position: absolute; inset: auto 3px 0; height: 1px;
+      background: var(--workspace-accent, var(--fluxion-accent));
     }
     .fluxion-section-label {
       height: 24px; display: flex; align-items: center; padding: 4px 11px 3px;
@@ -100,17 +161,17 @@
       letter-spacing: .055em; text-transform: uppercase; white-space: nowrap;
     }
     .fluxion-section-label[hidden], .fluxion-tabs[hidden] { display: none !important; }
-    .fluxion-tabs { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 1px 6px 8px; scrollbar-width: thin; }
+    .fluxion-tabs { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 1px 5px 7px; scrollbar-width: thin; }
     .fluxion-tab {
-      position: relative; height: 34px; display: flex; align-items: center; gap: 8px;
-      padding: 0 6px; margin: 1px 0; border-radius: 5px; color: var(--fluxion-muted);
+      position: relative; height: 32px; display: flex; align-items: center; gap: 7px;
+      padding: 0 6px; margin: 1px 0; border-radius: 3px; color: var(--fluxion-muted);
       user-select: none; transition: opacity 100ms ease, transform var(--fluxion-fast), background-color 80ms linear;
     }
     .fluxion-tab:hover { background: var(--fluxion-hover); color: var(--fluxion-ink); }
     .fluxion-tab[aria-selected="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); }
     .fluxion-tab[aria-selected="true"]::before {
-      content: ""; position: absolute; inset-inline-start: 0; width: 2px; height: 16px;
-      border-radius: 1px; background: var(--fluxion-accent);
+      content: ""; position: absolute; inset-inline-start: 0; width: 2px; height: 14px;
+      background: var(--fluxion-accent);
     }
     .fluxion-tab.is-closing { opacity: 0; transform: scaleY(.72); pointer-events: none; }
     .fluxion-tab.is-dragover::after {
@@ -127,11 +188,11 @@
     .fluxion-close, .fluxion-audio { width: 22px; height: 22px; flex: none; font-size: 14px; opacity: 0; }
     .fluxion-tab:hover .fluxion-close, .fluxion-tab:focus-within .fluxion-close, .fluxion-audio { opacity: 1; }
     .fluxion-footer {
-      height: 40px; display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+      height: 36px; display: flex; align-items: center; gap: 6px; padding: 4px 7px;
       border-top: 1px solid var(--fluxion-line);
     }
     .fluxion-new-tab {
-      flex: 1; height: 27px; border: 0; border-radius: 4px; background: transparent;
+      flex: 1; height: 26px; border: 0; border-radius: 3px; background: transparent;
       color: var(--fluxion-ink); font: inherit; text-align: start; padding: 0 7px;
     }
     .fluxion-new-tab:hover { background: var(--fluxion-hover); }
@@ -142,14 +203,21 @@
     #fluxion-flow[data-state="compact"] .fluxion-close,
     #fluxion-flow[data-state="compact"] .fluxion-count,
     #fluxion-flow[data-state="compact"] .fluxion-new-tab span { display: none; }
-    #fluxion-flow[data-state="compact"] .fluxion-header { padding-inline: 12px; }
+    .fluxion-pinned-tabs {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
+      gap: 2px; padding: 1px 5px 6px;
+    }
+    .fluxion-pinned-tabs .fluxion-tab { justify-content: center; margin: 0; padding: 0; }
+    .fluxion-pinned-tabs .fluxion-title,
+    .fluxion-pinned-tabs .fluxion-close { display: none; }
+    #fluxion-flow[data-state="compact"] .fluxion-header { padding-inline: 10px; }
     #fluxion-flow[data-state="compact"] .fluxion-icon-button { display: none; }
-    #fluxion-flow[data-state="compact"] .fluxion-workspaces { flex-direction: column; padding: 5px 9px; }
-    #fluxion-flow[data-state="compact"] .fluxion-workspace { flex: none; width: 34px; }
-    #fluxion-flow[data-state="compact"] .fluxion-tabs { padding-inline: 8px; }
+    #fluxion-flow[data-state="compact"] .fluxion-workspaces { flex-direction: column; gap: 2px; padding: 4px 7px; }
+    #fluxion-flow[data-state="compact"] .fluxion-workspace { flex: none; width: 30px; }
+    #fluxion-flow[data-state="compact"] .fluxion-tabs { padding-inline: 6px; }
     #fluxion-flow[data-state="compact"] .fluxion-tab { justify-content: center; padding: 0; }
-    #fluxion-flow[data-state="compact"] .fluxion-footer { padding-inline: 9px; }
-    #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 34px; text-align: center; }
+    #fluxion-flow[data-state="compact"] .fluxion-footer { padding-inline: 7px; }
+    #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
       #fluxion-flow, .fluxion-tab { transition-duration: 0.01ms !important; }
     }
@@ -174,6 +242,30 @@
 
   const browser = document.getElementById("browser");
   if (!browser) throw new Error("Fluxion: Firefox browser deck was not found");
+
+  function brandMenuItem(id, label) {
+    const item = document.getElementById(id);
+    if (!item) return null;
+    item.removeAttribute("data-l10n-id");
+    item.setAttribute("label", label);
+    return item;
+  }
+
+  brandMenuItem("aboutName", "About Fluxion");
+  brandMenuItem("menu_preferences", "Fluxion Settings…");
+  brandMenuItem("menu_setAsDefault", "Set Fluxion as Default Browser");
+  brandMenuItem("menu_FileQuitItem", "Quit Fluxion");
+  brandMenuItem("menu_mac_hide_app", "Hide Fluxion");
+  const aboutItem = document.getElementById("aboutName");
+  if (aboutItem) {
+    on(aboutItem, "command", event => {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const tab = gBrowser.addTrustedTab(ABOUT_URL);
+      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      gBrowser.selectedTab = tab;
+    }, true);
+  }
 
   const flow = xul("vbox", { id: "fluxion-flow", role: "navigation", "aria-label": "Fluxion Flow" });
   const initialState = Services.prefs.getStringPref(PREF_SIDEBAR, "expanded");
@@ -287,6 +379,16 @@
     flow.dataset.state = state;
     Services.prefs.setStringPref(PREF_SIDEBAR, state);
     modeButton.textContent = state === "expanded" ? "‹" : state === "compact" ? "·" : "›";
+  }
+
+  function openWorkspaceTab() {
+    const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
+    tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+    gBrowser.selectedTab = tab;
+    window.requestAnimationFrame(() => {
+      if (window.gURLBar && tab === gBrowser.selectedTab) window.gURLBar.select();
+    });
+    return tab;
   }
 
   function closeWithStability(tab, element) {
@@ -415,10 +517,20 @@
     count.textContent = String(visible.length);
   }
 
+  function updateWindowTitle() {
+    const label = tabLabel(gBrowser.selectedTab);
+    const isPrivate = Boolean(window.PrivateBrowsingUtils?.isWindowPrivate(window));
+    const title = `${label} — Fluxion${isPrivate ? " Private" : ""}`;
+    if (document.title !== title) document.title = title;
+  }
+
   function scheduleRender() {
     if (renderQueued) return;
     renderQueued = true;
-    window.requestAnimationFrame(render);
+    window.requestAnimationFrame(() => {
+      render();
+      updateWindowTitle();
+    });
   }
 
   const contextMenu = xul("menupopup", { id: "fluxion-tab-context" });
@@ -443,9 +555,7 @@
     if (flow.dataset.state === "focus" && event.target === flow) cycleSidebar();
   });
   on(newTabButton, "click", () => {
-    const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
-    tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
-    gBrowser.selectedTab = tab;
+    openWorkspaceTab();
   });
   for (const eventName of ["TabOpen", "TabClose", "TabSelect", "TabMove", "TabPinned", "TabUnpinned", "TabAttrModified"]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
@@ -465,12 +575,30 @@
     while (cleanup.length) cleanup.pop()();
     contextMenu.remove();
     style.remove();
+    delete window.FluxionUI;
+    document.documentElement.removeAttribute("data-fluxion");
   }, { once: true });
 
   // Assign restored/unowned tabs before filtering, then reveal the saved workspace.
   for (const tab of gBrowser.tabs) tabWorkspace(tab);
   switchWorkspace(currentWorkspace);
   render();
+  updateWindowTitle();
+  window.FluxionUI = Object.freeze({
+    cycleSidebar,
+    currentWorkspace: () => currentWorkspace,
+    moveTabToWorkspace,
+    newTab: openWorkspaceTab,
+    selectTab(tab) {
+      if (!tab || !tab.parentNode) return;
+      const workspace = tabWorkspace(tab);
+      if (workspace !== currentWorkspace) switchWorkspace(workspace);
+      gBrowser.selectedTab = tab;
+    },
+    switchWorkspace,
+    tabWorkspace,
+    workspaces: () => workspaces.map(workspace => ({ ...workspace })),
+  });
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);
 })(window);

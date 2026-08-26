@@ -8,9 +8,15 @@ This is an early development preview, not a stable release. Fluxion is still a
 Firefox-derived runtime overlay, and some Firefox surfaces and branding remain
 while the independent product interface is built out.
 
-Preview 2 corrects the macOS application identity: Finder, the Dock, Launchpad,
-Get Info, and permission dialogs now use Fluxion's icon and product name rather
-than inherited Firefox branding.
+Version 0.2 introduces Fluxion's first independent browser-chrome milestone:
+
+- a restrained navigation skin that retains Gecko's security-aware URL field;
+- a flatter, denser Flow sidebar with a 44px compact rail;
+- icon-only persistent pinned tabs and quieter workspace indicators;
+- `Cmd/Ctrl+K` search across commands, tabs, workspaces, history, and bookmarks;
+- `Cmd/Ctrl+Shift+A` high-volume open-tab search;
+- a blank new-tab surface with immediate address-field focus;
+- removal of inherited Firefox application icon and permission-dialog branding.
 
 ## Install
 

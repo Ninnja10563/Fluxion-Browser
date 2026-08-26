@@ -1,94 +1,9 @@
 :root {
   color-scheme: light dark;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   background: light-dark(#f7f7f5, #20211f);
-  color: light-dark(#242522, #eeeeea);
 }
-
-* { box-sizing: border-box; }
 
 body {
   min-height: 100vh;
   margin: 0;
-  display: grid;
-  place-items: center;
-}
-
-main {
-  width: min(540px, calc(100vw - 48px));
-  transform: translateY(-8vh);
-}
-
-.identity {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin-bottom: 30px;
-  font-size: 17px;
-  font-weight: 650;
-  letter-spacing: -.015em;
-}
-
-.identity svg { width: 26px; height: 26px; }
-
-label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-}
-
-.field {
-  height: 46px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 0 15px;
-  border: 1px solid light-dark(rgba(20,21,19,.16), rgba(255,255,250,.16));
-  border-radius: 7px;
-  background: light-dark(#fff, #292a27);
-  box-shadow: 0 2px 8px light-dark(rgba(20,21,19,.06), rgba(0,0,0,.16));
-}
-
-.field:focus-within {
-  border-color: light-dark(#536d80, #8ca8ba);
-  box-shadow: 0 0 0 2px light-dark(rgba(83,109,128,.18), rgba(140,168,186,.18));
-}
-
-.field svg { width: 18px; height: 18px; flex: none; opacity: .58; }
-
-input {
-  width: 100%;
-  border: 0;
-  outline: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  font-size: 14px;
-}
-
-input::placeholder { color: currentColor; opacity: .48; }
-
-.hint {
-  margin: 14px 0 0;
-  text-align: center;
-  font-size: 11px;
-  opacity: .48;
-}
-
-kbd {
-  min-width: 17px;
-  display: inline-block;
-  margin-right: 3px;
-  padding: 1px 4px;
-  border: 1px solid currentColor;
-  border-radius: 3px;
-  font: inherit;
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  main { animation: enter 160ms cubic-bezier(.2,.7,.2,1) both; }
-  @keyframes enter { from { opacity: 0; transform: translateY(calc(-8vh + 4px)); } }
 }

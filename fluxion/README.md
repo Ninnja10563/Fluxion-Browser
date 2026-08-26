@@ -16,8 +16,12 @@ Phase 1 is runnable and includes:
   reordering, pinning, duplication, and native tab session restoration;
 - three-state sidebar (expanded, compact, focus rail);
 - workspace switching and moving tabs between workspaces;
+- a restrained Fluxion navigation skin over Gecko's native security-aware URL
+  field and a universal `Cmd/Ctrl+K` command palette;
+- fuzzy keyboard search across commands, open tabs, workspaces, history, and
+  bookmarks, with dedicated `Cmd/Ctrl+Shift+A` tab search;
 - private windows and all mature Firefox browser services;
-- a restrained custom new-tab page and Fluxion product identity.
+- a deliberately blank new-tab page and Fluxion product identity.
 
 This is intentionally an incremental browser fork. Later phases are tracked in
 [`docs/roadmap.md`](docs/roadmap.md); controls for unfinished features are not
@@ -67,6 +71,8 @@ ad-hoc signs the development bundle. It does not need Homebrew, Rosetta, or
 administrator access and does not modify `/Applications/Firefox.app`.
 Detailed build and troubleshooting notes are in
 [`docs/macos.md`](docs/macos.md).
+The build, visual-inspection, and publishing gate is described in
+[`docs/releases.md`](docs/releases.md).
 
 Fluxion's profile is stored separately at:
 
@@ -131,6 +137,8 @@ under Xvfb):
 The smoke test needs a locally installed Firefox or `FLUXION_FIREFOX_BIN`.
 Architecture and upstream strategy are described in
 [`docs/architecture.md`](docs/architecture.md).
+The product's visual rules and researched reference points are documented in
+[`docs/design.md`](docs/design.md).
 
 ## Keyboard model
 
@@ -144,9 +152,11 @@ Firefox shortcuts remain available. Fluxion adds:
 | New tab | `Cmd+T` | `Ctrl+T` |
 | Reopen closed tab | `Cmd+Shift+T` | `Ctrl+Shift+T` |
 | Tab search | `Cmd+Shift+A` | `Ctrl+Shift+A` |
+| Command palette | `Cmd+K` | `Ctrl+K` |
 
 ## License
 
-Fluxion code is available under the repository's MIT license. Mozilla Firefox
-and its trademarks have their own licenses and policies; Fluxion does not
-redistribute Firefox binaries from this repository.
+Fluxion-authored code is available under the repository's MIT license. Preview
+DMGs bundle Mozilla Firefox/Gecko components under their respective licenses;
+Mozilla trademarks and third-party components retain their own terms. Fluxion
+is an independent project and is not affiliated with Mozilla.

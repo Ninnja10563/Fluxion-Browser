@@ -74,7 +74,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/InfoPlist.strings")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/firefox-developer.entitlements.plist")"
+signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-palette.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/search.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/about/index.html")|$(stat -f '%m:%z' "$fluxion_root/about/about.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/InfoPlist.strings")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/firefox-developer.entitlements.plist")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -107,6 +107,7 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   mkdir -p "$bundled_root"
   ditto "$fluxion_root/chrome" "$bundled_root/chrome"
   ditto "$fluxion_root/newtab" "$bundled_root/newtab"
+  ditto "$fluxion_root/about" "$bundled_root/about"
   ditto "$fluxion_root/assets" "$bundled_root/assets"
 
   launcher_arch_flags=(-arch "$target_arch")

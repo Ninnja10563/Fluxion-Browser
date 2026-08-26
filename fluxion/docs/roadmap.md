@@ -21,7 +21,8 @@ controls work and its failure paths have been tested.
 ## Phase 3 — interaction model
 
 - named/reorderable workspaces and tab groups
-- fuzzy command palette and high-volume tab search
+- fuzzy command palette and high-volume tab search (initial command, tab,
+  workspace, history, and bookmark search implemented)
 - split view, peek pages, and configurable tab sleeping
 
 ## Phase 4 — local semantic history

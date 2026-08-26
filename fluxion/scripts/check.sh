@@ -14,8 +14,10 @@ bash -n \
   scripts/smoke-gecko.sh \
   scripts/verify-macos-app.sh
 node --check chrome/core/url.js
+node --check chrome/core/search.js
 node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js
+node --check chrome/fluxion-palette.js
 node --test tests/*.test.js
 
 if [[ "$(uname -s)" == "Darwin" ]]; then

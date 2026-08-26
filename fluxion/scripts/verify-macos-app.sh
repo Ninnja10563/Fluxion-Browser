@@ -34,10 +34,18 @@ process_id=$!
 
 attempt=0
 while (( attempt < 120 )); do
-  if [[ -f "$profile/prefs.js" ]] && grep -q \
-      'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' \
-      "$profile/prefs.js"; then
-    printf 'Verified: Fluxion Flow sidebar loaded.\n' >&2
+  if [[ -f "$profile/prefs.js" ]] && \
+      grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js"; then
+    printf 'Verified: Fluxion chrome and command palette loaded.\n' >&2
+    if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
+      sleep 1
+      if screencapture -x "$FLUXION_CAPTURE_PATH"; then
+        printf 'Captured Fluxion chrome at %s\n' "$FLUXION_CAPTURE_PATH" >&2
+      else
+        printf 'Warning: macOS runner could not capture the Fluxion window.\n' >&2
+      fi
+    fi
     exit 0
   fi
   if ! kill -0 "$process_id" 2>/dev/null; then

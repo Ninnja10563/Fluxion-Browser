@@ -27,10 +27,10 @@ process_id=$!
 
 attempt=0
 while (( attempt < 80 )); do
-  if [[ -f "$profile/prefs.js" ]] && grep -q \
-      'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' \
-      "$profile/prefs.js"; then
-    printf 'Gecko loaded Fluxion browser chrome successfully.\n'
+  if [[ -f "$profile/prefs.js" ]] && \
+      grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js"; then
+    printf 'Gecko loaded Fluxion chrome and command palette successfully.\n'
     exit 0
   fi
   if ! kill -0 "$process_id" 2>/dev/null; then

@@ -18,6 +18,17 @@ test("preserves explicit safe and browser schemes", () => {
   assert.equal(resolveNavigation("file:///tmp/example.pdf"), "file:///tmp/example.pdf");
 });
 
+test("does not open script-bearing schemes from privileged chrome", () => {
+  assert.equal(
+    resolveNavigation("javascript:alert(document.domain)"),
+    "https://duckduckgo.com/?q=javascript%3Aalert(document.domain)"
+  );
+  assert.equal(
+    resolveNavigation("data:text/html,<script>alert(1)</script>"),
+    "https://duckduckgo.com/?q=data%3Atext%2Fhtml%2C%3Cscript%3Ealert(1)%3C%2Fscript%3E"
+  );
+});
+
 test("adds HTTPS to domains and localhost", () => {
   assert.equal(resolveNavigation("example.com/docs"), "https://example.com/docs");
   assert.equal(resolveNavigation("localhost:8080/test"), "https://localhost:8080/test");

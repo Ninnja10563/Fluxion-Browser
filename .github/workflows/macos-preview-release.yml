@@ -6,11 +6,16 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.1.0-preview.2
+        default: 0.2.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.1.0-preview.2
+        default: v0.2.0-preview.1
+      publish:
+        description: Publish assets to GitHub Releases after verification
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -45,6 +50,7 @@ jobs:
         env:
           FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
           FLUXION_TARGET_ARCH: universal2
+          FLUXION_CAPTURE_PATH: ${{ runner.temp }}/fluxion-chrome.png
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           export FLUXION_APP_VERSION="${RELEASE_VERSION%%-*}"
@@ -66,6 +72,13 @@ jobs:
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
 
+      - name: Preserve chrome inspection snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluxion-${{ inputs.version }}-chrome-inspection
+          path: ${{ runner.temp }}/fluxion-chrome.png
+          if-no-files-found: warn
+
       - name: Package DMG and checksum
         shell: bash
         env:
@@ -85,6 +98,7 @@ jobs:
           if-no-files-found: error
 
       - name: Publish GitHub prerelease
+        if: ${{ inputs.publish }}
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}

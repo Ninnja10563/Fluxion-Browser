@@ -27,7 +27,7 @@ pages retain Firefox's process, principal, and sandbox boundaries.
   cookie implementations;
 - Firefox multi-process isolation, principals, permission prompts, certificate
   UI, authentication flows, and site security infrastructure;
-- native navigation toolbar and address/search field;
+- native address/search field, identity controls, and permission anchors;
 - `gBrowser`, SessionStore, Places history/bookmarks, downloads, private
   browsing, crash recovery, PDF.js, picture-in-picture, DevTools, and
   WebExtensions;
@@ -46,8 +46,10 @@ bin/fluxion
   -> runtime/fluxion.cfg (privileged startup boundary)
      -> chrome/core/*.js (typed-by-contract state and URL helpers)
      -> chrome/fluxion-chrome.js
-        -> Flow sidebar / workspaces / tab interactions
+        -> Flow sidebar / workspaces / tab interactions / navigation skin
         -> Firefox gBrowser + SessionStore
+     -> chrome/fluxion-palette.js
+        -> commands / tabs / workspaces / Places history and bookmarks
      -> newtab/ (unprivileged local document)
 ```
 
@@ -60,6 +62,12 @@ Workspace membership is stored as a persisted SessionStore tab attribute.
 The current workspace and sidebar state use Firefox preferences. This keeps
 crash recovery atomic with the actual tab session and avoids a second database
 whose state could drift from Firefox.
+
+The visible navigation bar is styled by Fluxion but deliberately retains
+Firefox's native URL bar internals. This preserves certificate identity,
+permission anchors, autofill, search suggestions, extension page actions, and
+keyboard behavior. The command palette is a separate browser-chrome surface;
+it reads Places through privileged browser APIs, never through page JavaScript.
 
 The new-tab page is a local, unprivileged file. It can submit navigation but
 cannot call chrome methods.
@@ -109,10 +117,11 @@ Finder-safe launcher for the current architecture, and ad-hoc signs the local
 bundle. On Apple Silicon it rejects a Firefox build without an `arm64` slice,
 so M-series Macs do not silently fall back to Rosetta.
 
-A public macOS release still requires an Apple Developer ID, hardened-runtime
-signing, notarization, update metadata, and final traffic-light/menu polish.
-Windows and Linux use the same product layer with platform packaging and
-title-bar adapters.
+A stable public macOS release still requires an Apple Developer ID,
+hardened-runtime signing, notarization, update metadata, and final
+traffic-light/menu polish. Preview releases use a two-pass build and visual
+inspection gate documented in `docs/releases.md`. Windows and Linux use the
+same product layer with platform packaging and title-bar adapters.
 
 ## Future local search boundary
 
