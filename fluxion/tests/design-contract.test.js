@@ -39,8 +39,9 @@ test("compact Flow uses the researched 44px rail", () => {
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
   assert.match(
     chrome,
-    /navigatorToolbox\.setAttribute\("tabs-hidden", "true"\)/,
+    /#nav-bar > \.titlebar-buttonbox-container \{ display: flex !important; \}/,
   );
+  assert.doesNotMatch(chrome, /setAttribute\("tabs-hidden"/);
   assert.doesNotMatch(chrome, /titlebar-(?:close|min|max)[^\n]*addEventListener/);
 });
 

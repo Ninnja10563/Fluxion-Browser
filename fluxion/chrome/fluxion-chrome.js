@@ -104,6 +104,9 @@
       box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
     }
     #PanelUI-button { padding-inline-start: 2px !important; }
+    @media (-moz-platform: macos) {
+      #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
+    }
     #appMenu-fxa-status2,
     #appMenu-fxa-separator,
     #appMenu-new-ai-window-button,
@@ -223,13 +226,6 @@
     }
   `;
   document.documentElement.appendChild(style);
-
-  // Firefox already provides a native titlebar button box inside #nav-bar for
-  // its vertical-tabs layout. Marking the hidden horizontal strip explicitly
-  // lets Gecko expose that macOS control box in the first visible toolbar,
-  // preserving the real traffic-light controls instead of drawing substitutes.
-  const navigatorToolbox = document.getElementById("navigator-toolbox");
-  if (navigatorToolbox) navigatorToolbox.setAttribute("tabs-hidden", "true");
 
   let workspaces;
   try {
@@ -582,7 +578,6 @@
     while (cleanup.length) cleanup.pop()();
     contextMenu.remove();
     style.remove();
-    navigatorToolbox?.removeAttribute("tabs-hidden");
     delete window.FluxionUI;
     document.documentElement.removeAttribute("data-fluxion");
   }, { once: true });
