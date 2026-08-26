@@ -155,6 +155,12 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   rm -rf -- "$icon_work"
 
   printf 'Signing the local Fluxion development application...\n' >&2
+  # Firefox's main Mach-O signature seals the enclosing Info.plist. Re-sign it
+  # after changing the bundle identity, while retaining the upstream JIT and
+  # hardened-runtime entitlements Gecko needs to render web content.
+  codesign --force --sign - --timestamp=none \
+    --preserve-metadata=entitlements,flags,runtime \
+    "$macos/firefox"
   codesign --force --sign - --timestamp=none "$macos/Fluxion"
   codesign --force --sign - --timestamp=none "$runtime_app"
   codesign --verify --deep --strict "$runtime_app"
