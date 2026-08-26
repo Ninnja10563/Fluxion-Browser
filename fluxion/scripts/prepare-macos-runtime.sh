@@ -95,17 +95,13 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   fi
 
   # Current Firefox macOS bundles no longer ship a physical defaults/pref
-  # directory, but Gecko still scans it when administrators create one.
+  # directory, but Gecko still scans it when administrators create one. Keep
+  # configuration under Resources: macOS code signing rejects data files placed
+  # beside executable code in Contents/MacOS.
   mkdir -p "$resources/defaults/pref"
   cp "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" \
     "$resources/defaults/pref/fluxion-autoconfig.js"
   cp "$fluxion_root/runtime/fluxion.cfg" "$resources/fluxion.cfg"
-  # Keep a second copy beside the executable for Firefox variants that resolve
-  # default preferences and general.config.filename relative to the binary.
-  mkdir -p "$macos/defaults/pref"
-  cp "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" \
-    "$macos/defaults/pref/fluxion-autoconfig.js"
-  cp "$fluxion_root/runtime/fluxion.cfg" "$macos/fluxion.cfg"
 
   bundled_root="$resources/fluxion"
   mkdir -p "$bundled_root"
