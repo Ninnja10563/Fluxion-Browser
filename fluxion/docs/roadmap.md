@@ -23,7 +23,8 @@ controls work and its failure paths have been tested.
 - named/reorderable workspaces and Gecko-native tab groups (implemented)
 - fuzzy command palette and high-volume tab search (initial command, tab,
   workspace, history, and bookmark search implemented)
-- split view, peek pages, and configurable tab sleeping
+- Gecko-native horizontal split view (implemented)
+- vertical split orientation, peek pages, and configurable tab sleeping
 
 ## Phase 4 — local semantic history
 

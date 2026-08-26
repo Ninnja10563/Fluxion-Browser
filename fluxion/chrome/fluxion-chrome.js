@@ -115,6 +115,26 @@
     #appMenu-chats-history-button,
     #appMenu-update-banner { display: none !important; }
     #browser { background: var(--fluxion-bg); }
+    #tabbrowser-tabpanels[splitview] .split-view-panel.deck-selected > .browserContainer {
+      outline: 1px solid color-mix(in srgb, var(--fluxion-accent) 70%, transparent) !important;
+    }
+    #tabbrowser-tabpanels[splitview] .split-view-splitter {
+      width: 3px !important; margin-inline: 2px !important;
+      border-radius: 0 !important; transition: background-color 100ms linear !important;
+    }
+    #tabbrowser-tabpanels[splitview] .split-view-splitter:hover {
+      background-color: color-mix(in srgb, var(--fluxion-accent) 58%, transparent) !important;
+    }
+    #tabbrowser-tabpanels[splitview] split-view-footer {
+      min-height: 25px; padding: 2px 4px 2px 7px !important; gap: 5px !important;
+      color: var(--fluxion-muted) !important; background: var(--fluxion-bg-raised) !important;
+      border-color: var(--fluxion-line) !important; border-start-start-radius: 3px !important;
+      border-end-end-radius: 0 !important; font: menu; font-size: 11px;
+    }
+    #tabbrowser-tabpanels[splitview] split-view-footer toolbarbutton {
+      width: 20px; height: 20px; min-width: 20px; padding: 4px !important;
+      border-radius: 3px !important;
+    }
     #fluxion-flow {
       width: 232px; min-width: 232px; max-width: 232px;
       color: var(--fluxion-ink); background: var(--fluxion-bg);

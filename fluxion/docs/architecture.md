@@ -71,6 +71,14 @@ operations. Fluxion only projects those groups into Flow; labels, colours,
 collapse state, tab membership, closed-group recovery, and crash restoration
 remain owned by Firefox SessionStore.
 
+Split view uses Gecko's native `MozTabSplitViewWrapper` and browser-panel deck.
+Fluxion supplies creation and management affordances and projects each pair as
+one connected Flow item. Gecko owns both live content processes, the draggable
+divider, active-panel focus, security state, dialog containment, teardown, and
+SessionStore restoration. No iframe, webview, or second navigation model is
+introduced. Current upstream Gecko exposes a two-column layout; a stacked
+layout will not ship until it can preserve the same native lifecycle.
+
 The visible navigation bar is styled by Fluxion but deliberately retains
 Firefox's native URL bar internals. This preserves certificate identity,
 permission anchors, autofill, search suggestions, extension page actions, and

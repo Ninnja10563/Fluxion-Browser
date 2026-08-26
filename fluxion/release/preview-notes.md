@@ -9,6 +9,21 @@ Firefox-derived runtime overlay, and some secondary Gecko preference surfaces
 retain upstream terminology while the independent product interface is built
 out.
 
+Version 0.5 adds a real Gecko-native split view to the Flow interaction model:
+
+- place any two ordinary tabs side by side from a concise tab menu;
+- choose the second page with fuzzy tab search from the command palette;
+- open a blank page directly beside the current page;
+- resize the two live Gecko panels with a directly manipulated divider;
+- swap sides or separate the pair without losing either tab;
+- treat paired tabs as one connected item when moving between workspaces;
+- restore the split through Gecko SessionStore after restart or recovery;
+- keep security state, dialogs, page processes, and navigation owned by Gecko.
+
+The panel focus, divider, and inactive-site footer are restyled into Fluxion's
+restrained visual system. The macOS release gate now refuses a build unless a
+native split is live alongside Flow and a native tab group.
+
 Version 0.4 integrates Gecko-native tab groups directly into Flow:
 
 - compact group headings with collapse and expand state;

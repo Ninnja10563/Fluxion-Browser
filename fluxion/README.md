@@ -8,7 +8,7 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-Phase 1 is runnable and includes:
+The current preview is runnable and includes:
 
 - arbitrary website rendering through Firefox ESR/Gecko;
 - URL/search navigation, back, forward, reload, stop, and security identity;
@@ -16,6 +16,9 @@ Phase 1 is runnable and includes:
   reordering, pinning, duplication, and native tab session restoration;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration;
+- Gecko-native two-page split view with a live draggable divider, Flow pairing,
+  command-palette and context-menu creation, side swapping, separation, and
+  native session restoration;
 - three-state sidebar (expanded, compact, focus rail);
 - persistent workspace creation, renaming, reordering, symbols, restrained
   accents, deletion with safe tab migration, and drag-to-workspace movement;
@@ -161,6 +164,11 @@ Use the `+` beside the workspace strip to create a workspace. Right-click a
 workspace name or symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
+
+To browse two pages side by side, right-click a tab and choose **Open Side by
+Side With**, or open the command palette and run **Open split view**. The pair
+stays together in Flow and can be swapped, separated, or moved to another
+workspace as one unit.
 
 ## License
 
