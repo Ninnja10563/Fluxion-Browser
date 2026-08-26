@@ -74,7 +74,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/firefox-developer.entitlements.plist")"
+signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/InfoPlist.strings")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/firefox-developer.entitlements.plist")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -126,6 +126,37 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   plutil -replace CFBundleIdentifier -string app.fluxion.browser "$info"
   plutil -replace CFBundleShortVersionString -string "$app_version" "$info"
   plutil -replace CFBundleVersion -string "$app_version" "$info"
+  plutil -replace CFBundleGetInfoString -string "Fluxion $app_version" "$info"
+  plutil -replace CFBundleSignature -string FLXN "$info"
+  # CFBundleIconName points at Firefox's AppIcon in Assets.car and takes
+  # precedence over CFBundleIconFile on current macOS releases.
+  plutil -remove CFBundleIconName "$info" 2>/dev/null || true
+  plutil -replace NSCameraUsageDescription -string \
+    'Only sites you allow within Fluxion can use the camera.' "$info"
+  plutil -replace NSMicrophoneUsageDescription -string \
+    'Only sites you allow within Fluxion can use the microphone.' "$info"
+  plutil -replace NSLocationUsageDescription -string \
+    'Only sites you allow within Fluxion can use location services.' "$info"
+  plutil -replace NSLocationAlwaysAndWhenInUseUsageDescription -string \
+    'Only sites you allow within Fluxion can use location services.' "$info"
+  plutil -replace NSLocationWhenInUseUsageDescription -string \
+    'Only sites you allow within Fluxion can use location services.' "$info"
+  plutil -replace NSAppleEventsUsageDescription -string \
+    'Fluxion uses Apple Events to communicate with other applications.' "$info"
+  plutil -replace NSDownloadsFolderUsageDescription -string \
+    'Fluxion needs access to Downloads to save and manage downloaded files.' "$info"
+  plutil -replace NSDocumentsFolderUsageDescription -string \
+    'Fluxion needs access to Documents to open and save files at your request.' "$info"
+  plutil -replace NSDesktopFolderUsageDescription -string \
+    'Fluxion needs access to Desktop to open and save files at your request.' "$info"
+  plutil -replace NSRemovableVolumesUsageDescription -string \
+    'Fluxion needs access to removable volumes to open and save files.' "$info"
+  plutil -replace NSNetworkVolumesUsageDescription -string \
+    'Fluxion needs access to network volumes to open and save files.' "$info"
+  for localised_info in "$resources"/*.lproj/InfoPlist.strings; do
+    [[ -e "$localised_info" ]] || continue
+    ditto "$fluxion_root/packaging/macos/InfoPlist.strings" "$localised_info"
+  done
 
   icon_work="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-icon.XXXXXX")"
   if qlmanage -t -s 1024 -o "$icon_work" "$fluxion_root/assets/fluxion.svg" \
@@ -149,8 +180,12 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
     done
     iconutil -c icns "$iconset" -o "$resources/fluxion.icns"
     plutil -replace CFBundleIconFile -string fluxion.icns "$info"
+    # Replace the inherited icon too so no legacy Launch Services path can
+    # display Firefox branding while caches refresh.
+    ditto "$resources/fluxion.icns" "$resources/firefox.icns"
   else
-    printf 'Warning: macOS could not render the Fluxion icon; using the runtime icon.\n' >&2
+    printf 'macOS could not render the Fluxion icon; refusing a Firefox-branded build.\n' >&2
+    exit 1
   fi
   rm -rf -- "$icon_work"
 

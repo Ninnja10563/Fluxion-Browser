@@ -1,0 +1,3 @@
+/* Fluxion overrides the inherited Firefox application display name. */
+CFBundleName = "Fluxion";
+CFBundleDisplayName = "Fluxion";

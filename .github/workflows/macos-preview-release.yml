@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.1.0-preview.1
+        default: 0.1.0-preview.2
       tag:
         description: Git tag for the release
         required: true
-        default: v0.1.0-preview.1
+        default: v0.1.0-preview.2
 
 permissions:
   contents: write
@@ -55,9 +55,15 @@ jobs:
         run: |
           set -euo pipefail
           launcher='.runtime/Fluxion.app/Contents/MacOS/Fluxion'
+          info='.runtime/Fluxion.app/Contents/Info.plist'
+          resources='.runtime/Fluxion.app/Contents/Resources'
           architectures="$(lipo -archs "$launcher")"
           [[ " $architectures " == *' arm64 '* ]]
           [[ " $architectures " == *' x86_64 '* ]]
+          [[ "$(plutil -extract CFBundleIconFile raw "$info")" == 'fluxion.icns' ]]
+          ! plutil -extract CFBundleIconName raw "$info" >/dev/null 2>&1
+          [[ "$(plutil -extract CFBundleName raw "$info")" == 'Fluxion' ]]
+          cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
 
       - name: Package DMG and checksum

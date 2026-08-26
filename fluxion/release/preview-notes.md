@@ -1,4 +1,4 @@
-This is the first downloadable Fluxion Gecko Foundation Preview for macOS.
+This is a downloadable Fluxion Gecko Foundation Preview for macOS.
 
 It includes real Gecko webpage rendering, the Fluxion **Flow** vertical tab
 sidebar, workspaces, navigation, Firefox's mature browser services, a separate
@@ -7,6 +7,10 @@ Fluxion profile, and a native universal launcher with Apple Silicon support.
 This is an early development preview, not a stable release. Fluxion is still a
 Firefox-derived runtime overlay, and some Firefox surfaces and branding remain
 while the independent product interface is built out.
+
+Preview 2 corrects the macOS application identity: Finder, the Dock, Launchpad,
+Get Info, and permission dialogs now use Fluxion's icon and product name rather
+than inherited Firefox branding.
 
 ## Install
 
