@@ -178,7 +178,7 @@ Fluxion Settings is browser chrome, not webpage content. When a selected tab
 navigates to `about:preferences`, the window projects a Fluxion-owned settings
 surface beside Flow and temporarily hides Gecko's preferences document. The
 tab, URL, session state, and navigation remain Gecko-owned. Controls call
-`Services.prefs`, Gecko's `nsISearchService`, Places history, cookie/cache services, and
+`Services.prefs`, Gecko's `SearchService`, Places history, cookie/cache services, and
 the permission manager directly from the privileged product layer; none of
 those capabilities are exposed to ordinary sites.
 

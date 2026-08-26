@@ -8,8 +8,9 @@
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
-  const searchService = Cc["@mozilla.org/browser/search-service;1"]
-    .getService(Ci.nsISearchService);
+  const { SearchService: searchService } = ChromeUtils.importESModule(
+    "moz-src:///toolkit/components/search/SearchService.sys.mjs",
+  );
 
   const create = (tag, className, text) => {
     const element = document.createElementNS(HTML, tag);
@@ -185,7 +186,7 @@
     searchEngine.addEventListener("change", async () => {
       const engine = engines.find(item => (item.id || item.name) === searchEngine.value);
       if (!engine) return;
-      await searchService.setDefault(engine, Ci.nsISearchService.CHANGE_REASON_USER);
+      await searchService.setDefault(engine, searchService.CHANGE_REASON.USER);
       setNote(`Default search engine changed to ${engine.name}.`, "general");
     });
   }).catch(error => {

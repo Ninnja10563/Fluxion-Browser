@@ -32,7 +32,8 @@ test("browser chrome avoids prohibited decorative effects", () => {
 test("Fluxion settings replace the visible Firefox preferences surface with live controls", () => {
   assert.match(settings, /about:preferences/);
   assert.match(settings, /browser\.startup\.page/);
-  assert.match(settings, /nsISearchService\.CHANGE_REASON_USER/);
+  assert.match(settings, /SearchService\.sys\.mjs/);
+  assert.match(settings, /CHANGE_REASON\.USER/);
   assert.match(settings, /FluxionMemory\?\.setExcludedDomains/);
   assert.match(settings, /PlacesUtils\.history\.clear/);
   assert.match(settings, /Services\.cookies\.removeAll/);
