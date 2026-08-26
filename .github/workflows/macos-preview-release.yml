@@ -1,0 +1,97 @@
+name: macOS preview release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Release version without the leading v
+        required: true
+        default: 0.1.0-preview.1
+      tag:
+        description: Git tag for the release
+        required: true
+        default: v0.1.0-preview.1
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build universal Fluxion DMG
+    runs-on: macos-14
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Download official Firefox Gecko runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --location --retry 3 \
+            'https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=en-US' \
+            --output "$RUNNER_TEMP/firefox.dmg"
+          mkdir -p "$RUNNER_TEMP/firefox-volume" "$RUNNER_TEMP/firefox-source"
+          hdiutil attach "$RUNNER_TEMP/firefox.dmg" \
+            -mountpoint "$RUNNER_TEMP/firefox-volume" \
+            -nobrowse -readonly
+          ditto "$RUNNER_TEMP/firefox-volume/Firefox.app" \
+            "$RUNNER_TEMP/firefox-source/Firefox.app"
+          hdiutil detach "$RUNNER_TEMP/firefox-volume"
+
+      - name: Build Fluxion application
+        shell: bash
+        env:
+          FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
+          FLUXION_TARGET_ARCH: universal2
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          export FLUXION_APP_VERSION="${RELEASE_VERSION%%-*}"
+          ./fluxion/scripts/build-macos.sh --clean
+
+      - name: Verify application architecture and signature
+        shell: bash
+        run: |
+          set -euo pipefail
+          launcher='.runtime/Fluxion.app/Contents/MacOS/Fluxion'
+          architectures="$(lipo -archs "$launcher")"
+          [[ " $architectures " == *' arm64 '* ]]
+          [[ " $architectures " == *' x86_64 '* ]]
+          codesign --verify --deep --strict '.runtime/Fluxion.app'
+
+      - name: Package DMG and checksum
+        shell: bash
+        env:
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          ./fluxion/scripts/package-macos-dmg.sh \
+            --version "$RELEASE_VERSION" \
+            --output-dir "$GITHUB_WORKSPACE/dist"
+
+      - name: Preserve packaged assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fluxion-${{ inputs.version }}-macOS-universal
+          path: |
+            dist/*.dmg
+            dist/*.sha256
+          if-no-files-found: error
+
+      - name: Publish GitHub prerelease
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9A-Za-z][0-9A-Za-z._-]*$ ]]
+          [[ "$RELEASE_VERSION" =~ ^[0-9A-Za-z][0-9A-Za-z._-]*$ ]]
+          gh release create "$RELEASE_TAG" \
+            "dist/Fluxion-${RELEASE_VERSION}-macOS-universal.dmg" \
+            "dist/Fluxion-${RELEASE_VERSION}-macOS-universal.dmg.sha256" \
+            --target "$GITHUB_SHA" \
+            --title "Fluxion ${RELEASE_VERSION} — Gecko Foundation Preview" \
+            --notes-file fluxion/release/preview-notes.md \
+            --prerelease

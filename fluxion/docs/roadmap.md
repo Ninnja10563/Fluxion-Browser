@@ -42,4 +42,5 @@ controls work and its failure paths have been tested.
 - performance, battery, memory, and hundreds-of-tabs profiling
 - macOS notarization, Windows signing, Linux packages, and update service
 - signed and notarized Apple Silicon DMGs attached to GitHub Releases for each
-  large, release-worthy milestone (the current prototype will not be released)
+  stable, release-worthy milestone; early milestone DMGs remain clearly marked
+  prereleases until Developer ID signing and notarization are configured

@@ -17,4 +17,7 @@ On an Apple Silicon Mac, Fluxion automatically finds `/Applications/Firefox.app`
 and builds a native local `Fluxion.app`. See the project README for the one-time
 Apple Command Line Tools prerequisite.
 
+Downloadable macOS previews are published under
+[GitHub Releases](https://github.com/Ninnja10563/Fluxion-Browser/releases).
+
 See the project README for prerequisites and development commands.

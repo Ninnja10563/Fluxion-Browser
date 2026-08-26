@@ -10,6 +10,21 @@ if [[ "$(uname -s)" != "Darwin" ]]; then
   exit 69
 fi
 
+target_arch="${FLUXION_TARGET_ARCH:-$(uname -m)}"
+case "$target_arch" in
+  arm64|x86_64|universal2) ;;
+  *)
+    printf 'Unsupported FLUXION_TARGET_ARCH: %s\n' "$target_arch" >&2
+    printf 'Expected arm64, x86_64, or universal2.\n' >&2
+    exit 64
+    ;;
+esac
+app_version="${FLUXION_APP_VERSION:-0.1.0}"
+if [[ ! "$app_version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+  printf 'Invalid FLUXION_APP_VERSION: %s\n' "$app_version" >&2
+  exit 64
+fi
+
 fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 requested="$1"
 case "$requested" in
@@ -30,15 +45,19 @@ if [[ "$(sysctl -in sysctl.proc_translated 2>/dev/null || printf '0')" == "1" ]]
     'Open a native Terminal window and run the builder again for an ARM64 Fluxion app.' >&2
   exit 69
 fi
-if [[ "$(uname -m)" == "arm64" ]]; then
-  firefox_architectures="$(lipo -archs "$requested" 2>/dev/null || true)"
-  if [[ " $firefox_architectures " != *" arm64 "* ]]; then
-    printf '%s\n' \
-      'The installed Firefox does not contain native Apple Silicon code.' \
-      'Install the current macOS Firefox build before building Fluxion.' >&2
+firefox_architectures="$(lipo -archs "$requested" 2>/dev/null || true)"
+required_architectures=("$target_arch")
+if [[ "$target_arch" == "universal2" ]]; then
+  required_architectures=(arm64 x86_64)
+fi
+for required_architecture in "${required_architectures[@]}"; do
+  if [[ " $firefox_architectures " != *" $required_architecture "* ]]; then
+    printf 'Firefox does not contain the required %s architecture.\n' \
+      "$required_architecture" >&2
+    printf 'Install the current universal macOS Firefox build.\n' >&2
     exit 69
   fi
-fi
+done
 for system_tool in ditto plutil lipo codesign; do
   if ! command -v "$system_tool" >/dev/null 2>&1; then
     printf 'Required macOS system tool is unavailable: %s\n' "$system_tool" >&2
@@ -55,7 +74,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")"
+signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -65,7 +84,7 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
 
   rm -rf -- "$runtime_app"
   mkdir -p "$runtime_parent"
-  printf 'Creating native %s application from %s...\n' "$(uname -m)" "$source_app" >&2
+  printf 'Creating %s application from %s...\n' "$target_arch" "$source_app" >&2
   ditto "$source_app" "$runtime_app"
 
   resources="$runtime_app/Contents/Resources"
@@ -94,7 +113,11 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   ditto "$fluxion_root/newtab" "$bundled_root/newtab"
   ditto "$fluxion_root/assets" "$bundled_root/assets"
 
-  xcrun clang -arch "$(uname -m)" -Os -Wall -Wextra -Werror \
+  launcher_arch_flags=(-arch "$target_arch")
+  if [[ "$target_arch" == "universal2" ]]; then
+    launcher_arch_flags=(-arch arm64 -arch x86_64)
+  fi
+  xcrun clang "${launcher_arch_flags[@]}" -Os -Wall -Wextra -Werror \
     "$fluxion_root/packaging/macos/launcher.c" \
     -o "$macos/Fluxion"
 
@@ -105,6 +128,8 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
     plutil -insert CFBundleDisplayName -string Fluxion "$info"
   fi
   plutil -replace CFBundleIdentifier -string app.fluxion.browser "$info"
+  plutil -replace CFBundleShortVersionString -string "$app_version" "$info"
+  plutil -replace CFBundleVersion -string "$app_version" "$info"
 
   icon_work="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-icon.XXXXXX")"
   if qlmanage -t -s 1024 -o "$icon_work" "$fluxion_root/assets/fluxion.svg" \

@@ -3,6 +3,17 @@
 Fluxion supports M1, M2, M3, and M4 Macs through Mozilla's native ARM64 Gecko
 runtime. It does not use Rosetta, Chromium, Electron, or a system web view.
 
+## Install the preview DMG
+
+Download the newest macOS asset from
+[GitHub Releases](https://github.com/Ninnja10563/Fluxion-Browser/releases), open
+the DMG, and drag `Fluxion.app` to Applications. The universal application
+contains a native Apple Silicon launcher and runs natively on an M3 Mac.
+
+The preview is ad-hoc signed but is not yet Apple-notarized. On first launch,
+macOS may require you to right-click Fluxion and choose **Open**, or approve it
+under **System Settings → Privacy & Security**.
+
 ## One-time setup
 
 Install the current Firefox for macOS from Mozilla and move `Firefox.app` into
@@ -50,7 +61,7 @@ Pass normal Firefox command-line arguments after it:
 
 The builder never edits `/Applications/Firefox.app`. It creates the ignored
 local application `.runtime/Fluxion.app`, adds Fluxion's chrome and new-tab
-resources, compiles an ARM64 launcher, generates the Fluxion application icon,
+resources, compiles a native launcher, generates the Fluxion application icon,
 and ad-hoc signs the result for local development.
 
 The Finder launcher always uses this independent profile:
@@ -105,9 +116,9 @@ If the builder reports that Terminal is translated, quit Terminal, select it
 in Finder, open **Get Info**, turn off **Open using Rosetta**, and try again.
 
 If Apple blocks the locally signed development app, open **System Settings →
-Privacy & Security** and approve Fluxion, then open it again. Public releases
-will require Developer ID signing and notarization; the repository build is an
-ad-hoc-signed development application.
+Privacy & Security** and approve Fluxion, then open it again. Stable public
+releases will require Developer ID signing and notarization; the repository
+build and current preview are ad-hoc-signed development applications.
 
 To force a clean rebuild, remove only the generated application and run the
 builder again:

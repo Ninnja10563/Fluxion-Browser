@@ -7,6 +7,7 @@ cd "$fluxion_root"
 bash -n \
   bin/fluxion \
   scripts/build-macos.sh \
+  scripts/package-macos-dmg.sh \
   scripts/prepare-macos-runtime.sh \
   scripts/prepare-runtime.sh \
   scripts/check.sh \

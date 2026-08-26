@@ -23,6 +23,11 @@ This is intentionally an incremental browser fork. Later phases are tracked in
 [`docs/roadmap.md`](docs/roadmap.md); controls for unfinished features are not
 shown in the UI.
 
+An ad-hoc-signed Apple Silicon-compatible DMG is available from
+[GitHub Releases](https://github.com/Ninnja10563/Fluxion-Browser/releases).
+It is an early preview and is not Apple-notarized; see
+[`docs/macos.md`](docs/macos.md) for installation details.
+
 ## Run
 
 Fluxion requires Firefox ESR 140 or compatible Firefox on the host.
@@ -56,7 +61,7 @@ You can also build and run directly with:
 ```
 
 The builder verifies the Firefox executable has an `arm64` slice, compiles the
-small native launcher for the Mac's current architecture, copies Firefox into
+small native launcher for the requested architecture, copies Firefox into
 an ignored local `.runtime/Fluxion.app`, installs the Fluxion chrome, and
 ad-hoc signs the development bundle. It does not need Homebrew, Rosetta, or
 administrator access and does not modify `/Applications/Firefox.app`.
