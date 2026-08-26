@@ -76,5 +76,9 @@ done
 printf '%s\n' \
   'Fluxion.app opened Gecko but the Flow sidebar did not load.' \
   'The build is invalid and will not be presented as successful.' >&2
+if [[ -f "$profile/prefs.js" ]]; then
+  printf 'Observed Fluxion health markers:\n' >&2
+  grep 'user_pref("fluxion\..*\.health"' "$profile/prefs.js" >&2 || true
+fi
 sed -n '1,160p' "$log" >&2
 exit 1
