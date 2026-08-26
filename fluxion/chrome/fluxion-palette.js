@@ -163,6 +163,10 @@
         keywords: ["hide show collapse tabs"], run: () => ui.cycleSidebar(),
       },
       {
+        label: "New workspace", detail: "Create a named space for a separate tab set", kind: "Command",
+        keywords: ["add create workspace"], run: () => ui.addWorkspace(),
+      },
+      {
         label: "Open downloads", detail: "View current and completed downloads", kind: "Command",
         keywords: ["download manager files"], run: () => openUrl("about:downloads"),
       },

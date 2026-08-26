@@ -15,7 +15,8 @@ Phase 1 is runnable and includes:
 - compact vertical tabs with favicons, titles, audio state, close controls,
   reordering, pinning, duplication, and native tab session restoration;
 - three-state sidebar (expanded, compact, focus rail);
-- workspace switching and moving tabs between workspaces;
+- persistent workspace creation, renaming, reordering, symbols, restrained
+  accents, deletion with safe tab migration, and drag-to-workspace movement;
 - a restrained Fluxion navigation skin over Gecko's native security-aware URL
   field and a universal `Cmd/Ctrl+K` command palette;
 - fuzzy keyboard search across commands, open tabs, workspaces, history, and
@@ -153,6 +154,11 @@ Firefox shortcuts remain available. Fluxion adds:
 | Reopen closed tab | `Cmd+Shift+T` | `Ctrl+Shift+T` |
 | Tab search | `Cmd+Shift+A` | `Ctrl+Shift+A` |
 | Command palette | `Cmd+K` | `Ctrl+K` |
+
+Use the `+` beside the workspace strip to create a workspace. Right-click a
+workspace name or symbol to rename, reorder, recolour, change its symbol, or
+delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
+adjacent workspace after confirmation.
 
 ## License
 
