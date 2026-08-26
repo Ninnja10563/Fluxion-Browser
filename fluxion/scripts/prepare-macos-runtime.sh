@@ -74,7 +74,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")"
+signature="$target_arch|$app_version|$requested|$(stat -f '%m:%z' "$requested")|$(stat -f '%m:%z' "$fluxion_root/scripts/prepare-macos-runtime.sh")|$(stat -f '%m:%z' "$fluxion_root/runtime/fluxion.cfg")|$(stat -f '%m:%z' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/fluxion-chrome.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/url.js")|$(stat -f '%m:%z' "$fluxion_root/chrome/core/workspaces.js")|$(stat -f '%m:%z' "$fluxion_root/newtab/index.html")|$(stat -f '%m:%z' "$fluxion_root/newtab/newtab.css")|$(stat -f '%m:%z' "$fluxion_root/assets/fluxion.svg")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/launcher.c")|$(stat -f '%m:%z' "$fluxion_root/packaging/macos/firefox-developer.entitlements.plist")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -156,10 +156,12 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
 
   printf 'Signing the local Fluxion development application...\n' >&2
   # Firefox's main Mach-O signature seals the enclosing Info.plist. Re-sign it
-  # after changing the bundle identity, while retaining the upstream JIT and
-  # hardened-runtime entitlements Gecko needs to render web content.
-  codesign --force --sign - --timestamp=none \
-    --preserve-metadata=entitlements,flags,runtime \
+  # after changing the bundle identity with Mozilla's developer entitlement
+  # model. Production Firefox includes restricted passkey entitlements that
+  # macOS rejects when they are preserved in an ad-hoc signature.
+  codesign --force --sign - --timestamp=none --options runtime \
+    --entitlements \
+      "$fluxion_root/packaging/macos/firefox-developer.entitlements.plist" \
     "$macos/firefox"
   codesign --force --sign - --timestamp=none "$macos/Fluxion"
   codesign --force --sign - --timestamp=none "$runtime_app"

@@ -21,3 +21,5 @@ verify the download.
 
 Private browsing, downloads, permissions, PDF viewing, developer tools, media,
 and WebExtensions continue to use Firefox/Gecko's existing implementations.
+Platform passkeys are unavailable in this ad-hoc-signed preview because that
+macOS entitlement requires an Apple provisioning profile.
