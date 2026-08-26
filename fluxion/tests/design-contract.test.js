@@ -9,6 +9,10 @@ const root = path.resolve(__dirname, "..");
 const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf8");
 const palette = fs.readFileSync(path.join(root, "chrome/fluxion-palette.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
+const runtimeConfig = fs.readFileSync(
+  path.join(root, "runtime/fluxion.cfg"),
+  "utf8",
+);
 const macBuilder = fs.readFileSync(
   path.join(root, "scripts/prepare-macos-runtime.sh"),
   "utf8",
@@ -42,4 +46,20 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.palette\.health/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
+});
+
+test("new profiles never show Firefox onboarding or upload Mozilla telemetry", () => {
+  assert.match(
+    runtimeConfig,
+    /setBoolPref\("browser\.preonboarding\.enabled", false\)/,
+  );
+  assert.match(
+    runtimeConfig,
+    /setBoolPref\("browser\.aboutwelcome\.enabled", false\)/,
+  );
+  assert.match(
+    runtimeConfig,
+    /setBoolPref\("datareporting\.policy\.dataSubmissionEnabled", false\)/,
+  );
+  assert.doesNotMatch(runtimeConfig, /termsofuse\.accepted(?:Date|Version)/);
 });

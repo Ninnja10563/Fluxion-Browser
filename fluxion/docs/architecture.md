@@ -83,6 +83,10 @@ cannot call chrome methods.
 - Private windows retain Firefox's private-browsing origin attributes. No
   semantic index exists in this milestone, so no private content is captured.
 - No credentials, telemetry keys, AI endpoints, or remote scripts are bundled.
+- Mozilla telemetry upload, studies, Firefox onboarding, and pre-onboarding
+  experiments are disabled before the first browser window is restored.
+  Fluxion does not write Firefox Terms-of-Use acceptance preferences on a
+  user's behalf.
 
 The autoconfig hook is powerful by design. Installation artifacts must be
 owned and writable only by the installing user or administrator. Release
