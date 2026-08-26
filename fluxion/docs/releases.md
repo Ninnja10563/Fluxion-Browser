@@ -5,9 +5,11 @@ passes:
 
 1. Run with `publish=false`. GitHub builds and ad-hoc signs the universal app,
    launches Gecko with an isolated profile, requires Flow, command palette,
-   native tab-group, and native split-view health markers, validates application
-   branding, packages the DMG, and preserves a chrome-inspection screenshot
-   when the runner permits it.
+   Browser Memory service, native tab-group, and native split-view health
+   markers, validates application branding, packages the DMG, and preserves a
+   chrome-inspection screenshot when the runner permits it. The hosted runner
+   also opens either Gecko's semantic vector connection or its intentional
+   low-spec lexical fallback.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

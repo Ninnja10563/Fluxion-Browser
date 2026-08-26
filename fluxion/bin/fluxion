@@ -67,7 +67,7 @@ chmod 700 "$profile"
 export FLUXION_PROFILE="$profile"
 
 if [[ "${1:-}" == "--version" ]]; then
-  printf 'Fluxion 0.5.0-preview.1\n'
+  printf 'Fluxion 0.6.0-preview.1\n'
   exec "$runtime_binary" --version
 fi
 

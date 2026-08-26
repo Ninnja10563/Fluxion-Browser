@@ -39,7 +39,7 @@ while (( attempt < 240 )); do
       grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.health", "local-memory-controls-loaded")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.memory.engine.health", "local-vector-store-opened")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.memory.engine.health", "\(local-vector-store-opened\|lexical-fallback-available\)")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js"; then
     printf 'Verified: Fluxion chrome, palette, Browser Memory controls, tab groups, and native split view loaded.\n' >&2

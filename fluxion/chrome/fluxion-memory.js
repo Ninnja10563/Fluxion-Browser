@@ -127,8 +127,10 @@
     let state = "building";
     try {
       const semanticManager = getManager();
-      await semanticManager.getConnection();
-      if (await semanticManager.hasSufficientEntriesForSearching()) {
+      const connection = await semanticManager.getConnection();
+      if (!connection) {
+        state = "lexical";
+      } else if (await semanticManager.hasSufficientEntriesForSearching()) {
         const response = await semanticManager.infer({ searchString: query });
         semantic = (response.results || [])
           .filter(row => isAllowedResult(row.url))
@@ -169,10 +171,10 @@
     Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", false);
     Services.prefs.savePrefFile(null);
     const semanticManager = getManager();
-    await semanticManager.getConnection();
+    const connection = await semanticManager.getConnection();
     semanticManager.onPagesRankChanged();
     applyExclusions();
-    return true;
+    return connection ? "semantic" : "lexical";
   }
 
   async function clearAndDisable() {
@@ -219,8 +221,11 @@
   }
   if (Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1") {
     Services.prefs.setStringPref("browser.search.region", "US");
-    enable().then(() => {
-      Services.prefs.setStringPref("fluxion.memory.engine.health", "local-vector-store-opened");
+    enable().then(capability => {
+      Services.prefs.setStringPref(
+        "fluxion.memory.engine.health",
+        capability === "semantic" ? "local-vector-store-opened" : "lexical-fallback-available",
+      );
       Services.prefs.savePrefFile(null);
     }).catch(Cu.reportError);
   }

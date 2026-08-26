@@ -28,9 +28,10 @@ controls work and its failure paths have been tested.
 
 ## Phase 4 — local semantic history
 
-- privacy-gated page extraction and sensitive-origin exclusions
-- SQLite FTS hybrid ranker with optional local embedding worker
-- inspectable Browser Memory evidence and complete deletion controls
+- opt-in Gecko-local embeddings, sensitive-origin/domain exclusions, hybrid
+  history ranker, and complete vector deletion controls (implemented)
+- privacy-gated heading/body extraction and richer local metadata
+- inspectable Browser Memory answer evidence
 
 ## Phase 5 — optional AI providers
 

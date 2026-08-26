@@ -143,11 +143,31 @@ traffic-light/menu polish. Preview releases use a two-pass build and visual
 inspection gate documented in `docs/releases.md`. Windows and Linux use the
 same product layer with platform packaging and title-bar adapters.
 
-## Future local search boundary
+## Local Browser Memory boundary
 
-Semantic history will be a separate low-priority service, not code executed in
-page context. The planned pipeline is extraction through a narrow message
-boundary, redaction/exclusion policy, SQLite metadata and full-text ranking,
-and optional local embeddings. Private contexts are rejected before enqueue.
-The AI provider and embedding provider will remain separate optional
-interfaces. See the roadmap for acceptance criteria.
+Browser Memory is opt-in and uses Gecko's packaged
+`PlacesSemanticHistoryManager`, `EmbeddingsGenerator`, SQLite `vec0` extension,
+and a separate `places_semantic.sqlite` database. Its current embedding text is
+the title and description already held by Places; Fluxion does not inject page
+content into a privileged document or send history to a network AI provider.
+Gecko generates and queries embeddings on-device in deferred chunks, monitors
+chunk latency, and disables the model path when hardware requirements are not
+met. Fluxion merges those results with exact/fuzzy Places evidence, recency,
+visit frequency, and active-workspace relevance. Exact evidence has an explicit
+ranking advantage over a weaker semantic neighbour.
+
+Firefox excludes private-window visits before they enter Places, and Fluxion
+also refuses Browser Memory operations from private windows. Auth, mail,
+payment, billing, and other obviously sensitive URLs are filtered. User domain
+exclusions are stored as a local preference; excluded vector rows are replaced
+with a content-free sentinel and filtered at query time, preventing the native
+indexer from immediately recreating page-derived vectors while retaining the
+ordinary history record. Clearing Browser Memory disables its feature gates,
+deletes vector rows and mappings, and schedules the semantic database files for
+removal at the next startup. It does not silently delete ordinary history.
+
+A later enrichment stage may add extracted headings and useful body text
+through a narrow content-process actor, but it will require independent tests
+for private contexts, password forms, exclusions, size limits, and deletion
+before it is enabled. Optional generative `AIProvider` and `EmbeddingProvider`
+interfaces remain separate future work.

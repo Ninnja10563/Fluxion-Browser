@@ -9,6 +9,22 @@ Firefox-derived runtime overlay, and some secondary Gecko preference surfaces
 retain upstream terminology while the independent product interface is built
 out.
 
+Version 0.6 introduces the first usable Browser Memory milestone:
+
+- opt in from the command palette; ordinary browsing remains AI-independent;
+- search history by exact text and, on supported Macs, local semantic meaning;
+- combine keyword evidence, vector similarity, recency, visit frequency, and
+  active-workspace relevance without letting weak semantics beat exact terms;
+- keep history and embeddings on-device with Gecko's local embedding runtime;
+- reject Browser Memory access from private windows;
+- automatically filter obvious auth, mail, account, billing, and payment URLs;
+- exclude the current domain and its subdomains without deleting normal history;
+- clear all semantic vectors and disable the feature from a visible control;
+- fall back to exact local history search when the model is unavailable.
+
+The macOS gate opens the packaged Browser Memory service and visually inspects
+its dedicated search mode before a DMG can be published.
+
 Version 0.5 adds a real Gecko-native split view to the Flow interaction model:
 
 - place any two ordinary tabs side by side from a concise tab menu;

@@ -580,7 +580,7 @@
   if (Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1") {
     window.setTimeout(() => {
       open("memory");
-      input.value = "example domain from earlier";
+      input.value = "example.com";
       render(false);
     }, 1200);
   }

@@ -26,6 +26,9 @@ The current preview is runnable and includes:
   field and a universal `Cmd/Ctrl+K` command palette;
 - fuzzy keyboard search across commands, open tabs, workspaces, history, and
   bookmarks, with dedicated `Cmd/Ctrl+Shift+A` tab search;
+- optional Browser Memory search over non-private history, combining exact
+  Places matches with Gecko's on-device embeddings, recency, frequency, and
+  workspace relevance;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 
@@ -169,6 +172,14 @@ To browse two pages side by side, right-click a tab and choose **Open Side by
 Side With**, or open the command palette and run **Open split view**. The pair
 stays together in Flow and can be swapped, separated, or moved to another
 workspace as one unit.
+
+Browser Memory is off by default. Run **Enable Browser Memory** from the
+command palette to opt in, then use **Search Browser Memory** to describe a
+page you remember. The embedding model and vector database stay on the Mac;
+private-window history is never eligible. The palette also provides controls
+to exclude the current domain or delete the semantic database and turn the
+feature off. Machines that do not meet Gecko's local-model requirements retain
+exact and fuzzy local-history search without downloading or running a model.
 
 ## License
 
