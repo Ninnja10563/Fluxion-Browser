@@ -9,7 +9,20 @@ Firefox-derived runtime overlay, and some secondary Gecko preference surfaces
 retain upstream terminology while the independent product interface is built
 out.
 
-Version 0.3 makes Fluxion workspaces fully persistent and user-manageable:
+Version 0.4 integrates Gecko-native tab groups directly into Flow:
+
+- compact group headings with collapse and expand state;
+- group names and restrained colour indicators;
+- drag tabs into groups or use the concise native context menu;
+- reorder groups and move a whole group between workspaces;
+- remove individual tabs from a group or ungroup without closing anything;
+- include group names in high-volume tab search;
+- retain Gecko SessionStore ownership of group membership and crash recovery.
+
+The macOS release gate now creates a real native group and refuses the build
+unless Fluxion renders it successfully.
+
+Version 0.3 made Fluxion workspaces fully persistent and user-manageable:
 
 - create and name workspaces directly from the Flow strip;
 - rename and reorder workspaces through concise native context menus;
