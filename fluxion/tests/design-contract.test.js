@@ -57,6 +57,8 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.groups\.health/);
   assert.match(macVerifier, /fluxion\.splitview\.health/);
   assert.match(macVerifier, /fluxion\.memory\.health/);
+  assert.match(macVerifier, /fluxion\.memory\.engine\.health/);
+  assert.match(macVerifier, /FLUXION_VISUAL_MEMORY_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);

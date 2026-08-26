@@ -576,6 +576,14 @@
     layer.remove();
     style.remove();
   }, { once: true });
+  window.FluxionPalette = Object.freeze({ open });
+  if (Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1") {
+    window.setTimeout(() => {
+      open("memory");
+      input.value = "example domain from earlier";
+      render(false);
+    }, 1200);
+  }
   Services.prefs.setStringPref("fluxion.palette.health", "command-palette-loaded");
   Services.prefs.savePrefFile(null);
 })(window);

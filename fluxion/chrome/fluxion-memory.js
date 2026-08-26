@@ -217,6 +217,13 @@
   if (enabled() && !PrivateBrowsingUtils.isWindowPrivate(window)) {
     enable().catch(Cu.reportError);
   }
+  if (Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1") {
+    Services.prefs.setStringPref("browser.search.region", "US");
+    enable().then(() => {
+      Services.prefs.setStringPref("fluxion.memory.engine.health", "local-vector-store-opened");
+      Services.prefs.savePrefFile(null);
+    }).catch(Cu.reportError);
+  }
   Services.prefs.setStringPref("fluxion.memory.health", "local-memory-controls-loaded");
   Services.prefs.savePrefFile(null);
 })(window);

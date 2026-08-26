@@ -29,16 +29,17 @@ cleanup() {
 trap cleanup EXIT
 
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 \
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 \
   "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
 attempt=0
-while (( attempt < 120 )); do
+while (( attempt < 240 )); do
   if [[ -f "$profile/prefs.js" ]] && \
       grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.health", "local-memory-controls-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.memory.engine.health", "local-vector-store-opened")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js"; then
     printf 'Verified: Fluxion chrome, palette, Browser Memory controls, tab groups, and native split view loaded.\n' >&2
