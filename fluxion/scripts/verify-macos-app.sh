@@ -29,7 +29,7 @@ cleanup() {
 trap cleanup EXIT
 
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" "$launcher" about:blank >"$log" 2>&1 &
+FLUXION_PROFILE="$profile" "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
 attempt=0

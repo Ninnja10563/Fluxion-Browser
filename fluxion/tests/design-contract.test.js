@@ -36,6 +36,14 @@ test("compact Flow uses the researched 44px rail", () => {
   assert.match(chrome, /data-state="compact"[^}]*width:\s*44px/);
 });
 
+test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
+  assert.match(
+    chrome,
+    /navigatorToolbox\.setAttribute\("tabs-hidden", "true"\)/,
+  );
+  assert.doesNotMatch(chrome, /titlebar-(?:close|min|max)[^\n]*addEventListener/);
+});
+
 test("macOS package cannot inherit Firefox's asset-catalogue icon", () => {
   assert.match(macBuilder, /rm -f -- "\$resources\/Assets\.car"/);
   assert.match(macBuilder, /plutil -remove CFBundleIconName/);
@@ -46,6 +54,7 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.palette\.health/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
+  assert.match(macVerifier, /https:\/\/example\.com\//);
 });
 
 test("new profiles never show Firefox onboarding or upload Mozilla telemetry", () => {
