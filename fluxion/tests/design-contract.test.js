@@ -54,9 +54,19 @@ test("macOS package cannot inherit Firefox's asset-catalogue icon", () => {
 test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.palette\.health/);
   assert.match(macVerifier, /fluxion\.groups\.health/);
+  assert.match(macVerifier, /fluxion\.splitview\.health/);
+  assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("split view delegates content panes to Gecko and remains controllable from Flow", () => {
+  assert.match(chrome, /gBrowser\.addTabSplitView/);
+  assert.match(chrome, /splitView\.unsplitTabs/);
+  assert.match(chrome, /splitView\.reverseTabs/);
+  assert.match(chrome, /fluxion-split-mark/);
+  assert.doesNotMatch(chrome, /createElement\(["'](?:iframe|browser)["']/);
 });
 
 test("new profiles never show Firefox onboarding or upload Mozilla telemetry", () => {

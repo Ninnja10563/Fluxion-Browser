@@ -18,6 +18,7 @@
   let visibleItems = [];
   let lastFocus = null;
   let mode = "all";
+  let splitSource = null;
   let placesTimer = 0;
 
   const create = (tag, className) => {
@@ -133,7 +134,7 @@
 
   function commandItems() {
     const doCommand = id => document.getElementById(id)?.doCommand();
-    return [
+    const items = [
       {
         label: "New tab", detail: "Open a blank tab", kind: "Command", boost: 45,
         keywords: ["create page"], run: () => ui.newTab(),
@@ -206,16 +207,48 @@
         keywords: ["devtools inspector console"], run: () => doCommand("Tools:DevToolbox"),
       },
     ];
+    const selectedTab = gBrowser.selectedTab;
+    if (selectedTab?.splitview) {
+      items.splice(9, 0,
+        {
+          label: "Swap split sides", detail: "Reverse the two pages", kind: "Command",
+          keywords: ["split view reverse panes"], run: () => ui.reverseSplitView(selectedTab),
+        },
+        {
+          label: "Separate split view", detail: "Return both pages to ordinary tabs", kind: "Command",
+          keywords: ["split view exit unsplit panes"], run: () => ui.separateSplitView(selectedTab),
+        },
+      );
+    } else if (selectedTab && !selectedTab.pinned) {
+      items.splice(9, 0,
+        {
+          label: "Open split view", detail: "Choose an open tab to place beside this page", kind: "Command",
+          keywords: ["side by side two panes"], run: () => open("split", selectedTab),
+        },
+        {
+          label: "New page in split view", detail: "Open a blank page beside this one", kind: "Command",
+          keywords: ["side by side two panes"], run: () => ui.openNewSplit(selectedTab),
+        },
+      );
+    }
+    return items;
   }
 
   function tabItems() {
-    return [...gBrowser.tabs].map(tab => ({
+    const source = splitSource;
+    const tabs = mode === "split"
+      ? [...gBrowser.tabs].filter(tab =>
+          ui.tabWorkspace(tab) === ui.currentWorkspace() &&
+          window.FluxionSplitViews.canSplit(splitSource, tab)
+        )
+      : [...gBrowser.tabs];
+    return tabs.map(tab => ({
       label: tab.label || "New tab",
       detail: tab.linkedBrowser?.currentURI?.displaySpec || "",
-      kind: "Tab",
+      kind: mode === "split" ? "Split" : "Tab",
       boost: tab === gBrowser.selectedTab ? 18 : 0,
       keywords: [ui.tabWorkspace(tab), tab.group?.label || ""],
-      run: () => ui.selectTab(tab),
+      run: () => source ? ui.createSplitView(source, tab) : ui.selectTab(tab),
     }));
   }
 
@@ -283,7 +316,7 @@
   }
 
   function allItems(search, includePlaces) {
-    if (mode === "tabs") return tabItems();
+    if (mode === "tabs" || mode === "split") return tabItems();
     const items = [...commandItems(), ...tabItems(), ...workspaceItems()];
     if (includePlaces) {
       const seen = new Set();
@@ -342,7 +375,9 @@
     results.replaceChildren();
     if (!visibleItems.length) {
       const empty = create("div", "fluxion-palette-empty");
-      empty.textContent = mode === "tabs" ? "No matching open tabs" : "No matching command or page";
+      empty.textContent = mode === "split"
+        ? "No tabs are available for split view"
+        : mode === "tabs" ? "No matching open tabs" : "No matching command or page";
       results.appendChild(empty);
       input.removeAttribute("aria-activedescendant");
       return;
@@ -377,12 +412,15 @@
     }
   }
 
-  function open(nextMode = "all") {
+  function open(nextMode = "all", sourceTab = null) {
     mode = nextMode;
+    splitSource = nextMode === "split" ? sourceTab : null;
     lastFocus = document.activeElement;
     layer.hidden = false;
     input.value = "";
-    input.placeholder = mode === "tabs" ? "Search open tabs" : "Search commands, tabs, history, and bookmarks";
+    input.placeholder = mode === "split"
+      ? "Choose a tab to place beside this page"
+      : mode === "tabs" ? "Search open tabs" : "Search commands, tabs, history, and bookmarks";
     activeIndex = 0;
     render(false);
     window.requestAnimationFrame(() => input.focus());
@@ -392,6 +430,7 @@
     window.clearTimeout(placesTimer);
     layer.hidden = true;
     input.value = "";
+    splitSource = null;
     if (lastFocus?.isConnected) lastFocus.focus();
     lastFocus = null;
   }

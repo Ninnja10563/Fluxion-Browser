@@ -16,6 +16,7 @@ bash -n \
 node --check chrome/core/url.js
 node --check chrome/core/search.js
 node --check chrome/core/tab-groups.js
+node --check chrome/core/split-views.js
 node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-palette.js
