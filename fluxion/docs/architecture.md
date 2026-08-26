@@ -47,7 +47,7 @@ bin/fluxion
   -> isolated Firefox profile
   -> Linux runtime symlink overlay OR macOS Fluxion.app copy
   -> runtime/fluxion.cfg (privileged startup boundary)
-     -> chrome/core/*.js (typed-by-contract state and URL helpers)
+     -> chrome/core/*.js (typed-by-contract state, group projection, and URL helpers)
      -> chrome/fluxion-chrome.js
         -> Flow sidebar / workspaces / tab interactions / navigation skin
         -> Firefox gBrowser + SessionStore
@@ -65,6 +65,11 @@ Workspace membership is stored as a persisted SessionStore tab attribute.
 The current workspace and sidebar state use Firefox preferences. This keeps
 crash recovery atomic with the actual tab session and avoids a second database
 whose state could drift from Firefox.
+
+Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
+operations. Fluxion only projects those groups into Flow; labels, colours,
+collapse state, tab membership, closed-group recovery, and crash restoration
+remain owned by Firefox SessionStore.
 
 The visible navigation bar is styled by Fluxion but deliberately retains
 Firefox's native URL bar internals. This preserves certificate identity,

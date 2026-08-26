@@ -53,6 +53,7 @@ test("macOS package cannot inherit Firefox's asset-catalogue icon", () => {
 
 test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.palette\.health/);
+  assert.match(macVerifier, /fluxion\.groups\.health/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);

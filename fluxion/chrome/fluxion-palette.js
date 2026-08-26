@@ -167,6 +167,10 @@
         keywords: ["add create workspace"], run: () => ui.addWorkspace(),
       },
       {
+        label: "New tab group", detail: "Start a named group with the current tab", kind: "Command",
+        keywords: ["add create organize tabs"], run: () => ui.createGroup(),
+      },
+      {
         label: "Open downloads", detail: "View current and completed downloads", kind: "Command",
         keywords: ["download manager files"], run: () => openUrl("about:downloads"),
       },
@@ -210,7 +214,7 @@
       detail: tab.linkedBrowser?.currentURI?.displaySpec || "",
       kind: "Tab",
       boost: tab === gBrowser.selectedTab ? 18 : 0,
-      keywords: [ui.tabWorkspace(tab)],
+      keywords: [ui.tabWorkspace(tab), tab.group?.label || ""],
       run: () => ui.selectTab(tab),
     }));
   }

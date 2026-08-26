@@ -20,7 +20,7 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
-- named/reorderable workspaces (implemented) and tab groups
+- named/reorderable workspaces and Gecko-native tab groups (implemented)
 - fuzzy command palette and high-volume tab search (initial command, tab,
   workspace, history, and bookmark search implemented)
 - split view, peek pages, and configurable tab sleeping

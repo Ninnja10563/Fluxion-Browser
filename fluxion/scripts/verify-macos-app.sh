@@ -29,15 +29,17 @@ cleanup() {
 trap cleanup EXIT
 
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" "$launcher" https://example.com/ >"$log" 2>&1 &
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 \
+  "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
 attempt=0
 while (( attempt < 120 )); do
   if [[ -f "$profile/prefs.js" ]] && \
       grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js"; then
-    printf 'Verified: Fluxion chrome and command palette loaded.\n' >&2
+      grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js"; then
+    printf 'Verified: Fluxion chrome, command palette, and native tab groups loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground

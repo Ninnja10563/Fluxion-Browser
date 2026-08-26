@@ -14,6 +14,8 @@ Phase 1 is runnable and includes:
 - URL/search navigation, back, forward, reload, stop, and security identity;
 - compact vertical tabs with favicons, titles, audio state, close controls,
   reordering, pinning, duplication, and native tab session restoration;
+- Gecko-native named tab groups with collapse, reorder, colour, group-to-
+  workspace movement, and crash/session restoration;
 - three-state sidebar (expanded, compact, focus rail);
 - persistent workspace creation, renaming, reordering, symbols, restrained
   accents, deletion with safe tab migration, and drag-to-workspace movement;

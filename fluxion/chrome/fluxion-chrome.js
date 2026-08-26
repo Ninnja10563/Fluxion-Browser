@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionTabGroups, FluxionWorkspaces */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -16,6 +16,7 @@
   const SIDEBAR_STATES = ["expanded", "compact", "focus"];
   const cleanup = [];
   let contextTab = null;
+  let contextGroup = null;
   let contextWorkspace = null;
   let dragTab = null;
   let renderQueued = false;
@@ -199,6 +200,22 @@
     .fluxion-tab.is-dragover::after {
       content: ""; position: absolute; inset: -2px 4px auto; height: 2px; background: var(--fluxion-accent);
     }
+    .fluxion-group { margin: 2px 0 4px; }
+    .fluxion-group-heading {
+      width: 100%; height: 25px; display: flex; align-items: center; gap: 5px;
+      padding: 0 7px; border: 0; border-radius: 3px; color: var(--fluxion-muted);
+      background: transparent; font: inherit; font-size: 10.5px; text-align: start;
+    }
+    .fluxion-group-heading:hover,
+    .fluxion-group-heading[data-dragover="true"] { color: var(--fluxion-ink); background: var(--fluxion-hover); }
+    .fluxion-group-heading.has-active { color: var(--fluxion-ink); }
+    .fluxion-group-disclosure { width: 9px; flex: none; font-size: 12px; transition: transform var(--fluxion-fast); }
+    .fluxion-group:not(.is-collapsed) .fluxion-group-disclosure { transform: rotate(90deg); }
+    .fluxion-group-mark { width: 2px; height: 12px; flex: none; background: var(--group-accent); }
+    .fluxion-group-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fluxion-group-count { color: var(--fluxion-muted); font-variant-numeric: tabular-nums; }
+    .fluxion-group-tabs { margin-inline-start: 8px; padding-inline-start: 3px; border-inline-start: 1px solid var(--fluxion-line); }
+    .fluxion-group.is-collapsed .fluxion-group-tabs { display: none; }
     .fluxion-favicon {
       width: 16px; height: 16px; flex: none; object-fit: contain; border-radius: 2px;
     }
@@ -222,6 +239,8 @@
     #fluxion-flow[data-state="compact"] .fluxion-name,
     #fluxion-flow[data-state="compact"] .fluxion-section-label,
     #fluxion-flow[data-state="compact"] .fluxion-title,
+    #fluxion-flow[data-state="compact"] .fluxion-group-name,
+    #fluxion-flow[data-state="compact"] .fluxion-group-count,
     #fluxion-flow[data-state="compact"] .fluxion-close,
     #fluxion-flow[data-state="compact"] .fluxion-count,
     #fluxion-flow[data-state="compact"] .fluxion-new-tab span { display: none; }
@@ -246,6 +265,9 @@
     #fluxion-flow[data-state="compact"] .fluxion-add-workspace { width: 30px; height: 28px; }
     #fluxion-flow[data-state="compact"] .fluxion-tabs { padding-inline: 6px; }
     #fluxion-flow[data-state="compact"] .fluxion-tab { justify-content: center; padding: 0; }
+    #fluxion-flow[data-state="compact"] .fluxion-group-heading { justify-content: center; padding: 0; }
+    #fluxion-flow[data-state="compact"] .fluxion-group-disclosure { display: none; }
+    #fluxion-flow[data-state="compact"] .fluxion-group-tabs { margin-inline-start: 3px; padding-inline-start: 0; }
     #fluxion-flow[data-state="compact"] .fluxion-footer { padding-inline: 7px; }
     #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
@@ -367,6 +389,62 @@
 
   function iconFor(tab) {
     return tab.getAttribute("image") || tab.image || "";
+  }
+
+  function askGroupName(title, initialValue = "") {
+    const value = { value: initialValue };
+    const accepted = Services.prompt.prompt(
+      window,
+      title,
+      "Group name:",
+      value,
+      null,
+      { value: false },
+    );
+    return accepted ? FluxionTabGroups.normaliseGroupName(value.value) : null;
+  }
+
+  function createGroupForTab(tab) {
+    if (!tab || !tab.parentNode) return null;
+    const name = askGroupName("New Tab Group");
+    if (name === null) return null;
+    if (!name) {
+      Services.prompt.alert(window, "Group Not Created", "Enter a group name.");
+      return null;
+    }
+    const group = gBrowser.addTabGroup([tab], { label: name, insertBefore: tab });
+    scheduleRender();
+    return group;
+  }
+
+  function renameGroup(group) {
+    if (!group?.isConnected) return;
+    const name = askGroupName("Rename Tab Group", group.label || "");
+    if (name) group.label = name;
+  }
+
+  function moveGroupToWorkspace(group, id) {
+    if (!group?.isConnected || !workspaces.some(item => item.id === id)) return;
+    for (const tab of group.tabs) tab.setAttribute(TAB_WORKSPACE, id);
+    if (id !== currentWorkspace && group.tabs.includes(gBrowser.selectedTab)) {
+      const replacement = [...gBrowser.tabs].find(
+        tab => !group.tabs.includes(tab) && tabWorkspace(tab) === currentWorkspace,
+      );
+      if (replacement) gBrowser.selectedTab = replacement;
+    }
+    switchWorkspace(currentWorkspace);
+  }
+
+  function reorderGroup(group, direction) {
+    const groups = gBrowser.tabGroups.filter(candidate =>
+      candidate.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
+    );
+    const index = groups.indexOf(group);
+    const target = groups[index + Math.sign(direction)];
+    if (index < 0 || !target) return;
+    if (direction < 0) gBrowser.moveTabBefore(group, target);
+    else gBrowser.moveTabAfter(group, target);
+    scheduleRender();
   }
 
   function saveWorkspaces(next) {
@@ -630,6 +708,60 @@
     return svg;
   }
 
+  function createGroupElement(group, tabs) {
+    const colours = {
+      blue: "#51748a", purple: "#756681", cyan: "#4f7d7e",
+      orange: "#907052", yellow: "#8a7b4c", pink: "#896777",
+      green: "#667c69", gray: "#68747b", red: "#8b646b",
+    };
+    const item = create("div", "fluxion-group");
+    item.classList.toggle("is-collapsed", Boolean(group.collapsed));
+    item.style.setProperty("--group-accent", colours[group.color] || colours.gray);
+
+    const heading = create("button", "fluxion-group-heading");
+    heading.type = "button";
+    heading.classList.toggle("has-active", tabs.includes(gBrowser.selectedTab));
+    heading.setAttribute("aria-expanded", String(!group.collapsed));
+    heading.title = group.label || "Tab group";
+    const disclosure = create("span", "fluxion-group-disclosure");
+    disclosure.textContent = "›";
+    disclosure.setAttribute("aria-hidden", "true");
+    const mark = create("span", "fluxion-group-mark");
+    mark.setAttribute("aria-hidden", "true");
+    const label = create("span", "fluxion-group-name");
+    label.textContent = group.label || "Group";
+    const groupCount = create("span", "fluxion-group-count");
+    groupCount.textContent = String(tabs.length);
+    heading.append(disclosure, mark, label, groupCount);
+    heading.addEventListener("click", () => {
+      group.collapsed = !group.collapsed;
+      scheduleRender();
+    });
+    heading.addEventListener("contextmenu", event => {
+      event.preventDefault();
+      contextGroup = group;
+      groupMenu.openPopupAtScreen(event.screenX, event.screenY, true);
+    });
+    heading.addEventListener("dragover", event => {
+      if (!dragTab || dragTab.group === group) return;
+      event.preventDefault();
+      heading.setAttribute("data-dragover", "true");
+    });
+    heading.addEventListener("dragleave", () => heading.removeAttribute("data-dragover"));
+    heading.addEventListener("drop", event => {
+      event.preventDefault();
+      heading.removeAttribute("data-dragover");
+      if (dragTab) group.addTabs([dragTab]);
+      dragTab = null;
+      scheduleRender();
+    });
+
+    const groupTabs = create("div", "fluxion-group-tabs");
+    for (const tab of tabs) groupTabs.appendChild(createTabElement(tab));
+    item.append(heading, groupTabs);
+    return item;
+  }
+
   function renderWorkspaces() {
     workspaceList.replaceChildren();
     const colours = { slate: "#68747b", blue: "#51748a", ochre: "#92794d", sage: "#667c69", rose: "#8b646b" };
@@ -672,8 +804,20 @@
     pinnedTabs.replaceChildren();
     tabsList.replaceChildren();
     const visible = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === currentWorkspace);
-    for (const tab of visible) {
-      (tab.pinned ? pinnedTabs : tabsList).appendChild(createTabElement(tab));
+    for (const tab of visible.filter(tab => tab.pinned)) {
+      pinnedTabs.appendChild(createTabElement(tab));
+    }
+    const rows = FluxionTabGroups.projectTabRows(
+      visible.filter(tab => !tab.pinned),
+      currentWorkspace,
+      { workspaceOf: tabWorkspace, groupOf: tab => tab.group },
+    );
+    for (const row of rows) {
+      tabsList.appendChild(
+        row.kind === "group"
+          ? createGroupElement(row.group, row.tabs)
+          : createTabElement(row.tab),
+      );
     }
     pinnedLabel.hidden = pinnedTabs.childElementCount === 0;
     pinnedTabs.hidden = pinnedTabs.childElementCount === 0;
@@ -716,6 +860,37 @@
   const moveToPopup = xul("menupopup");
   moveToMenu.appendChild(moveToPopup);
   contextMenu.appendChild(moveToMenu);
+  const tabGroupMenu = xul("menu", { label: "Tab Group" });
+  const tabGroupPopup = xul("menupopup");
+  tabGroupMenu.appendChild(tabGroupPopup);
+  contextMenu.appendChild(tabGroupMenu);
+  tabGroupPopup.addEventListener("popupshowing", event => {
+    if (event.target !== tabGroupPopup) return;
+    tabGroupPopup.replaceChildren();
+    appendAction(tabGroupPopup, "New Group…", () => createGroupForTab(contextTab));
+    const groups = gBrowser.tabGroups.filter(group =>
+      group.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
+    );
+    if (groups.length) tabGroupPopup.appendChild(xul("menuseparator"));
+    for (const group of groups) {
+      appendAction(
+        tabGroupPopup,
+        `Move to ${group.label || "Group"}`,
+        () => {
+          if (contextTab) group.addTabs([contextTab]);
+          scheduleRender();
+        },
+        contextTab?.group === group ? { disabled: "true" } : {},
+      );
+    }
+    if (contextTab?.group) {
+      tabGroupPopup.appendChild(xul("menuseparator"));
+      appendAction(tabGroupPopup, "Remove from Group", () => {
+        if (contextTab) gBrowser.ungroupTab(contextTab);
+        scheduleRender();
+      });
+    }
+  });
   contextMenu.addEventListener("popupshowing", event => {
     if (event.target !== contextMenu) return;
     moveToPopup.replaceChildren();
@@ -730,6 +905,66 @@
   });
   contextMenu.appendChild(xul("menuseparator"));
   appendAction(contextMenu, "Close Tab", () => contextTab && gBrowser.removeTab(contextTab));
+
+  const groupMenu = xul("menupopup", { id: "fluxion-group-context" });
+  appendAction(groupMenu, "Rename Group…", () => renameGroup(contextGroup));
+  const collapseGroupItem = appendAction(groupMenu, "Collapse Group", () => {
+    if (contextGroup) contextGroup.collapsed = !contextGroup.collapsed;
+  });
+  const moveGroupUp = appendAction(groupMenu, "Move Group Up", () => reorderGroup(contextGroup, -1));
+  const moveGroupDown = appendAction(groupMenu, "Move Group Down", () => reorderGroup(contextGroup, 1));
+  groupMenu.appendChild(xul("menuseparator"));
+  const groupColourMenu = xul("menu", { label: "Colour" });
+  const groupColourPopup = xul("menupopup");
+  const groupColourItems = new Map();
+  for (const colour of FluxionTabGroups.GROUP_COLORS) {
+    const item = appendAction(
+      groupColourPopup,
+      colour[0].toUpperCase() + colour.slice(1),
+      () => {
+        if (contextGroup) contextGroup.color = colour;
+      },
+      { type: "radio", name: "fluxion-tab-group-colour" },
+    );
+    groupColourItems.set(colour, item);
+  }
+  groupColourMenu.appendChild(groupColourPopup);
+  groupMenu.appendChild(groupColourMenu);
+  const groupWorkspaceMenu = xul("menu", { label: "Move Group to Workspace" });
+  const groupWorkspacePopup = xul("menupopup");
+  groupWorkspaceMenu.appendChild(groupWorkspacePopup);
+  groupMenu.appendChild(groupWorkspaceMenu);
+  groupMenu.appendChild(xul("menuseparator"));
+  appendAction(groupMenu, "Ungroup Tabs", () => {
+    contextGroup?.ungroupTabs();
+    scheduleRender();
+  });
+  groupMenu.addEventListener("popupshowing", event => {
+    if (event.target !== groupMenu) return;
+    const groups = gBrowser.tabGroups.filter(group =>
+      group.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
+    );
+    const index = groups.indexOf(contextGroup);
+    collapseGroupItem.setAttribute(
+      "label",
+      contextGroup?.collapsed ? "Expand Group" : "Collapse Group",
+    );
+    moveGroupUp.setAttribute("disabled", String(index <= 0));
+    moveGroupDown.setAttribute("disabled", String(index < 0 || index >= groups.length - 1));
+    for (const [colour, item] of groupColourItems) {
+      item.setAttribute("checked", String(contextGroup?.color === colour));
+    }
+    groupWorkspacePopup.replaceChildren();
+    for (const workspace of workspaces) {
+      const alreadyThere = contextGroup?.tabs.every(tab => tabWorkspace(tab) === workspace.id);
+      appendAction(
+        groupWorkspacePopup,
+        workspace.name,
+        () => moveGroupToWorkspace(contextGroup, workspace.id),
+        alreadyThere ? { disabled: "true" } : {},
+      );
+    }
+  });
 
   const workspaceMenu = xul("menupopup", { id: "fluxion-workspace-context" });
   appendAction(workspaceMenu, "Rename Workspace…", () => renameWorkspace(contextWorkspace));
@@ -795,7 +1030,7 @@
     }
   });
 
-  popupSet.append(contextMenu, workspaceMenu);
+  popupSet.append(contextMenu, groupMenu, workspaceMenu);
 
   on(modeButton, "click", cycleSidebar);
   on(addWorkspaceButton, "click", addWorkspace);
@@ -805,7 +1040,11 @@
   on(newTabButton, "click", () => {
     openWorkspaceTab();
   });
-  for (const eventName of ["TabOpen", "TabClose", "TabSelect", "TabMove", "TabPinned", "TabUnpinned", "TabAttrModified"]) {
+  for (const eventName of [
+    "TabOpen", "TabClose", "TabSelect", "TabMove", "TabPinned", "TabUnpinned",
+    "TabAttrModified", "TabGroupCreate", "TabGroupRemoved", "TabGroupUpdate",
+    "TabGroupCollapse", "TabGroupExpand", "TabGrouped", "TabUngrouped",
+  ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }
   on(window, "keydown", event => {
@@ -822,6 +1061,7 @@
   on(window, "unload", () => {
     while (cleanup.length) cleanup.pop()();
     contextMenu.remove();
+    groupMenu.remove();
     workspaceMenu.remove();
     style.remove();
     delete window.FluxionUI;
@@ -835,6 +1075,7 @@
   updateWindowTitle();
   window.FluxionUI = Object.freeze({
     addWorkspace,
+    createGroup: () => createGroupForTab(gBrowser.selectedTab),
     cycleSidebar,
     currentWorkspace: () => currentWorkspace,
     deleteWorkspace,
@@ -851,6 +1092,25 @@
     tabWorkspace,
     workspaces: () => workspaces.map(workspace => ({ ...workspace })),
   });
+  if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
+    const groupTabs = [...gBrowser.tabs]
+      .filter(tab => tabWorkspace(tab) === currentWorkspace && !tab.pinned)
+      .slice(0, 2);
+    if (groupTabs.length < 2) {
+      const tab = gBrowser.addTrustedTab("https://example.org/");
+      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      groupTabs.push(tab);
+    }
+    const group = gBrowser.addTabGroup(groupTabs, {
+      label: "Reference",
+      color: "blue",
+      insertBefore: groupTabs[0],
+    });
+    if (!group) throw new Error("Fluxion: native Gecko tab-group integration failed");
+    group.collapsed = false;
+    Services.prefs.setStringPref("fluxion.groups.health", "native-group-rendered");
+    scheduleRender();
+  }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);
 })(window);
