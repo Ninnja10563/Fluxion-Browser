@@ -39,7 +39,16 @@ while (( attempt < 120 )); do
       grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js"; then
     printf 'Verified: Fluxion chrome and command palette loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
-      sleep 1
+      # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
+      # few more frames to replace macOS's startup placeholder, then foreground
+      # the process so the artifact represents the browser users actually see.
+      sleep 4
+      if command -v osascript >/dev/null 2>&1; then
+        osascript -e \
+          "tell application \"System Events\" to set frontmost of first application process whose unix id is $process_id to true" \
+          >/dev/null 2>&1 || true
+        sleep 1
+      fi
       if screencapture -x "$FLUXION_CAPTURE_PATH"; then
         printf 'Captured Fluxion chrome at %s\n' "$FLUXION_CAPTURE_PATH" >&2
       else

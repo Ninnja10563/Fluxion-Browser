@@ -69,6 +69,7 @@ jobs:
           [[ "$(plutil -extract CFBundleIconFile raw "$info")" == 'fluxion.icns' ]]
           ! plutil -extract CFBundleIconName raw "$info" >/dev/null 2>&1
           [[ "$(plutil -extract CFBundleName raw "$info")" == 'Fluxion' ]]
+          [[ ! -e "$resources/Assets.car" ]]
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
 

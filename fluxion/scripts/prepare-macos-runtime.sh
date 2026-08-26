@@ -132,6 +132,12 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   # CFBundleIconName points at Firefox's AppIcon in Assets.car and takes
   # precedence over CFBundleIconFile on current macOS releases.
   plutil -remove CFBundleIconName "$info" 2>/dev/null || true
+  # Firefox's compiled asset catalogue contains another copy of AppIcon. The
+  # native macOS startup placeholder can resolve it even after CFBundleIconName
+  # is removed, briefly showing Firefox branding before Gecko paints chrome.
+  # Fluxion uses the explicit ICNS below, so the inherited catalogue is neither
+  # needed nor safe to keep in a branded application bundle.
+  rm -f -- "$resources/Assets.car"
   plutil -replace NSCameraUsageDescription -string \
     'Only sites you allow within Fluxion can use the camera.' "$info"
   plutil -replace NSMicrophoneUsageDescription -string \
