@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <title>Fluxion</title>
+  <rect width="64" height="64" rx="13" fill="#252724"/>
+  <path d="M15 12h37L32.2 29.4h18.4L17.5 54 27 34.7H15z"
+        stroke="#F1F1EC" stroke-width="4" stroke-linejoin="round"/>
+</svg>

@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+export FLUXION_ROOT="$fluxion_root"
+
+find_firefox() {
+  if [[ -n "${FLUXION_FIREFOX_BIN:-}" ]]; then
+    printf '%s\n' "$FLUXION_FIREFOX_BIN"
+    return
+  fi
+
+  local candidate
+  for candidate in firefox-esr firefox; do
+    if command -v "$candidate" >/dev/null 2>&1; then
+      command -v "$candidate"
+      return
+    fi
+  done
+
+  if [[ -x "$fluxion_root/../.runtime/upstream/usr/lib/firefox-esr/firefox-esr" ]]; then
+    printf '%s\n' "$fluxion_root/../.runtime/upstream/usr/lib/firefox-esr/firefox-esr"
+    return
+  fi
+
+  return 1
+}
+
+upstream_binary="$(find_firefox || true)"
+if [[ -z "$upstream_binary" || ! -x "$upstream_binary" ]]; then
+  cat >&2 <<'MESSAGE'
+Fluxion needs a Firefox/Gecko runtime.
+
+Install Firefox ESR with your system package manager, or run:
+  FLUXION_FIREFOX_BIN=/absolute/path/to/firefox ./bin/fluxion
+
+Chromium-based runtimes are intentionally unsupported.
+MESSAGE
+  exit 69
+fi
+
+runtime_binary="$($fluxion_root/scripts/prepare-runtime.sh "$upstream_binary")"
+profile="${FLUXION_PROFILE:-$fluxion_root/../.profiles/default}"
+mkdir -p "$profile"
+chmod 700 "$profile"
+
+if [[ "${1:-}" == "--version" ]]; then
+  printf 'Fluxion 0.1.0\n'
+  exec "$runtime_binary" --version
+fi
+
+# The extracted-runtime smoke path can provide extra private libraries without
+# affecting normal packaged Firefox installations.
+if [[ -n "${FLUXION_LIBRARY_PATH:-}" ]]; then
+  export LD_LIBRARY_PATH="$FLUXION_LIBRARY_PATH${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+fi
+
+exec "$runtime_binary" \
+  --no-remote \
+  --profile "$profile" \
+  --name Fluxion \
+  "$@"

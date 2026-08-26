@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>New Tab</title>
+    <link rel="stylesheet" href="newtab.css">
+  </head>
+  <body>
+    <main>
+      <div class="identity" aria-label="Fluxion">
+        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M5 4.5h13.5l-7.2 6.3H18L6 20l3.5-7H5z" stroke="currentColor" stroke-width="1.45" stroke-linejoin="round"/>
+        </svg>
+        <span>Fluxion</span>
+      </div>
+      <form action="https://duckduckgo.com/" method="get" role="search">
+        <label for="q">Search the web</label>
+        <div class="field">
+          <svg viewBox="0 0 20 20" fill="none" aria-hidden="true">
+            <circle cx="8.5" cy="8.5" r="5.25" stroke="currentColor" stroke-width="1.5"/>
+            <path d="m12.5 12.5 4 4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <input id="q" name="q" type="search" autocomplete="off" autofocus placeholder="Search or enter an address">
+        </div>
+      </form>
+      <p class="hint"><kbd>⌘</kbd><kbd>L</kbd> focuses the address field</p>
+    </main>
+  </body>
+</html>

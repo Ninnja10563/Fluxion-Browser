@@ -1,0 +1,6 @@
+.cache/
+.runtime/
+.profiles/
+*.log
+*.png
+.DS_Store
