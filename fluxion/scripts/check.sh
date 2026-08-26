@@ -19,9 +19,11 @@ node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
 node --check chrome/core/memory-ranking.js
+node --check chrome/core/settings.js
 node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-memory.js
+node --check chrome/fluxion-settings.js
 node --check chrome/fluxion-palette.js
 node --test tests/*.test.js
 

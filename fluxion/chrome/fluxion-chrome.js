@@ -210,6 +210,11 @@
       padding: 0 6px; margin: 1px 0; border-radius: 3px; color: var(--fluxion-muted);
       user-select: none; transition: opacity 100ms ease, transform var(--fluxion-fast), background-color 80ms linear;
     }
+    :root[data-fluxion-density="compact"] .fluxion-tab { height: 28px; }
+    :root[data-fluxion-density="roomy"] .fluxion-tab { height: 36px; }
+    :root[data-fluxion-no-motion] #fluxion-flow,
+    :root[data-fluxion-no-motion] .fluxion-tab,
+    :root[data-fluxion-no-motion] .fluxion-group-disclosure { transition: none !important; }
     .fluxion-tab:hover { background: var(--fluxion-hover); color: var(--fluxion-ink); }
     .fluxion-tab[aria-selected="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); }
     .fluxion-tab[aria-selected="true"]::before {
@@ -313,6 +318,16 @@
     }
   `;
   document.documentElement.appendChild(style);
+  document.documentElement.setAttribute(
+    "data-fluxion-density",
+    ["compact", "standard", "roomy"].includes(Services.prefs.getStringPref("fluxion.tabs.density", "standard"))
+      ? Services.prefs.getStringPref("fluxion.tabs.density", "standard")
+      : "standard",
+  );
+  document.documentElement.toggleAttribute(
+    "data-fluxion-no-motion",
+    !Services.prefs.getBoolPref("fluxion.animations.enabled", true),
+  );
 
   let workspaces;
   try {
@@ -650,13 +665,25 @@
     scheduleRender();
   }
 
-  function cycleSidebar() {
-    const index = SIDEBAR_STATES.indexOf(flow.dataset.state);
-    const state = SIDEBAR_STATES[(index + 1) % SIDEBAR_STATES.length];
+  function setSidebarState(value) {
+    const state = SIDEBAR_STATES.includes(value) ? value : "expanded";
     flow.dataset.state = state;
     Services.prefs.setStringPref(PREF_SIDEBAR, state);
+    Services.prefs.savePrefFile(null);
     modeButton.textContent = state === "expanded" ? "‹" : state === "compact" ? "·" : "›";
     scheduleRender();
+  }
+
+  function cycleSidebar() {
+    const index = SIDEBAR_STATES.indexOf(flow.dataset.state);
+    setSidebarState(SIDEBAR_STATES[(index + 1) % SIDEBAR_STATES.length]);
+  }
+
+  function setTabDensity(value) {
+    const density = ["compact", "standard", "roomy"].includes(value) ? value : "standard";
+    document.documentElement.setAttribute("data-fluxion-density", density);
+    Services.prefs.setStringPref("fluxion.tabs.density", density);
+    Services.prefs.savePrefFile(null);
   }
 
   function openWorkspaceTab() {
@@ -1253,6 +1280,8 @@
     renameWorkspace,
     reverseSplitView,
     separateSplitView,
+    setSidebarState,
+    setTabDensity,
     selectTab(tab) {
       if (!tab || !tab.parentNode) return;
       const workspace = tabWorkspace(tab);

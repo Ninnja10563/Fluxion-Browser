@@ -171,3 +171,18 @@ through a narrow content-process actor, but it will require independent tests
 for private contexts, password forms, exclusions, size limits, and deletion
 before it is enabled. Optional generative `AIProvider` and `EmbeddingProvider`
 interfaces remain separate future work.
+
+## Privileged settings surface
+
+Fluxion Settings is browser chrome, not webpage content. When a selected tab
+navigates to `about:preferences`, the window projects a Fluxion-owned settings
+surface beside Flow and temporarily hides Gecko's preferences document. The
+tab, URL, session state, and navigation remain Gecko-owned. Controls call
+`Services.prefs`, `Services.search`, Places history, cookie/cache services, and
+the permission manager directly from the privileged product layer; none of
+those capabilities are exposed to ordinary sites.
+
+The original preferences document remains packaged as part of Gecko so mature
+internal implementation and migration code are not removed. Fluxion owns the
+normal user-facing route, while new settings are added only when they have a
+working service behind them.

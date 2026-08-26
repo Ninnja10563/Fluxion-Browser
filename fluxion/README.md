@@ -29,6 +29,9 @@ The current preview is runnable and includes:
 - optional Browser Memory search over non-private history, combining exact
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;
+- a Fluxion-owned settings surface with live controls for startup, search,
+  Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
+  permissions;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

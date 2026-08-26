@@ -5,7 +5,7 @@ passes:
 
 1. Run with `publish=false`. GitHub builds and ad-hoc signs the universal app,
    launches Gecko with an isolated profile, requires Flow, command palette,
-   Browser Memory service, native tab-group, and native split-view health
+   live Fluxion Settings, Browser Memory service, native tab-group, and native split-view health
    markers, validates application branding, packages the DMG, and preserves a
    chrome-inspection screenshot when the runner permits it. The hosted runner
    also opens either Gecko's semantic vector connection or its intentional

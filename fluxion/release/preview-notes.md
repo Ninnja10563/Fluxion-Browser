@@ -4,10 +4,27 @@ It includes real Gecko webpage rendering, the Fluxion **Flow** vertical tab
 sidebar, workspaces, navigation, Firefox's mature browser services, a separate
 Fluxion profile, and a native universal launcher with Apple Silicon support.
 
-This is an early development preview, not a stable release. Fluxion is still a
-Firefox-derived runtime overlay, and some secondary Gecko preference surfaces
-retain upstream terminology while the independent product interface is built
-out.
+This is an early development preview, not a stable release. Fluxion retains
+Gecko's browser services and security boundaries while its independent product
+interface is built out incrementally.
+
+Version 0.7 replaces the visible Firefox preferences page with live Fluxion
+Settings:
+
+- a restrained, compact preferences layout that remains beside the Flow tab
+  sidebar instead of presenting an admin dashboard;
+- startup, session restoration, homepage, external-link, and default-search
+  controls backed by Gecko preferences and search services;
+- immediate Flow sidebar mode and tab-density controls plus an independent
+  animation switch that still respects macOS Reduce Motion;
+- real tab warning and foreground-selection controls;
+- Browser Memory opt-in, domain exclusions, and semantic-data deletion;
+- confirmed actions to clear Gecko history, cookies/cache, or saved site
+  permissions;
+- an accurate keyboard reference for Fluxion and retained browser shortcuts.
+
+The macOS release gate now opens the packaged settings surface and refuses to
+publish unless the privileged controls are visible and connected.
 
 Version 0.6 introduces the first usable Browser Memory milestone:
 

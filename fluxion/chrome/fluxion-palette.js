@@ -577,7 +577,10 @@
     style.remove();
   }, { once: true });
   window.FluxionPalette = Object.freeze({ open });
-  if (Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1") {
+  if (
+    Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1" &&
+    Services.env.get("FLUXION_VISUAL_SETTINGS_TEST") !== "1"
+  ) {
     window.setTimeout(() => {
       open("memory");
       input.value = "example.com";

@@ -202,6 +202,14 @@
     return true;
   }
 
+  async function setExcludedDomains(values) {
+    const next = [...new Set(values.map(FluxionMemoryPolicy.normaliseDomain).filter(Boolean))].slice(0, 200);
+    Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
+    Services.prefs.savePrefFile(null);
+    await applyExclusions();
+    return next;
+  }
+
   const observer = () => { applyExclusions(); };
   Services.obs.addObserver(observer, "places-semantichistorymanager-update-complete");
   window.addEventListener("unload", () => {
@@ -214,6 +222,7 @@
     enabled,
     excludeDomain,
     excludedDomains,
+    setExcludedDomains,
     search,
   });
   if (enabled() && !PrivateBrowsingUtils.isWindowPrivate(window)) {

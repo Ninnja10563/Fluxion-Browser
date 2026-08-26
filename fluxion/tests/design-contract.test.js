@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf8");
 const palette = fs.readFileSync(path.join(root, "chrome/fluxion-palette.js"), "utf8");
 const memory = fs.readFileSync(path.join(root, "chrome/fluxion-memory.js"), "utf8");
+const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -24,8 +25,19 @@ const macVerifier = fs.readFileSync(
 );
 
 test("browser chrome avoids prohibited decorative effects", () => {
-  const productCss = `${chrome}\n${palette}`;
+  const productCss = `${chrome}\n${palette}\n${settings}`;
   assert.doesNotMatch(productCss, /(?:linear|radial)-gradient|backdrop-filter|filter:\s*blur/i);
+});
+
+test("Fluxion settings replace the visible Firefox preferences surface with live controls", () => {
+  assert.match(settings, /about:preferences/);
+  assert.match(settings, /browser\.startup\.page/);
+  assert.match(settings, /Services\.search\.setDefault/);
+  assert.match(settings, /FluxionMemory\?\.setExcludedDomains/);
+  assert.match(settings, /PlacesUtils\.history\.clear/);
+  assert.match(settings, /Services\.cookies\.removeAll/);
+  assert.match(settings, /Services\.perms\.removeAll/);
+  assert.doesNotMatch(settings, /(?:linear|radial)-gradient|backdrop-filter/);
 });
 
 test("new tab stays blank instead of duplicating the address field", () => {
@@ -58,8 +70,10 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.splitview\.health/);
   assert.match(macVerifier, /fluxion\.memory\.health/);
   assert.match(macVerifier, /fluxion\.memory\.engine\.health/);
+  assert.match(macVerifier, /fluxion\.settings\.visual\.health/);
   assert.match(macVerifier, /FLUXION_VISUAL_MEMORY_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_SETTINGS_TEST=1/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
