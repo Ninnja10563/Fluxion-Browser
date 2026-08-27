@@ -186,3 +186,18 @@ The original preferences document remains packaged as part of Gecko so mature
 internal implementation and migration code are not removed. Fluxion owns the
 normal user-facing route, while new settings are added only when they have a
 working service behind them.
+
+## Tab sleeping boundary
+
+Fluxion schedules eligibility, but Gecko owns suspension. The scheduler uses a
+tab's native `lastAccessed` timestamp and excludes active or sensitive runtime
+states before calling `gBrowser.prepareDiscardBrowser`. It then calls
+`gBrowser.discardBrowser(tab, false)`: the non-forced path invokes Gecko's
+`permitUnload` protection, refuses active dialogs, records a lazy SessionStore
+state, tears down the content browser, and restores it through the ordinary tab
+selection path. Fluxion does not serialize page state itself.
+
+Private windows never run the scheduler. Selected, pinned, split, audio/PiP,
+screen/camera/microphone-sharing, busy, closing, and already discarded tabs are
+also excluded. These checks intentionally trade a small amount of potential
+memory recovery for predictable browsing behaviour.

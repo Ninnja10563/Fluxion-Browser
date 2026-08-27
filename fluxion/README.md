@@ -32,6 +32,9 @@ The current preview is runnable and includes:
 - a Fluxion-owned settings surface with live controls for startup, search,
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
   permissions;
+- automatic native tab sleeping with configurable idle intervals, safe
+  before-unload handling, and exclusions for pinned, audio, shared, split, and
+  private tabs;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

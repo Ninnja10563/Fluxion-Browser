@@ -222,6 +222,11 @@
       background: var(--fluxion-accent);
     }
     .fluxion-tab.is-closing { opacity: 0; transform: scaleY(.72); pointer-events: none; }
+    .fluxion-tab.is-sleeping { color: color-mix(in srgb, var(--fluxion-muted) 82%, transparent); }
+    .fluxion-tab.is-sleeping::after {
+      content: ""; width: 7px; height: 7px; flex: none; border: 1px solid currentColor;
+      border-block-start-color: transparent; border-radius: 50%; transform: rotate(-35deg);
+    }
     .fluxion-tab.is-dragover::after {
       content: ""; position: absolute; inset: -2px 4px auto; height: 2px; background: var(--fluxion-accent);
     }
@@ -706,11 +711,13 @@
 
   function createTabElement(tab) {
     const item = create("div", "fluxion-tab");
+    const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
+    item.classList.toggle("is-sleeping", sleeping);
     item.tabIndex = 0;
     item.draggable = true;
     item.setAttribute("role", "tab");
     item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab));
-    item.title = `${tabLabel(tab)}\n${tab.linkedBrowser?.currentURI?.displaySpec || ""}`;
+    item.title = `${tabLabel(tab)}\n${tab.linkedBrowser?.currentURI?.displaySpec || ""}${sleeping ? "\nSleeping — select to restore" : ""}`;
 
     const faviconUrl = iconFor(tab);
     if (faviconUrl) {
@@ -1009,6 +1016,9 @@
     if (!contextTab) return;
     contextTab.pinned ? gBrowser.unpinTab(contextTab) : gBrowser.pinTab(contextTab);
   });
+  const sleepTabItem = appendAction(contextMenu, "Sleep Background Tab", () => {
+    if (contextTab) window.FluxionTabSleeping?.sleep(contextTab, { forceAge: true });
+  });
   contextMenu.appendChild(xul("menuseparator"));
   const splitWithMenu = xul("menu", { label: "Open Side by Side With" });
   const splitWithPopup = xul("menupopup");
@@ -1086,6 +1096,7 @@
     splitWithMenu.hidden = inSplitView || Boolean(contextTab?.pinned);
     separateSplitItem.hidden = !inSplitView;
     reverseSplitItem.hidden = !inSplitView;
+    sleepTabItem.hidden = Boolean(contextTab?.selected || contextTab?.pinned || inSplitView || !contextTab?.linkedPanel);
     moveToPopup.replaceChildren();
     for (const workspace of workspaces) {
       appendAction(
@@ -1238,6 +1249,7 @@
     "TabAttrModified", "TabGroupCreate", "TabGroupRemoved", "TabGroupUpdate",
     "TabGroupCollapse", "TabGroupExpand", "TabGrouped", "TabUngrouped",
     "SplitViewCreated", "SplitViewRemoved", "SplitViewTabChange",
+    "FluxionTabSleep",
   ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }

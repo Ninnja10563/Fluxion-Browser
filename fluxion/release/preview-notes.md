@@ -8,6 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.8 adds real Gecko-native tab sleeping for large sessions:
+
+- choose 5, 15, 30, or 60 minutes—or never—from live Fluxion Settings;
+- flush current SessionStore state, release the content process through
+  Gecko's native discard path, and restore the page when selected;
+- never force a discard, allowing Gecko to protect unsaved forms and active
+  page dialogs through its `beforeunload` checks;
+- exclude selected, pinned, audio/PiP, shared, split-view, busy, private, and
+  already sleeping tabs;
+- show a quiet crescent state in Flow and provide a concise manual sleep action
+  for eligible background tabs.
+
+The macOS release gate now proves that a real background Gecko browser was
+discarded before packaging the app.
+
 Version 0.7 replaces the visible Firefox preferences page with live Fluxion
 Settings:
 

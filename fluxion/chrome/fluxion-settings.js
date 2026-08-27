@@ -215,6 +215,13 @@
   }));
 
   const tabs = section("tabs", "Tabs", "Control tab prompts and the behaviour of large sessions.");
+  row(tabs, "Sleep inactive tabs", "Release memory through Gecko after a tab has stayed unused. Pinned, audio, shared, split, private, and unsaved-form tabs are protected.", select([
+    ["5", "After 5 minutes"], ["15", "After 15 minutes"], ["30", "After 30 minutes"],
+    ["60", "After 1 hour"], ["0", "Never"],
+  ], window.FluxionTabSleeping?.minutes() ?? 30, value => {
+    window.FluxionTabSleeping?.setMinutes(value);
+    setNote(value === "0" ? "Automatic tab sleeping disabled." : `Inactive tabs will sleep after ${value} minutes.`, "tabs");
+  }));
   row(tabs, "Confirm closing many tabs", "Ask before closing a window with multiple open tabs.", toggle("Enabled", pref.bool("browser.tabs.warnOnClose", true), checked => pref.setBool("browser.tabs.warnOnClose", checked)));
   row(tabs, "Switch to new tabs", "Immediately focus links that request a new foreground tab.", toggle("Enabled", pref.bool("browser.tabs.loadInBackground", true) === false, checked => pref.setBool("browser.tabs.loadInBackground", !checked)));
   row(tabs, "Confirm quitting", "Protect the current browsing session when quitting with ⌘Q.", toggle("Enabled", pref.bool("browser.warnOnQuit", true), checked => pref.setBool("browser.warnOnQuit", checked)));

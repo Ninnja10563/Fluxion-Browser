@@ -10,6 +10,7 @@ const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf
 const palette = fs.readFileSync(path.join(root, "chrome/fluxion-palette.js"), "utf8");
 const memory = fs.readFileSync(path.join(root, "chrome/fluxion-memory.js"), "utf8");
 const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
+const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -77,9 +78,19 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_MEMORY_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SETTINGS_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_SLEEP_TEST=1/);
+  assert.match(macVerifier, /native-tab-discarded/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("tab sleeping uses Gecko discard and protects live browsing state", () => {
+  assert.match(sleeping, /prepareDiscardBrowser/);
+  assert.match(sleeping, /discardBrowser\(tab, false\)/);
+  assert.match(sleeping, /PrivateBrowsingUtils\.isWindowPrivate/);
+  assert.doesNotMatch(sleeping, /discardBrowser\(tab, true\)/);
+  assert.match(settings, /Sleep inactive tabs/);
 });
 
 test("Browser Memory is optional, local, and unavailable in private windows", () => {
