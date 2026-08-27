@@ -11,6 +11,7 @@ const palette = fs.readFileSync(path.join(root, "chrome/fluxion-palette.js"), "u
 const memory = fs.readFileSync(path.join(root, "chrome/fluxion-memory.js"), "utf8");
 const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
 const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js"), "utf8");
+const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -80,9 +81,20 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_SETTINGS_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SLEEP_TEST=1/);
   assert.match(macVerifier, /native-tab-discarded/);
+  assert.match(macVerifier, /FLUXION_VISUAL_PEEK_TEST=1/);
+  assert.match(macVerifier, /temporary-gecko-tab-opened/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("Peek Pages preserve Gecko link security and remain temporary native tabs", () => {
+  assert.match(peek, /_openLinkInParameters/);
+  assert.match(peek, /window\.openLinkIn/);
+  assert.match(peek, /skipSessionStore: true/);
+  assert.match(peek, /persistTabAttribute/);
+  assert.match(peek, /createSplitView/);
+  assert.doesNotMatch(peek, /createElement(?:NS)?\([^\n]*(?:iframe|browser)/);
 });
 
 test("tab sleeping uses Gecko discard and protects live browsing state", () => {

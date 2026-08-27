@@ -8,6 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.9 adds secure, temporary Peek Pages:
+
+- choose **Peek Link** from Gecko's native webpage link menu;
+- open the real page in a real Gecko tab using the source document's existing
+  principal, CSP, referrer, container, and history parameters;
+- label the temporary page quietly in Flow and close it automatically when the
+  user switches away;
+- keep it as an ordinary tab, promote it beside the source as a native split,
+  or close it without polluting recently closed tabs;
+- discard unpromoted Peeks during restart/crash restoration while ordinary
+  promoted tabs continue through SessionStore.
+
+The macOS release gate now opens and renders a real HTTPS Peek Page before the
+DMG can be packaged.
+
 Version 0.8 adds real Gecko-native tab sleeping for large sessions:
 
 - choose 5, 15, 30, or 60 minutes—or never—from live Fluxion Settings;

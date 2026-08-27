@@ -35,6 +35,8 @@ The current preview is runnable and includes:
 - automatic native tab sleeping with configurable idle intervals, safe
   before-unload handling, and exclusions for pinned, audio, shared, split, and
   private tabs;
+- temporary Peek Pages opened from the native link menu, with explicit keep,
+  close, and side-by-side promotion actions and no closed-tab/session clutter;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

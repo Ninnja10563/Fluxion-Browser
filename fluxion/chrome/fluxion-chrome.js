@@ -271,6 +271,10 @@
       color: var(--fluxion-muted); font-size: 11px; border: 1px solid var(--fluxion-line); border-radius: 50%;
     }
     .fluxion-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fluxion-peek-badge {
+      flex: none; color: var(--fluxion-muted); font-size: 9px; font-weight: 650;
+      letter-spacing: .06em; text-transform: uppercase;
+    }
     .fluxion-close, .fluxion-audio { width: 22px; height: 22px; flex: none; font-size: 14px; opacity: 0; }
     .fluxion-tab:hover .fluxion-close, .fluxion-tab:focus-within .fluxion-close, .fluxion-audio { opacity: 1; }
     .fluxion-footer {
@@ -705,7 +709,8 @@
     if (!tab || tab.closing) return;
     element.classList.add("is-closing");
     window.setTimeout(() => {
-      if (tab.parentNode) gBrowser.removeTab(tab, { animate: false });
+      if (!tab.parentNode) return;
+      if (!window.FluxionPeek?.close(tab)) gBrowser.removeTab(tab, { animate: false });
     }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120);
   }
 
@@ -733,6 +738,13 @@
     const title = create("span", "fluxion-title");
     title.textContent = tabLabel(tab);
     item.appendChild(title);
+
+    if (tab.hasAttribute("fluxion-peek")) {
+      const badge = create("span", "fluxion-peek-badge");
+      badge.textContent = "Peek";
+      badge.title = "Temporary page — switch away to close";
+      item.appendChild(badge);
+    }
 
     if (tab.splitview) {
       const splitMark = create("span", "fluxion-split-mark");
@@ -1019,6 +1031,12 @@
   const sleepTabItem = appendAction(contextMenu, "Sleep Background Tab", () => {
     if (contextTab) window.FluxionTabSleeping?.sleep(contextTab, { forceAge: true });
   });
+  const promotePeekItem = appendAction(contextMenu, "Keep Peek as Tab", () => {
+    if (contextTab) window.FluxionPeek?.promote(contextTab);
+  });
+  const splitPeekItem = appendAction(contextMenu, "Open Peek Side by Side", () => {
+    if (contextTab) window.FluxionPeek?.openBeside(contextTab);
+  });
   contextMenu.appendChild(xul("menuseparator"));
   const splitWithMenu = xul("menu", { label: "Open Side by Side With" });
   const splitWithPopup = xul("menupopup");
@@ -1093,10 +1111,13 @@
   contextMenu.addEventListener("popupshowing", event => {
     if (event.target !== contextMenu) return;
     const inSplitView = Boolean(contextTab?.splitview);
+    const isPeek = Boolean(window.FluxionPeek?.isPeek(contextTab));
     splitWithMenu.hidden = inSplitView || Boolean(contextTab?.pinned);
     separateSplitItem.hidden = !inSplitView;
     reverseSplitItem.hidden = !inSplitView;
     sleepTabItem.hidden = Boolean(contextTab?.selected || contextTab?.pinned || inSplitView || !contextTab?.linkedPanel);
+    promotePeekItem.hidden = !isPeek;
+    splitPeekItem.hidden = !isPeek;
     moveToPopup.replaceChildren();
     for (const workspace of workspaces) {
       appendAction(
@@ -1108,7 +1129,9 @@
     }
   });
   contextMenu.appendChild(xul("menuseparator"));
-  appendAction(contextMenu, "Close Tab", () => contextTab && gBrowser.removeTab(contextTab));
+  appendAction(contextMenu, "Close Tab", () => {
+    if (contextTab && !window.FluxionPeek?.close(contextTab)) gBrowser.removeTab(contextTab);
+  });
 
   const groupMenu = xul("menupopup", { id: "fluxion-group-context" });
   appendAction(groupMenu, "Rename Group…", () => renameGroup(contextGroup));
@@ -1250,6 +1273,7 @@
     "TabGroupCollapse", "TabGroupExpand", "TabGrouped", "TabUngrouped",
     "SplitViewCreated", "SplitViewRemoved", "SplitViewTabChange",
     "FluxionTabSleep",
+    "FluxionPeekChange",
   ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }

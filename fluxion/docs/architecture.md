@@ -201,3 +201,17 @@ Private windows never run the scheduler. Selected, pinned, split, audio/PiP,
 screen/camera/microphone-sharing, busy, closing, and already discarded tabs are
 also excluded. These checks intentionally trade a small amount of potential
 memory recovery for predictable browsing behaviour.
+
+## Peek Page boundary
+
+Peek Pages reuse `nsContextMenu`'s `_openLinkInParameters` and the browser
+window's native `openLinkIn` path. This preserves the source page's triggering
+principal, content-security policy, referrer, origin attributes, and container
+identity; Fluxion never loads an untrusted URL into browser chrome or an
+injected iframe. The resulting content remains an ordinary isolated Gecko tab.
+
+The `fluxion-peek` marker is persisted only so restored temporary tabs can be
+identified and removed. Closing uses Gecko's `skipSessionStore` option, so a
+Peek does not appear under Reopen Closed Tab. Promotion removes the marker and
+returns the tab to ordinary session ownership. Side-by-side promotion delegates
+to the same native split-view wrapper as other Fluxion splits.
