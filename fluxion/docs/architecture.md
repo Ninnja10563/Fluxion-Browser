@@ -215,3 +215,19 @@ identified and removed. Closing uses Gecko's `skipSessionStore` option, so a
 Peek does not appear under Reopen Closed Tab. Promotion removes the marker and
 returns the tab to ordinary session ownership. Side-by-side promotion delegates
 to the same native split-view wrapper as other Fluxion splits.
+
+## Multi-selected tab ownership
+
+Flow does not keep an independent selection array. Command-click, Shift-click,
+and batch operations call Gecko's `addToMultiSelectedTabs`,
+`addRangeToMultiSelectedTabs`, `removeFromMultiSelectedTabs`, and
+`clearMultiSelectedTabs` APIs. Rendering listens for `TabMultiSelect` and reads
+the native `multiselected` state, so extension commands, native menus, split
+wrappers, and accessibility metadata continue to agree on which tabs are
+selected.
+
+Batch commands derive their target from `gBrowser.selectedTabs` only when the
+context-clicked tab belongs to that selection. Otherwise the command remains
+scoped to the clicked tab. Split children expand to their native pair for moves,
+and Gecko retains ownership of before-unload prompts and multi-tab close
+warnings.

@@ -8,6 +8,22 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.10 adds native multi-select workflows to Flow:
+
+- Command-click individual tabs and Shift-click a visible range using familiar
+  macOS selection semantics;
+- retain Gecko's native `selectedTabs`, `TabMultiSelect`, split-pair selection,
+  and accessibility state instead of maintaining a second selection model;
+- batch duplicate, reload, pin/unpin, sleep, group, move to workspace, drag,
+  and close from the same concise tab menu;
+- make split pairs move atomically and keep actions scoped to one tab when the
+  context-clicked tab is outside the current selection;
+- show multi-selected rows with a quiet one-pixel boundary rather than a loud
+  block of accent colour.
+
+The macOS release gate now creates a real native Gecko multi-selection and
+requires both selected rows to remain projected in Flow.
+
 Version 0.9 adds secure, temporary Peek Pages:
 
 - choose **Peek Link** from Gecko's native webpage link menu;

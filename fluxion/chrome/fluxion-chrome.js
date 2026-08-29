@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionSplitViews, FluxionTabGroups, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionSplitViews, FluxionTabGroups, FluxionTabSelection, FluxionWorkspaces */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -19,6 +19,7 @@
   let contextGroup = null;
   let contextWorkspace = null;
   let dragTab = null;
+  let dragTabs = [];
   let renderQueued = false;
 
   document.documentElement.setAttribute("data-fluxion", "true");
@@ -217,6 +218,10 @@
     :root[data-fluxion-no-motion] .fluxion-group-disclosure { transition: none !important; }
     .fluxion-tab:hover { background: var(--fluxion-hover); color: var(--fluxion-ink); }
     .fluxion-tab[aria-selected="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); }
+    .fluxion-tab.is-multiselected:not([data-active="true"]) {
+      color: var(--fluxion-ink); background: var(--fluxion-hover);
+      box-shadow: inset 0 0 0 1px var(--fluxion-line);
+    }
     .fluxion-tab[aria-selected="true"]::before {
       content: ""; position: absolute; inset-inline-start: 0; width: 2px; height: 14px;
       background: var(--fluxion-accent);
@@ -467,14 +472,20 @@
   }
 
   function createGroupForTab(tab) {
-    if (!tab || !tab.parentNode) return null;
+    return createGroupForTabs(tab ? [tab] : []);
+  }
+
+  function createGroupForTabs(tabs) {
+    const candidates = [...new Set(tabs)].filter(tab => tab?.parentNode && !tab.pinned && !tab.splitview);
+    if (!candidates.length) return null;
     const name = askGroupName("New Tab Group");
     if (name === null) return null;
     if (!name) {
       Services.prompt.alert(window, "Group Not Created", "Enter a group name.");
       return null;
     }
-    const group = gBrowser.addTabGroup([tab], { label: name, insertBefore: tab });
+    const group = gBrowser.addTabGroup(candidates, { label: name, insertBefore: candidates[0] });
+    gBrowser.clearMultiSelectedTabs();
     scheduleRender();
     return group;
   }
@@ -617,9 +628,14 @@
   }
 
   function moveTabToWorkspace(tab, id) {
-    if (!tab || !workspaces.some(item => item.id === id)) return;
-    const movingTabs = tab.splitview?.tabs || [tab];
+    moveTabsToWorkspace(tab ? [tab] : [], id);
+  }
+
+  function moveTabsToWorkspace(tabs, id) {
+    if (!tabs.length || !workspaces.some(item => item.id === id)) return;
+    const movingTabs = [...new Set(tabs.flatMap(tab => tab?.splitview?.tabs || [tab]).filter(Boolean))];
     for (const movingTab of movingTabs) movingTab.setAttribute(TAB_WORKSPACE, id);
+    gBrowser.clearMultiSelectedTabs();
     if (id !== currentWorkspace && movingTabs.includes(gBrowser.selectedTab)) {
       const replacement = [...gBrowser.tabs].find(
         candidate => !movingTabs.includes(candidate) && tabWorkspace(candidate) === currentWorkspace,
@@ -628,6 +644,10 @@
       else switchWorkspace(currentWorkspace);
     }
     switchWorkspace(currentWorkspace);
+  }
+
+  function contextTabs(tab = contextTab) {
+    return FluxionTabSelection.contextTabs(tab, gBrowser.selectedTabs);
   }
 
   function createSplitView(primary, secondary, options = {}) {
@@ -707,21 +727,31 @@
 
   function closeWithStability(tab, element) {
     if (!tab || tab.closing) return;
+    const tabs = contextTabs(tab);
     element.classList.add("is-closing");
     window.setTimeout(() => {
-      if (!tab.parentNode) return;
-      if (!window.FluxionPeek?.close(tab)) gBrowser.removeTab(tab, { animate: false });
+      closeTabs(tabs, { animate: false });
     }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120);
+  }
+
+  function closeTabs(tabs, options = {}) {
+    const ordinary = tabs.filter(tab =>
+      tab?.parentNode && !window.FluxionPeek?.close(tab, { returnToSource: false })
+    );
+    if (ordinary.length === 1) gBrowser.removeTab(ordinary[0], options);
+    else if (ordinary.length > 1) gBrowser.removeTabs(ordinary, options);
   }
 
   function createTabElement(tab) {
     const item = create("div", "fluxion-tab");
     const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
     item.classList.toggle("is-sleeping", sleeping);
+    item.classList.toggle("is-multiselected", Boolean(tab.multiselected));
     item.tabIndex = 0;
     item.draggable = true;
     item.setAttribute("role", "tab");
-    item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab));
+    item.dataset.active = String(tab === gBrowser.selectedTab);
+    item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab || tab.multiselected));
     item.title = `${tabLabel(tab)}\n${tab.linkedBrowser?.currentURI?.displaySpec || ""}${sleeping ? "\nSleeping — select to restore" : ""}`;
 
     const faviconUrl = iconFor(tab);
@@ -778,13 +808,33 @@
     });
     item.appendChild(close);
 
-    const select = () => { gBrowser.selectedTab = tab; };
+    const select = event => {
+      const accelerator = event && (navigator.platform.includes("Mac") ? event.metaKey : event.ctrlKey);
+      if (event?.shiftKey) {
+        const anchor = gBrowser.lastMultiSelectedTab;
+        if (!accelerator) {
+          gBrowser.selectedTab = anchor;
+          gBrowser.clearMultiSelectedTabs();
+        }
+        gBrowser.addRangeToMultiSelectedTabs(anchor, tab);
+      } else if (accelerator) {
+        if (tab.multiselected) gBrowser.removeFromMultiSelectedTabs(tab);
+        else if (tab !== gBrowser.selectedTab) {
+          gBrowser.addToMultiSelectedTabs(tab);
+          gBrowser.lastMultiSelectedTab = tab;
+        }
+      } else {
+        if (tab.multiselected) gBrowser.lockClearMultiSelectionOnce();
+        gBrowser.selectedTab = tab;
+      }
+      scheduleRender();
+    };
     item.addEventListener("click", select);
     item.addEventListener("auxclick", event => {
       if (event.button === 1) closeWithStability(tab, item);
     });
     item.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(); }
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(event); }
       if (event.key === "Delete") { event.preventDefault(); closeWithStability(tab, item); }
     });
     item.addEventListener("contextmenu", event => {
@@ -794,6 +844,7 @@
     });
     item.addEventListener("dragstart", event => {
       dragTab = tab;
+      dragTabs = contextTabs(tab);
       event.dataTransfer.effectAllowed = "move";
       event.dataTransfer.setData("application/x-fluxion-tab", "tab");
     });
@@ -806,10 +857,15 @@
     item.addEventListener("drop", event => {
       event.preventDefault();
       item.classList.remove("is-dragover");
-      if (dragTab && dragTab !== tab) gBrowser.moveTabTo(dragTab, tab._tPos);
+      if (dragTab && dragTab !== tab) {
+        const moving = dragTabs.filter(candidate => candidate !== tab).sort((a, b) => a._tPos - b._tPos);
+        let index = tab._tPos;
+        for (const candidate of moving) gBrowser.moveTabTo(candidate, index++);
+      }
       dragTab = null;
+      dragTabs = [];
     });
-    item.addEventListener("dragend", () => { dragTab = null; });
+    item.addEventListener("dragend", () => { dragTab = null; dragTabs = []; });
     return item;
   }
 
@@ -909,8 +965,9 @@
     heading.addEventListener("drop", event => {
       event.preventDefault();
       heading.removeAttribute("data-dragover");
-      if (dragTab) group.addTabs([dragTab]);
+      if (dragTabs.length) group.addTabs(dragTabs.filter(tab => !tab.pinned && !tab.splitview));
       dragTab = null;
+      dragTabs = [];
       scheduleRender();
     });
 
@@ -948,8 +1005,9 @@
       button.addEventListener("drop", event => {
         event.preventDefault();
         button.removeAttribute("data-dragover");
-        if (dragTab) moveTabToWorkspace(dragTab, workspace.id);
+        if (dragTabs.length) moveTabsToWorkspace(dragTabs, workspace.id);
         dragTab = null;
+        dragTabs = [];
       });
       workspaceList.appendChild(button);
     }
@@ -1022,14 +1080,25 @@
   };
 
   const contextMenu = xul("menupopup", { id: "fluxion-tab-context" });
-  appendAction(contextMenu, "Duplicate Tab", () => contextTab && gBrowser.duplicateTab(contextTab));
-  appendAction(contextMenu, "Reload Tab", () => contextTab?.linkedBrowser.reload());
-  appendAction(contextMenu, "Pin / Unpin Tab", () => {
-    if (!contextTab) return;
-    contextTab.pinned ? gBrowser.unpinTab(contextTab) : gBrowser.pinTab(contextTab);
+  const duplicateTabItem = appendAction(contextMenu, "Duplicate Tab", () => {
+    for (const tab of contextTabs()) {
+      const duplicate = gBrowser.duplicateTab(tab);
+      duplicate?.removeAttribute("fluxion-peek");
+    }
+  });
+  const reloadTabItem = appendAction(contextMenu, "Reload Tab", () => {
+    for (const tab of contextTabs()) tab.linkedBrowser.reload();
+  });
+  const pinTabItem = appendAction(contextMenu, "Pin / Unpin Tab", () => {
+    const tabs = contextTabs();
+    const unpin = tabs.every(tab => tab.pinned);
+    for (const tab of unpin ? [...tabs].reverse() : tabs) {
+      if (unpin) gBrowser.unpinTab(tab);
+      else if (!tab.pinned) gBrowser.pinTab(tab);
+    }
   });
   const sleepTabItem = appendAction(contextMenu, "Sleep Background Tab", () => {
-    if (contextTab) window.FluxionTabSleeping?.sleep(contextTab, { forceAge: true });
+    for (const tab of contextTabs()) window.FluxionTabSleeping?.sleep(tab, { forceAge: true });
   });
   const promotePeekItem = appendAction(contextMenu, "Keep Peek as Tab", () => {
     if (contextTab) window.FluxionPeek?.promote(contextTab);
@@ -1084,7 +1153,7 @@
   tabGroupPopup.addEventListener("popupshowing", event => {
     if (event.target !== tabGroupPopup) return;
     tabGroupPopup.replaceChildren();
-    appendAction(tabGroupPopup, "New Group…", () => createGroupForTab(contextTab));
+    appendAction(tabGroupPopup, "New Group…", () => createGroupForTabs(contextTabs()));
     const groups = gBrowser.tabGroups.filter(group =>
       group.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
     );
@@ -1094,7 +1163,9 @@
         tabGroupPopup,
         `Move to ${group.label || "Group"}`,
         () => {
-          if (contextTab) group.addTabs([contextTab]);
+          const tabs = contextTabs().filter(tab => !tab.pinned && !tab.splitview);
+          if (tabs.length) group.addTabs(tabs);
+          gBrowser.clearMultiSelectedTabs();
           scheduleRender();
         },
         contextTab?.group === group ? { disabled: "true" } : {},
@@ -1110,12 +1181,20 @@
   });
   contextMenu.addEventListener("popupshowing", event => {
     if (event.target !== contextMenu) return;
+    const actionTabs = contextTabs();
+    const count = actionTabs.length;
     const inSplitView = Boolean(contextTab?.splitview);
     const isPeek = Boolean(window.FluxionPeek?.isPeek(contextTab));
+    duplicateTabItem.setAttribute("label", count > 1 ? `Duplicate ${count} Tabs` : "Duplicate Tab");
+    reloadTabItem.setAttribute("label", count > 1 ? `Reload ${count} Tabs` : "Reload Tab");
+    pinTabItem.setAttribute("label", count > 1
+      ? `${actionTabs.every(tab => tab.pinned) ? "Unpin" : "Pin"} ${count} Tabs`
+      : "Pin / Unpin Tab");
+    sleepTabItem.setAttribute("label", count > 1 ? "Sleep Selected Background Tabs" : "Sleep Background Tab");
     splitWithMenu.hidden = inSplitView || Boolean(contextTab?.pinned);
     separateSplitItem.hidden = !inSplitView;
     reverseSplitItem.hidden = !inSplitView;
-    sleepTabItem.hidden = Boolean(contextTab?.selected || contextTab?.pinned || inSplitView || !contextTab?.linkedPanel);
+    sleepTabItem.hidden = !actionTabs.some(tab => !tab.selected && !tab.pinned && !tab.splitview && tab.linkedPanel);
     promotePeekItem.hidden = !isPeek;
     splitPeekItem.hidden = !isPeek;
     moveToPopup.replaceChildren();
@@ -1123,14 +1202,19 @@
       appendAction(
         moveToPopup,
         workspace.name,
-        () => contextTab && moveTabToWorkspace(contextTab, workspace.id),
+        () => moveTabsToWorkspace(contextTabs(), workspace.id),
         contextTab && tabWorkspace(contextTab) === workspace.id ? { disabled: "true" } : {},
       );
     }
   });
   contextMenu.appendChild(xul("menuseparator"));
-  appendAction(contextMenu, "Close Tab", () => {
-    if (contextTab && !window.FluxionPeek?.close(contextTab)) gBrowser.removeTab(contextTab);
+  const closeTabItem = appendAction(contextMenu, "Close Tab", () => {
+    closeTabs(contextTabs());
+  });
+  contextMenu.addEventListener("popupshowing", event => {
+    if (event.target !== contextMenu) return;
+    const count = contextTabs().length;
+    closeTabItem.setAttribute("label", count > 1 ? `Close ${count} Tabs` : "Close Tab");
   });
 
   const groupMenu = xul("menupopup", { id: "fluxion-group-context" });
@@ -1274,6 +1358,7 @@
     "SplitViewCreated", "SplitViewRemoved", "SplitViewTabChange",
     "FluxionTabSleep",
     "FluxionPeekChange",
+    "TabMultiSelect",
   ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }
@@ -1358,6 +1443,22 @@
     }
     Services.prefs.setStringPref("fluxion.splitview.health", "native-split-rendered");
     scheduleRender();
+  }
+  if (Services.env.get("FLUXION_VISUAL_MULTISELECT_TEST") === "1") {
+    window.setTimeout(() => {
+      const selected = gBrowser.selectedTab;
+      const other = gBrowser.visibleTabs.find(tab => tab !== selected && !tab.closing);
+      if (!other) return;
+      gBrowser.addToMultiSelectedTabs(other);
+      gBrowser.lastMultiSelectedTab = other;
+      Promise.resolve().then(() => {
+        if (gBrowser.selectedTabs.length >= 2 && selected.multiselected && other.multiselected) {
+          Services.prefs.setStringPref("fluxion.multiselect.health", "native-multiselect-visible");
+          Services.prefs.savePrefFile(null);
+          scheduleRender();
+        }
+      });
+    }, 2600);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);

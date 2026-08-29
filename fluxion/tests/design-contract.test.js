@@ -83,9 +83,20 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /native-tab-discarded/);
   assert.match(macVerifier, /FLUXION_VISUAL_PEEK_TEST=1/);
   assert.match(macVerifier, /temporary-gecko-tab-opened/);
+  assert.match(macVerifier, /FLUXION_VISUAL_MULTISELECT_TEST=1/);
+  assert.match(macVerifier, /native-multiselect-visible/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("Flow delegates multi-selection to Gecko and exposes batch actions", () => {
+  assert.match(chrome, /addRangeToMultiSelectedTabs/);
+  assert.match(chrome, /addToMultiSelectedTabs/);
+  assert.match(chrome, /removeFromMultiSelectedTabs/);
+  assert.match(chrome, /gBrowser\.selectedTabs/);
+  assert.match(chrome, /moveTabsToWorkspace/);
+  assert.match(chrome, /gBrowser\.removeTabs/);
 });
 
 test("Peek Pages preserve Gecko link security and remain temporary native tabs", () => {

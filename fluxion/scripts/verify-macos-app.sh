@@ -29,7 +29,7 @@ cleanup() {
 trap cleanup EXIT
 
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 \
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 \
   "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
@@ -46,9 +46,10 @@ while (( attempt < 240 )); do
       grep -q 'user_pref("fluxion.sleeping.visual.health", "native-tab-discarded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.peek.health", "secure-context-link-peek-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.peek.visual.health", "temporary-gecko-tab-opened")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.multiselect.health", "native-multiselect-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js"; then
-    printf 'Verified: Fluxion chrome, live settings, Peek Pages, native tab sleeping, palette, Browser Memory controls, tab groups, and native split view loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, live settings, Peek Pages, native multi-select, tab sleeping, palette, Browser Memory controls, tab groups, and native split view loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
