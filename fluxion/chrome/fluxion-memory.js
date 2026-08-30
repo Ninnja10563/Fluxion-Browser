@@ -323,7 +323,10 @@
       })
       .then(indexedURL => FluxionMemoryStore.get(indexedURL))
       .then(record => {
-        const found = record?.content?.toLocaleLowerCase().includes("illustrative examples");
+        const evidence = [record?.title, record?.description, record?.headings, record?.content]
+          .filter(Boolean).join(" ").toLocaleLowerCase();
+        const found = record?.url?.startsWith("https://example.com/") &&
+          evidence.includes("example");
         if (found) {
           Services.prefs.setStringPref(
             "fluxion.memory.enrichment.health",
