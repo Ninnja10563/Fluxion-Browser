@@ -111,8 +111,10 @@ passes:
    and active page plus shared workspace names/order/symbols/accents,
    pin/group/split state, and keyword-only Browser Memory choice. The gate
    switches workspaces in the primary window while requiring the companion to
-   remain in Life, opens and quits a private session, and restores both normal
-   windows again without enabling ML.
+   remain in Life, opens and closes a real private window inside the restored
+   app, cleanly quits, and restores both normal windows again without enabling
+   ML. Fluxion's startup configuration must preserve Gecko's restore-previous-
+   session preference through every one of those launches.
    The seed opens the enriched Browser Memory SQLite store, so each clean quit
    also proves its profile-before-change shutdown blocker awaited connection
    closure instead of relying on process termination.

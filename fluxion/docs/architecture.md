@@ -124,6 +124,14 @@ absent from tabs, Places history, and Browser Memory. This exercises the same
 SessionStore and private-origin boundaries users rely on; Fluxion does not
 maintain a shadow session database.
 
+`fluxion.cfg` supplies Fluxion's blank homepage but deliberately does not write
+`browser.startup.page`. The value selected in General settings therefore
+survives the next privileged startup and Gecko, rather than Fluxion, decides
+whether to reopen the previous windows and tabs. The recovery gate keeps that
+preference at Gecko's restore value across every controlled relaunch, guarding
+against startup configuration accidentally replacing a saved session with the
+homepage.
+
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,
 collapse state, tab membership, closed-group recovery, and crash restoration

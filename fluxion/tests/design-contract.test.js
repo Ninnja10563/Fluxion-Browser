@@ -80,6 +80,11 @@ test("site permissions use Gecko records and expose exact reset scopes", () => {
 });
 
 test("packaged recovery gate crosses real normal and private app launches", () => {
+  assert.doesNotMatch(
+    runtimeConfig,
+    /setIntPref\("browser\.startup\.page"/,
+    "startup configuration must not overwrite the user's session-restoration choice",
+  );
   assert.match(sessionRecovery, /requestTabStateFlush/);
   assert.match(sessionRecovery, /Promise\.race/);
   assert.match(sessionRecovery, /SessionStore\.getWindowState/);

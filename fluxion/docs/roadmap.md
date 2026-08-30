@@ -19,9 +19,9 @@ controls work and its failure paths have been tested.
   owned palette routing implemented)
 - automated multi-launch session recovery and private-window isolation coverage
   for multiple normal windows with distinct active workspaces, pins, native
-  groups, split views, Places, and Browser Memory (implemented), plus product-
-  owned recently-closed menus and palette recovery over Gecko SessionStore
-  (implemented)
+  groups, split views, persistent restore-on-startup choice, Places, and Browser
+  Memory (implemented), plus product-owned recently-closed menus and palette
+  recovery over Gecko SessionStore (implemented)
 - signed macOS application bundle and native application menus (custom Flow
   menu, distinct trailing toolbar menu, and About route implemented; Developer
   ID signing remains)
