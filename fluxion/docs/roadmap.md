@@ -17,7 +17,8 @@ controls work and its failure paths have been tested.
   surfaces backed by Firefox services (settings, unified Library, native
   bookmark-folder editing, and per-site permission management implemented)
 - automated session/crash-recovery and private-window integration coverage
-- signed macOS application bundle and native application menus
+- signed macOS application bundle and native application menus (custom Flow
+  menu and About route implemented; Developer ID signing remains)
 
 ## Phase 3 — interaction model
 

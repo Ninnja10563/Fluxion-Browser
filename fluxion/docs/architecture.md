@@ -50,6 +50,7 @@ bin/fluxion
      -> chrome/core/*.js (typed-by-contract state, group projection, and URL helpers)
      -> chrome/fluxion-chrome.js
         -> Flow sidebar / workspaces / tab interactions / navigation skin
+        -> native Flow application menu / versioned About route
         -> Firefox gBrowser + SessionStore
      -> chrome/fluxion-palette.js
         -> commands / tabs / workspaces / Places history and bookmarks
@@ -84,6 +85,15 @@ Firefox's native URL bar internals. This preserves certificate identity,
 permission anchors, autofill, search suggestions, extension page actions, and
 keyboard behavior. The command palette is a separate browser-chrome surface;
 it reads Places through privileged browser APIs, never through page JavaScript.
+
+On macOS, Fluxion inserts a top-level native **Flow** menu into Gecko's XUL
+menubar rather than replacing AppKit menu handling. Its items call the same
+workspace, sidebar, palette, and Library controllers as the visible chrome, so
+menu commands cannot drift into decorative duplicates. Standard File, Edit,
+View, History, Bookmarks, Tools, Window, and Help commands remain Gecko-owned.
+The application menu's About command is captured at chrome scope and opens a
+local, unprivileged, versioned Fluxion page; Settings continues through the
+native preferences command into Fluxion's live overlay.
 
 The new-tab page is a local, unprivileged file. It can submit navigation but
 cannot call chrome methods.

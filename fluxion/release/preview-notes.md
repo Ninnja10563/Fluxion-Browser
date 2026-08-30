@@ -8,6 +8,25 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.19 gives Fluxion ownership of its native macOS application model:
+
+- add a top-level **Flow** menu beside the familiar native browser menus;
+- open the command palette and fast tab search with the user's current editable
+  shortcut labels shown in the menu;
+- select Expanded, Compact, or Focus sidebar modes and switch among the live,
+  profile-persisted workspace list from native menu items;
+- route History, Bookmarks, and Downloads into Fluxion Library and create a new
+  workspace without reaching a Firefox-branded management surface;
+- keep Gecko's standard File, Edit, View, History, Bookmarks, Tools, Window, and
+  Help command implementations intact for platform behaviour and accessibility;
+- replace the stale About route with the restrained local About Fluxion surface
+  and enforce that its displayed version matches the shipped application.
+
+The macOS release gate now requires the native Flow menu health marker, checks
+the packaged About version against `CFBundleShortVersionString`, opens the real
+About Fluxion page, and captures that final independent product surface before
+the DMG can be published.
+
 Version 0.18 adds a dedicated site Permissions Center to Fluxion Settings:
 
 - search every saved HTTP(S) site decision by origin, permission type, state,

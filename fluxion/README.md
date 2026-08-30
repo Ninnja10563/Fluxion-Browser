@@ -48,6 +48,8 @@ The current preview is runnable and includes:
   reload, duplicate, pin, sleep, group, workspace, drag, and close actions;
 - editable, profile-persisted shortcuts for the command palette, tab search,
   Flow sidebar, and workspace navigation, with conflict and reserved-key checks;
+- a native **Flow** application menu on macOS for the palette, tab search,
+  sidebar modes, workspaces, Library routes, and a versioned About Fluxion page;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

@@ -386,6 +386,95 @@
     }, true);
   }
 
+  const nativeMenuBar = document.getElementById("main-menubar");
+  const nativeFlowMenu = xul("menu", { id: "fluxion-native-menu", label: "Flow" });
+  const nativeFlowPopup = xul("menupopup", { id: "fluxion-native-menu-popup" });
+  nativeFlowMenu.appendChild(nativeFlowPopup);
+  const nativeAction = (label, action, attributes = {}, tracked = true) => {
+    const item = xul("menuitem", { label, ...attributes });
+    if (tracked) on(item, "command", action);
+    else item.addEventListener("command", action, { once: true });
+    return item;
+  };
+  const nativeSeparator = () => xul("menuseparator");
+
+  nativeFlowPopup.append(
+    nativeAction("Command Palette…", () => window.FluxionPalette?.open("all"), {
+      id: "fluxion-native-command-palette",
+      acceltext: window.FluxionShortcuts?.format("palette") || "",
+    }),
+    nativeAction("Search Tabs…", () => window.FluxionPalette?.open("tabs"), {
+      id: "fluxion-native-tab-search",
+      acceltext: window.FluxionShortcuts?.format("tabSearch") || "",
+    }),
+    nativeSeparator(),
+  );
+
+  const nativeSidebarMenu = xul("menu", { label: "Sidebar" });
+  const nativeSidebarPopup = xul("menupopup", { id: "fluxion-native-sidebar-popup" });
+  const nativeSidebarItems = new Map();
+  for (const [state, label] of [
+    ["expanded", "Expanded"], ["compact", "Compact"], ["focus", "Focus"],
+  ]) {
+    const item = nativeAction(label, () => setSidebarState(state), {
+      type: "radio", name: "fluxion-native-sidebar-state",
+    });
+    nativeSidebarItems.set(state, item);
+    nativeSidebarPopup.appendChild(item);
+  }
+  on(nativeSidebarPopup, "popupshowing", event => {
+    if (event.target !== nativeSidebarPopup) return;
+    for (const [state, item] of nativeSidebarItems) {
+      item.setAttribute("checked", String(flow.dataset.state === state));
+    }
+  });
+  nativeSidebarMenu.appendChild(nativeSidebarPopup);
+
+  const nativeWorkspaceMenu = xul("menu", { label: "Workspaces" });
+  const nativeWorkspacePopup = xul("menupopup", { id: "fluxion-native-workspace-popup" });
+  on(nativeWorkspacePopup, "popupshowing", event => {
+    if (event.target !== nativeWorkspacePopup) return;
+    nativeWorkspacePopup.replaceChildren();
+    for (const workspace of workspaces) {
+      nativeWorkspacePopup.appendChild(nativeAction(
+        workspace.name,
+        () => switchWorkspace(workspace.id),
+        {
+          type: "radio", name: "fluxion-native-workspace",
+          checked: String(workspace.id === currentWorkspace),
+        }, false,
+      ));
+    }
+    nativeWorkspacePopup.append(
+      nativeSeparator(),
+      nativeAction("New Workspace…", addWorkspace, {}, false),
+    );
+  });
+  nativeWorkspaceMenu.appendChild(nativeWorkspacePopup);
+
+  const nativeLibraryMenu = xul("menu", { label: "Library" });
+  const nativeLibraryPopup = xul("menupopup");
+  nativeLibraryPopup.append(
+    nativeAction("History", () => window.FluxionLibrary?.open("history")),
+    nativeAction("Bookmarks", () => window.FluxionLibrary?.open("bookmarks")),
+    nativeAction("Downloads", () => window.FluxionLibrary?.open("downloads")),
+  );
+  nativeLibraryMenu.appendChild(nativeLibraryPopup);
+  nativeFlowPopup.append(
+    nativeSidebarMenu,
+    nativeWorkspaceMenu,
+    nativeSeparator(),
+    nativeLibraryMenu,
+    nativeAction("New Workspace…", addWorkspace),
+  );
+
+  if (nativeMenuBar) {
+    nativeMenuBar.insertBefore(nativeFlowMenu, document.getElementById("history-menu"));
+    cleanup.push(() => nativeFlowMenu.remove());
+    Services.prefs.setStringPref("fluxion.nativeMenu.health", "flow-application-menu-loaded");
+    Services.prefs.savePrefFile(null);
+  }
+
   const flow = xul("vbox", { id: "fluxion-flow", role: "navigation", "aria-label": "Fluxion Flow" });
   const initialState = Services.prefs.getStringPref(PREF_SIDEBAR, "expanded");
   flow.dataset.state = SIDEBAR_STATES.includes(initialState) ? initialState : "expanded";
@@ -1475,6 +1564,22 @@
         }
       });
     }, 2600);
+  }
+  if (Services.env.get("FLUXION_VISUAL_ABOUT_TEST") === "1") {
+    window.setTimeout(() => {
+      const tab = gBrowser.addTrustedTab(ABOUT_URL);
+      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      const loaded = () => {
+        if (tab.linkedBrowser?.currentURI?.spec !== ABOUT_URL) return;
+        Services.prefs.setStringPref(
+          "fluxion.about.visual.health", "versioned-about-fluxion-visible",
+        );
+        Services.prefs.savePrefFile(null);
+      };
+      tab.linkedBrowser.addEventListener("load", loaded, { capture: true, once: true });
+      gBrowser.selectedTab = tab;
+      window.setTimeout(loaded, 1200);
+    }, 20500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);

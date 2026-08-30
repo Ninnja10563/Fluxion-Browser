@@ -108,6 +108,9 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_PERMISSIONS_TEST=1/);
   assert.match(macVerifier, /real-permissions-enumerated-and-reset/);
   assert.match(macVerifier, /native-site-decisions-visible/);
+  assert.match(macVerifier, /FLUXION_VISUAL_ABOUT_TEST=1/);
+  assert.match(macVerifier, /flow-application-menu-loaded/);
+  assert.match(macVerifier, /versioned-about-fluxion-visible/);
   assert.match(macVerifier, /ollama-stub\.py/);
   assert.match(macVerifier, /current-page-answer-visible/);
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);

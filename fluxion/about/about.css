@@ -33,4 +33,5 @@ dl div {
 dt { color: light-dark(#696a65, #a8a9a3); }
 dd { margin: 0; }
 a { color: inherit; text-underline-offset: 2px; }
+code { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .legal { margin-top: 30px; font-size: 11px; }

@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.18.0-preview.1
+        default: 0.19.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.18.0-preview.1
+        default: v0.19.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -69,6 +69,9 @@ jobs:
           [[ "$(plutil -extract CFBundleIconFile raw "$info")" == 'fluxion.icns' ]]
           ! plutil -extract CFBundleIconName raw "$info" >/dev/null 2>&1
           [[ "$(plutil -extract CFBundleName raw "$info")" == 'Fluxion' ]]
+          app_version="$(plutil -extract CFBundleShortVersionString raw "$info")"
+          grep -q "data-fluxion-version>${app_version}<" \
+            "$resources/fluxion/about/index.html"
           [[ ! -e "$resources/Assets.car" ]]
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'

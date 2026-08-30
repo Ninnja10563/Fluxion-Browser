@@ -21,7 +21,10 @@ passes:
    to be visible. Finally, it writes real camera, microphone, and location
    decisions through Gecko's permission manager, resets the exact location
    record through Fluxion, and requires the remaining native decisions to be
-   visible in the Permissions settings surface.
+   visible in the Permissions settings surface. The last identity gate requires
+   Fluxion's native Flow application menu to exist, verifies that the bundled
+   About version matches the application bundle version, and captures the real
+   About Fluxion page instead of an inherited Firefox route.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass
