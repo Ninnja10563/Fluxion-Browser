@@ -2619,6 +2619,8 @@
       const panelButton = document.getElementById("PanelUI-button");
       const inheritedHidden = !panelButton || window.getComputedStyle(panelButton).display === "none";
       const buttonRect = toolbarMenuButton.getBoundingClientRect();
+      const urlbarRect = document.getElementById("urlbar-container")?.getBoundingClientRect();
+      const backRect = document.getElementById("back-button")?.getBoundingClientRect();
       const labels = [...toolbarMenuPopup.children].map(item => item.getAttribute("label")).filter(Boolean);
       const expectedLabels = [
         "New Tab", "New Window", "New Private Window", "Command Palette…",
@@ -2628,6 +2630,8 @@
         buttonRect.width >= 24 && buttonRect.width <= 38 && buttonRect.height >= 24 &&
         toolbarMenuButton.getAttribute("aria-label") === "Fluxion menu" &&
         expectedLabels.every(label => labels.includes(label));
+      const navigationVisible = urlbarRect?.width >= 300 && urlbarRect?.height >= 28 &&
+        backRect?.width >= 24 && backRect?.height >= 24;
       const tabsBefore = new Set(gBrowser.tabs);
       const before = tabsBefore.size;
       toolbarNewTabItem.dispatchEvent(new window.CustomEvent("command", { bubbles: true }));
@@ -2639,7 +2643,8 @@
       toolbarMenuPopup.openPopup(toolbarMenuButton, "after_end");
       window.setTimeout(() => {
         const opened = ["open", "showing"].includes(toolbarMenuPopup.state);
-        if (inheritedHidden && mounted && commandWorked && opened) {
+        toolbarMenuPopup.hidePopup();
+        if (inheritedHidden && mounted && navigationVisible && commandWorked && opened) {
           Services.prefs.setStringPref(
             "fluxion.toolbarMenu.health",
             "product-menu-opened-and-native-command-executed",
@@ -2647,9 +2652,12 @@
         } else {
           Services.prefs.setStringPref(
             "fluxion.toolbarMenu.visual.error",
-            `hidden=${inheritedHidden} mounted=${mounted} command=${commandWorked} ` +
+            `hidden=${inheritedHidden} mounted=${mounted} navigation=${navigationVisible} command=${commandWorked} ` +
               `opened=${opened} state=${toolbarMenuPopup.state} ` +
-              `button=${Math.round(buttonRect.width)}x${Math.round(buttonRect.height)} labels=${labels.join("|")}`,
+              `button=${Math.round(buttonRect.width)}x${Math.round(buttonRect.height)} ` +
+              `urlbar=${Math.round(urlbarRect?.width || 0)}x${Math.round(urlbarRect?.height || 0)} ` +
+              `back=${Math.round(backRect?.width || 0)}x${Math.round(backRect?.height || 0)} ` +
+              `labels=${labels.join("|")}`,
           );
         }
         Services.prefs.savePrefFile(null);
