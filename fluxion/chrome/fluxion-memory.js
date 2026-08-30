@@ -234,6 +234,10 @@
     if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
     const actor = browser.browsingContext?.currentWindowGlobal?.getActor("FluxionMemoryPage");
     const extracted = await actor?.sendQuery("FluxionMemory:Extract");
+    if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
+      Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "content-extracted");
+      Services.prefs.savePrefFile(null);
+    }
     const page = FluxionMemoryContent.normalisePage(extracted);
     if (!FluxionMemoryPolicy.canIndexPage(page, excludedDomains())) return;
     const embeddingText = FluxionMemoryContent.embeddingText(page);
@@ -247,6 +251,10 @@
       lastVisit: Date.now(),
       indexedAt: Date.now(),
     });
+    if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
+      Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "evidence-stored");
+      Services.prefs.savePrefFile(null);
+    }
     indexedAt.set(page.url, Date.now());
     Services.prefs.setStringPref("fluxion.memory.content.health", "content-indexed");
   }
@@ -300,12 +308,14 @@
     }).catch(Cu.reportError);
   }
   if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
-    enable().then(() => new Promise(resolve => window.setTimeout(resolve, 2200)))
+    const testURL = "https://example.com/?fluxion-memory-test=1";
+    const testTab = window.gBrowser.addTrustedTab(testURL, { skipAnimation: true });
+    testTab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    enable().then(() => new Promise(resolve => window.setTimeout(resolve, 3000)))
       .then(() => {
-        const testTab = [...window.gBrowser.tabs].find(tab =>
-          tab.linkedBrowser?.currentURI?.spec === "https://example.com/"
-        );
-        if (!testTab) throw new Error("enrichment gate could not find the loaded HTTPS tab");
+        if (testTab.closing || testTab.linkedBrowser?.currentURI?.spec !== testURL) {
+          throw new Error("enrichment gate could not load its dedicated HTTPS tab");
+        }
         Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "page-found");
         Services.prefs.savePrefFile(null);
         return indexBrowser(testTab.linkedBrowser);
@@ -313,7 +323,7 @@
       .then(() => FluxionMemoryStore.search("illustrative examples", 6))
       .then(results => {
         const found = [...results.lexical, ...results.semantic]
-          .some(row => row.url === "https://example.com/");
+          .some(row => row.url === testURL);
         if (found) {
           Services.prefs.setStringPref(
             "fluxion.memory.enrichment.health",
