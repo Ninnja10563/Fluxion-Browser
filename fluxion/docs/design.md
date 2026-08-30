@@ -61,6 +61,8 @@ SigmaOS is deliberately excluded as a reference.
   a quiet interface must not trade visual simplicity for dead controls.
 - A generated web or address destination is always the last matching result;
   exact browser actions must remain the fastest keyboard path.
+- When a strong result exists, weak subsequence matches are omitted instead of
+  filling the palette merely because their letters happen to align.
 - Recently Closed rows are plain native menu or palette entries, not a card
   carousel. They disappear when Gecko has no recoverable state.
 - Motion stays between 100ms and 160ms and disappears under reduced motion.

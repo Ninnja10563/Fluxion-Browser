@@ -980,9 +980,12 @@
               input.value = "reopen";
               render(false);
               const recoveryVisible = visibleItems.some(item => item.kind === "Closed Tab");
+              const recoveryFocused = visibleItems.every(item =>
+                ["Closed Tab", "Recovery", "Search"].includes(item.kind)
+              );
               if (
                 row && nativeListed && selectedDefault && restored &&
-                workspaceRestored && countRestored && recoveryVisible
+                workspaceRestored && countRestored && recoveryVisible && recoveryFocused
               ) {
                 Services.prefs.setStringPref(
                   "fluxion.closedTabs.health",
@@ -993,7 +996,7 @@
                   "fluxion.closedTabs.visual.error",
                   `row=${Boolean(row)} native=${nativeListed} selected=${selectedDefault} ` +
                     `restored=${Boolean(restored)} workspace=${workspaceRestored} ` +
-                    `count=${countRestored} visible=${recoveryVisible}`,
+                    `count=${countRestored} visible=${recoveryVisible} focused=${recoveryFocused}`,
                 );
               }
               Services.prefs.savePrefFile(null);

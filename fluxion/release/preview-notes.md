@@ -14,6 +14,8 @@ Version 0.31 makes closed-tab recovery a first-class Fluxion workflow:
   the cross-platform toolbar menu;
 - search up to ten recent closed pages by title or address in the universal
   command palette, while keeping the full menu projection bounded at twelve;
+- suppress weak subsequence noise when an exact or prefix match exists, while
+  retaining fuzzy recovery for queries that contain only a typo;
 - show **Reopen Last Closed Tab** only when Gecko has recoverable state, rather
   than leaving a visible command that throws or does nothing;
 - restore by SessionStore index, preserving Gecko navigation history, form and

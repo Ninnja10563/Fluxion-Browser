@@ -44,7 +44,7 @@
 
   function rankSearchItems(query, items, limit = 12) {
     const safeLimit = Math.max(0, Math.min(Number(limit) || 0, 100));
-    return items
+    const records = items
       .map((item, index) => {
         const fields = [item.label, item.detail, ...(item.keywords || [])];
         const score = Math.max(...fields.map(field => fuzzyScore(query, field)));
@@ -55,7 +55,14 @@
           score: score + Number(item.boost || 0),
         };
       })
-      .filter(record => Number.isFinite(record.score))
+      .filter(record => Number.isFinite(record.score));
+    const strongestRealMatch = Math.max(
+      Number.NEGATIVE_INFINITY,
+      ...records.filter(record => !record.fallback).map(record => record.score),
+    );
+    const confidenceFloor = strongestRealMatch >= 650 ? 400 : Number.NEGATIVE_INFINITY;
+    return records
+      .filter(record => record.fallback || record.score >= confidenceFloor)
       .sort((left, right) =>
         Number(left.fallback) - Number(right.fallback) ||
         right.score - left.score ||

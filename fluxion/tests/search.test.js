@@ -58,3 +58,20 @@ test("generated navigation fallbacks never displace a real matching action", () 
     ["Search the web"],
   );
 });
+
+test("strong matches suppress unrelated subsequences without disabling typo search", () => {
+  const items = [
+    { label: "Reopen Example Domain" },
+    { label: "Open downloads", detail: "View current and completed downloads" },
+    { label: "Site permissions", detail: "Review saved decisions" },
+    { label: "Search the web", keywords: ["reopen"], fallback: true },
+  ];
+  assert.deepEqual(
+    rankSearchItems("reopen", items).map(item => item.label),
+    ["Reopen Example Domain", "Search the web"],
+  );
+  assert.equal(
+    rankSearchItems("opndwlds", [{ label: "Open downloads" }])[0].label,
+    "Open downloads",
+  );
+});
