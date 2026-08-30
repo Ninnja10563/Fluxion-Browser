@@ -223,6 +223,10 @@
         keywords: ["clear browsing data delete history"], run: () => openUrl("about:preferences#privacy"),
       },
       {
+        label: "Site permissions", detail: "Review saved camera, microphone, location, and notification decisions", kind: "Command",
+        keywords: ["permissions allow block reset sites"], run: () => openUrl("about:preferences#permissions"),
+      },
+      {
         label: "Open bookmarks", detail: "Search and manage saved pages in Fluxion Library", kind: "Command",
         keywords: ["library favourites favorites"],
         run: () => window.FluxionLibrary?.open("bookmarks"),

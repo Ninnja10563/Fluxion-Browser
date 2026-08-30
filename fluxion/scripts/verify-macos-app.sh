@@ -56,7 +56,7 @@ if (( provider_attempt == 40 )); then
 fi
 
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 FLUXION_VISUAL_AI_COMPARE_TEST=1 FLUXION_VISUAL_LIBRARY_TEST=1 FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1 \
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 FLUXION_VISUAL_AI_COMPARE_TEST=1 FLUXION_VISUAL_LIBRARY_TEST=1 FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1 FLUXION_VISUAL_PERMISSIONS_TEST=1 \
   "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
@@ -85,10 +85,13 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.library.health", "places-downloads-library-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.library.visual.health", "history-bookmarks-downloads-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.library.folders.visual.health", "folder-created-and-bookmark-moved")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.permissions.health", "native-permission-manager-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.permissions.visual.health", "real-permissions-enumerated-and-reset")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.permissions.surface.visual.health", "native-site-decisions-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then
-    printf 'Verified: Fluxion chrome, Library history/bookmark folders/downloads, live settings and shortcuts, grounded current-page questions and selected-page comparison, Peek Pages, native multi-select, tab sleeping, Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, Peek Pages, native multi-select, tab sleeping, Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
@@ -130,6 +133,7 @@ if [[ -f "$profile/prefs.js" ]]; then
   grep 'user_pref("fluxion\.ai\.compare\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.library\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.library\.folders\.visual\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.permissions\.visual\.error"' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,80p' "$provider_log" >&2
 sed -n '1,160p' "$log" >&2

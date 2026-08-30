@@ -18,7 +18,10 @@ passes:
    Library, and requires all three backends to render before capture. It then
    creates a Places folder, moves and renames the test bookmark using the public
    mutation API, filters Library to that folder, and requires the filed record
-   to be visible.
+   to be visible. Finally, it writes real camera, microphone, and location
+   decisions through Gecko's permission manager, resets the exact location
+   record through Fluxion, and requires the remaining native decisions to be
+   visible in the Permissions settings surface.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

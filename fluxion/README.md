@@ -34,7 +34,8 @@ The current preview is runnable and includes:
   and ordinary browsing independent;
 - a Fluxion-owned settings surface with live controls for startup, search,
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
-  permissions;
+  permissions, including searchable per-site camera, microphone, location,
+  notification, expiry, and reset controls backed by Gecko's permission manager;
 - Fluxion Library for fast searchable history, bookmarks, and live downloads,
   backed by Gecko Places and Downloads with open, reveal, retry, cancel, and
   removal actions;

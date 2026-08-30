@@ -14,8 +14,8 @@ controls work and its failure paths have been tested.
 ## Phase 2 — browser fundamentals hardening
 
 - Fluxion-owned history, bookmarks, downloads, permissions, and settings
-  surfaces backed by Firefox services (settings, unified Library, and native
-  bookmark-folder editing implemented; dedicated permissions surface remains)
+  surfaces backed by Firefox services (settings, unified Library, native
+  bookmark-folder editing, and per-site permission management implemented)
 - automated session/crash-recovery and private-window integration coverage
 - signed macOS application bundle and native application menus
 

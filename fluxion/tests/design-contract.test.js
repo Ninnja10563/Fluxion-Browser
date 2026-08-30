@@ -14,6 +14,7 @@ const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js
 const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
 const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js"), "utf8");
 const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
+const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -43,8 +44,19 @@ test("Fluxion settings replace the visible Firefox preferences surface with live
   assert.match(settings, /FluxionMemory\?\.setExcludedDomains/);
   assert.match(settings, /PlacesUtils\.history\.clear/);
   assert.match(settings, /Services\.cookies\.removeAll/);
-  assert.match(settings, /Services\.perms\.removeAll/);
+  assert.match(settings, /FluxionPermissions\?\.clear/);
   assert.doesNotMatch(settings, /(?:linear|radial)-gradient|backdrop-filter/);
+});
+
+test("site permissions use Gecko records and expose exact reset scopes", () => {
+  assert.match(permissions, /Services\.perms\.all/);
+  assert.match(permissions, /Services\.perms\.removePermission/);
+  assert.match(permissions, /Services\.perms\.removeAll/);
+  assert.match(permissions, /perm-changed/);
+  assert.match(settings, /FluxionPermissionPolicy\.group/);
+  assert.match(settings, /removeSite\(group\.siteKey\)/);
+  assert.match(settings, /remove\(permission\.id\)/);
+  assert.match(palette, /about:preferences#permissions/);
 });
 
 test("new tab stays blank instead of duplicating the address field", () => {
@@ -93,6 +105,9 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_AI_COMPARE_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_LIBRARY_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_PERMISSIONS_TEST=1/);
+  assert.match(macVerifier, /real-permissions-enumerated-and-reset/);
+  assert.match(macVerifier, /native-site-decisions-visible/);
   assert.match(macVerifier, /ollama-stub\.py/);
   assert.match(macVerifier, /current-page-answer-visible/);
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);

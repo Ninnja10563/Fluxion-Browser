@@ -88,6 +88,15 @@ it reads Places through privileged browser APIs, never through page JavaScript.
 The new-tab page is a local, unprivileged file. It can submit navigation but
 cannot call chrome methods.
 
+Fluxion Settings reads site decisions from Gecko's `nsIPermissionManager`
+rather than maintaining a second permission store. The Permissions section
+projects only safe HTTP(S) origins—never page paths, queries, or credentials—and
+retains Gecko's allow, block, ask, permanent, session, timed, policy, private-
+context, and tab-scoped distinctions. Individual and per-site resets remove the
+exact native `nsIPermission` objects; the global reset delegates to Gecko's
+bulk removal API. A `perm-changed` observer keeps every open Settings surface
+in sync with permission prompts and other browser windows.
+
 ## Security boundaries
 
 - Page JavaScript executes only in Gecko content processes and cannot reach
@@ -96,6 +105,9 @@ cannot call chrome methods.
   beneath `FLUXION_ROOT` and only targets browser chrome windows.
 - Fluxion uses native Firefox navigation APIs, URL fix-up, permission panels,
   download handling, and certificate state rather than shadow implementations.
+- Site permission management enumerates and mutates Gecko principals only from
+  privileged chrome; no permission object or reset capability crosses into a
+  webpage content process.
 - Private windows retain Firefox's private-browsing origin attributes. Fluxion
   also refuses Browser Memory and AI page tools in private windows.
 - No credentials, telemetry keys, remote AI endpoints, or remote scripts are

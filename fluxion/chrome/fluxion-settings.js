@@ -1,4 +1,4 @@
-/* global gBrowser, Services, FluxionSettings, FluxionAIProviders */
+/* global gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy */
 (function initialiseFluxionSettings(window) {
   "use strict";
 
@@ -83,11 +83,45 @@
     .fluxion-shortcut-key[data-capturing="true"] { border-color: var(--fluxion-accent); color: var(--fluxion-muted); }
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .fluxion-permissions-toolbar {
+      display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px;
+      align-items: center; margin: 0 0 12px;
+    }
+    .fluxion-permissions-toolbar input { min-height: 32px; }
+    .fluxion-permissions-count { color: var(--fluxion-muted); font-size: 12px; white-space: nowrap; }
+    .fluxion-permissions-list { border-bottom: 1px solid var(--fluxion-line); }
+    .fluxion-permission-site { border-top: 1px solid var(--fluxion-line); }
+    .fluxion-permission-site-head {
+      display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px;
+      align-items: center; min-height: 46px; padding: 8px 0;
+    }
+    .fluxion-permission-site-copy { min-width: 0; }
+    .fluxion-permission-site-copy b,
+    .fluxion-permission-site-copy small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fluxion-permission-site-copy b { font-size: 13px; font-weight: 650; }
+    .fluxion-permission-site-copy small { margin-top: 2px; color: var(--fluxion-muted); font-size: 11px; }
+    .fluxion-permission-site-head .fluxion-settings-button,
+    .fluxion-permission-row .fluxion-settings-button { width: auto; min-width: 58px; padding-inline: 9px; }
+    .fluxion-permission-row {
+      display: grid; grid-template-columns: minmax(130px, 1fr) auto minmax(120px, auto) auto;
+      gap: 12px; align-items: center; min-height: 37px; padding: 0 0 0 14px;
+      border-top: 1px solid color-mix(in srgb, var(--fluxion-line) 62%, transparent);
+    }
+    .fluxion-permission-kind { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fluxion-permission-state {
+      min-width: 62px; color: var(--fluxion-muted); font-size: 12px; font-weight: 600; text-align: end;
+    }
+    .fluxion-permission-state[data-tone="allow"] { color: light-dark(#23623c, #7bc49a); }
+    .fluxion-permission-state[data-tone="block"] { color: light-dark(#8e2f2b, #ef9690); }
+    .fluxion-permission-expiry { color: var(--fluxion-muted); font-size: 11px; text-align: end; white-space: nowrap; }
+    .fluxion-permissions-empty { margin: 0; padding: 36px 0; color: var(--fluxion-muted); text-align: center; border-top: 1px solid var(--fluxion-line); }
     @media (max-width: 760px) {
       #fluxion-settings { grid-template-columns: 150px minmax(360px, 1fr); }
       .fluxion-settings-main { padding-inline: 24px; }
       .fluxion-setting { grid-template-columns: 1fr; gap: 8px; }
       .fluxion-switch { justify-self: start; }
+      .fluxion-permission-row { grid-template-columns: minmax(100px, 1fr) auto auto; }
+      .fluxion-permission-expiry { display: none; }
     }
     @media (prefers-reduced-motion: reduce) { #fluxion-settings * { scroll-behavior: auto !important; } }
   `;
@@ -106,6 +140,7 @@
   const sections = new Map();
   let activeSection = "general";
   const notes = new Map();
+  let renderPermissions = () => {};
 
   function showSection(id) {
     if (!sections.has(id)) id = "general";
@@ -114,6 +149,7 @@
       entry.panel.hidden = key !== id;
       entry.button.setAttribute("aria-current", String(key === id));
     }
+    if (id === "permissions") renderPermissions();
   }
 
   function section(id, title, description) {
@@ -364,14 +400,103 @@
     setNote("Cookies and cached site data cleared.");
   });
   row(privacy, "Cookies and site data", "Clearing this data signs you out of most websites.", clearCookies);
-  const permissions = create("button", "fluxion-settings-button danger", "Reset site permissions…");
-  permissions.type = "button";
-  permissions.addEventListener("click", () => {
-    if (!Services.prompt.confirm(window, "Reset Site Permissions", "Remove every saved camera, microphone, notification, and location decision?")) return;
-    Services.perms.removeAll();
-    setNote("Saved site permissions reset.");
+  const managePermissions = create("button", "fluxion-settings-button", "Manage permissions");
+  managePermissions.type = "button";
+  managePermissions.addEventListener("click", () => showSection("permissions"));
+  row(privacy, "Site permissions", "Review camera, microphone, location, notification, and other saved site decisions.", managePermissions);
+
+  const permissionPanel = section(
+    "permissions", "Permissions",
+    "Saved decisions come directly from Gecko and take effect immediately. Sites with no saved decision use your browser defaults.",
+  );
+  const permissionToolbar = create("div", "fluxion-permissions-toolbar");
+  const permissionSearch = create("input", "fluxion-settings-control");
+  permissionSearch.type = "search";
+  permissionSearch.placeholder = "Search sites or permission types";
+  permissionSearch.setAttribute("aria-label", "Search saved site permissions");
+  const permissionCount = create("span", "fluxion-permissions-count");
+  permissionToolbar.append(permissionSearch, permissionCount);
+  permissionPanel.appendChild(permissionToolbar);
+  const permissionList = create("div", "fluxion-permissions-list");
+  permissionList.setAttribute("aria-live", "polite");
+  permissionPanel.appendChild(permissionList);
+
+  renderPermissions = (providedRecords = null) => {
+    const records = providedRecords || window.FluxionPermissions?.list() || [];
+    const groups = FluxionPermissionPolicy.group(records, permissionSearch.value);
+    const visibleCount = groups.reduce((total, group) => total + group.permissions.length, 0);
+    permissionCount.textContent = permissionSearch.value.trim()
+      ? `${visibleCount} of ${records.length}`
+      : `${records.length} saved`;
+    permissionList.replaceChildren();
+    if (!groups.length) {
+      permissionList.appendChild(create(
+        "p", "fluxion-permissions-empty",
+        records.length ? "No saved decisions match this search." : "No saved site decisions.",
+      ));
+      return;
+    }
+    for (const group of groups) {
+      const site = create("section", "fluxion-permission-site");
+      const head = create("div", "fluxion-permission-site-head");
+      const copy = create("div", "fluxion-permission-site-copy");
+      copy.append(
+        create("b", "", group.site),
+        create("small", "", `${group.origin} · ${group.context}`),
+      );
+      const resetSite = create("button", "fluxion-settings-button", "Reset site");
+      resetSite.type = "button";
+      resetSite.addEventListener("click", () => {
+        if (!Services.prompt.confirm(
+          window, "Reset Site Permissions",
+          `Remove all saved permission decisions for ${group.site}?`,
+        )) return;
+        const count = window.FluxionPermissions?.removeSite(group.siteKey) || 0;
+        setNote(`Reset ${count} saved decision${count === 1 ? "" : "s"} for ${group.site}.`, "permissions");
+      });
+      head.append(copy, resetSite);
+      site.appendChild(head);
+      for (const permission of group.permissions) {
+        const decision = create("div", "fluxion-permission-row");
+        const state = create("span", "fluxion-permission-state", permission.state);
+        state.dataset.tone = permission.tone;
+        const reset = create("button", "fluxion-settings-button", "Reset");
+        reset.type = "button";
+        reset.setAttribute("aria-label", `Reset ${permission.typeLabel} for ${group.site}`);
+        reset.addEventListener("click", () => {
+          if (!window.FluxionPermissions?.remove(permission.id)) return;
+          setNote(`${permission.typeLabel} decision reset for ${group.site}.`, "permissions");
+        });
+        decision.append(
+          create("span", "fluxion-permission-kind", permission.typeLabel),
+          state,
+          create("span", "fluxion-permission-expiry", permission.expiry),
+          reset,
+        );
+        site.appendChild(decision);
+      }
+      permissionList.appendChild(site);
+    }
+  };
+  permissionSearch.addEventListener("input", () => renderPermissions());
+  const resetAllPermissions = create("button", "fluxion-settings-button danger", "Reset all permissions…");
+  resetAllPermissions.type = "button";
+  resetAllPermissions.addEventListener("click", () => {
+    if (!Services.prompt.confirm(
+      window, "Reset All Site Permissions",
+      "Remove every saved site permission decision? This cannot be undone.",
+    )) return;
+    window.FluxionPermissions?.clear();
+    setNote("All saved site permission decisions were reset.", "permissions");
   });
-  row(privacy, "Site permissions", "Reset saved allow and block decisions for all websites.", permissions);
+  row(
+    permissionPanel, "Reset every decision",
+    "Clears all saved allow, block, and ask choices from Gecko’s permission manager.",
+    resetAllPermissions,
+  );
+  const unsubscribePermissions = window.FluxionPermissions?.subscribe(records => {
+    if (!root.hidden && activeSection === "permissions") renderPermissions(records);
+  });
 
   const keyboard = section("keyboard", "Keyboard", "Change Fluxion commands without overriding protected browser or macOS shortcuts.");
   const shortcutButtons = new Map();
@@ -454,7 +579,7 @@
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
       const hash = gBrowser.selectedBrowser.currentURI.spec.split("#")[1] || "general";
-      showSection(["privacy", "ai"].includes(hash) ? hash : activeSection);
+      showSection(sections.has(hash) ? hash : activeSection);
       Services.prefs.setStringPref("fluxion.settings.visual.health", "settings-surface-visible");
       Services.prefs.savePrefFile(null);
     }
@@ -469,6 +594,7 @@
     root.remove();
     style.remove();
     document.documentElement.removeAttribute("data-fluxion-settings-visible");
+    unsubscribePermissions?.();
   }, { once: true });
   showSection("general");
   syncVisibility();
@@ -492,5 +618,24 @@
         Services.prefs.savePrefFile(null);
       }
     }, 3200);
+  }
+  if (Services.env.get("FLUXION_VISUAL_PERMISSIONS_TEST") === "1") {
+    window.setTimeout(() => {
+      const tab = [...gBrowser.tabs].find(candidate =>
+        candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
+      if (tab) gBrowser.selectedTab = tab;
+      showSection("permissions");
+      renderPermissions();
+      const text = permissionPanel.textContent;
+      if (
+        text.includes("permissions.fluxion.test") && text.includes("Camera") &&
+        text.includes("Microphone") && text.includes("Allow") && text.includes("Block")
+      ) {
+        Services.prefs.setStringPref(
+          "fluxion.permissions.surface.visual.health", "native-site-decisions-visible",
+        );
+        Services.prefs.savePrefFile(null);
+      }
+    }, 18500);
   }
 })(window);

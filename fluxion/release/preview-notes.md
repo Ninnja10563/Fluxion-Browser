@@ -8,6 +8,24 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.18 adds a dedicated site Permissions Center to Fluxion Settings:
+
+- search every saved HTTP(S) site decision by origin, permission type, state,
+  or browsing context without exposing page paths, queries, or credentials;
+- inspect camera, microphone, location, notification, storage, autoplay, and
+  future Gecko permission types with restrained allow/block/ask states;
+- distinguish permanent, session, timed, policy-managed, and tab-specific
+  expiry while identifying private and container-scoped records;
+- reset one exact native permission, every decision for one site, or all saved
+  decisions, with confirmation around broad destructive actions;
+- observe Gecko's live `perm-changed` stream so decisions made by page prompts
+  or other windows appear without restarting or maintaining shadow state.
+
+The macOS release gate now creates native camera, microphone, and location
+records in the packaged browser, removes only the location record through
+Fluxion, and refuses publication unless the remaining live Gecko decisions are
+visible in the custom Permissions surface.
+
 Version 0.17 completes native bookmark-folder management in Fluxion Library:
 
 - browse the actual Places folder hierarchy, including nested user folders and
