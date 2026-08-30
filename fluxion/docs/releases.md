@@ -29,6 +29,10 @@ passes:
    The interaction gate also creates three related ungrouped pages and requires
    the local **Suggest tab group** command, proposed name, and confirmation-only
    execution path to be available in the packaged command palette.
+   A scale/accessibility gate then opens 200 temporary native tabs, bounds the
+   Flow render, requires a single roving tab stop, drives ArrowDown, verifies
+   selected-tab and DOM focus identity after rerender, and removes the fixture
+   before capture.
    A separate four-launch gate then seeds and cleanly quits a normal session,
    restores its workspace/pin/group/split state, opens and quits a private
    session, and restores normal mode again. Publication is blocked if the

@@ -17,6 +17,7 @@ const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "u
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
+const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -91,6 +92,19 @@ test("tab organisation stays local, evidence-backed, and confirmation-only", () 
   assert.match(palette, /ui\.createSuggestedGroup/);
   assert.match(chrome, /gBrowser\.addTabGroup/);
   assert.match(macVerifier, /local-proposal-visible-and-confirmation-required/);
+});
+
+test("Flow uses roving focus and the packaged app proves 200-tab keyboard stability", () => {
+  assert.match(flowNavigation, /ArrowUp/);
+  assert.match(flowNavigation, /ArrowLeft/);
+  assert.match(chrome, /item\.tabIndex = tab === gBrowser\.selectedTab \? 0 : -1/);
+  assert.match(chrome, /aria-keyshortcuts/);
+  assert.match(chrome, /focusTabAfterRender/);
+  assert.match(chrome, /new Set\(visible\)/);
+  assert.match(palette, /button\.tabIndex = -1/);
+  assert.match(palette, /event\.key === "Tab"/);
+  assert.match(macVerifier, /FLUXION_VISUAL_SCALE_TEST=1/);
+  assert.match(macVerifier, /200-tabs-rendered-with-roving-keyboard-focus/);
 });
 
 test("new tab stays blank instead of duplicating the address field", () => {

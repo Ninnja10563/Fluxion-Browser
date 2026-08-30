@@ -8,6 +8,26 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.22 hardens keyboard navigation and many-tab responsiveness:
+
+- replace hundreds of tab-row stops with one roving focus target per tablist;
+- navigate visible tabs with Up/Down, Home, and End while keeping Gecko's native
+  selected tab and Flow's focused row aligned across rerenders;
+- navigate the workspace strip with Left/Right, Home, and End using correct
+  horizontal tablist semantics;
+- retain focus on the nearest surviving visible tab after keyboard close,
+  skipping every member of a closing multi-selection;
+- expose sleeping, playing, and muted state through accessible tab names while
+  keeping pointer-only nested controls out of the browser-wide Tab sequence;
+- keep command-palette focus in its search field and announce live status while
+  Arrow keys update the active descendant;
+- replace a repeated linear membership check in split-row rendering with a set;
+- gate the packaged application with 200 temporary Gecko tabs, a bounded Flow
+  render, exactly one tab stop, and a real ArrowDown focus/selection round trip.
+
+The scale fixture is removed before release capture and ordinary profiles never
+run it.
+
 Version 0.21 adds deliberate, local tab-organisation suggestions:
 
 - inspect only titles and hostnames from eligible unpinned, ungrouped tabs in

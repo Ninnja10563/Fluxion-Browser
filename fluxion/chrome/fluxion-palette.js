@@ -155,6 +155,8 @@
   const status = create("div");
   status.id = "fluxion-palette-status";
   status.hidden = true;
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
   inputRow.append(glyph, input);
   palette.append(inputRow, status, results);
   layer.appendChild(palette);
@@ -530,6 +532,7 @@
     visibleItems.forEach((item, index) => {
       const button = create("button", "fluxion-palette-result");
       button.type = "button";
+      button.tabIndex = -1;
       button.id = `fluxion-palette-result-${index}`;
       button.setAttribute("role", "option");
       button.setAttribute("aria-selected", String(index === activeIndex));
@@ -757,7 +760,10 @@
 
   on(input, "input", queuePlaces);
   on(input, "keydown", event => {
-    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    if (event.key === "Tab") {
+      event.preventDefault();
+      input.focus();
+    } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setActive(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
     } else if (event.key === "Enter" && (mode === "ask" || mode === "compare")) {

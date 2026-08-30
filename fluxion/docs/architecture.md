@@ -371,3 +371,25 @@ suggested name. Accepting the native confirmation passes the exact still-open
 tab objects to `gBrowser.addTabGroup`; cancellation is a no-op. Gecko therefore
 continues to own group membership, ordering, collapse state, drag behaviour,
 and SessionStore restoration.
+
+## Flow focus and scale boundary
+
+Flow uses one roving tab stop per tablist instead of placing every open tab in
+the browser-wide Tab sequence. Up/Down, Home, and End move through visible tabs;
+Left/Right, Home, and End move through workspaces. Selection remains native in
+`gBrowser`, while a short-lived native-tab reference restores DOM focus after
+Flow's coalesced animation-frame render. Keyboard close chooses the next visible
+tab outside the complete closing selection, preventing both focus loss and
+repeated accidental close targeting.
+
+Nested mouse controls do not add hundreds of hidden Tab stops. The tab row
+exposes sleeping and audio state through its accessible name, Delete/Backspace
+closes, and `M` toggles an audible tab. The command palette similarly retains
+focus in its combobox while `aria-activedescendant` identifies the active result.
+
+The packaged macOS gate temporarily opens 200 cheap Gecko tabs in one workspace,
+requires Flow to render all rows within a bounded animation frame with exactly
+one tab stop, dispatches a real ArrowDown event, and verifies DOM focus follows
+Gecko's changed selected tab after the rebuild. It removes the fixture before
+visual capture. This is a regression gate, not a substitute for later CPU,
+battery, and representative-content memory profiling.

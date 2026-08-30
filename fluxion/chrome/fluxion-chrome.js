@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionSplitViews, FluxionTabGroups, FluxionTabSelection, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionFlowNavigation, FluxionSplitViews, FluxionTabGroups, FluxionTabSelection, FluxionWorkspaces */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -21,6 +21,10 @@
   let dragTab = null;
   let dragTabs = [];
   let renderQueued = false;
+  let focusTabAfterRender = null;
+  let focusWorkspaceAfterRender = null;
+  const tabElements = new Map();
+  const workspaceElements = new Map();
 
   document.documentElement.setAttribute("data-fluxion", "true");
 
@@ -164,7 +168,9 @@
     }
     .fluxion-icon-button { width: 24px; height: 24px; font-size: 15px; }
     .fluxion-icon-button:hover, .fluxion-close:hover, .fluxion-audio:hover { background: var(--fluxion-hover); }
-    .fluxion-icon-button:focus-visible, .fluxion-tab:focus-visible, .fluxion-workspace:focus-visible {
+    .fluxion-icon-button:focus-visible, .fluxion-tab:focus-visible, .fluxion-workspace:focus-visible,
+    .fluxion-add-workspace:focus-visible, .fluxion-group-heading:focus-visible,
+    .fluxion-new-tab:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
     .fluxion-workspaces { display: flex; align-items: center; gap: 3px; padding: 5px 7px 4px; }
@@ -192,10 +198,10 @@
     .fluxion-add-workspace:disabled { opacity: .35; }
     .fluxion-workspace:hover { color: var(--fluxion-ink); }
     .fluxion-workspace[data-dragover="true"] { background: var(--fluxion-hover); color: var(--fluxion-ink); }
-    .fluxion-workspace[aria-pressed="true"] {
+    .fluxion-workspace[aria-selected="true"] {
       color: var(--fluxion-ink); background: transparent; font-weight: 600;
     }
-    .fluxion-workspace[aria-pressed="true"]::after {
+    .fluxion-workspace[aria-selected="true"]::after {
       content: ""; position: absolute; inset: auto 3px 0; height: 1px;
       background: var(--workspace-accent, var(--fluxion-accent));
     }
@@ -508,6 +514,7 @@
   const workspaceList = create("div", "fluxion-workspace-list");
   workspaceList.setAttribute("role", "tablist");
   workspaceList.setAttribute("aria-label", "Workspaces");
+  workspaceList.setAttribute("aria-orientation", "horizontal");
   const addWorkspaceButton = create("button", "fluxion-add-workspace");
   addWorkspaceButton.type = "button";
   addWorkspaceButton.textContent = "+";
@@ -518,10 +525,15 @@
   pinnedLabel.textContent = "Pinned";
   const pinnedTabs = create("div", "fluxion-tabs fluxion-pinned-tabs");
   pinnedTabs.style.flex = "none";
+  pinnedTabs.setAttribute("role", "tablist");
+  pinnedTabs.setAttribute("aria-label", "Pinned tabs");
+  pinnedTabs.setAttribute("aria-orientation", "horizontal");
   const openLabel = create("div", "fluxion-section-label");
   openLabel.textContent = "Flow";
   const tabsList = create("div", "fluxion-tabs");
   tabsList.setAttribute("role", "tablist");
+  tabsList.setAttribute("aria-label", "Open tabs in current workspace");
+  tabsList.setAttribute("aria-orientation", "vertical");
 
   const footer = create("div", "fluxion-footer");
   const newTabButton = create("button", "fluxion-new-tab");
@@ -829,9 +841,24 @@
     return tab;
   }
 
+  function renderedTabElements() {
+    return [...flow.querySelectorAll(".fluxion-tab")]
+      .filter(element => !element.closest(".fluxion-group.is-collapsed"));
+  }
+
   function closeWithStability(tab, element) {
     if (!tab || tab.closing) return;
     const tabs = contextTabs(tab);
+    if (element.matches(":focus-within")) {
+      const rendered = renderedTabElements();
+      const index = rendered.indexOf(element);
+      const closing = new Set(tabs);
+      const replacement = [
+        ...rendered.slice(index + 1),
+        ...rendered.slice(0, index).reverse(),
+      ].find(candidate => !closing.has(candidate._fluxionTab));
+      focusTabAfterRender = replacement?._fluxionTab || null;
+    }
     element.classList.add("is-closing");
     window.setTimeout(() => {
       closeTabs(tabs, { animate: false });
@@ -851,11 +878,17 @@
     const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
     item.classList.toggle("is-sleeping", sleeping);
     item.classList.toggle("is-multiselected", Boolean(tab.multiselected));
-    item.tabIndex = 0;
+    item.tabIndex = tab === gBrowser.selectedTab ? 0 : -1;
     item.draggable = true;
+    item._fluxionTab = tab;
     item.setAttribute("role", "tab");
+    item.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown Home End Delete");
     item.dataset.active = String(tab === gBrowser.selectedTab);
     item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab || tab.multiselected));
+    item.setAttribute(
+      "aria-label",
+      `${tabLabel(tab)}${sleeping ? ", sleeping" : ""}${tab.soundPlaying ? ", playing audio" : ""}${tab.muted ? ", muted" : ""}`,
+    );
     item.title = `${tabLabel(tab)}\n${tab.linkedBrowser?.currentURI?.displaySpec || ""}${sleeping ? "\nSleeping — select to restore" : ""}`;
 
     const faviconUrl = iconFor(tab);
@@ -894,6 +927,7 @@
       audio.textContent = tab.muted ? "×" : "◦";
       audio.title = tab.muted ? "Unmute tab" : "Mute tab";
       audio.setAttribute("aria-label", audio.title);
+      audio.tabIndex = -1;
       audio.addEventListener("click", event => {
         event.stopPropagation();
         tab.toggleMuteAudio();
@@ -906,6 +940,7 @@
     close.textContent = "×";
     close.title = "Close tab";
     close.setAttribute("aria-label", `Close ${tabLabel(tab)}`);
+    close.tabIndex = -1;
     close.addEventListener("click", event => {
       event.stopPropagation();
       closeWithStability(tab, item);
@@ -938,8 +973,30 @@
       if (event.button === 1) closeWithStability(tab, item);
     });
     item.addEventListener("keydown", event => {
-      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(event); }
-      if (event.key === "Delete") { event.preventDefault(); closeWithStability(tab, item); }
+      if (FluxionFlowNavigation.handlesRovingKey(event.key)) {
+        event.preventDefault();
+        event.stopPropagation();
+        const rendered = renderedTabElements();
+        const targetIndex = FluxionFlowNavigation.rovingIndex(
+          rendered.length, rendered.indexOf(item), event.key,
+        );
+        const targetTab = rendered[targetIndex]?._fluxionTab;
+        if (targetTab) {
+          focusTabAfterRender = targetTab;
+          gBrowser.selectedTab = targetTab;
+          scheduleRender();
+        }
+      } else if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        focusTabAfterRender = tab;
+        select(event);
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        closeWithStability(tab, item);
+      } else if (event.key.toLowerCase() === "m" && (tab.soundPlaying || tab.muted)) {
+        event.preventDefault();
+        tab.toggleMuteAudio();
+      }
     });
     item.addEventListener("contextmenu", event => {
       event.preventDefault();
@@ -970,6 +1027,7 @@
       dragTabs = [];
     });
     item.addEventListener("dragend", () => { dragTab = null; dragTabs = []; });
+    tabElements.set(tab, item);
     return item;
   }
 
@@ -1083,18 +1141,35 @@
 
   function renderWorkspaces() {
     workspaceList.replaceChildren();
+    workspaceElements.clear();
     const colours = { slate: "#68747b", blue: "#51748a", ochre: "#92794d", sage: "#667c69", rose: "#8b646b" };
-    for (const workspace of workspaces) {
+    for (const [workspaceIndex, workspace] of workspaces.entries()) {
       const button = create("button", "fluxion-workspace");
       button.type = "button";
+      button.tabIndex = workspace.id === currentWorkspace ? 0 : -1;
       button.title = workspace.name;
       button.setAttribute("role", "tab");
-      button.setAttribute("aria-pressed", String(workspace.id === currentWorkspace));
+      button.setAttribute("aria-selected", String(workspace.id === currentWorkspace));
+      button.setAttribute("aria-posinset", String(workspaceIndex + 1));
+      button.setAttribute("aria-setsize", String(workspaces.length));
       button.style.setProperty("--workspace-accent", colours[workspace.accent]);
       const label = create("span", "fluxion-workspace-name");
       label.textContent = workspace.name;
       button.append(workspaceSymbol(workspace.icon), label);
       button.addEventListener("click", () => switchWorkspace(workspace.id));
+      button.addEventListener("keydown", event => {
+        if (!FluxionFlowNavigation.handlesRovingKey(event.key, "horizontal")) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const targetIndex = FluxionFlowNavigation.rovingIndex(
+          workspaces.length, workspaceIndex, event.key, "horizontal",
+        );
+        const target = workspaces[targetIndex];
+        if (target) {
+          focusWorkspaceAfterRender = target.id;
+          switchWorkspace(target.id);
+        }
+      });
       button.addEventListener("contextmenu", event => {
         event.preventDefault();
         contextWorkspace = workspace.id;
@@ -1114,6 +1189,7 @@
         dragTabs = [];
       });
       workspaceList.appendChild(button);
+      workspaceElements.set(workspace.id, button);
     }
     addWorkspaceButton.disabled = workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES;
   }
@@ -1121,9 +1197,11 @@
   function render() {
     renderQueued = false;
     renderWorkspaces();
+    tabElements.clear();
     pinnedTabs.replaceChildren();
     tabsList.replaceChildren();
     const visible = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === currentWorkspace);
+    const visibleSet = new Set(visible);
     for (const tab of visible.filter(tab => tab.pinned)) {
       pinnedTabs.appendChild(createTabElement(tab));
     }
@@ -1146,7 +1224,7 @@
       if (seenSplitViews.has(splitView)) continue;
       seenSplitViews.add(splitView);
       const splitTabs = splitView.tabs.filter(tab =>
-        visible.includes(tab) && !tab.pinned && !tab.group
+        visibleSet.has(tab) && !tab.pinned && !tab.group
       );
       tabsList.appendChild(
         splitTabs.length > 1
@@ -1157,6 +1235,23 @@
     pinnedLabel.hidden = pinnedTabs.childElementCount === 0;
     pinnedTabs.hidden = pinnedTabs.childElementCount === 0;
     count.textContent = String(visible.length);
+    const rendered = renderedTabElements();
+    rendered.forEach((element, index) => {
+      element.setAttribute("aria-posinset", String(index + 1));
+      element.setAttribute("aria-setsize", String(rendered.length));
+    });
+    if (focusTabAfterRender) {
+      const element = tabElements.get(focusTabAfterRender);
+      focusTabAfterRender = null;
+      if (element && !element.closest(".fluxion-group.is-collapsed")) {
+        element.focus({ preventScroll: true });
+        element.scrollIntoView({ block: "nearest" });
+      }
+    } else if (focusWorkspaceAfterRender) {
+      const element = workspaceElements.get(focusWorkspaceAfterRender);
+      focusWorkspaceAfterRender = null;
+      element?.focus({ preventScroll: true });
+    }
   }
 
   function updateWindowTitle() {
@@ -1583,6 +1678,61 @@
         }
       });
     }, 2600);
+  }
+  if (Services.env.get("FLUXION_VISUAL_SCALE_TEST") === "1") {
+    window.setTimeout(() => {
+      const creationStarted = window.performance.now();
+      const scaleTabs = Array.from({ length: 200 }, (_, index) => {
+        const tab = gBrowser.addTrustedTab(`about:blank?fluxion-scale=${index}`, {
+          skipAnimation: true,
+        });
+        tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+        tab.setAttribute("label", `Scale tab ${index + 1}`);
+        return tab;
+      });
+      const creationElapsed = window.performance.now() - creationStarted;
+      const renderStarted = window.performance.now();
+      window.requestAnimationFrame(() => {
+        const renderElapsed = window.performance.now() - renderStarted;
+        const rendered = renderedTabElements();
+        const tabStops = rendered.filter(element => element.tabIndex === 0);
+        const selectedBefore = gBrowser.selectedTab;
+        const selectedElement = tabElements.get(selectedBefore);
+        if (
+          creationElapsed > 8000 || renderElapsed > 1500 ||
+          rendered.length < scaleTabs.length || tabStops.length !== 1 || !selectedElement
+        ) {
+          Services.prefs.setStringPref(
+            "fluxion.scale.visual.error",
+            `create=${creationElapsed.toFixed(1)} render=${renderElapsed.toFixed(1)} rows=${rendered.length} tabstops=${tabStops.length}`,
+          );
+          Services.prefs.savePrefFile(null);
+          return;
+        }
+        selectedElement.focus();
+        selectedElement.dispatchEvent(new window.KeyboardEvent("keydown", {
+          key: "ArrowDown", bubbles: true,
+        }));
+        window.requestAnimationFrame(() => {
+          const focusStable = document.activeElement?._fluxionTab === gBrowser.selectedTab;
+          const selectionMoved = gBrowser.selectedTab !== selectedBefore;
+          if (focusStable && selectionMoved) {
+            Services.prefs.setStringPref(
+              "fluxion.scale.health",
+              "200-tabs-rendered-with-roving-keyboard-focus",
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.scale.visual.error",
+              `focusStable=${focusStable} selectionMoved=${selectionMoved}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+          gBrowser.removeTabs(scaleTabs, { animate: false });
+          scheduleRender();
+        });
+      });
+    }, 3600);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);
