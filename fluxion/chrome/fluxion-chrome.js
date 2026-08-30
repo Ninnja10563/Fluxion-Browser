@@ -3190,6 +3190,7 @@
           gBrowser.selectedTab = fixtureTabs[2];
           scheduleRender();
           window.setTimeout(() => {
+            render();
             const replacementItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
               candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
             );
