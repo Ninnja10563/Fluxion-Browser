@@ -33,6 +33,17 @@
   let focusWorkspaceAfterRender = null;
   const tabElements = new Map();
   const workspaceElements = new Map();
+  let sessionRestoreSettled = false;
+  let pendingRestoreWorkspace = null;
+
+  Promise.resolve(SessionStore.promiseAllWindowsRestored).then(() => {
+    sessionRestoreSettled = true;
+    const pending = pendingRestoreWorkspace;
+    pendingRestoreWorkspace = null;
+    if (pending && currentWorkspace === pending) {
+      switchWorkspace(pending, { reconcileRestore: false });
+    }
+  }).catch(Cu.reportError);
 
   document.documentElement.setAttribute("data-fluxion", "true");
 
@@ -1186,8 +1197,11 @@
     return true;
   }
 
-  function switchWorkspace(id) {
+  function switchWorkspace(id, options = {}) {
     if (!workspaces.some(item => item.id === id)) return;
+    if (!sessionRestoreSettled && options.reconcileRestore !== false) {
+      pendingRestoreWorkspace = id;
+    }
     const previous = gBrowser.selectedTab;
     if (previous?.parentNode && tabWorkspace(previous) === currentWorkspace) {
       rememberWorkspaceTab(previous);

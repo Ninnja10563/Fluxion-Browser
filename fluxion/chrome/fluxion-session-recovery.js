@@ -147,6 +147,7 @@
   }
 
   async function validateRestoredSession() {
+    await SessionStore.promiseAllWindowsRestored;
     let result = await waitFor(() => FluxionSessionRecovery.validateNormal(snapshot()));
     if (!result.ok) throw new Error(`session restore invalid: ${result.reasons.join("; ")}`);
     window.FluxionUI.switchWorkspace("focus");

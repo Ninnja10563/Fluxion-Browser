@@ -29,7 +29,10 @@ workflow:
   delete the workspace, and refuse packaging unless that tab moves safely;
 - extend the four-launch recovery test to require workspace names, order,
   symbols, and accents to survive a real Gecko quit and restart alongside tabs,
-  groups, pins, split views, and per-workspace active pages.
+  groups, pins, split views, and per-workspace active pages;
+- reconcile the latest workspace chosen during startup after Gecko reports all
+  SessionStore windows restored, so a delayed native tab selection cannot undo
+  an early user action.
 
 The release capture settles on the actual Workspaces preferences surface so
 its density, alignment, and grayscale hierarchy can be inspected before

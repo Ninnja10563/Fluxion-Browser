@@ -83,6 +83,13 @@ point. The current workspace and sidebar state use Firefox preferences. This
 keeps crash recovery atomic with the actual tab session and avoids a second
 database whose state could drift from Firefox.
 
+Gecko may finish applying its native selected-tab state after Fluxion chrome is
+already interactive. Fluxion remembers the latest workspace chosen during that
+short startup interval and reconciles it after SessionStore's
+`promiseAllWindowsRestored` resolves. The user's choice wins without delaying
+Flow or replacing Gecko's restore lifecycle; the multi-launch verifier awaits
+the same authoritative boundary before exercising workspace switches.
+
 Workspace definitions are a small bounded Firefox preference containing only
 stable IDs, names, geometric symbols, restrained accent names, and order.
 Flow's context menu and Fluxion Settings call one window controller for every

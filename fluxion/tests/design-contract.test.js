@@ -83,6 +83,7 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(sessionRecovery, /requestTabStateFlush/);
   assert.match(sessionRecovery, /Promise\.race/);
   assert.match(sessionRecovery, /SessionStore\.getWindowState/);
+  assert.match(sessionRecovery, /await SessionStore\.promiseAllWindowsRestored/);
   assert.match(sessionRecovery, /new Set\(\[\.\.\.groupTabs, \.\.\.splitTabs, pinned, \.\.\.focusTabs\]\)/);
   assert.match(sessionRecovery, /PlacesUtils\.history\.fetch/);
   assert.match(sessionRecovery, /validatePrivateAbsence\(snapshot\(\)\)/);
@@ -107,6 +108,8 @@ test("workspaces resume their last active native page without shadow sessions", 
   assert.match(chrome, /TAB_WORKSPACE_ACTIVE = "fluxion-workspace-active"/);
   assert.match(chrome, /rememberWorkspaceTab\(previous\)/);
   assert.match(chrome, /preferredWorkspaceTab\(id, workspaceTabs\)/);
+  assert.match(chrome, /SessionStore\.promiseAllWindowsRestored/);
+  assert.match(chrome, /pendingRestoreWorkspace/);
   assert.match(macVerifier, /FLUXION_VISUAL_WORKSPACE_RESUME_TEST=1/);
   assert.match(macVerifier, /two-workspace-active-pages-round-tripped/);
 });
