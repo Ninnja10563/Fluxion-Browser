@@ -37,6 +37,9 @@ The current preview is runnable and includes:
   field and a universal `Cmd/Ctrl+K` command palette;
 - fuzzy keyboard search across commands, open tabs, workspaces, history, and
   bookmarks, with dedicated `Cmd/Ctrl+Shift+A` tab search;
+- live command-palette access to Gecko find, bookmarking, save, print, zoom,
+  fullscreen, WebExtensions, and Developer Tools actions, with unavailable
+  commands omitted instead of rendered as dead controls;
 - optional Browser Memory search over non-private history, combining exact
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;

@@ -696,21 +696,35 @@
     }
     return gDevToolsBrowser;
   }
-  const toolbarDeveloperItem = nativeAction("Developer Tools", () => {
+  function nativeCommandAvailable(commandId) {
+    const command = document.getElementById(commandId);
+    return Boolean(command?.doCommand) && command.getAttribute("disabled") !== "true";
+  }
+  function runNativeCommand(commandId) {
+    if (!nativeCommandAvailable(commandId)) return false;
+    document.getElementById(commandId).doCommand();
+    return true;
+  }
+  function developerToolsAvailable() {
     try {
-      developerToolsController().toggleToolboxCommand(gBrowser, ChromeUtils.now());
-    } catch (error) {
-      console.error(`Exception while opening Developer Tools: ${error}\n${error.stack}`);
+      developerToolsController();
+      return true;
+    } catch {
+      return false;
     }
+  }
+  function openDeveloperTools() {
+    if (!developerToolsAvailable()) return false;
+    developerToolsController().toggleToolboxCommand(gBrowser, ChromeUtils.now());
+    return true;
+  }
+  const toolbarDeveloperItem = nativeAction("Developer Tools", () => {
+    try { openDeveloperTools(); }
+    catch (error) { console.error(`Exception while opening Developer Tools: ${error}\n${error.stack}`); }
   }, { acceltext: toolbarAccel("⌥⌘I", "F12") });
   on(toolbarToolsPopup, "popupshowing", event => {
     if (event.target === toolbarToolsPopup) {
-      try {
-        developerToolsController();
-        toolbarDeveloperItem.removeAttribute("disabled");
-      } catch {
-        toolbarDeveloperItem.setAttribute("disabled", "true");
-      }
+      toolbarDeveloperItem.toggleAttribute("disabled", !developerToolsAvailable());
     }
   });
   toolbarToolsPopup.append(
@@ -2346,13 +2360,17 @@
     createSplitView,
     cycleSidebar,
     currentWorkspace: () => currentWorkspace,
+    developerToolsAvailable,
     deleteWorkspace,
     moveTabToWorkspace,
+    nativeCommandAvailable,
     newTab: openWorkspaceTab,
+    openDeveloperTools,
     openNewSplit,
     refresh: scheduleRender,
     renameWorkspace,
     reverseSplitView,
+    runNativeCommand,
     revealSidebar: revealFocusSurface,
     hideSidebar: hideFocusSurface,
     separateSplitView,

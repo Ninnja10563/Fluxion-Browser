@@ -8,6 +8,25 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.30 completes the command palette's native page-control layer:
+
+- expose Find in Page, Bookmark This Page, Save Page As, Print, page zoom,
+  Full Screen, Extensions & Themes, and Developer Tools beside Fluxion's tab,
+  workspace, history, bookmark, settings, and privacy commands;
+- resolve native command availability from the live Gecko window, so a command
+  unavailable for the current page is omitted instead of becoming a dead row;
+- route every action through one privileged Fluxion-to-Gecko bridge while page
+  JavaScript remains unable to call browser chrome;
+- replace the palette's obsolete Developer Tools command ID with the same lazy
+  `gDevToolsBrowser` controller used by Firefox and Fluxion's toolbar menu;
+- keep native dialogs, enabled state, WebExtension compatibility, and page
+  behavior owned by Gecko rather than recreating them in palette code;
+- require the packaged browser to list the live commands and execute Zoom In
+  then Actual Size through keyboard selection before a DMG can publish.
+
+The palette remains a compact command surface, not a second toolbar or a
+decorative dashboard.
+
 Version 0.29 completes the Fluxion toolbar menu as a cross-platform command
 surface:
 

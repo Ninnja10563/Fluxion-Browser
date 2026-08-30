@@ -62,8 +62,12 @@ passes:
    A page-tools gate then resolves every Find, Save, Print, Zoom, Full Screen,
    Add-ons command and lazy Gecko Developer Tools controller against the
    packaged browser chrome. It drives Zoom In and Actual Size through the
-   actual menuitems and refuses the
-   build unless the live selected browser returns to 100 percent.
+   actual menuitems and refuses the build unless the live selected browser
+   returns to 100 percent.
+   A palette-command gate selects an ordinary live page, requires the available
+   native page, bookmark, extension, and Developer Tools actions to appear,
+   then drives Zoom In and Actual Size through actual keyboard selection. The
+   gate leaves a settled query visible for screenshot inspection.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

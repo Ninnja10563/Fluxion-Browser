@@ -146,6 +146,9 @@ and calls the same implementations as keyboard shortcuts and the platform menu.
 The Developer Tools item lazily resolves Gecko's `gDevToolsBrowser` controller
 and calls the same `toggleToolboxCommand` entry point as Firefox's dynamically
 registered toolbox command; Fluxion neither embeds nor recreates DevTools.
+That controller and a small checked native-command dispatcher are exported only
+inside privileged browser chrome for the command palette. The palette omits
+commands Gecko marks unavailable and never exposes this bridge to page content.
 The application menu's About command is captured at chrome scope and opens the
 versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle

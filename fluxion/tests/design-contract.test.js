@@ -205,6 +205,23 @@ test("Fluxion page tools delegate to Gecko commands and round-trip native zoom",
   assert.match(macVerifier, /native-page-tools-wired-and-zoom-round-tripped/);
 });
 
+test("the universal palette exposes live Gecko page commands without stale command IDs", () => {
+  for (const label of [
+    "Find in Page", "Bookmark This Page", "Save Page As", "Print", "Zoom Out",
+    "Actual Size", "Zoom In", "Toggle Full Screen", "Extensions & Themes", "Developer Tools",
+  ]) {
+    assert.match(palette, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(chrome, /nativeCommandAvailable/);
+  assert.match(chrome, /runNativeCommand/);
+  assert.match(chrome, /openDeveloperTools/);
+  assert.match(palette, /ui\.runNativeCommand\(command\)/);
+  assert.match(palette, /ui\.openDeveloperTools\(\)/);
+  assert.doesNotMatch(palette, /Tools:DevToolbox/);
+  assert.match(macVerifier, /FLUXION_VISUAL_PALETTE_COMMAND_TEST=1/);
+  assert.match(macVerifier, /native-page-commands-listed-and-keyboard-zoom-round-tripped/);
+});
+
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
   assert.match(
     chrome,

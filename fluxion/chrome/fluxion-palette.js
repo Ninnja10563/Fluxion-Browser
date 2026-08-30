@@ -203,7 +203,6 @@
   }
 
   function commandItems() {
-    const doCommand = id => document.getElementById(id)?.doCommand();
     const items = [
       {
         label: "New tab", detail: "Open a blank tab", kind: "Command", boost: 45,
@@ -272,15 +271,31 @@
         keywords: ["library recent pages"],
         run: () => window.FluxionLibrary?.open("history"),
       },
-      {
-        label: "Toggle fullscreen", detail: "Enter or leave fullscreen browsing", kind: "Command",
-        keywords: ["full screen"], run: () => doCommand("View:FullScreen"),
-      },
-      {
-        label: "Developer tools", detail: "Inspect the current page", kind: "Command",
-        keywords: ["devtools inspector console"], run: () => doCommand("Tools:DevToolbox"),
-      },
     ];
+    const nativePageCommands = [
+      ["Find in Page", "Search text in the current page", "cmd_find", ["find search text"]],
+      ["Bookmark This Page", "Save the current page to Gecko bookmarks", "Browser:AddBookmarkAs", ["save favorite favourite"]],
+      ["Save Page As", "Save the current page with Gecko's file dialog", "Browser:SavePage", ["download page file"]],
+      ["Print", "Print the current page with Gecko's native dialog", "cmd_print", ["printer pdf"]],
+      ["Zoom Out", "Reduce the current page zoom", "cmd_fullZoomReduce", ["smaller page"]],
+      ["Actual Size", "Reset the current page to 100%", "cmd_fullZoomReset", ["zoom reset 100"]],
+      ["Zoom In", "Increase the current page zoom", "cmd_fullZoomEnlarge", ["larger page"]],
+      ["Toggle Full Screen", "Enter or leave fullscreen browsing", "View:FullScreen", ["fullscreen"]],
+      ["Extensions & Themes", "Manage Firefox-compatible WebExtensions", "Tools:Addons", ["addons add-ons themes"]],
+    ];
+    for (const [label, detail, command, keywords] of nativePageCommands) {
+      if (!ui.nativeCommandAvailable(command)) continue;
+      items.push({
+        label, detail, kind: "Page", keywords,
+        run: () => ui.runNativeCommand(command),
+      });
+    }
+    if (ui.developerToolsAvailable()) {
+      items.push({
+        label: "Developer Tools", detail: "Inspect the current page with Gecko DevTools", kind: "Page",
+        keywords: ["devtools inspector console"], run: () => ui.openDeveloperTools(),
+      });
+    }
     const selectedTab = gBrowser.selectedTab;
     const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
     const aiConfig = window.FluxionAI?.config();
@@ -834,6 +849,61 @@
     style.remove();
   }, { once: true });
   window.FluxionPalette = Object.freeze({ close, open });
+  if (Services.env.get("FLUXION_VISUAL_PALETTE_COMMAND_TEST") === "1") {
+    window.setTimeout(() => {
+      const previousTab = gBrowser.selectedTab;
+      const ordinaryTab = [...gBrowser.tabs].find(tab =>
+        /^https:\/\/example\.com\//.test(tab.linkedBrowser?.currentURI?.spec || "")
+      );
+      if (ordinaryTab) ui.selectTab(ordinaryTab);
+      const labels = new Set(commandItems().map(item => item.label));
+      const required = [
+        "Find in Page", "Bookmark This Page", "Save Page As", "Print", "Zoom In",
+        "Toggle Full Screen", "Extensions & Themes", "Developer Tools",
+      ];
+      open("all");
+      input.value = "zoom in";
+      render(false);
+      const zoomInIndex = visibleItems.findIndex(item => item.label === "Zoom In");
+      const before = window.ZoomManager.zoom;
+      if (zoomInIndex >= 0) {
+        setActive(zoomInIndex);
+        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      }
+      window.requestAnimationFrame(() => {
+        const enlarged = window.ZoomManager.zoom > before && layer.hidden;
+        open("all");
+        input.value = "actual size";
+        render(false);
+        const resetIndex = visibleItems.findIndex(item => item.label === "Actual Size");
+        if (resetIndex >= 0) {
+          setActive(resetIndex);
+          input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        }
+        window.requestAnimationFrame(() => {
+          const reset = Math.abs(window.ZoomManager.zoom - 1) < 0.001 && layer.hidden;
+          const complete = required.every(label => labels.has(label));
+          if (previousTab?.parentNode) ui.selectTab(previousTab);
+          open("all");
+          input.value = "zoom";
+          render(false);
+          if (complete && enlarged && reset && visibleItems.some(item => item.label === "Zoom In")) {
+            Services.prefs.setStringPref(
+              "fluxion.paletteCommands.health",
+              "native-page-commands-listed-and-keyboard-zoom-round-tripped",
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.paletteCommands.visual.error",
+              `complete=${complete} enlarged=${enlarged} reset=${reset} ` +
+                `missing=${required.filter(label => !labels.has(label)).join("|")}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+        });
+      });
+    }, 32000);
+  }
   if (
     Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1" &&
     Services.env.get("FLUXION_VISUAL_SETTINGS_TEST") !== "1"

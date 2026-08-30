@@ -57,6 +57,8 @@ SigmaOS is deliberately excluded as a reference.
   point, not a duplicated hero search box.
 - The command palette is a compact transient list. It uses no dimmed backdrop,
   blur, gradient, oversized radius, or decorative animation.
+- Native page actions in the palette appear only when Gecko can execute them;
+  a quiet interface must not trade visual simplicity for dead controls.
 - Motion stays between 100ms and 160ms and disappears under reduced motion.
 - Gradients, glass effects, neon, ornamental borders, and marketing-style empty
   space are prohibited in browser chrome.
