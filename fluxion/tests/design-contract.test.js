@@ -116,6 +116,8 @@ test("workspaces resume their last active native page without shadow sessions", 
 
 test("Workspace settings mutate the shared controller and prove safe native-tab migration", () => {
   assert.match(settings, /section\(\s*"workspaces", "Workspaces"/);
+  assert.match(settings, /fluxion-settings-workspace-list/);
+  assert.doesNotMatch(settings, /create\("div", "fluxion-workspace-list"\)/);
   assert.match(settings, /window\.FluxionUI\.createWorkspace\(workspaceName\.value, \{ activate: false \}\)/);
   assert.match(settings, /window\.FluxionUI\.updateWorkspace/);
   assert.match(settings, /window\.FluxionUI\.moveWorkspace/);

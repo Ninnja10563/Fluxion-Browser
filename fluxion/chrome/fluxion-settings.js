@@ -98,26 +98,26 @@
       display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px;
       color: var(--fluxion-muted); font-size: 11px;
     }
-    .fluxion-workspace-list { border-bottom: 1px solid var(--fluxion-line); }
-    .fluxion-workspace-row { padding: 13px 0; border-top: 1px solid var(--fluxion-line); }
-    .fluxion-workspace-identity {
+    .fluxion-settings-workspace-list { display: block; border-bottom: 1px solid var(--fluxion-line); }
+    .fluxion-settings-workspace-row { padding: 13px 0; border-top: 1px solid var(--fluxion-line); }
+    .fluxion-settings-workspace-identity {
       display: grid; grid-template-columns: 18px minmax(120px, 1fr) auto; gap: 9px;
       align-items: center; margin-bottom: 8px;
     }
-    .fluxion-workspace-mark { width: 13px; height: 13px; color: var(--workspace-accent); }
-    .fluxion-workspace-name { min-height: 29px !important; font-weight: 600 !important; }
-    .fluxion-workspace-current {
+    .fluxion-settings-workspace-mark { width: 13px; height: 13px; color: var(--workspace-accent); }
+    .fluxion-settings-workspace-name { min-height: 29px !important; font-weight: 600 !important; }
+    .fluxion-settings-workspace-current {
       min-width: 48px; color: var(--fluxion-muted); font-size: 11px; text-align: end;
     }
-    .fluxion-workspace-controls {
+    .fluxion-settings-workspace-controls {
       display: grid; grid-template-columns: minmax(100px, 1fr) minmax(100px, 1fr) auto;
       gap: 7px; padding-inline-start: 27px;
     }
-    .fluxion-workspace-actions { display: flex; gap: 4px; }
-    .fluxion-workspace-actions .fluxion-settings-button {
+    .fluxion-settings-workspace-actions { display: flex; gap: 4px; }
+    .fluxion-settings-workspace-actions .fluxion-settings-button {
       width: auto; min-width: 48px; padding-inline: 8px;
     }
-    .fluxion-workspace-actions .fluxion-settings-button.danger { min-width: 58px; }
+    .fluxion-settings-workspace-actions .fluxion-settings-button.danger { min-width: 58px; }
     .fluxion-permissions-toolbar {
       display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px;
       align-items: center; margin: 0 0 12px;
@@ -162,8 +162,8 @@
       .fluxion-settings-main { min-width: 360px; padding-inline: 24px; }
       .fluxion-setting { grid-template-columns: 1fr; gap: 8px; }
       .fluxion-switch { justify-self: start; }
-      .fluxion-workspace-controls { grid-template-columns: 1fr 1fr; }
-      .fluxion-workspace-actions { grid-column: 1 / -1; }
+      .fluxion-settings-workspace-controls { grid-template-columns: 1fr 1fr; }
+      .fluxion-settings-workspace-actions { grid-column: 1 / -1; }
       .fluxion-permission-row { grid-template-columns: minmax(100px, 1fr) auto auto; }
       .fluxion-permission-expiry { display: none; }
     }
@@ -371,7 +371,7 @@
   const workspaceCount = create("span");
   const workspaceCurrent = create("span");
   workspaceSummary.append(workspaceCount, workspaceCurrent);
-  const workspaceList = create("div", "fluxion-workspace-list");
+  const workspaceList = create("div", "fluxion-settings-workspace-list");
   workspaceList.setAttribute("role", "list");
   workspacePanel.append(workspaceCreate, workspaceSummary, workspaceList);
 
@@ -381,7 +381,7 @@
   ]);
   function workspaceMark(icon, accent) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    svg.setAttribute("class", "fluxion-workspace-mark");
+    svg.setAttribute("class", "fluxion-settings-workspace-mark");
     svg.setAttribute("viewBox", "0 0 12 12");
     svg.setAttribute("fill", "none");
     svg.setAttribute("aria-hidden", "true");
@@ -417,11 +417,11 @@
     workspaceName.disabled = workspaceAdd.disabled;
     workspaceList.replaceChildren();
     for (const [index, workspace] of items.entries()) {
-      const item = create("section", "fluxion-workspace-row");
+      const item = create("section", "fluxion-settings-workspace-row");
       item.dataset.workspaceId = workspace.id;
       item.setAttribute("role", "listitem");
-      const identity = create("div", "fluxion-workspace-identity");
-      const name = create("input", "fluxion-settings-control fluxion-workspace-name");
+      const identity = create("div", "fluxion-settings-workspace-identity");
+      const name = create("input", "fluxion-settings-control fluxion-settings-workspace-name");
       name.type = "text";
       name.maxLength = 32;
       name.value = workspace.name;
@@ -434,10 +434,10 @@
           setNote("Workspace names cannot be empty.", "workspaces");
         }
       });
-      const state = create("span", "fluxion-workspace-current", workspace.id === currentId ? "Current" : "");
+      const state = create("span", "fluxion-settings-workspace-current", workspace.id === currentId ? "Current" : "");
       identity.append(workspaceMark(workspace.icon, workspace.accent), name, state);
 
-      const controls = create("div", "fluxion-workspace-controls");
+      const controls = create("div", "fluxion-settings-workspace-controls");
       const symbol = select([
         ["circle", "Circle"], ["diamond", "Diamond"], ["square", "Square"],
         ["arc", "Arc"], ["grid", "Grid"],
@@ -456,7 +456,7 @@
       });
       accent.classList.add("fluxion-settings-control");
       accent.setAttribute("aria-label", `Accent for ${workspace.name}`);
-      const actions = create("div", "fluxion-workspace-actions");
+      const actions = create("div", "fluxion-settings-workspace-actions");
       const up = create("button", "fluxion-settings-button", "Up");
       up.type = "button";
       up.disabled = index === 0;
@@ -887,11 +887,20 @@
   }
   if (Services.env.get("FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST") === "1") {
     window.addEventListener("FluxionDataClearingVisualReady", () => {
-      const settingsTab = [...gBrowser.tabs].find(candidate =>
-        candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
-      if (settingsTab) gBrowser.selectedTab = settingsTab;
-      showSection("workspaces");
-      renderWorkspaces();
+      let settingsTab = [...gBrowser.tabs].find(candidate =>
+        candidate.linkedBrowser?.currentURI?.spec === "about:preferences#workspaces");
+      if (!settingsTab) {
+        settingsTab = gBrowser.addTrustedTab("about:preferences#workspaces", { skipAnimation: true });
+        window.FluxionUI.setTabWorkspace(settingsTab, window.FluxionUI.currentWorkspace());
+      }
+      gBrowser.selectedTab = settingsTab;
+      window.setTimeout(() => {
+        syncVisibility();
+        showSection("workspaces");
+        renderWorkspaces();
+        const status = notes.get("workspaces");
+        if (status) status.textContent = "";
+      }, 250);
     }, { once: true });
     window.setTimeout(() => {
       let fixtureTab = null;
@@ -907,7 +916,7 @@
         createdId = window.FluxionUI.workspaces().find(workspace =>
           !originalIds.includes(workspace.id) && workspace.name === "Reference Lab")?.id || "";
         let item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
-        const name = item?.querySelector(".fluxion-workspace-name");
+        const name = item?.querySelector(".fluxion-settings-workspace-name");
         if (name) {
           name.value = "Reference Desk";
           name.dispatchEvent(new window.Event("change", { bubbles: true }));
@@ -968,6 +977,8 @@
         if (createdId && window.FluxionUI.workspaces().some(workspace => workspace.id === createdId)) {
           window.FluxionUI.deleteWorkspace(createdId, { confirm: false });
         }
+        const status = notes.get("workspaces");
+        if (status) status.textContent = "";
         Services.prefs.savePrefFile(null);
       }
     }, 5200);
