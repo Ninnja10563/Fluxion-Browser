@@ -2978,50 +2978,54 @@
         return;
       }
       followingRow.scrollIntoView({ block: "nearest" });
-      const targetRect = closeButton.getBoundingClientRect();
-      const pointer = {
-        clientX: targetRect.left + targetRect.width / 2,
-        clientY: targetRect.top + targetRect.height / 2,
-      };
-      const followingTop = followingRow.getBoundingClientRect().top;
-      closeButton.dispatchEvent(new window.MouseEvent("click", {
-        ...pointer, bubbles: true, button: 0, detail: 1,
-      }));
       window.setTimeout(() => {
-        const repeatTarget = document.elementFromPoint(pointer.clientX, pointer.clientY);
-        const protectedTarget = Boolean(repeatTarget && !repeatTarget.closest?.(".fluxion-close"));
-        repeatTarget?.dispatchEvent(new window.MouseEvent("click", {
+        const targetRect = closeButton.getBoundingClientRect();
+        const pointer = {
+          clientX: targetRect.left + targetRect.width / 2,
+          clientY: targetRect.top + targetRect.height / 2,
+        };
+        const followingTop = followingRow.getBoundingClientRect().top;
+        closeButton.dispatchEvent(new window.MouseEvent("click", {
           ...pointer, bubbles: true, button: 0, detail: 1,
         }));
-        const held = !closing.parentNode && closingRow.isConnected &&
-          closingRow.classList.contains("is-closing") &&
-          Math.abs(followingRow.getBoundingClientRect().top - followingTop) <= 1;
-        const neighboursSafe = first.parentNode && following.parentNode;
-        window.dispatchEvent(new window.PointerEvent("pointermove", {
-          clientX: targetRect.left - FluxionTabCloseStability.DEFAULT_PADDING - 8,
-          clientY: pointer.clientY,
-          bubbles: true,
-        }));
         window.setTimeout(() => {
-          const followingAfter = tabElements.get(following);
-          const compressed = !closingRow.isConnected && followingAfter &&
-            followingAfter.getBoundingClientRect().top < followingTop - 10;
-          if (protectedTarget && held && neighboursSafe && compressed) {
-            Services.prefs.setStringPref(
-              "fluxion.closeStability.health",
-              "pointer-close-held-one-row-until-movement",
-            );
-          } else {
-            Services.prefs.setStringPref(
-              "fluxion.closeStability.visual.error",
-              `protected=${protectedTarget} held=${held} neighbours=${Boolean(neighboursSafe)} compressed=${Boolean(compressed)}`,
-            );
-          }
-          Services.prefs.savePrefFile(null);
-          gBrowser.removeTabs([first, following].filter(tab => tab.parentNode), { animate: false });
-          scheduleRender();
+          const repeatTarget = document.elementFromPoint(pointer.clientX, pointer.clientY);
+          const protectedTarget = Boolean(repeatTarget && !repeatTarget.closest?.(".fluxion-close"));
+          const held = !closing.parentNode && closingRow.isConnected &&
+            closingRow.classList.contains("is-closing") &&
+            Math.abs(followingRow.getBoundingClientRect().top - followingTop) <= 1;
+          repeatTarget?.dispatchEvent(new window.MouseEvent("click", {
+            ...pointer, bubbles: true, button: 0, detail: 1,
+          }));
+          window.setTimeout(() => {
+            const neighboursSafe = first.parentNode && following.parentNode;
+            window.dispatchEvent(new window.PointerEvent("pointermove", {
+              clientX: targetRect.left - FluxionTabCloseStability.DEFAULT_PADDING - 8,
+              clientY: pointer.clientY,
+              bubbles: true,
+            }));
+            window.setTimeout(() => {
+              const followingAfter = tabElements.get(following);
+              const compressed = !closingRow.isConnected && followingAfter &&
+                followingAfter.getBoundingClientRect().top < followingTop - 10;
+              if (protectedTarget && held && neighboursSafe && compressed) {
+                Services.prefs.setStringPref(
+                  "fluxion.closeStability.health",
+                  "pointer-close-held-one-row-until-movement",
+                );
+              } else {
+                Services.prefs.setStringPref(
+                  "fluxion.closeStability.visual.error",
+                  `protected=${protectedTarget} held=${held} neighbours=${Boolean(neighboursSafe)} compressed=${Boolean(compressed)}`,
+                );
+              }
+              Services.prefs.savePrefFile(null);
+              gBrowser.removeTabs([first, following].filter(tab => tab.parentNode), { animate: false });
+              scheduleRender();
+            }, 180);
+          }, 160);
         }, 180);
-      }, 180);
+      }, 80);
     }, 3400);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
