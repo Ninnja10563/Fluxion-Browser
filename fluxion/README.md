@@ -35,6 +35,9 @@ The current preview is runnable and includes:
 - a Fluxion-owned settings surface with live controls for startup, search,
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
   permissions;
+- Fluxion Library for fast searchable history, bookmarks, and live downloads,
+  backed by Gecko Places and Downloads with open, reveal, retry, cancel, and
+  removal actions;
 - automatic native tab sleeping with configurable idle intervals, safe
   before-unload handling, and exclusions for pinned, audio, shared, split, and
   private tabs;
@@ -222,6 +225,14 @@ To compare pages, Command-click two to four tabs in Flow, open the command
 palette, and run **Compare Selected Pages**. Fluxion sends only those explicitly
 selected, policy-approved extracts and shows a separate source record for each
 page. It never chooses tabs or reorganises them automatically.
+
+Run **Open history**, **Open bookmarks**, or **Open downloads** from the command
+palette to enter Fluxion Library. History and bookmarks are read from the real
+Places database; downloads update from Gecko's live download list and remain
+separate in private windows. Finished files can be opened or revealed, active
+downloads canceled, interrupted downloads retried, and list entries removed.
+The concise **Manage bookmark folders…** route retains Gecko's complete folder
+organizer while Fluxion's native folder editor is developed.
 
 ## License
 

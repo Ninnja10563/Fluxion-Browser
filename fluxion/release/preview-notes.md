@@ -8,6 +8,27 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.16 introduces Fluxion Library as the primary history, bookmark, and
+download surface:
+
+- search recent history, saved bookmarks, folder context, download names, and
+  source URLs in one restrained native-feeling interface;
+- open or remove individual history and bookmark records from the real Gecko
+  Places database with confirmation before destructive data changes;
+- observe Gecko's live public download list—or only the private list in a
+  private window—without polling or shadow download state;
+- open completed files, reveal them in Finder, cancel active transfers, retry
+  interrupted transfers, and remove list entries through native Download APIs;
+- retain Gecko's full bookmark-folder organizer behind a concise management
+  route while Fluxion's folder editor remains in development;
+- route command-palette history, bookmark, and download actions directly into
+  the independent Fluxion surface instead of Firefox-styled management pages.
+
+The macOS release gate now writes a real visit and bookmark into the isolated
+Places profile, adds a native Download object, and refuses the DMG unless all
+three are visible in the packaged Fluxion Library after every earlier browser
+gate passes.
+
 Version 0.15 adds explicit, grounded comparison across selected tabs:
 
 - Command-click or Shift-click two to four real Gecko tabs in Flow, then run

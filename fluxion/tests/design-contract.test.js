@@ -13,6 +13,7 @@ const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), 
 const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js"), "utf8");
 const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
 const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js"), "utf8");
+const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -28,7 +29,7 @@ const macVerifier = fs.readFileSync(
 );
 
 test("browser chrome avoids prohibited decorative effects", () => {
-  const productCss = `${chrome}\n${palette}\n${settings}`;
+  const productCss = `${chrome}\n${palette}\n${settings}\n${library}`;
   assert.doesNotMatch(productCss, /(?:linear|radial)-gradient|backdrop-filter|filter:\s*blur/i);
 });
 
@@ -90,6 +91,7 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /custom-shortcut-persisted/);
   assert.match(macVerifier, /FLUXION_VISUAL_AI_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_AI_COMPARE_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_LIBRARY_TEST=1/);
   assert.match(macVerifier, /ollama-stub\.py/);
   assert.match(macVerifier, /current-page-answer-visible/);
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);
@@ -98,6 +100,23 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("Fluxion Library owns visible history, bookmark, and download workflows", () => {
+  assert.match(library, /PlacesUtils\.promiseDBConnection/);
+  assert.match(library, /moz_historyvisits/);
+  assert.match(library, /moz_bookmarks/);
+  assert.match(library, /Downloads\.getList/);
+  assert.match(library, /Downloads\.PRIVATE/);
+  assert.match(library, /download\.launch\(\)/);
+  assert.match(library, /download\.showContainingDirectory\(\)/);
+  assert.match(library, /downloadList\.remove\(download\)/);
+  assert.match(library, /PlacesUtils\.history\.remove/);
+  assert.match(library, /PlacesUtils\.bookmarks\.remove/);
+  assert.match(palette, /FluxionLibrary\?\.open\("history"\)/);
+  assert.match(palette, /FluxionLibrary\?\.open\("bookmarks"\)/);
+  assert.match(palette, /FluxionLibrary\?\.open\("downloads"\)/);
+  assert.doesNotMatch(library, /(?:linear|radial)-gradient|backdrop-filter/);
 });
 
 test("custom shortcuts are persisted centrally and consumed by live commands", () => {

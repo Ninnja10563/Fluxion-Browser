@@ -13,7 +13,9 @@ passes:
    fixture must receive a grounded page payload from the packaged app and the
    resulting cited answer must be visible before packaging can proceed. The
    fixture then requires a second request containing two explicitly selected
-   page contexts and Fluxion must render both sources.
+   page contexts and Fluxion must render both sources. The final gate seeds a
+   real Places visit, bookmark, and native download-list record, opens Fluxion
+   Library, and requires all three backends to render before capture.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

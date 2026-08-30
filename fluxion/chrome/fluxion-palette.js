@@ -206,8 +206,8 @@
         keywords: ["add create organize tabs"], run: () => ui.createGroup(),
       },
       {
-        label: "Open downloads", detail: "View current and completed downloads", kind: "Command",
-        keywords: ["download manager files"], run: () => openUrl("about:downloads"),
+        label: "Open downloads", detail: "View current and completed downloads in Fluxion Library", kind: "Command",
+        keywords: ["download manager files library"], run: () => window.FluxionLibrary?.open("downloads"),
       },
       {
         label: "Open settings", detail: "Change Fluxion and Gecko preferences", kind: "Command",
@@ -223,14 +223,14 @@
         keywords: ["clear browsing data delete history"], run: () => openUrl("about:preferences#privacy"),
       },
       {
-        label: "Open bookmarks", detail: "Manage saved pages and folders", kind: "Command",
+        label: "Open bookmarks", detail: "Search and manage saved pages in Fluxion Library", kind: "Command",
         keywords: ["library favourites favorites"],
-        run: () => window.PlacesCommandHook?.showPlacesOrganizer("AllBookmarks"),
+        run: () => window.FluxionLibrary?.open("bookmarks"),
       },
       {
-        label: "Open history", detail: "Review previously visited pages", kind: "Command",
+        label: "Open history", detail: "Review visited pages in Fluxion Library", kind: "Command",
         keywords: ["library recent pages"],
-        run: () => window.PlacesCommandHook?.showPlacesOrganizer("History"),
+        run: () => window.FluxionLibrary?.open("history"),
       },
       {
         label: "Toggle fullscreen", detail: "Enter or leave fullscreen browsing", kind: "Command",

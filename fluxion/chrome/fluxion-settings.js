@@ -449,7 +449,8 @@
   function syncVisibility() {
     const visible = isSettingsTab();
     root.hidden = !visible;
-    contentDeck.hidden = visible;
+    if (visible) contentDeck.hidden = true;
+    else if (!document.documentElement.hasAttribute("data-fluxion-library-visible")) contentDeck.hidden = false;
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
       const hash = gBrowser.selectedBrowser.currentURI.spec.split("#")[1] || "general";

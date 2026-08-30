@@ -237,6 +237,25 @@ internal implementation and migration code are not removed. Fluxion owns the
 normal user-facing route, while new settings are added only when they have a
 working service behind them.
 
+## Fluxion Library boundary
+
+Fluxion Library is a privileged product surface projected when a real
+`about:downloads` tab is selected. The underlying internal tab remains
+Gecko-owned and session-restorable, while the visible interface is independent
+of Firefox's organizer styling. History and bookmarks are bounded read queries
+against the existing Places connection; mutations use `PlacesUtils.history`
+and `PlacesUtils.bookmarks` after explicit confirmation. Bookmark URLs pass
+through Fluxion's safe navigation policy so a stored script-bearing scheme is
+never executed from privileged chrome.
+
+Downloads come from `Downloads.PUBLIC` in ordinary windows and
+`Downloads.PRIVATE` in private windows. A live `DownloadList` view refreshes
+progress without polling or duplicating download state. Open, containing-folder,
+cancel, retry, and remove commands delegate to the native `Download` object;
+removing a list entry never deletes its completed file. Fluxion does not
+implement networking, file writing, quarantine metadata, reputation checks, or
+content analysis. Those remain in Gecko's download stack.
+
 ## Tab sleeping boundary
 
 Fluxion schedules eligibility, but Gecko owns suspension. The scheduler uses a
