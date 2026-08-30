@@ -2176,6 +2176,13 @@
   }
 
   function render() {
+    if (pointerCloseHold) {
+      renderQueued = false;
+      renderDeferredForClose = true;
+      syncHeldTabSelection();
+      updateWindowTitle();
+      return;
+    }
     renderQueued = false;
     renderWorkspaces();
     tabElements.clear();
