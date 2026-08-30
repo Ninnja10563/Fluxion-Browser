@@ -70,13 +70,24 @@ function withTimeout(promise, milliseconds) {
 export const FluxionMemoryStore = Object.freeze({
   async upsert(page) {
     const db = await connection();
+    const parameters = {
+      url: page.url,
+      title: page.title,
+      description: page.description,
+      headings: page.headings,
+      content: page.text,
+      workspace: page.workspace,
+      tabGroup: page.tabGroup,
+      lastVisit: page.lastVisit,
+      indexedAt: page.indexedAt,
+    };
     await db.executeCached(`INSERT INTO pages
         (url,title,description,headings,content,workspace,tab_group,last_visit,indexed_at)
         VALUES (:url,:title,:description,:headings,:content,:workspace,:tabGroup,:lastVisit,:indexedAt)
         ON CONFLICT(url) DO UPDATE SET title=excluded.title, description=excluded.description,
         headings=excluded.headings, content=excluded.content, workspace=excluded.workspace,
         tab_group=excluded.tab_group, last_visit=excluded.last_visit,
-        visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, page);
+        visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, parameters);
     // Embedding is intentionally detached: an unavailable model must never
     // delay navigation, durable evidence storage, or lexical recall.
     embedAndStore(page.url, page.embeddingText).catch(Cu.reportError);
