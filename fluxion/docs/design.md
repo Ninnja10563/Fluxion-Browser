@@ -53,6 +53,9 @@ SigmaOS is deliberately excluded as a reference.
   replaces the row content with a literal spatial action such as “Split left”
   or “Stack below”; it does not rely on colour alone.
 - Workspace colour appears only in a one-pixel selection indicator.
+- System, Light, and Dark appearance choices change native Gecko chrome and the
+  restrained Fluxion surfaces together. They do not introduce coloured themes,
+  gradients, wallpaper, or per-workspace decoration.
 - The new-tab page is blank by default. The address field is the primary entry
   point, not a duplicated hero search box.
 - The command palette is a compact transient list. It uses no dimmed backdrop,

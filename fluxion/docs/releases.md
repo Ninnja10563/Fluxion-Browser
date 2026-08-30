@@ -76,6 +76,10 @@ passes:
    opens the selected palette fallback through that engine, verifies workspace
    placement, restores the original default, and requires the settled palette
    to name the restored engine.
+   An appearance gate then enables Gecko's installed Dark theme through the
+   same controller used by Settings and palette commands, opens the real
+   Appearance section, and requires its selection plus the computed browser-
+   chrome color scheme to update before capture.
    A browsing-data gate then opens Fluxion's direct command surface through the
    same privileged controller used by Settings and refuses publication unless
    Gecko's native sanitizer dialog is mounted in the packaged browser. The

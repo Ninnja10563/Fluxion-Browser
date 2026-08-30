@@ -8,6 +8,27 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.34 makes appearance a live browser capability rather than a static
+skin:
+
+- add working **Follow system**, **Light**, and **Dark** choices to Fluxion's
+  compact Appearance settings;
+- install and enable Gecko's own built-in themes through `BuiltInThemes` and
+  `AddonManager`, so native menus, dialogs, toolbar controls, and Fluxion chrome
+  update through one supported lifecycle;
+- observe active-theme changes across open windows and preserve a distinct
+  **Extension theme** state when a Firefox-compatible theme owns appearance;
+- expose Appearance, Tabs, Search & Memory, AI, and Keyboard destinations as
+  fuzzy-searchable Settings results in the universal command palette;
+- add direct palette actions for switching to System, Light, or Dark appearance
+  without turning theme state into permanent toolbar clutter;
+- require the packaged macOS app to enable Dark, update the live Settings
+  selection and computed chrome color scheme, then open Gecko's native privacy
+  dialog in that appearance before a DMG can publish.
+
+The visual system remains grayscale-first: no gradients, wallpaper, colourway,
+or decorative theme layer was added.
+
 Version 0.33 replaces partial browsing-data deletion with Gecko's coordinated
 native privacy workflow:
 

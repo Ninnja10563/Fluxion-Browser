@@ -5,7 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.33.0";
+  const PRODUCT_VERSION = "0.34.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -254,6 +254,41 @@
   });
 
   const appearance = section("appearance", "Appearance", "Tune information density without turning the browser into a theme dashboard.");
+  const themeOptions = [
+    ["system", "Follow system"], ["light", "Light"], ["dark", "Dark"],
+  ];
+  if (window.FluxionTheme.current() === "custom") {
+    themeOptions.push(["custom", "Extension theme"]);
+  }
+  const themeChoice = select(themeOptions, window.FluxionTheme.current(), async value => {
+    if (value === "custom") return;
+    themeChoice.disabled = true;
+    try {
+      const applied = await window.FluxionTheme.set(value);
+      themeChoice.value = applied;
+      setNote(
+        applied === "system" ? "Appearance now follows the system." : `${applied === "dark" ? "Dark" : "Light"} appearance enabled.`,
+        "appearance",
+      );
+    } catch (error) {
+      themeChoice.value = window.FluxionTheme.current();
+      setNote(`Appearance could not be changed: ${error.message}`, "appearance");
+    } finally { themeChoice.disabled = false; }
+  });
+  themeChoice.id = "fluxion-theme-choice";
+  themeChoice.querySelector('option[value="custom"]')?.setAttribute("disabled", "true");
+  row(appearance, "Theme", "Follow macOS automatically or choose a persistent light or dark Gecko theme.", themeChoice);
+  const syncThemeChoice = event => {
+    const value = event.detail?.choice || window.FluxionTheme.current();
+    if (value === "custom" && !themeChoice.querySelector('option[value="custom"]')) {
+      const option = create("option", "", "Extension theme");
+      option.value = "custom";
+      option.disabled = true;
+      themeChoice.appendChild(option);
+    }
+    themeChoice.value = value;
+  };
+  window.addEventListener("FluxionThemeChanged", syncThemeChoice);
   row(appearance, "Flow sidebar", "Expanded shows titles; compact keeps the rail; focus leaves a reveal edge.", select([
     ["expanded", "Expanded"], ["compact", "Compact"], ["focus", "Focus"],
   ], FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")), value => {
@@ -650,6 +685,7 @@
     root.remove();
     style.remove();
     document.documentElement.removeAttribute("data-fluxion-settings-visible");
+    window.removeEventListener("FluxionThemeChanged", syncThemeChoice);
     unsubscribePermissions?.();
   }, { once: true });
   showSection("general");

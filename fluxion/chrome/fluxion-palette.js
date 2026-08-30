@@ -273,6 +273,31 @@
         run: () => window.FluxionLibrary?.open("history"),
       },
     ];
+    const settingsDestinations = [
+      ["Appearance settings", "Theme, Flow sidebar, density, and interface motion", "appearance", ["dark light system compact focus"]],
+      ["Tab settings", "Sleeping, close confirmation, and new-tab focus", "tabs", ["sleep inactive background quit"]],
+      ["Search & Memory settings", "Semantic history, ranking, and excluded domains", "search", ["browser memory embeddings exclusions"]],
+      ["AI settings", "Optional local or OpenAI-compatible page tools", "ai", ["ollama lm studio endpoint model"]],
+      ["Keyboard settings", "View and edit Fluxion shortcuts", "keyboard", ["hotkeys commands keys"]],
+    ];
+    for (const [label, detail, route, keywords] of settingsDestinations) {
+      items.push({
+        label, detail, kind: "Setting", keywords, boost: -12,
+        run: () => openUrl(`about:preferences#${route}`),
+      });
+    }
+    const currentTheme = window.FluxionTheme?.current();
+    for (const [choice, label] of [["system", "Follow System Appearance"], ["light", "Use Light Appearance"], ["dark", "Use Dark Appearance"]]) {
+      if (!window.FluxionTheme || choice === currentTheme) continue;
+      items.push({
+        label,
+        detail: "Switch Fluxion and native Gecko chrome immediately",
+        kind: "Appearance",
+        keywords: ["theme colour color mode"],
+        boost: -12,
+        run: () => window.FluxionTheme.set(choice),
+      });
+    }
     const nativePageCommands = [
       ["Find in Page", "Search text in the current page", "cmd_find", ["find search text"]],
       ["Bookmark This Page", "Save the current page to Gecko bookmarks", "Browser:AddBookmarkAs", ["save favorite favourite"]],
@@ -1137,7 +1162,9 @@
       setActive(index);
       input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
     };
-    if (Services.env.get("FLUXION_VISUAL_SEARCH_ENGINE_TEST") === "1") {
+    if (Services.env.get("FLUXION_VISUAL_THEME_TEST") === "1") {
+      on(window, "FluxionThemeVisualReady", runClearDataGate, { once: true });
+    } else if (Services.env.get("FLUXION_VISUAL_SEARCH_ENGINE_TEST") === "1") {
       on(window, "FluxionWebSearchVisualReady", runClearDataGate, { once: true });
     } else {
       window.setTimeout(runClearDataGate, 70000);

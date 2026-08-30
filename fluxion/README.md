@@ -57,6 +57,9 @@ The current preview is runnable and includes:
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
   permissions, including searchable per-site camera, microphone, location,
   notification, expiry, and reset controls backed by Gecko's permission manager;
+- live System, Light, and Dark appearance choices backed by Gecko's installed
+  theme lifecycle, with third-party Firefox-compatible themes preserved and
+  every major Settings destination searchable from the command palette;
 - browsing-data and site-data clearing through Gecko's coordinated native
   Sanitizer dialog, available from both Settings and the command palette, so
   history, downloads, forms, cookies, cache, storage, logins, and site settings

@@ -19,6 +19,7 @@ const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-
 const closedTabs = fs.readFileSync(path.join(root, "chrome/core/closed-tabs.js"), "utf8");
 const webSearch = fs.readFileSync(path.join(root, "chrome/fluxion-web-search.js"), "utf8");
 const dataClearing = fs.readFileSync(path.join(root, "chrome/fluxion-data-clearing.js"), "utf8");
+const theme = fs.readFileSync(path.join(root, "chrome/fluxion-theme.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
 const tabStatus = fs.readFileSync(path.join(root, "chrome/core/tab-status.js"), "utf8");
@@ -269,6 +270,23 @@ test("browsing-data clearing stays in Gecko's coordinated sanitizer", () => {
   assert.doesNotMatch(dataClearing, /PlacesUtils\.history\.clear|cookies\.removeAll|cache2\.clear/);
   assert.match(macVerifier, /FLUXION_VISUAL_CLEAR_DATA_TEST=1/);
   assert.match(macVerifier, /gecko-browsing-data-dialog-opened/);
+});
+
+test("Appearance switches live Gecko themes and stays searchable from the palette", () => {
+  assert.match(runtimeConfig, /chrome\/core\/theme\.js/);
+  assert.match(runtimeConfig, /chrome\/fluxion-theme\.js/);
+  assert.match(theme, /BuiltInThemes\.ensureBuiltInThemes\(\)/);
+  assert.match(theme, /AddonManager\.getAddonByID\(id\)/);
+  assert.match(theme, /await addon\.enable\(\)/);
+  assert.match(theme, /applyChain\.catch\(\(\) => \{\}\)\.then/);
+  assert.match(settings, /id = "fluxion-theme-choice"/);
+  assert.match(settings, /FluxionTheme\.set\(value\)/);
+  assert.match(palette, /Appearance settings/);
+  assert.match(palette, /Search & Memory settings/);
+  assert.match(palette, /Use Dark Appearance/);
+  assert.match(palette, /window\.FluxionTheme\.set\(choice\)/);
+  assert.match(macVerifier, /FLUXION_VISUAL_THEME_TEST=1/);
+  assert.match(macVerifier, /dark-theme-enabled-in-live-gecko-chrome/);
 });
 
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {

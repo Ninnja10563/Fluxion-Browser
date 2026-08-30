@@ -171,6 +171,15 @@ versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle
 file path is exposed and no dynamically registered protocol is required.
 
+Appearance selection uses Gecko's built-in theme packages rather than a second
+Fluxion theme renderer. The privileged controller asks `BuiltInThemes` to make
+the supported System, Light, and Dark packages available, resolves the chosen
+theme through `AddonManager`, and enables it through the same lifecycle used by
+Firefox onboarding. A preference observer projects changes into every open
+Fluxion window, including changes made by Firefox-compatible theme extensions.
+Fluxion sets its restrained product variables to the selected color scheme but
+does not rewrite webpage colors or duplicate WebExtension theme storage.
+
 The new-tab page is a local, unprivileged file. It can submit navigation but
 cannot call chrome methods.
 

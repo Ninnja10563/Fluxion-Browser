@@ -55,8 +55,9 @@ controls work and its failure paths have been tested.
 
 - reduced-motion and accessibility audits (Flow and palette keyboard/focus
   semantics, inert keyboard-revealable non-reflowing Focus overlay, complete
-  native tab-status descriptions, and static reduced-motion loading state
-  implemented; broader platform audit remains)
+  native tab-status descriptions, static reduced-motion loading state, and
+  live System/Light/Dark Gecko theme selection implemented; broader platform
+  audit remains)
 - cross-platform command access after replacing PanelUI (native Fluxion Page
   and Tools menus with Gecko find/save/print/zoom/fullscreen/extensions and
   DevTools delegation, plus the same availability-checked actions in the
