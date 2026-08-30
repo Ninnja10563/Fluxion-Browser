@@ -230,7 +230,7 @@
   async function indexBrowser(browser) {
     if (!enabled() || PrivateBrowsingUtils.isWindowPrivate(window) || !browser) return;
     const url = browser.currentURI?.spec || "";
-    if (Date.now() - (indexedAt.get(url) || 0) < 30000) return;
+    if (Date.now() - (indexedAt.get(url) || 0) < 30000) return url;
     if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
     const actor = browser.browsingContext?.currentWindowGlobal?.getActor("FluxionMemoryPage");
     const extracted = await actor?.sendQuery("FluxionMemory:Extract");
