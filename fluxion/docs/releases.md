@@ -24,7 +24,8 @@ passes:
    visible in the Permissions settings surface. The last identity gate requires
    Fluxion's native Flow application menu to exist, verifies that the bundled
    About version matches the application bundle version, and captures the real
-   About Fluxion page instead of an inherited Firefox route.
+   `about:fluxion` page instead of an inherited Firefox route or exposed bundle
+   file path.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

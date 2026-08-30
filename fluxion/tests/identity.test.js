@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const packageData = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
 const about = fs.readFileSync(path.join(root, "about/index.html"), "utf8");
 const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf8");
+const runtime = fs.readFileSync(path.join(root, "runtime/fluxion.cfg"), "utf8");
 
 test("About Fluxion presents the current product version without remote scripts", () => {
   const productVersion = packageData.version.split("-")[0];
@@ -16,6 +17,12 @@ test("About Fluxion presents the current product version without remote scripts"
   assert.doesNotMatch(about, /<script|Firefox Browser|firefox\.com/i);
   assert.match(about, /Mozilla Gecko/);
   assert.match(about, /about:license/);
+  assert.match(about, /resource:\/\/fluxion\/about\/about\.css/);
+  assert.match(runtime, /protocol\/about;1\?what=fluxion/);
+  assert.match(runtime, /URI_SAFE_FOR_UNTRUSTED_CONTENT/);
+  assert.match(runtime, /URI_MUST_LOAD_IN_CHILD/);
+  assert.match(runtime, /createContentPrincipal\(uri, \{\}\)/);
+  assert.match(runtime, /aboutFluxionRegistered \? "about:fluxion"/);
 });
 
 test("the native Flow menu owns product commands while retaining Gecko execution", () => {

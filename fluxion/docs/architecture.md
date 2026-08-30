@@ -91,8 +91,8 @@ menubar rather than replacing AppKit menu handling. Its items call the same
 workspace, sidebar, palette, and Library controllers as the visible chrome, so
 menu commands cannot drift into decorative duplicates. Standard File, Edit,
 View, History, Bookmarks, Tools, Window, and Help commands remain Gecko-owned.
-The application menu's About command is captured at chrome scope and opens a
-local, unprivileged, versioned Fluxion page; Settings continues through the
+The application menu's About command is captured at chrome scope and opens the
+local, unprivileged, versioned `about:fluxion` page; Settings continues through the
 native preferences command into Fluxion's live overlay.
 
 The new-tab page is a local, unprivileged file. It can submit navigation but

@@ -1567,6 +1567,11 @@
   }
   if (Services.env.get("FLUXION_VISUAL_ABOUT_TEST") === "1") {
     window.setTimeout(() => {
+      if (ABOUT_URL !== "about:fluxion") {
+        Services.prefs.setStringPref("fluxion.about.visual.error", `Unexpected route: ${ABOUT_URL}`);
+        Services.prefs.savePrefFile(null);
+        return;
+      }
       const tab = gBrowser.addTrustedTab(ABOUT_URL);
       tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
       const loaded = () => {

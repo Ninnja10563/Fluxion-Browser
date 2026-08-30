@@ -13,6 +13,7 @@ bash -n \
   scripts/check.sh \
   scripts/smoke-gecko.sh \
   scripts/verify-macos-app.sh
+node --check < runtime/fluxion.cfg
 node --check chrome/core/url.js
 node --check chrome/core/search.js
 node --check chrome/core/ai-providers.js
