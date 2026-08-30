@@ -57,6 +57,10 @@ The current preview is runnable and includes:
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
   permissions, including searchable per-site camera, microphone, location,
   notification, expiry, and reset controls backed by Gecko's permission manager;
+- browsing-data and site-data clearing through Gecko's coordinated native
+  Sanitizer dialog, available from both Settings and the command palette, so
+  history, downloads, forms, cookies, cache, storage, logins, and site settings
+  are not split across incomplete custom deletion paths;
 - Fluxion Library for fast searchable history, bookmarks, and live downloads,
   backed by Gecko Places and Downloads with open, reveal, retry, cancel, and
   removal actions;

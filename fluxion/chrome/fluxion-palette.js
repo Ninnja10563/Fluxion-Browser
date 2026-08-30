@@ -251,7 +251,12 @@
       },
       {
         label: "Privacy settings", detail: "History, cookies, permissions, and browsing data", kind: "Command",
-        keywords: ["clear browsing data delete history"], run: () => openUrl("about:preferences#privacy"),
+        keywords: ["privacy permissions history cookies"], run: () => openUrl("about:preferences#privacy"),
+      },
+      {
+        label: "Clear browsing data…", detail: "Choose data and time range in Gecko’s native privacy dialog", kind: "Command",
+        keywords: ["delete history cookies cache downloads form logins site data"],
+        run: () => window.FluxionDataClearing.open(),
       },
       {
         label: "Site permissions", detail: "Review saved camera, microphone, location, and notification decisions", kind: "Command",
@@ -1085,6 +1090,7 @@
               "fluxion.webSearch.health",
               "gecko-default-engine-switched-opened-and-restored",
             );
+            window.dispatchEvent(new window.CustomEvent("FluxionWebSearchVisualReady"));
           } else {
             Services.prefs.setStringPref(
               "fluxion.webSearch.visual.error",
@@ -1109,6 +1115,32 @@
       });
     } else {
       window.setTimeout(() => runSearchEngineGate().catch(Cu.reportError), 36000);
+    }
+  }
+  if (Services.env.get("FLUXION_VISUAL_CLEAR_DATA_TEST") === "1") {
+    let ranClearDataGate = false;
+    const runClearDataGate = () => {
+      if (ranClearDataGate) return;
+      ranClearDataGate = true;
+      open("all");
+      input.value = "clear browsing data";
+      render(false);
+      const index = visibleItems.findIndex(item => item.label === "Clear browsing data…");
+      if (index < 0) {
+        Services.prefs.setStringPref(
+          "fluxion.dataClearing.visual.error",
+          "The command palette did not expose Clear browsing data",
+        );
+        Services.prefs.savePrefFile(null);
+        return;
+      }
+      setActive(index);
+      input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    };
+    if (Services.env.get("FLUXION_VISUAL_SEARCH_ENGINE_TEST") === "1") {
+      on(window, "FluxionWebSearchVisualReady", runClearDataGate, { once: true });
+    } else {
+      window.setTimeout(runClearDataGate, 70000);
     }
   }
   if (

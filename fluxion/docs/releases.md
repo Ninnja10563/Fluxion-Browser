@@ -76,6 +76,11 @@ passes:
    opens the selected palette fallback through that engine, verifies workspace
    placement, restores the original default, and requires the settled palette
    to name the restored engine.
+   A browsing-data gate then opens Fluxion's direct command surface through the
+   same privileged controller used by Settings and refuses publication unless
+   Gecko's native sanitizer dialog is mounted in the packaged browser. The
+   inspection screenshot therefore proves the real selectable privacy workflow
+   rather than a custom confirmation around partial service calls.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

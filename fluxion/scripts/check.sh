@@ -21,6 +21,7 @@ node --check chrome/core/flow-navigation.js
 node --check chrome/core/index-scheduler.js
 node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js
+node --check chrome/core/data-clearing.js
 node --check chrome/core/permissions.js
 node --check chrome/core/session-recovery.js
 node --check chrome/core/tab-organisation.js
@@ -39,6 +40,7 @@ node --check chrome/core/tab-status.js
 node --check chrome/core/tab-drop.js
 node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js
+node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-shortcuts.js
 node --check chrome/fluxion-memory.js
 node --check chrome/fluxion-ai.js

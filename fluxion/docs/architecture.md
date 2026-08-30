@@ -158,6 +158,14 @@ Palette web searches are resolved at execution time through Gecko
 and change notifications. Fluxion classifies input but stores no provider
 template, so Settings, policy, locale, and WebExtension engine changes remain
 authoritative.
+Browsing-data controls similarly delegate to Gecko's `Sanitizer.showUI` entry
+point. The native dialog owns time ranges, item selection, and coordinated
+clearing of Places history, download records, form history, cookies, caches,
+DOM storage, authentication state, content-blocking records, media-device
+state, and site settings through `nsIClearDataService`. Fluxion contributes a
+single-flight privileged controller and entry points in Settings and the
+command palette; it does not issue partial direct deletes or expose the
+sanitizer to page JavaScript.
 The application menu's About command is captured at chrome scope and opens the
 versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle

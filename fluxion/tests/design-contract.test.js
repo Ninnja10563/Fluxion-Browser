@@ -18,6 +18,7 @@ const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const closedTabs = fs.readFileSync(path.join(root, "chrome/core/closed-tabs.js"), "utf8");
 const webSearch = fs.readFileSync(path.join(root, "chrome/fluxion-web-search.js"), "utf8");
+const dataClearing = fs.readFileSync(path.join(root, "chrome/fluxion-data-clearing.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
 const tabStatus = fs.readFileSync(path.join(root, "chrome/core/tab-status.js"), "utf8");
@@ -58,8 +59,9 @@ test("Fluxion settings replace the visible Firefox preferences surface with live
   assert.match(settings, /SearchService\.sys\.mjs/);
   assert.match(settings, /CHANGE_REASON\.USER/);
   assert.match(settings, /FluxionMemory\?\.setExcludedDomains/);
-  assert.match(settings, /PlacesUtils\.history\.clear/);
-  assert.match(settings, /Services\.cookies\.removeAll/);
+  assert.match(settings, /FluxionDataClearing\.open\(\)/);
+  assert.match(settings, /FluxionDataClearing\.openSiteData\(\)/);
+  assert.doesNotMatch(settings, /PlacesUtils\.history\.clear|Services\.cookies\.removeAll|Services\.cache2\.clear/);
   assert.match(settings, /FluxionPermissions\?\.clear/);
   assert.doesNotMatch(settings, /(?:linear|radial)-gradient|backdrop-filter/);
 });
@@ -252,6 +254,21 @@ test("palette web search follows Gecko's live normal or private default engine",
   assert.doesNotMatch(palette, /duckduckgo/i);
   assert.match(macVerifier, /FLUXION_VISUAL_SEARCH_ENGINE_TEST=1/);
   assert.match(macVerifier, /gecko-default-engine-switched-opened-and-restored/);
+});
+
+test("browsing-data clearing stays in Gecko's coordinated sanitizer", () => {
+  assert.match(runtimeConfig, /chrome\/core\/data-clearing\.js/);
+  assert.match(runtimeConfig, /chrome\/fluxion-data-clearing\.js/);
+  assert.match(dataClearing, /resource:\/\/\/modules\/Sanitizer\.sys\.mjs/);
+  assert.match(dataClearing, /Sanitizer\.showUI\(window, mode\)/);
+  assert.match(dataClearing, /FluxionDataClearingCore\.createController/);
+  assert.match(palette, /label: "Clear browsing data…"/);
+  assert.match(palette, /window\.FluxionDataClearing\.open\(\)/);
+  assert.match(palette, /FLUXION_VISUAL_CLEAR_DATA_TEST/);
+  assert.match(palette, /item\.label === "Clear browsing data…"/);
+  assert.doesNotMatch(dataClearing, /PlacesUtils\.history\.clear|cookies\.removeAll|cache2\.clear/);
+  assert.match(macVerifier, /FLUXION_VISUAL_CLEAR_DATA_TEST=1/);
+  assert.match(macVerifier, /gecko-browsing-data-dialog-opened/);
 });
 
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {

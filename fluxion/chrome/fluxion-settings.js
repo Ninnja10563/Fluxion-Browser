@@ -5,7 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.32.0";
+  const PRODUCT_VERSION = "0.33.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -391,24 +391,35 @@
   row(ai, "Connection tools", "Tests the configured model service without sharing a webpage.", aiActions);
 
   const privacy = section("privacy", "Privacy", "Manage locally stored browsing data using Gecko’s mature security services.");
-  const clearHistory = create("button", "fluxion-settings-button danger", "Clear browsing history…");
-  clearHistory.type = "button";
-  clearHistory.addEventListener("click", async () => {
-    if (!Services.prompt.confirm(window, "Clear Browsing History", "Delete all browsing and download history? This cannot be undone.")) return;
-    const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
-    await PlacesUtils.history.clear();
-    setNote("Browsing history cleared.");
+  const clearBrowsingData = create("button", "fluxion-settings-button danger", "Choose what to clear…");
+  clearBrowsingData.type = "button";
+  clearBrowsingData.addEventListener("click", async () => {
+    clearBrowsingData.disabled = true;
+    try {
+      const result = await window.FluxionDataClearing.open();
+      setNote(result === "accept" ? "Selected browsing data cleared." : "Browsing data was not changed.");
+    } catch (error) {
+      setNote(`Browsing data could not be cleared: ${error.message}`);
+    } finally { clearBrowsingData.disabled = false; }
   });
-  row(privacy, "Browsing history", "Delete visited pages and download-history records from this profile.", clearHistory);
-  const clearCookies = create("button", "fluxion-settings-button danger", "Clear cookies and site data…");
-  clearCookies.type = "button";
-  clearCookies.addEventListener("click", () => {
-    if (!Services.prompt.confirm(window, "Clear Site Data", "Sign out of sites and delete all cookies and cached website data?")) return;
-    Services.cookies.removeAll();
-    Services.cache2.clear();
-    setNote("Cookies and cached site data cleared.");
+  row(
+    privacy,
+    "Browsing data",
+    "Choose history, downloads, form entries, cookies, cache, active logins, and site settings through Gecko’s native clearing controls.",
+    clearBrowsingData,
+  );
+  const clearSiteData = create("button", "fluxion-settings-button danger", "Clear site data…");
+  clearSiteData.type = "button";
+  clearSiteData.addEventListener("click", async () => {
+    clearSiteData.disabled = true;
+    try {
+      const result = await window.FluxionDataClearing.openSiteData();
+      setNote(result === "accept" ? "Selected cookies and site data cleared." : "Site data was not changed.");
+    } catch (error) {
+      setNote(`Site data could not be cleared: ${error.message}`);
+    } finally { clearSiteData.disabled = false; }
   });
-  row(privacy, "Cookies and site data", "Clearing this data signs you out of most websites.", clearCookies);
+  row(privacy, "Cookies and site data", "Review stored site data before clearing it; accepting may sign you out of websites.", clearSiteData);
   const managePermissions = create("button", "fluxion-settings-button", "Manage permissions");
   managePermissions.type = "button";
   managePermissions.addEventListener("click", () => showSection("permissions"));

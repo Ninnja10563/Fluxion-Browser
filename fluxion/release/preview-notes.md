@@ -8,6 +8,25 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.33 replaces partial browsing-data deletion with Gecko's coordinated
+native privacy workflow:
+
+- add **Clear browsing data…** directly to the universal command palette while
+  retaining a separate route to Fluxion's full Privacy settings;
+- replace hand-written Places, cookie, and cache deletion buttons with Gecko's
+  native selectable clearing dialog and its supported site-data mode;
+- let Gecko own time ranges and coordinated history, download, form, cookie,
+  cache, DOM-storage, authentication, media-device, tracking-protection, and
+  site-setting cleanup through its `Sanitizer` and `nsIClearDataService` path;
+- keep the sanitizer entirely inside privileged browser chrome so webpage
+  JavaScript receives no local-data capability;
+- prevent repeated clicks or palette invocations from stacking destructive
+  dialogs, while preserving explicit accept/cancel outcomes for Settings;
+- require the packaged browser to load the real Gecko sanitizer service and
+  open its in-window dialog before a universal macOS DMG can publish.
+
+Fluxion no longer maintains a second, incomplete definition of browsing data.
+
 Version 0.32 makes Gecko the single owner of web-search routing:
 
 - remove the command palette's hard-coded DuckDuckGo destination and obtain
