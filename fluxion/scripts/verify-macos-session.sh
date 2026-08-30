@@ -78,11 +78,11 @@ run_stage() {
 run_stage \
   'normal session seed' \
   FLUXION_SESSION_SEED_TEST \
-  'user_pref("fluxion.recovery.seed.health", "workspace-tabs-groups-split-seeded")'
+  'user_pref("fluxion.recovery.seed.health", "workspace-tabs-groups-stacked-split-seeded")'
 run_stage \
   'normal session restoration' \
   FLUXION_SESSION_RESTORE_TEST \
-  'user_pref("fluxion.recovery.restore.health", "workspace-tabs-groups-split-restored")'
+  'user_pref("fluxion.recovery.restore.health", "workspace-tabs-groups-stacked-split-restored")'
 run_stage \
   'private-window boundary' \
   FLUXION_PRIVATE_ISOLATION_TEST \
@@ -93,4 +93,4 @@ run_stage \
   FLUXION_PRIVATE_ABSENCE_TEST \
   'user_pref("fluxion.recovery.absence.health", "private-tabs-history-memory-excluded")'
 
-printf 'Verified: native tabs, pins, groups, split views, and workspaces restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2
+printf 'Verified: native tabs, pins, groups, stacked split orientation, and workspaces restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2

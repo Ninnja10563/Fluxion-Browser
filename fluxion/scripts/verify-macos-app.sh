@@ -93,11 +93,11 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.about.route.health", "settings-about-route-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.visual.health", "versioned-about-fluxion-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.splitview.health", "native-side-by-side-and-stacked-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.organisation.health", "local-proposal-visible-and-confirmation-required")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.scale.health", "200-tabs-rendered-with-roving-keyboard-focus")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then
-    printf 'Verified: Fluxion chrome, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native side-by-side and stacked split views loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
@@ -144,6 +144,7 @@ if [[ -f "$profile/prefs.js" ]]; then
   grep 'user_pref("fluxion\.about\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.organisation\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.scale\.visual\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.splitview\.visual\.error"' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,80p' "$provider_log" >&2
 sed -n '1,160p' "$log" >&2

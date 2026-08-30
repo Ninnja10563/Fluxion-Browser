@@ -8,6 +8,25 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.24 completes two-orientation native split browsing:
+
+- arrange any eligible pair side by side or in a stacked top/bottom layout;
+- switch orientation without reloading either page or replacing Gecko's live
+  content panels;
+- create both layouts from concise tab-context actions and command-palette
+  commands, including a new blank page in either direction;
+- keep the native draggable XUL splitter, focus routing, page dialogs, security
+  state, DevTools ownership, and split teardown;
+- expose left/right and top/bottom pane positions to Flow and keep the divider's
+  separator orientation and size values aligned for assistive technology;
+- persist the validated orientation on both native tabs through SessionStore;
+- require a real stacked split to survive Fluxion's clean quit and multi-launch
+  macOS recovery gate;
+- drive the packaged app through both geometries before a DMG can publish.
+
+No iframe, webview, second navigation model, or custom content container is
+introduced.
+
 Version 0.23 makes local Browser Memory indexing subordinate to browsing:
 
 - replace detached concurrent embedding timers with one bounded serial queue;

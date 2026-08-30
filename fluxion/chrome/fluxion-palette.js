@@ -19,6 +19,7 @@
   let lastFocus = null;
   let mode = "all";
   let splitSource = null;
+  let pendingSplitOrientation = window.FluxionSplitViews.SIDE_BY_SIDE;
   let askBrowser = null;
   let compareBrowsers = [];
   let askController = null;
@@ -361,10 +362,18 @@
       });
     }
     if (selectedTab?.splitview) {
+      const stacked = ui.splitOrientation(selectedTab) === window.FluxionSplitViews.STACKED;
       items.splice(9, 0,
         {
-          label: "Swap split sides", detail: "Reverse the two pages", kind: "Command",
+          label: stacked ? "Swap top and bottom" : "Swap left and right",
+          detail: "Reverse the two pages", kind: "Command",
           keywords: ["split view reverse panes"], run: () => ui.reverseSplitView(selectedTab),
+        },
+        {
+          label: stacked ? "Place split side by side" : "Stack split vertically",
+          detail: stacked ? "Arrange the pages in two columns" : "Arrange the pages in two rows",
+          kind: "Command", keywords: ["split view orientation horizontal vertical stacked"],
+          run: () => ui.toggleSplitOrientation(selectedTab),
         },
         {
           label: "Separate split view", detail: "Return both pages to ordinary tabs", kind: "Command",
@@ -374,12 +383,24 @@
     } else if (selectedTab && !selectedTab.pinned) {
       items.splice(9, 0,
         {
-          label: "Open split view", detail: "Choose an open tab to place beside this page", kind: "Command",
-          keywords: ["side by side two panes"], run: () => open("split", selectedTab),
+          label: "Open split side by side", detail: "Choose an open tab for the right pane", kind: "Command",
+          keywords: ["split view columns two panes"],
+          run: () => openSplitPicker(selectedTab, window.FluxionSplitViews.SIDE_BY_SIDE),
         },
         {
-          label: "New page in split view", detail: "Open a blank page beside this one", kind: "Command",
-          keywords: ["side by side two panes"], run: () => ui.openNewSplit(selectedTab),
+          label: "Open stacked split", detail: "Choose an open tab for the bottom pane", kind: "Command",
+          keywords: ["split view rows vertical two panes"],
+          run: () => openSplitPicker(selectedTab, window.FluxionSplitViews.STACKED),
+        },
+        {
+          label: "New page side by side", detail: "Open a blank page in the right pane", kind: "Command",
+          keywords: ["split view columns two panes"],
+          run: () => ui.openNewSplit(selectedTab, window.FluxionSplitViews.SIDE_BY_SIDE),
+        },
+        {
+          label: "New page stacked", detail: "Open a blank page in the bottom pane", kind: "Command",
+          keywords: ["split view rows vertical two panes"],
+          run: () => ui.openNewSplit(selectedTab, window.FluxionSplitViews.STACKED),
         },
       );
     }
@@ -400,7 +421,9 @@
       kind: mode === "split" ? "Split" : "Tab",
       boost: tab === gBrowser.selectedTab ? 18 : 0,
       keywords: [ui.tabWorkspace(tab), tab.group?.label || ""],
-      run: () => source ? ui.createSplitView(source, tab) : ui.selectTab(tab),
+      run: () => source
+        ? ui.createSplitView(source, tab, { orientation: pendingSplitOrientation })
+        : ui.selectTab(tab),
     }));
   }
 
@@ -733,7 +756,9 @@
     layer.hidden = false;
     input.value = "";
     input.placeholder = mode === "split"
-      ? "Choose a tab to place beside this page"
+      ? pendingSplitOrientation === window.FluxionSplitViews.STACKED
+        ? "Choose a tab for the bottom pane"
+        : "Choose a tab for the right pane"
       : mode === "tabs" ? "Search open tabs"
         : mode === "memory" ? "What do you remember about the page?"
           : mode === "ask" ? "Ask a question about this page"
@@ -742,6 +767,11 @@
     activeIndex = 0;
     render(false);
     window.requestAnimationFrame(() => input.focus());
+  }
+
+  function openSplitPicker(sourceTab, orientation) {
+    pendingSplitOrientation = window.FluxionSplitViews.normaliseOrientation(orientation);
+    open("split", sourceTab);
   }
 
   function close() {
@@ -753,6 +783,7 @@
     layer.hidden = true;
     input.value = "";
     splitSource = null;
+    pendingSplitOrientation = window.FluxionSplitViews.SIDE_BY_SIDE;
     askBrowser = null;
     compareBrowsers = [];
     if (lastFocus?.isConnected) lastFocus.focus();

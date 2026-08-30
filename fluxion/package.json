@@ -1,6 +1,6 @@
 {
   "name": "fluxion-browser-chrome",
-  "version": "0.23.0-preview.1",
+  "version": "0.24.0-preview.1",
   "private": true,
   "description": "Fluxion privileged browser chrome and pure state modules",
   "scripts": {

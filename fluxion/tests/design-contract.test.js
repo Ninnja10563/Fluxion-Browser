@@ -80,7 +80,7 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(macSessionVerifier, /FLUXION_SESSION_RESTORE_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ISOLATION_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ABSENCE_TEST/);
-  assert.match(macSessionVerifier, /workspace-tabs-groups-split-restored/);
+  assert.match(macSessionVerifier, /workspace-tabs-groups-stacked-split-restored/);
   assert.match(macSessionVerifier, /private-tabs-history-memory-excluded/);
 });
 
@@ -325,6 +325,14 @@ test("split view delegates content panes to Gecko and remains controllable from 
   assert.match(chrome, /gBrowser\.addTabSplitView/);
   assert.match(chrome, /splitView\.unsplitTabs/);
   assert.match(chrome, /splitView\.reverseTabs/);
+  assert.match(chrome, /\[TAB_WORKSPACE, TAB_SPLIT_ORIENTATION\]/);
+  assert.match(chrome, /SessionStore\.persistTabAttribute\(attribute\)/);
+  assert.match(chrome, /data-fluxion-split-orientation="stacked"/);
+  assert.match(chrome, /tabpanels\.setAttribute\("orient", orientation === FluxionSplitViews\.STACKED/);
+  assert.match(chrome, /aria-orientation/);
+  assert.match(palette, /Open stacked split/);
+  assert.match(palette, /Stack split vertically/);
+  assert.match(macVerifier, /native-side-by-side-and-stacked-rendered/);
   assert.match(chrome, /fluxion-split-mark/);
   assert.doesNotMatch(chrome, /createElement\(["'](?:iframe|browser)["']/);
 });

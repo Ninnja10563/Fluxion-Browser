@@ -8,8 +8,8 @@ function normalSnapshot(overrides = {}) {
   const tabs = [
     { url: Recovery.URLS.groupA, workspace: "build", group: "Recovery Lab" },
     { url: Recovery.URLS.groupB, workspace: "build", group: "Recovery Lab" },
-    { url: Recovery.URLS.splitA, workspace: "build", split: "pair-a" },
-    { url: Recovery.URLS.splitB, workspace: "build", split: "pair-a" },
+    { url: Recovery.URLS.splitA, workspace: "build", split: "pair-a", splitOrientation: "stacked" },
+    { url: Recovery.URLS.splitB, workspace: "build", split: "pair-a", splitOrientation: "stacked" },
     { url: Recovery.URLS.pinned, workspace: "build", pinned: true },
   ];
   return { currentWorkspace: "build", isPrivate: false, tabs, ...overrides };
@@ -25,6 +25,14 @@ test("normal recovery requires workspaces, pins, groups, and native split identi
   assert.match(result.reasons.join("\n"), /missing .*group-b/);
   assert.match(result.reasons.join("\n"), /native tab group/);
   assert.match(result.reasons.join("\n"), /native split pair/);
+});
+
+test("normal recovery requires the persisted stacked split orientation", () => {
+  const broken = normalSnapshot();
+  broken.tabs.find(tab => tab.url === Recovery.URLS.splitB).splitOrientation = "side-by-side";
+  const result = Recovery.validateNormal(broken);
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join("\n"), /stacked split orientation/);
 });
 
 test("private tabs are rejected from a post-private normal restoration", () => {

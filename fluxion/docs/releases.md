@@ -33,6 +33,11 @@ passes:
    Flow render, requires a single roving tab stop, drives ArrowDown, verifies
    selected-tab and DOM focus identity after rerender, and removes the fixture
    before capture.
+   The split gate drives the same Gecko-native pair through stacked and
+   side-by-side layouts, requires both panel geometries to change, and verifies
+   that the native splitter remains between live browser panels. The
+   multi-launch gate seeds a stacked pair and refuses restoration unless its
+   orientation returns with the native split identity.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

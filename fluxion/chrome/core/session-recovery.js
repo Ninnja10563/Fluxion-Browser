@@ -25,6 +25,7 @@
       pinned: Boolean(tab?.pinned),
       group: clean(tab?.group, 120),
       split: clean(tab?.split, 4096),
+      splitOrientation: clean(tab?.splitOrientation, 24),
     });
   }
 
@@ -45,6 +46,9 @@
     const split = [URLS.splitA, URLS.splitB].map(url => tabs.find(tab => tab.url === url));
     if (split.some(tab => !tab?.split) || split[0]?.split !== split[1]?.split) {
       reasons.push("native split pair was not restored");
+    }
+    if (split.some(tab => tab?.splitOrientation !== "stacked")) {
+      reasons.push("stacked split orientation was not restored");
     }
     if (tabs.filter(tab => EXPECTED_NORMAL_URLS.includes(tab.url)).some(tab => tab.workspace !== "build")) {
       reasons.push("tab workspace membership was not restored");

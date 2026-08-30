@@ -11,6 +11,7 @@
   const PREF_CURRENT = "fluxion.workspace.current";
   const PREF_SIDEBAR = "fluxion.sidebar.state";
   const TAB_WORKSPACE = "fluxion-workspace";
+  const TAB_SPLIT_ORIENTATION = "fluxion-split-orientation";
   const NEW_TAB_URL = Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab");
   const ABOUT_URL = Services.prefs.getStringPref("fluxion.about.url", "about:support");
   const SIDEBAR_STATES = ["expanded", "compact", "focus"];
@@ -139,6 +140,39 @@
     #tabbrowser-tabpanels[splitview] split-view-footer toolbarbutton {
       width: 20px; height: 20px; min-width: 20px; padding: 4px !important;
       border-radius: 3px !important;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] {
+      flex-direction: column !important;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] > .split-view-panel {
+      --panel-min-height: 120px;
+      min-width: 0 !important; max-width: none !important; width: auto !important;
+      min-height: var(--panel-min-height) !important;
+      max-height: calc(100% - var(--panel-min-height)) !important;
+      height: 49.4%;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] > .split-view-panel.split-view-panel-active {
+      margin-inline: var(--space-xsmall) !important; width: auto !important;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] > .split-view-panel[column="0"] {
+      margin-block-end: 0 !important;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] > .split-view-panel[column="1"] {
+      margin-block-start: 0 !important;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] > .split-view-panel[height] {
+      flex: none;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"] > .split-view-splitter {
+      width: auto !important; height: 3px !important;
+      margin: 2px var(--space-xsmall) !important;
+      cursor: row-resize;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"]:has(.split-view-panel[column="0"].deck-selected) > .split-view-splitter {
+      margin-block-start: 3px !important;
+    }
+    #tabbrowser-tabpanels[splitview][data-fluxion-split-orientation="stacked"]:has(.split-view-panel[column="1"].deck-selected) > .split-view-splitter {
+      margin-block-end: 3px !important;
     }
     #fluxion-flow {
       width: 232px; min-width: 232px; max-width: 232px;
@@ -359,10 +393,12 @@
   let currentWorkspace = Services.prefs.getStringPref(PREF_CURRENT, workspaces[0].id);
   if (!workspaces.some(item => item.id === currentWorkspace)) currentWorkspace = workspaces[0].id;
 
-  try {
-    SessionStore.persistTabAttribute(TAB_WORKSPACE);
-  } catch (_) {
-    // Older compatible Firefox builds may already persist the attribute.
+  for (const attribute of [TAB_WORKSPACE, TAB_SPLIT_ORIENTATION]) {
+    try {
+      SessionStore.persistTabAttribute(attribute);
+    } catch (_) {
+      // Older compatible Firefox builds may already persist the attribute.
+    }
   }
 
   const browser = document.getElementById("browser");
@@ -766,26 +802,98 @@
     return FluxionTabSelection.contextTabs(tab, gBrowser.selectedTabs);
   }
 
+  function splitOrientation(tab = gBrowser.selectedTab) {
+    return FluxionSplitViews.orientationOf(tab?.splitview);
+  }
+
+  function resetSplitPanelSizing(splitView) {
+    for (const panel of splitView?.panels || []) {
+      panel.removeAttribute("width");
+      panel.removeAttribute("height");
+      panel.style.removeProperty("width");
+      panel.style.removeProperty("height");
+    }
+  }
+
+  function updateSplitAccessibility(splitView = gBrowser.activeSplitView) {
+    if (!splitView || splitView !== gBrowser.activeSplitView) return;
+    const tabpanels = gBrowser.tabpanels;
+    const splitter = tabpanels?.querySelector(":scope > .split-view-splitter");
+    const controlled = splitView.panels?.[0];
+    if (!splitter || !controlled) return;
+    const orientation = splitOrientation(splitView.tabs[0]);
+    const stacked = orientation === FluxionSplitViews.STACKED;
+    const containerSize = stacked ? tabpanels.clientHeight : tabpanels.clientWidth;
+    const currentSize = stacked ? controlled.clientHeight : controlled.clientWidth;
+    const minimum = parseFloat(window.getComputedStyle(controlled)[stacked ? "minHeight" : "minWidth"]) || 0;
+    splitter.setAttribute("aria-orientation", stacked ? "horizontal" : "vertical");
+    splitter.setAttribute("aria-valuemin", String(Math.round(minimum)));
+    splitter.setAttribute("aria-valuemax", String(Math.max(Math.round(minimum), Math.round(containerSize - minimum))));
+    splitter.setAttribute("aria-valuenow", String(Math.round(currentSize)));
+  }
+
+  function applyActiveSplitOrientation({ reset = false } = {}) {
+    const tabpanels = gBrowser.tabpanels;
+    const splitView = gBrowser.activeSplitView;
+    if (!tabpanels) return;
+    if (!splitView) {
+      tabpanels.removeAttribute("data-fluxion-split-orientation");
+      tabpanels.removeAttribute("orient");
+      return;
+    }
+    const orientation = splitOrientation(splitView.tabs[0]);
+    const changed = tabpanels.getAttribute("data-fluxion-split-orientation") !== orientation;
+    if (reset || changed) resetSplitPanelSizing(splitView);
+    tabpanels.setAttribute("data-fluxion-split-orientation", orientation);
+    tabpanels.setAttribute("orient", orientation === FluxionSplitViews.STACKED ? "vertical" : "horizontal");
+    window.requestAnimationFrame(() => updateSplitAccessibility(splitView));
+  }
+
+  function setSplitOrientation(tab = gBrowser.selectedTab, value = FluxionSplitViews.SIDE_BY_SIDE) {
+    const splitView = tab?.splitview;
+    if (!splitView || splitView.tabs.length !== 2) return false;
+    const orientation = FluxionSplitViews.normaliseOrientation(value);
+    for (const member of splitView.tabs) member.setAttribute(TAB_SPLIT_ORIENTATION, orientation);
+    applyActiveSplitOrientation({ reset: true });
+    scheduleRender();
+    return true;
+  }
+
+  function toggleSplitOrientation(tab = gBrowser.selectedTab) {
+    const next = splitOrientation(tab) === FluxionSplitViews.STACKED
+      ? FluxionSplitViews.SIDE_BY_SIDE
+      : FluxionSplitViews.STACKED;
+    return setSplitOrientation(tab, next);
+  }
+
   function createSplitView(primary, secondary, options = {}) {
     if (!FluxionSplitViews.canSplit(primary, secondary)) return null;
+    const orientation = FluxionSplitViews.normaliseOrientation(options.orientation);
     const workspace = tabWorkspace(primary);
     secondary.setAttribute(TAB_WORKSPACE, workspace);
+    primary.setAttribute(TAB_SPLIT_ORIENTATION, orientation);
+    secondary.setAttribute(TAB_SPLIT_ORIENTATION, orientation);
     const insertionPoint = primary.group || primary;
     const splitView = gBrowser.addTabSplitView([primary, secondary], {
       insertBefore: insertionPoint,
       trigger: "menu_open",
     });
-    if (!splitView || splitView.tabs.length !== 2) return null;
+    if (!splitView || splitView.tabs.length !== 2) {
+      primary.removeAttribute(TAB_SPLIT_ORIENTATION);
+      secondary.removeAttribute(TAB_SPLIT_ORIENTATION);
+      return null;
+    }
     gBrowser.selectedTab = options.selectSecondary ? secondary : primary;
+    applyActiveSplitOrientation({ reset: true });
     scheduleRender();
     return splitView;
   }
 
-  function openNewSplit(primary = gBrowser.selectedTab) {
+  function openNewSplit(primary = gBrowser.selectedTab, orientation = FluxionSplitViews.SIDE_BY_SIDE) {
     if (!primary || primary.pinned || primary.splitview) return null;
     const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
     tab.setAttribute(TAB_WORKSPACE, tabWorkspace(primary));
-    const splitView = createSplitView(primary, tab, { selectSecondary: true });
+    const splitView = createSplitView(primary, tab, { selectSecondary: true, orientation });
     if (!splitView) {
       gBrowser.removeTab(tab, { animate: false });
       return null;
@@ -799,7 +907,10 @@
   function separateSplitView(tab = gBrowser.selectedTab) {
     const splitView = tab?.splitview;
     if (!splitView) return;
+    const members = [...splitView.tabs];
     splitView.unsplitTabs("menu_separate");
+    for (const member of members) member.removeAttribute(TAB_SPLIT_ORIENTATION);
+    applyActiveSplitOrientation();
     scheduleRender();
   }
 
@@ -916,7 +1027,11 @@
     if (tab.splitview) {
       const splitMark = create("span", "fluxion-split-mark");
       const position = FluxionSplitViews.splitPosition(tab);
-      splitMark.title = `Split view, side ${position} of ${tab.splitview.tabs.length}`;
+      const orientation = splitOrientation(tab);
+      const spatialPosition = FluxionSplitViews.positionLabel(
+        position, orientation, tab.splitview.tabs.length,
+      );
+      splitMark.title = `${orientation === FluxionSplitViews.STACKED ? "Stacked" : "Side-by-side"} split view, ${spatialPosition} pane`;
       splitMark.setAttribute("aria-label", splitMark.title);
       item.appendChild(splitMark);
     }
@@ -1033,8 +1148,13 @@
 
   function createSplitElement(splitView, tabs) {
     const item = create("div", "fluxion-split");
+    const orientation = FluxionSplitViews.orientationOf(splitView);
     item.setAttribute("role", "group");
-    item.setAttribute("aria-label", "Split view");
+    item.setAttribute(
+      "aria-label",
+      orientation === FluxionSplitViews.STACKED ? "Stacked split view" : "Side-by-side split view",
+    );
+    item.dataset.orientation = orientation;
     item.dataset.active = String(Boolean(splitView?.hasActiveTab));
     for (const tab of tabs) item.appendChild(createTabElement(tab));
     return item;
@@ -1306,7 +1426,7 @@
     if (contextTab) window.FluxionPeek?.openBeside(contextTab);
   });
   contextMenu.appendChild(xul("menuseparator"));
-  const splitWithMenu = xul("menu", { label: "Open Side by Side With" });
+  const splitWithMenu = xul("menu", { label: "Open in Split View With" });
   const splitWithPopup = xul("menupopup");
   splitWithMenu.appendChild(splitWithPopup);
   contextMenu.appendChild(splitWithMenu);
@@ -1320,10 +1440,24 @@
     "Swap Split Sides",
     () => reverseSplitView(contextTab),
   );
+  const orientSplitItem = appendAction(
+    contextMenu,
+    "Stack Pages Vertically",
+    () => toggleSplitOrientation(contextTab),
+  );
   splitWithPopup.addEventListener("popupshowing", event => {
     if (event.target !== splitWithPopup) return;
     splitWithPopup.replaceChildren();
-    appendAction(splitWithPopup, "New Page", () => openNewSplit(contextTab));
+    appendAction(
+      splitWithPopup,
+      "New Page Side by Side",
+      () => openNewSplit(contextTab, FluxionSplitViews.SIDE_BY_SIDE),
+    );
+    appendAction(
+      splitWithPopup,
+      "New Page Stacked",
+      () => openNewSplit(contextTab, FluxionSplitViews.STACKED),
+    );
     const candidates = [...gBrowser.tabs]
       .filter(tab =>
         tab !== contextTab &&
@@ -1393,6 +1527,21 @@
     splitWithMenu.hidden = inSplitView || Boolean(contextTab?.pinned);
     separateSplitItem.hidden = !inSplitView;
     reverseSplitItem.hidden = !inSplitView;
+    orientSplitItem.hidden = !inSplitView;
+    if (inSplitView) {
+      reverseSplitItem.setAttribute(
+        "label",
+        splitOrientation(contextTab) === FluxionSplitViews.STACKED
+          ? "Swap Top and Bottom"
+          : "Swap Left and Right",
+      );
+      orientSplitItem.setAttribute(
+        "label",
+        splitOrientation(contextTab) === FluxionSplitViews.STACKED
+          ? "Place Pages Side by Side"
+          : "Stack Pages Vertically",
+      );
+    }
     sleepTabItem.hidden = !actionTabs.some(tab => !tab.selected && !tab.pinned && !tab.splitview && tab.linkedPanel);
     promotePeekItem.hidden = !isPeek;
     splitPeekItem.hidden = !isPeek;
@@ -1562,6 +1711,26 @@
   ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }
+  for (const eventName of [
+    "TabSelect", "SplitViewCreated", "SplitViewTabChange", "TabSplitViewActivate",
+  ]) {
+    on(gBrowser.tabContainer, eventName, () => {
+      window.requestAnimationFrame(() => applyActiveSplitOrientation());
+    });
+  }
+  on(gBrowser.tabContainer, "SplitViewRemoved", () => {
+    window.requestAnimationFrame(() => {
+      for (const tab of gBrowser.tabs) {
+        if (!tab.splitview) tab.removeAttribute(TAB_SPLIT_ORIENTATION);
+      }
+      applyActiveSplitOrientation();
+    });
+  });
+  on(gBrowser.tabpanels, "command", event => {
+    if (event.target?.classList?.contains("split-view-splitter")) {
+      window.requestAnimationFrame(() => updateSplitAccessibility());
+    }
+  });
   on(window, "keydown", event => {
     if (window.FluxionShortcuts?.matches(event, "sidebar")) {
       event.preventDefault();
@@ -1591,6 +1760,7 @@
   for (const tab of gBrowser.tabs) tabWorkspace(tab);
   switchWorkspace(currentWorkspace);
   render();
+  applyActiveSplitOrientation();
   updateWindowTitle();
   window.FluxionUI = Object.freeze({
     addWorkspace,
@@ -1607,8 +1777,10 @@
     renameWorkspace,
     reverseSplitView,
     separateSplitView,
+    setSplitOrientation,
     setSidebarState,
     setTabDensity,
+    splitOrientation,
     selectTab(tab) {
       if (!tab || !tab.parentNode) return;
       const workspace = tabWorkspace(tab);
@@ -1617,6 +1789,7 @@
     },
     switchWorkspace,
     tabWorkspace,
+    toggleSplitOrientation,
     workspaces: () => workspaces.map(workspace => ({ ...workspace })),
   });
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
@@ -1647,7 +1820,35 @@
     if (!splitView || splitView.tabs.length !== 2 || !gBrowser.activeSplitView) {
       throw new Error("Fluxion: native Gecko split-view integration failed");
     }
-    Services.prefs.setStringPref("fluxion.splitview.health", "native-split-rendered");
+    setSplitOrientation(primary, FluxionSplitViews.STACKED);
+    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+      const [topPanel, bottomPanel] = splitView.panels;
+      const topRect = topPanel?.getBoundingClientRect();
+      const bottomRect = bottomPanel?.getBoundingClientRect();
+      const stacked = gBrowser.tabpanels.getAttribute("orient") === "vertical" &&
+        gBrowser.tabpanels.getAttribute("data-fluxion-split-orientation") === "stacked" &&
+        topRect?.height > 100 && bottomRect?.height > 100 && bottomRect.top > topRect.top;
+      setSplitOrientation(primary, FluxionSplitViews.SIDE_BY_SIDE);
+      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
+        const leftRect = topPanel?.getBoundingClientRect();
+        const rightRect = bottomPanel?.getBoundingClientRect();
+        const sideBySide = gBrowser.tabpanels.getAttribute("orient") === "horizontal" &&
+          gBrowser.tabpanels.getAttribute("data-fluxion-split-orientation") === "side-by-side" &&
+          leftRect?.width > 100 && rightRect?.width > 100 && rightRect.left > leftRect.left;
+        if (stacked && sideBySide) {
+          Services.prefs.setStringPref(
+            "fluxion.splitview.health",
+            "native-side-by-side-and-stacked-rendered",
+          );
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.splitview.visual.error",
+            `stacked=${Boolean(stacked)} sideBySide=${Boolean(sideBySide)}`,
+          );
+        }
+        Services.prefs.savePrefFile(null);
+      }));
+    }));
     scheduleRender();
   }
   if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {

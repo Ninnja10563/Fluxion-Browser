@@ -22,9 +22,10 @@ The current preview is runnable and includes:
   workspace movement, and crash/session restoration;
 - local, evidence-backed tab-group suggestions across related ungrouped pages,
   with a concise preview and explicit confirmation before native grouping;
-- Gecko-native two-page split view with a live draggable divider, Flow pairing,
-  command-palette and context-menu creation, side swapping, separation, and
-  native session restoration;
+- Gecko-native two-page split view with side-by-side and stacked layouts, a
+  live draggable divider, Flow pairing, spatial accessibility labels,
+  command-palette and context-menu creation, order swapping, separation, and
+  orientation-aware native session restoration;
 - three-state sidebar (expanded, compact, focus rail);
 - persistent workspace creation, renaming, reordering, symbols, restrained
   accents, deletion with safe tab migration, and drag-to-workspace movement;
@@ -198,10 +199,12 @@ workspace name or symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
 
-To browse two pages side by side, right-click a tab and choose **Open Side by
-Side With**, or open the command palette and run **Open split view**. The pair
-stays together in Flow and can be swapped, separated, or moved to another
-workspace as one unit.
+To browse two pages together, right-click a tab and choose **Open in Split View
+With**, or use **Open split side by side** / **Open stacked split** in the
+command palette. An existing pair can switch between columns and rows without
+reloading either page. It stays together in Flow and can be reordered,
+separated, moved to another workspace, and restored after a restart as one
+unit.
 
 Browser Memory is off by default. Run **Enable Browser Memory** from the
 command palette to opt in, then use **Search Browser Memory** to describe a

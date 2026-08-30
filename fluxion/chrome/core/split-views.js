@@ -2,6 +2,14 @@
 (function exposeSplitViewCore(scope) {
   "use strict";
 
+  const SIDE_BY_SIDE = "side-by-side";
+  const STACKED = "stacked";
+  const ORIENTATIONS = Object.freeze([SIDE_BY_SIDE, STACKED]);
+
+  function normaliseOrientation(value) {
+    return ORIENTATIONS.includes(value) ? value : SIDE_BY_SIDE;
+  }
+
   function splitViewOf(tab) {
     return tab?.splitview || null;
   }
@@ -52,7 +60,32 @@
     return index < 0 ? 0 : index + 1;
   }
 
-  const api = Object.freeze({ canSplit, projectSplitRows, splitPosition });
+  function orientationOf(splitView, read = tab =>
+    tab?.getAttribute?.("fluxion-split-orientation") || tab?.splitOrientation
+  ) {
+    for (const tab of splitView?.tabs || []) {
+      const value = read(tab);
+      if (ORIENTATIONS.includes(value)) return value;
+    }
+    return SIDE_BY_SIDE;
+  }
+
+  function positionLabel(position, orientation = SIDE_BY_SIDE, size = 2) {
+    const index = Number(position);
+    const count = Number(size);
+    if (count === 2 && index === 1) {
+      return normaliseOrientation(orientation) === STACKED ? "top" : "left";
+    }
+    if (count === 2 && index === 2) {
+      return normaliseOrientation(orientation) === STACKED ? "bottom" : "right";
+    }
+    return index > 0 ? `pane ${index} of ${Math.max(index, count || 0)}` : "split pane";
+  }
+
+  const api = Object.freeze({
+    ORIENTATIONS, SIDE_BY_SIDE, STACKED, canSplit, normaliseOrientation,
+    orientationOf, positionLabel, projectSplitRows, splitPosition,
+  });
   scope.FluxionSplitViews = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis === "object" ? globalThis : this);

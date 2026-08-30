@@ -4,6 +4,9 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   canSplit,
+  normaliseOrientation,
+  orientationOf,
+  positionLabel,
   projectSplitRows,
   splitPosition,
 } = require("../chrome/core/split-views.js");
@@ -49,4 +52,25 @@ test("split positions are one-based and stable", () => {
   assert.equal(splitPosition(first, splitView), 1);
   assert.equal(splitPosition(second, splitView), 2);
   assert.equal(splitPosition({}, splitView), 0);
+});
+
+test("split orientation accepts only the two product layouts", () => {
+  assert.equal(normaliseOrientation("side-by-side"), "side-by-side");
+  assert.equal(normaliseOrientation("stacked"), "stacked");
+  assert.equal(normaliseOrientation("diagonal"), "side-by-side");
+});
+
+test("restored orientation can be read from either native split member", () => {
+  const first = { splitOrientation: "" };
+  const second = { splitOrientation: "stacked" };
+  assert.equal(orientationOf({ tabs: [first, second] }), "stacked");
+  assert.equal(orientationOf({ tabs: [{ splitOrientation: "invalid" }] }), "side-by-side");
+});
+
+test("split positions use spatial labels for both layouts", () => {
+  assert.equal(positionLabel(1, "side-by-side"), "left");
+  assert.equal(positionLabel(2, "side-by-side"), "right");
+  assert.equal(positionLabel(1, "stacked"), "top");
+  assert.equal(positionLabel(2, "stacked"), "bottom");
+  assert.equal(positionLabel(3, "stacked", 4), "pane 3 of 4");
 });

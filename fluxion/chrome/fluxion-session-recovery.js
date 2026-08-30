@@ -51,6 +51,7 @@
           pinned: tab.pinned,
           group: tab.group?.label || "",
           split,
+          splitOrientation: tab.splitview ? window.FluxionUI.splitOrientation(tab) : "",
         };
       }),
     };
@@ -105,7 +106,9 @@
       label: "Recovery Lab", color: "green", insertBefore: groupTabs[0],
     });
     if (!group || group.tabs.length !== 2) throw new Error("native recovery group was not created");
-    const split = window.FluxionUI.createSplitView(splitTabs[0], splitTabs[1]);
+    const split = window.FluxionUI.createSplitView(splitTabs[0], splitTabs[1], {
+      orientation: "stacked",
+    });
     if (!split || split.tabs.length !== 2) throw new Error("native recovery split was not created");
     window.gBrowser.pinTab(pinned);
     window.gBrowser.selectedTab = splitTabs[0];
@@ -122,14 +125,14 @@
     write("fluxion.recovery.seed.progress", "sessionstore-projected");
     const validation = FluxionSessionRecovery.validateNormal(snapshot());
     if (!validation.ok) throw new Error(`seed state invalid: ${validation.reasons.join("; ")}`);
-    write("fluxion.recovery.seed.health", "workspace-tabs-groups-split-seeded");
+    write("fluxion.recovery.seed.health", "workspace-tabs-groups-stacked-split-seeded");
     await quit();
   }
 
   async function validateRestoredSession() {
     const result = await waitFor(() => FluxionSessionRecovery.validateNormal(snapshot()));
     if (!result.ok) throw new Error(`session restore invalid: ${result.reasons.join("; ")}`);
-    write("fluxion.recovery.restore.health", "workspace-tabs-groups-split-restored");
+    write("fluxion.recovery.restore.health", "workspace-tabs-groups-stacked-split-restored");
     await flushTabs([...window.gBrowser.tabs]);
     await quit();
   }
