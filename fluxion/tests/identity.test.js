@@ -20,7 +20,7 @@ test("About Fluxion presents the current product version without remote scripts"
   assert.match(about, /resource:\/\/fluxion\/about\/about\.css/);
   assert.match(runtime, /protocol\/about;1\?what=fluxion/);
   assert.match(runtime, /URI_SAFE_FOR_UNTRUSTED_CONTENT/);
-  assert.match(runtime, /URI_MUST_LOAD_IN_CHILD/);
+  assert.match(runtime, /URI_CAN_LOAD_IN_CHILD/);
   assert.match(runtime, /createContentPrincipal\(uri, \{\}\)/);
   assert.match(runtime, /aboutFluxionRegistered \? "about:fluxion"/);
 });

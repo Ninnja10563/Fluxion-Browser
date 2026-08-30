@@ -1575,15 +1575,24 @@
       const tab = gBrowser.addTrustedTab(ABOUT_URL);
       tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
       const loaded = () => {
-        if (tab.linkedBrowser?.currentURI?.spec !== ABOUT_URL) return;
+        if (tab.linkedBrowser?.currentURI?.spec !== ABOUT_URL) return false;
         Services.prefs.setStringPref(
           "fluxion.about.visual.health", "versioned-about-fluxion-visible",
         );
         Services.prefs.savePrefFile(null);
+        tab.linkedBrowser.removeEventListener("load", loaded, true);
+        return true;
       };
-      tab.linkedBrowser.addEventListener("load", loaded, { capture: true, once: true });
+      tab.linkedBrowser.addEventListener("load", loaded, true);
       gBrowser.selectedTab = tab;
-      window.setTimeout(loaded, 1200);
+      window.setTimeout(() => {
+        if (loaded()) return;
+        Services.prefs.setStringPref(
+          "fluxion.about.visual.error",
+          `about:fluxion resolved to ${tab.linkedBrowser?.currentURI?.spec || "no URI"}`,
+        );
+        Services.prefs.savePrefFile(null);
+      }, 1600);
     }, 20500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
