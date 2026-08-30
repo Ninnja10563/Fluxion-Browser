@@ -18,6 +18,7 @@ const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
+const tabStatus = fs.readFileSync(path.join(root, "chrome/core/tab-status.js"), "utf8");
 const indexScheduler = fs.readFileSync(path.join(root, "chrome/core/index-scheduler.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
@@ -108,6 +109,24 @@ test("Flow uses roving focus and the packaged app proves 200-tab keyboard stabil
   assert.match(macVerifier, /200-tabs-rendered-with-roving-keyboard-focus/);
 });
 
+test("Flow projects live Gecko tab status with accessible, working media controls", () => {
+  assert.match(runtimeConfig, /chrome\/core\/tab-status\.js/);
+  assert.match(tabStatus, /picture-in-picture/);
+  assert.match(tabStatus, /sharing-camera-microphone/);
+  assert.match(tabStatus, /Audio playback blocked/);
+  assert.match(tabStatus, /Page crashed/);
+  assert.doesNotMatch(tabStatus, /setAttribute|fetch\(|Services\./);
+  assert.match(chrome, /tab\.pictureinpicture/);
+  assert.match(chrome, /tab\.sharingState/);
+  assert.match(chrome, /tab\.activeMediaBlocked/);
+  assert.match(chrome, /tab\.resumeDelayedMedia\(\)/);
+  assert.match(chrome, /tab\.toggleMuteAudio\(\)/);
+  assert.match(chrome, /\[tabLabel\(tab\), \.\.\.status\.labels\]\.join/);
+  assert.match(chrome, /prefers-reduced-motion/);
+  assert.match(macVerifier, /FLUXION_VISUAL_STATUS_TEST=1/);
+  assert.match(macVerifier, /native-gecko-tab-states-projected-and-controllable/);
+});
+
 test("new tab stays blank instead of duplicating the address field", () => {
   assert.doesNotMatch(newTab, /<form|<input|welcome|motivat/i);
   assert.match(newTab, /Blank new tab/);
@@ -142,6 +161,7 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.settings\.visual\.health/);
   assert.match(macVerifier, /FLUXION_VISUAL_MEMORY_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_STATUS_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SETTINGS_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SLEEP_TEST=1/);
   assert.match(macVerifier, /native-tab-discarded/);

@@ -8,6 +8,26 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.25 completes Flow's live native tab-status language:
+
+- project Gecko loading, attention, picture-in-picture, camera, microphone,
+  screen-sharing, crash, sleep, blocked-media, playing, and muted states;
+- replace temporary audio characters with one consistent geometric vector
+  system that remains legible in grayscale and compact or pinned Flow;
+- include every active state in the tab row's accessible name and native
+  tooltip without adding hundreds of nested keyboard stops;
+- keep loading as the only animated mark and make it static when reduced motion
+  is requested;
+- resume blocked audio and mute or unmute through Gecko's existing tab media
+  methods, including a concise selection-aware context action;
+- resolve stale state safely, so a crashed tab never presents obsolete capture
+  or media controls;
+- gate the packaged app with real Gecko tab elements, visible status marks, an
+  audio-control click, and the resulting native muted-state rerender.
+
+Fluxion does not persist or infer page activity. Gecko remains the single owner
+of media, capture, loading, crash, and picture-in-picture state.
+
 Version 0.24 completes two-orientation native split browsing:
 
 - arrange any eligible pair side by side or in a stacked top/bottom layout;

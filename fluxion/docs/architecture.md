@@ -410,3 +410,27 @@ one tab stop, dispatches a real ArrowDown event, and verifies DOM focus follows
 Gecko's changed selected tab after the rebuild. It removes the fixture before
 visual capture. This is a regression gate, not a substitute for later CPU,
 battery, and representative-content memory profiling.
+
+## Native tab-status ownership
+
+Flow derives page activity exclusively from Gecko's native tab state:
+`busy`/`progress`, `attention`, `pictureinpicture`, `sharing`, `crashed`,
+`soundplaying`, `muted`, `activemedia-blocked`, and SessionStore's pending or
+discarded state. A pure projection module resolves stale-state precedence—for
+example, a crash suppresses obsolete media controls—and produces the same
+descriptions used by the visible marks and each tab row's accessible name.
+Fluxion stores none of this state and reads no page content to infer it.
+
+Audio actions call the native tab's `resumeDelayedMedia` and `toggleMuteAudio`
+methods; the context menu applies the same operations to the exact Gecko-owned
+multi-selection. Picture-in-picture and sharing marks are indicators rather
+than privileged replicas of page controls. Compact and pinned Flow place one
+status mark on the favicon corner so tab geometry stays stable. Loading is the
+only animated mark, and it becomes static under reduced motion.
+
+The packaged macOS gate sets the supported attributes on real Gecko tab
+elements, requires Flow's marks and accessible descriptions, drives the visible
+mute control, observes Gecko's resulting muted state, and then requires the
+rerendered action to change to Unmute. This catches projection or interaction
+breakage when upstream tab chrome changes without introducing a shadow media
+state.

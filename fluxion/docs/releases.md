@@ -38,6 +38,11 @@ passes:
    that the native splitter remains between live browser panels. The
    multi-launch gate seeds a stacked pair and refuses restoration unless its
    orientation returns with the native split identity.
+   A tab-status gate then projects picture-in-picture, loading,
+   camera/microphone sharing, crash, and audio state from real Gecko tab
+   elements, verifies visible and accessible output, clicks Fluxion's media
+   control, and refuses publication unless Gecko records mute and the action
+   rerenders as Unmute.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

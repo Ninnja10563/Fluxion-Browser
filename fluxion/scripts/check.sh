@@ -35,6 +35,7 @@ node --check chrome/core/settings.js
 node --check chrome/core/shortcuts.js
 node --check chrome/core/tab-sleeping.js
 node --check chrome/core/tab-selection.js
+node --check chrome/core/tab-status.js
 node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-shortcuts.js

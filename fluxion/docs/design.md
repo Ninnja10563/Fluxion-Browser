@@ -32,6 +32,11 @@ SigmaOS is deliberately excluded as a reference.
   2px workspace-coloured rule; it does not become a floating card.
 - Pinned tabs are icon-only and spatially stable. Their titles remain available
   through native tooltips.
+- Page activity is expressed with small geometric marks beside the title or on
+  the favicon corner in compact Flow. Loading may move; capture, picture-in-
+  picture, attention, sleep, crash, and audio state remain still and legible in
+  grayscale. Camera, microphone, screen sharing, and crash are the only states
+  permitted to use warning colour.
 - Workspace colour appears only in a one-pixel selection indicator.
 - The new-tab page is blank by default. The address field is the primary entry
   point, not a duplicated hero search box.

@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionFlowNavigation, FluxionSplitViews, FluxionTabGroups, FluxionTabSelection, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionFlowNavigation, FluxionSplitViews, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -261,6 +261,9 @@
     :root[data-fluxion-no-motion] #fluxion-flow,
     :root[data-fluxion-no-motion] .fluxion-tab,
     :root[data-fluxion-no-motion] .fluxion-group-disclosure { transition: none !important; }
+    :root[data-fluxion-no-motion] .fluxion-status[data-kind="loading"]::before {
+      animation: none !important;
+    }
     .fluxion-tab:hover { background: var(--fluxion-hover); color: var(--fluxion-ink); }
     .fluxion-tab[aria-selected="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); }
     .fluxion-tab.is-multiselected:not([data-active="true"]) {
@@ -273,10 +276,6 @@
     }
     .fluxion-tab.is-closing { opacity: 0; transform: scaleY(.72); pointer-events: none; }
     .fluxion-tab.is-sleeping { color: color-mix(in srgb, var(--fluxion-muted) 82%, transparent); }
-    .fluxion-tab.is-sleeping::after {
-      content: ""; width: 7px; height: 7px; flex: none; border: 1px solid currentColor;
-      border-block-start-color: transparent; border-radius: 50%; transform: rotate(-35deg);
-    }
     .fluxion-tab.is-dragover::after {
       content: ""; position: absolute; inset: -2px 4px auto; height: 2px; background: var(--fluxion-accent);
     }
@@ -325,7 +324,33 @@
       flex: none; color: var(--fluxion-muted); font-size: 9px; font-weight: 650;
       letter-spacing: .06em; text-transform: uppercase;
     }
-    .fluxion-close, .fluxion-audio { width: 22px; height: 22px; flex: none; font-size: 14px; opacity: 0; }
+    .fluxion-status-strip {
+      min-width: 0; flex: none; display: flex; align-items: center; gap: 3px;
+      color: var(--fluxion-muted);
+    }
+    .fluxion-status {
+      width: 13px; height: 13px; flex: none; display: grid; place-items: center;
+      color: inherit;
+    }
+    .fluxion-status svg, .fluxion-control-glyph {
+      width: 13px; height: 13px; display: block; overflow: visible;
+      fill: none; stroke: currentColor; stroke-width: 1.35;
+      stroke-linecap: round; stroke-linejoin: round;
+    }
+    .fluxion-status[data-tone="active"] { color: var(--fluxion-accent); }
+    .fluxion-status[data-tone="warning"] { color: light-dark(#8b5148, #d49386); }
+    .fluxion-status[data-tone="critical"] { color: light-dark(#9b403d, #e17f79); }
+    .fluxion-status[data-kind="loading"]::before {
+      content: ""; width: 8px; height: 8px; border: 1.3px solid currentColor;
+      border-block-start-color: transparent; border-radius: 50%;
+      animation: fluxion-status-spin 720ms linear infinite;
+    }
+    .fluxion-status[data-kind="attention"]::before {
+      content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor;
+    }
+    @keyframes fluxion-status-spin { to { transform: rotate(1turn); } }
+    .fluxion-close, .fluxion-audio { width: 22px; height: 22px; flex: none; opacity: 0; }
+    .fluxion-audio .fluxion-control-glyph { width: 14px; height: 14px; }
     .fluxion-tab:hover .fluxion-close, .fluxion-tab:focus-within .fluxion-close, .fluxion-audio { opacity: 1; }
     .fluxion-footer {
       height: 36px; display: flex; align-items: center; gap: 6px; padding: 4px 7px;
@@ -353,6 +378,20 @@
     .fluxion-pinned-tabs .fluxion-tab { justify-content: center; margin: 0; padding: 0; }
     .fluxion-pinned-tabs .fluxion-title,
     .fluxion-pinned-tabs .fluxion-close { display: none; }
+    .fluxion-pinned-tabs .fluxion-status-strip,
+    #fluxion-flow[data-state="compact"] .fluxion-status-strip {
+      position: absolute; inset-inline-start: 2px; inset-block-end: 2px;
+      padding: 1px; gap: 0; border-radius: 2px; background: var(--fluxion-bg);
+    }
+    .fluxion-pinned-tabs .fluxion-status:not(:first-child),
+    #fluxion-flow[data-state="compact"] .fluxion-status:not(:first-child) { display: none; }
+    .fluxion-pinned-tabs .fluxion-audio,
+    #fluxion-flow[data-state="compact"] .fluxion-audio {
+      position: absolute; inset-inline-end: 1px; inset-block-end: 1px;
+      width: 15px; height: 15px; border-radius: 2px; background: var(--fluxion-bg);
+    }
+    .fluxion-pinned-tabs .fluxion-audio .fluxion-control-glyph,
+    #fluxion-flow[data-state="compact"] .fluxion-audio .fluxion-control-glyph { width: 12px; height: 12px; }
     #fluxion-flow[data-state="compact"] .fluxion-header { padding-inline: 10px; }
     #fluxion-flow[data-state="compact"] .fluxion-icon-button { display: none; }
     #fluxion-flow[data-state="compact"] .fluxion-workspaces { flex-direction: column; gap: 2px; padding: 4px 7px; }
@@ -374,6 +413,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
       #fluxion-flow, .fluxion-tab { transition-duration: 0.01ms !important; }
+      .fluxion-status[data-kind="loading"]::before { animation: none !important; }
     }
   `;
   document.documentElement.appendChild(style);
@@ -1016,23 +1056,121 @@
     else if (ordinary.length > 1) gBrowser.removeTabs(ordinary, options);
   }
 
+  function vectorGlyph(className, shapes, viewBox = "0 0 16 16") {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", className);
+    svg.setAttribute("viewBox", viewBox);
+    svg.setAttribute("aria-hidden", "true");
+    for (const [tag, attributes] of shapes) {
+      const shape = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
+      svg.appendChild(shape);
+    }
+    return svg;
+  }
+
+  function statusGlyph(indicator) {
+    const icon = create("span", "fluxion-status");
+    icon.dataset.kind = indicator.kind;
+    icon.dataset.tone = indicator.tone;
+    icon.title = indicator.label;
+    icon.setAttribute("aria-hidden", "true");
+    let shapes = null;
+    if (indicator.kind === "picture-in-picture") {
+      shapes = [
+        ["rect", { x: "1.5", y: "2.25", width: "13", height: "10.5", rx: "1.3" }],
+        ["rect", { x: "7.4", y: "7", width: "5", height: "3.6", rx: ".55" }],
+      ];
+    } else if (indicator.kind === "sharing-screen") {
+      shapes = [
+        ["rect", { x: "1.5", y: "2.25", width: "13", height: "9", rx: "1.25" }],
+        ["path", { d: "M5.5 14h5M8 11.5V14" }],
+        ["circle", { cx: "11.5", cy: "5.2", r: "1.2", fill: "currentColor", stroke: "none" }],
+      ];
+    } else if (indicator.kind.includes("camera")) {
+      shapes = [
+        ["rect", { x: "1.5", y: "4.1", width: "9.2", height: "7.8", rx: "1.4" }],
+        ["path", { d: "m10.7 6.3 3.8-1.7v6.8l-3.8-1.7Z" }],
+      ];
+    } else if (indicator.kind === "sharing-microphone") {
+      shapes = [
+        ["rect", { x: "5.4", y: "1.5", width: "5.2", height: "8.5", rx: "2.6" }],
+        ["path", { d: "M3.6 7.8a4.4 4.4 0 0 0 8.8 0M8 12.2v2.3M5.7 14.5h4.6" }],
+      ];
+    } else if (indicator.kind === "sharing-media") {
+      shapes = [
+        ["circle", { cx: "8", cy: "8", r: "1.3", fill: "currentColor", stroke: "none" }],
+        ["path", { d: "M4.8 4.8a4.5 4.5 0 0 0 0 6.4M11.2 4.8a4.5 4.5 0 0 1 0 6.4M2.5 2.8a7.3 7.3 0 0 0 0 10.4M13.5 2.8a7.3 7.3 0 0 1 0 10.4" }],
+      ];
+    } else if (indicator.kind === "crashed") {
+      shapes = [
+        ["path", { d: "M8 1.5 15 14H1Z" }],
+        ["path", { d: "M8 5.2v4.3M8 12h.01" }],
+      ];
+    } else if (indicator.kind === "sleeping") {
+      shapes = [["path", { d: "M11.9 11.7A5.9 5.9 0 0 1 4.3 4.1 6.1 6.1 0 1 0 11.9 11.7Z" }]];
+    }
+    if (shapes) icon.appendChild(vectorGlyph("fluxion-status-glyph", shapes));
+    return icon;
+  }
+
+  function controlGlyph(kind) {
+    if (kind === "close") {
+      return vectorGlyph("fluxion-control-glyph", [["path", { d: "m4.5 4.5 7 7m0-7-7 7" }]]);
+    }
+    const shapes = [["path", { d: "M2 6h3l3-2.8v9.6L5 10H2Z" }]];
+    if (kind === "playing") shapes.push(["path", { d: "M10.3 5.4a3.7 3.7 0 0 1 0 5.2M12.4 3.5a6.3 6.3 0 0 1 0 9" }]);
+    else if (kind === "muted") shapes.push(["path", { d: "m10.3 6 4 4m0-4-4 4" }]);
+    else shapes.push(["path", { d: "m10.5 5.2 4 2.8-4 2.8Z" }]);
+    return vectorGlyph("fluxion-control-glyph", shapes);
+  }
+
+  function describeTab(tab, sleeping) {
+    const browser = tab.linkedBrowser;
+    const nativeSharing = tab.sharingState;
+    const hasNativeSharing = nativeSharing && (
+      typeof nativeSharing !== "object" ||
+      Object.values(nativeSharing).some(value => value && value !== "none" && value !== "false")
+    );
+    const sharing = hasNativeSharing
+      ? nativeSharing
+      : tab.getAttribute("sharing") || browser?.getAttribute("sharing");
+    return FluxionTabStatus.describe({
+      attention: tab.hasAttribute("attention"),
+      busy: tab.hasAttribute("busy") || tab.hasAttribute("progress"),
+      crashed: tab.hasAttribute("crashed"),
+      mediaBlocked: tab.activeMediaBlocked || tab.hasAttribute("activemedia-blocked"),
+      muted: tab.muted || tab.hasAttribute("muted"),
+      pictureInPicture: tab.pictureinpicture || tab.hasAttribute("pictureinpicture"),
+      sharing,
+      sleeping,
+      soundPlaying: tab.soundPlaying || tab.hasAttribute("soundplaying"),
+    });
+  }
+
   function createTabElement(tab) {
     const item = create("div", "fluxion-tab");
     const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
+    const status = describeTab(tab, sleeping);
     item.classList.toggle("is-sleeping", sleeping);
     item.classList.toggle("is-multiselected", Boolean(tab.multiselected));
     item.tabIndex = tab === gBrowser.selectedTab ? 0 : -1;
     item.draggable = true;
     item._fluxionTab = tab;
     item.setAttribute("role", "tab");
-    item.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown Home End Delete");
+    item.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown Home End Delete M");
     item.dataset.active = String(tab === gBrowser.selectedTab);
+    item.dataset.status = status.indicators.map(indicator => indicator.kind).join(" ");
     item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab || tab.multiselected));
     item.setAttribute(
       "aria-label",
-      `${tabLabel(tab)}${sleeping ? ", sleeping" : ""}${tab.soundPlaying ? ", playing audio" : ""}${tab.muted ? ", muted" : ""}`,
+      [tabLabel(tab), ...status.labels].join(", "),
     );
-    item.title = `${tabLabel(tab)}\n${tab.linkedBrowser?.currentURI?.displaySpec || ""}${sleeping ? "\nSleeping — select to restore" : ""}`;
+    item.title = [
+      tabLabel(tab),
+      tab.linkedBrowser?.currentURI?.displaySpec || "",
+      ...status.labels,
+    ].filter(Boolean).join("\n");
 
     const faviconUrl = iconFor(tab);
     if (faviconUrl) {
@@ -1068,23 +1206,31 @@
       item.appendChild(splitMark);
     }
 
-    if (tab.soundPlaying || tab.muted) {
+    if (status.indicators.length) {
+      const indicators = create("span", "fluxion-status-strip");
+      indicators.setAttribute("aria-hidden", "true");
+      for (const indicator of status.indicators) indicators.appendChild(statusGlyph(indicator));
+      item.appendChild(indicators);
+    }
+
+    if (status.audio) {
       const audio = create("button", "fluxion-audio");
       audio.type = "button";
-      audio.textContent = tab.muted ? "×" : "◦";
-      audio.title = tab.muted ? "Unmute tab" : "Mute tab";
+      audio.appendChild(controlGlyph(status.audio.kind));
+      audio.title = status.audio.action;
       audio.setAttribute("aria-label", audio.title);
       audio.tabIndex = -1;
       audio.addEventListener("click", event => {
         event.stopPropagation();
-        tab.toggleMuteAudio();
+        if (status.audio.kind === "blocked") tab.resumeDelayedMedia();
+        else tab.toggleMuteAudio();
       });
       item.appendChild(audio);
     }
 
     const close = create("button", "fluxion-close");
     close.type = "button";
-    close.textContent = "×";
+    close.appendChild(controlGlyph("close"));
     close.title = "Close tab";
     close.setAttribute("aria-label", `Close ${tabLabel(tab)}`);
     close.tabIndex = -1;
@@ -1140,9 +1286,10 @@
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         closeWithStability(tab, item);
-      } else if (event.key.toLowerCase() === "m" && (tab.soundPlaying || tab.muted)) {
+      } else if (event.key.toLowerCase() === "m" && status.audio) {
         event.preventDefault();
-        tab.toggleMuteAudio();
+        if (status.audio.kind === "blocked") tab.resumeDelayedMedia();
+        else tab.toggleMuteAudio();
       }
     });
     item.addEventListener("contextmenu", event => {
@@ -1440,6 +1587,19 @@
   const reloadTabItem = appendAction(contextMenu, "Reload Tab", () => {
     for (const tab of contextTabs()) tab.linkedBrowser.reload();
   });
+  const mediaTabItem = appendAction(contextMenu, "Mute Tab", () => {
+    const tabs = contextTabs();
+    const blocked = tabs.filter(tab => tab.activeMediaBlocked || tab.hasAttribute("activemedia-blocked"));
+    if (blocked.length) {
+      for (const tab of blocked) tab.resumeDelayedMedia();
+      return;
+    }
+    const unmute = tabs.every(tab => tab.muted || tab.hasAttribute("muted"));
+    for (const tab of tabs) {
+      const muted = tab.muted || tab.hasAttribute("muted");
+      if ((unmute && muted) || (!unmute && !muted)) tab.toggleMuteAudio();
+    }
+  });
   const pinTabItem = appendAction(contextMenu, "Pin / Unpin Tab", () => {
     const tabs = contextTabs();
     const unpin = tabs.every(tab => tab.pinned);
@@ -1552,6 +1712,16 @@
     const isPeek = Boolean(window.FluxionPeek?.isPeek(contextTab));
     duplicateTabItem.setAttribute("label", count > 1 ? `Duplicate ${count} Tabs` : "Duplicate Tab");
     reloadTabItem.setAttribute("label", count > 1 ? `Reload ${count} Tabs` : "Reload Tab");
+    const mediaBlocked = actionTabs.some(tab =>
+      tab.activeMediaBlocked || tab.hasAttribute("activemedia-blocked")
+    );
+    const allMuted = actionTabs.every(tab => tab.muted || tab.hasAttribute("muted"));
+    mediaTabItem.setAttribute(
+      "label",
+      mediaBlocked
+        ? (count > 1 ? "Play Blocked Audio" : "Play Audio")
+        : `${allMuted ? "Unmute" : "Mute"} ${count > 1 ? `${count} Tabs` : "Tab"}`,
+    );
     pinTabItem.setAttribute("label", count > 1
       ? `${actionTabs.every(tab => tab.pinned) ? "Unpin" : "Pin"} ${count} Tabs`
       : "Pin / Unpin Tab");
@@ -1737,6 +1907,7 @@
     "TabAttrModified", "TabGroupCreate", "TabGroupRemoved", "TabGroupUpdate",
     "TabGroupCollapse", "TabGroupExpand", "TabGrouped", "TabUngrouped",
     "SplitViewCreated", "SplitViewRemoved", "SplitViewTabChange",
+    "TabSharingStateChanged",
     "FluxionTabSleep",
     "FluxionPeekChange",
     "TabMultiSelect",
@@ -1819,6 +1990,65 @@
     toggleSplitOrientation,
     workspaces: () => workspaces.map(workspace => ({ ...workspace })),
   });
+  if (Services.env.get("FLUXION_VISUAL_STATUS_TEST") === "1") {
+    window.setTimeout(() => {
+      const video = gBrowser.addTrustedTab("about:blank?fluxion-status=video", { skipAnimation: true });
+      const capture = gBrowser.addTrustedTab("about:blank?fluxion-status=capture", { skipAnimation: true });
+      const crashed = gBrowser.addTrustedTab("about:blank?fluxion-status=crash", { skipAnimation: true });
+      for (const tab of [video, capture, crashed]) tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      video.setAttribute("label", "Video reference");
+      video.setAttribute("pictureinpicture", "true");
+      video.setAttribute("soundplaying", "true");
+      video.setAttribute("busy", "true");
+      capture.setAttribute("label", "Live camera session");
+      capture.setAttribute("sharing", "camera microphone");
+      crashed.setAttribute("label", "Crashed fixture");
+      crashed.setAttribute("crashed", "true");
+      crashed.setAttribute("pictureinpicture", "true");
+      crashed.setAttribute("soundplaying", "true");
+      scheduleRender();
+      window.requestAnimationFrame(() => {
+        const videoRow = tabElements.get(video);
+        const captureRow = tabElements.get(capture);
+        const crashedRow = tabElements.get(crashed);
+        const initial = Boolean(
+          videoRow?.querySelector('[data-kind="picture-in-picture"]') &&
+          videoRow?.querySelector('[data-kind="loading"]') &&
+          videoRow?.querySelector('.fluxion-audio[aria-label="Mute tab"]') &&
+          videoRow?.getAttribute("aria-label").includes("Video playing in Picture-in-Picture") &&
+          captureRow?.querySelector('[data-kind="sharing-camera-microphone"]') &&
+          captureRow?.getAttribute("aria-label").includes("Using the camera and microphone") &&
+          crashedRow?.querySelectorAll(".fluxion-status").length === 1 &&
+          crashedRow?.querySelector('[data-kind="crashed"]') &&
+          !crashedRow?.querySelector(".fluxion-audio")
+        );
+        videoRow?.querySelector(".fluxion-audio")?.click();
+        video.removeAttribute("busy");
+        window.requestAnimationFrame(() => {
+          const updated = tabElements.get(video);
+          const controlled = Boolean(
+            video.hasAttribute("muted") &&
+            updated?.querySelector('.fluxion-audio[aria-label="Unmute tab"]') &&
+            !updated?.querySelector('[data-kind="loading"]')
+          );
+          if (initial && controlled) {
+            Services.prefs.setStringPref(
+              "fluxion.status.health",
+              "native-gecko-tab-states-projected-and-controllable",
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.status.visual.error",
+              `initial=${initial} controlled=${controlled} muted=${video.hasAttribute("muted")}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+          gBrowser.removeTab(crashed, { animate: false });
+          scheduleRender();
+        });
+      });
+    }, 2200);
+  }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
     const groupTabs = [...gBrowser.tabs]
       .filter(tab => tabWorkspace(tab) === currentWorkspace && !tab.pinned)

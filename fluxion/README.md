@@ -12,8 +12,10 @@ The current preview is runnable and includes:
 
 - arbitrary website rendering through Firefox ESR/Gecko;
 - URL/search navigation, back, forward, reload, stop, and security identity;
-- compact vertical tabs with favicons, titles, audio state, close controls,
-  reordering, pinning, duplication, and native tab session restoration;
+- compact vertical tabs with favicons, titles, geometric loading, attention,
+  picture-in-picture, camera/microphone/screen-sharing, crash, sleep, and audio
+  indicators, working media controls, reordering, pinning, duplication, and
+  native tab session restoration;
 - roving keyboard focus for tabs and workspaces, arrow/Home/End navigation,
   stable focus after selection or close, and a packaged 200-tab render gate;
 - packaged multi-launch recovery for workspace membership, pinned tabs, native
