@@ -16,7 +16,9 @@ controls work and its failure paths have been tested.
 - Fluxion-owned history, bookmarks, downloads, permissions, and settings
   surfaces backed by Firefox services (settings, unified Library, native
   bookmark-folder editing, and per-site permission management implemented)
-- automated session/crash-recovery and private-window integration coverage
+- automated multi-launch session recovery and private-window isolation coverage
+  for workspaces, pins, native groups, split views, Places, and Browser Memory
+  (implemented)
 - signed macOS application bundle and native application menus (custom Flow
   menu and About route implemented; Developer ID signing remains)
 

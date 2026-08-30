@@ -67,7 +67,8 @@ chmod 700 "$profile"
 export FLUXION_PROFILE="$profile"
 
 if [[ "${1:-}" == "--version" ]]; then
-  printf 'Fluxion 0.6.0-preview.1\n'
+  fluxion_version="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$fluxion_root/package.json" | head -n 1)"
+  printf 'Fluxion %s\n' "${fluxion_version:-development}"
   exec "$runtime_binary" --version
 fi
 

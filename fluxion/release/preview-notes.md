@@ -8,6 +8,26 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.20 hardens real session restoration and private-window isolation:
+
+- seed a normal packaged-app session containing five real Gecko tabs in the
+  Build workspace, including a pinned tab, a named native group, and a native
+  split pair;
+- flush content state through Gecko's frame loaders and use a clean application
+  quit instead of fabricating a session-state file;
+- restart the same `Fluxion.app` and require every URL, workspace attribute,
+  pin, group label, and split identity to be restored by SessionStore;
+- open a real private window against the same profile and require Browser
+  Memory to return no results and refuse enablement;
+- restart normal mode once more and prove that the private URL entered neither
+  restored tabs, Gecko Places history, nor Browser Memory;
+- derive the command-line `--version` response from the package version so the
+  launcher cannot retain stale preview identity.
+
+The macOS release workflow now runs this four-launch recovery sequence in a
+fresh isolated profile after the ordinary packaged-app interaction gate. A DMG
+cannot publish when normal browsing state is lost or private state leaks.
+
 Version 0.19 gives Fluxion ownership of its native macOS application model:
 
 - add a top-level **Flow** menu beside the familiar native browser menus;

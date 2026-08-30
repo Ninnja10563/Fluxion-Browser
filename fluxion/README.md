@@ -14,6 +14,8 @@ The current preview is runnable and includes:
 - URL/search navigation, back, forward, reload, stop, and security identity;
 - compact vertical tabs with favicons, titles, audio state, close controls,
   reordering, pinning, duplication, and native tab session restoration;
+- packaged multi-launch recovery for workspace membership, pinned tabs, native
+  groups, and split views, with private tabs excluded from the restored session;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration;
 - Gecko-native two-page split view with a live draggable divider, Flow pairing,

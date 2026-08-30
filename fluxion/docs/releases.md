@@ -26,6 +26,10 @@ passes:
    About version matches the application bundle version, and captures the real
    `about:preferences#about` product surface instead of an inherited Firefox
    route or exposed bundle file path.
+   A separate four-launch gate then seeds and cleanly quits a normal session,
+   restores its workspace/pin/group/split state, opens and quits a private
+   session, and restores normal mode again. Publication is blocked if the
+   private URL appears in restored tabs, Gecko Places, or Browser Memory.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

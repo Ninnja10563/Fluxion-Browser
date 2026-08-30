@@ -15,6 +15,7 @@ const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
 const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js"), "utf8");
 const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
+const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -26,6 +27,10 @@ const macBuilder = fs.readFileSync(
 );
 const macVerifier = fs.readFileSync(
   path.join(root, "scripts/verify-macos-app.sh"),
+  "utf8",
+);
+const macSessionVerifier = fs.readFileSync(
+  path.join(root, "scripts/verify-macos-session.sh"),
   "utf8",
 );
 
@@ -57,6 +62,20 @@ test("site permissions use Gecko records and expose exact reset scopes", () => {
   assert.match(settings, /removeSite\(group\.siteKey\)/);
   assert.match(settings, /remove\(permission\.id\)/);
   assert.match(palette, /about:preferences#permissions/);
+});
+
+test("packaged recovery gate crosses real normal and private app launches", () => {
+  assert.match(sessionRecovery, /requestTabStateFlush/);
+  assert.match(sessionRecovery, /SessionStore\.getWindowState/);
+  assert.match(sessionRecovery, /PlacesUtils\.history\.fetch/);
+  assert.match(sessionRecovery, /FluxionMemory\.search/);
+  assert.match(sessionRecovery, /PrivateBrowsingUtils\.isWindowPrivate/);
+  assert.match(macSessionVerifier, /FLUXION_SESSION_SEED_TEST/);
+  assert.match(macSessionVerifier, /FLUXION_SESSION_RESTORE_TEST/);
+  assert.match(macSessionVerifier, /FLUXION_PRIVATE_ISOLATION_TEST/);
+  assert.match(macSessionVerifier, /FLUXION_PRIVATE_ABSENCE_TEST/);
+  assert.match(macSessionVerifier, /workspace-tabs-groups-split-restored/);
+  assert.match(macSessionVerifier, /private-tabs-history-memory-excluded/);
 });
 
 test("new tab stays blank instead of duplicating the address field", () => {

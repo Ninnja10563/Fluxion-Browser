@@ -67,6 +67,18 @@ The current workspace and sidebar state use Firefox preferences. This keeps
 crash recovery atomic with the actual tab session and avoids a second database
 whose state could drift from Firefox.
 
+Packaged recovery validation uses Gecko's real shutdown and startup path rather
+than serialising Fluxion state in a test fixture. One app launch creates tabs in
+the Build workspace, a pinned tab, a native group, and a native split pair;
+content state is flushed through each frame loader before Gecko performs an
+attempted clean quit. A second app launch must recover all of those structures
+from the same profile. The gate then opens a real private window, confirms that
+Browser Memory returns its private state and cannot be enabled, quits, and
+launches normal mode once more. That final launch must retain the normal session
+while the private URL is absent from tabs, Places history, and Browser Memory.
+This exercises the same SessionStore and private-origin boundaries users rely
+on; Fluxion does not maintain a shadow session database.
+
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,
 collapse state, tab membership, closed-group recovery, and crash restoration
