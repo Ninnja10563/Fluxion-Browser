@@ -1821,34 +1821,35 @@
       throw new Error("Fluxion: native Gecko split-view integration failed");
     }
     setSplitOrientation(primary, FluxionSplitViews.STACKED);
-    window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-      const [topPanel, bottomPanel] = splitView.panels;
-      const topRect = topPanel?.getBoundingClientRect();
-      const bottomRect = bottomPanel?.getBoundingClientRect();
-      const stacked = gBrowser.tabpanels.getAttribute("orient") === "vertical" &&
-        gBrowser.tabpanels.getAttribute("data-fluxion-split-orientation") === "stacked" &&
-        topRect?.height > 100 && bottomRect?.height > 100 && bottomRect.top > topRect.top;
-      setSplitOrientation(primary, FluxionSplitViews.SIDE_BY_SIDE);
-      window.requestAnimationFrame(() => window.requestAnimationFrame(() => {
-        const leftRect = topPanel?.getBoundingClientRect();
-        const rightRect = bottomPanel?.getBoundingClientRect();
-        const sideBySide = gBrowser.tabpanels.getAttribute("orient") === "horizontal" &&
-          gBrowser.tabpanels.getAttribute("data-fluxion-split-orientation") === "side-by-side" &&
-          leftRect?.width > 100 && rightRect?.width > 100 && rightRect.left > leftRect.left;
-        if (stacked && sideBySide) {
-          Services.prefs.setStringPref(
-            "fluxion.splitview.health",
-            "native-side-by-side-and-stacked-rendered",
-          );
-        } else {
-          Services.prefs.setStringPref(
-            "fluxion.splitview.visual.error",
-            `stacked=${Boolean(stacked)} sideBySide=${Boolean(sideBySide)}`,
-          );
-        }
-        Services.prefs.savePrefFile(null);
-      }));
-    }));
+    const [topPanel, bottomPanel] = splitView.panels;
+    const topRect = topPanel?.getBoundingClientRect();
+    const bottomRect = bottomPanel?.getBoundingClientRect();
+    const stacked = gBrowser.tabpanels.getAttribute("orient") === "vertical" &&
+      gBrowser.tabpanels.getAttribute("data-fluxion-split-orientation") === "stacked" &&
+      topRect?.height > 100 && bottomRect?.height > 100 && bottomRect.top > topRect.top;
+    setSplitOrientation(primary, FluxionSplitViews.SIDE_BY_SIDE);
+    const leftRect = topPanel?.getBoundingClientRect();
+    const rightRect = bottomPanel?.getBoundingClientRect();
+    const sideBySide = gBrowser.tabpanels.getAttribute("orient") === "horizontal" &&
+      gBrowser.tabpanels.getAttribute("data-fluxion-split-orientation") === "side-by-side" &&
+      leftRect?.width > 100 && rightRect?.width > 100 && rightRect.left > leftRect.left;
+    if (stacked && sideBySide) {
+      Services.prefs.setStringPref(
+        "fluxion.splitview.health",
+        "native-side-by-side-and-stacked-rendered",
+      );
+    } else {
+      const rect = value => value
+        ? `${Math.round(value.left)},${Math.round(value.top)},${Math.round(value.width)},${Math.round(value.height)}`
+        : "missing";
+      Services.prefs.setStringPref(
+        "fluxion.splitview.visual.error",
+        `stacked=${Boolean(stacked)}[${rect(topRect)}|${rect(bottomRect)}] ` +
+          `sideBySide=${Boolean(sideBySide)}[${rect(leftRect)}|${rect(rightRect)}] ` +
+          `orient=${gBrowser.tabpanels.getAttribute("orient") || "none"}`,
+      );
+    }
+    Services.prefs.savePrefFile(null);
     scheduleRender();
   }
   if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {
