@@ -46,25 +46,40 @@ function generator() {
   return embedder;
 }
 
+async function embedAndStore(url, text) {
+  const db = await connection();
+  const engine = generator();
+  const result = await engine.embed(text);
+  const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
+  const rows = await db.executeCached("SELECT id FROM pages WHERE url=:url", { url });
+  if (!rows.length) return;
+  const rowid = rows[0].getResultByName("id");
+  await db.executeTransaction(async () => {
+    await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
+    await db.executeCached("INSERT INTO page_vectors(rowid,embedding) VALUES(:rowid,:vector)", { rowid, vector });
+  });
+}
+
+function withTimeout(promise, milliseconds) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("Fluxion local embedding timed out")), milliseconds)),
+  ]);
+}
+
 export const FluxionMemoryStore = Object.freeze({
   async upsert(page) {
     const db = await connection();
-    const engine = generator();
-    const result = await engine.embed(page.embeddingText);
-    const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
-    await db.executeTransaction(async () => {
-      await db.executeCached(`INSERT INTO pages
+    await db.executeCached(`INSERT INTO pages
         (url,title,description,headings,content,workspace,tab_group,last_visit,indexed_at)
         VALUES (:url,:title,:description,:headings,:content,:workspace,:tabGroup,:lastVisit,:indexedAt)
         ON CONFLICT(url) DO UPDATE SET title=excluded.title, description=excluded.description,
         headings=excluded.headings, content=excluded.content, workspace=excluded.workspace,
         tab_group=excluded.tab_group, last_visit=excluded.last_visit,
         visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, page);
-      const rows = await db.executeCached("SELECT id FROM pages WHERE url=:url", { url: page.url });
-      const rowid = rows[0].getResultByName("id");
-      await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
-      await db.executeCached("INSERT INTO page_vectors(rowid,embedding) VALUES(:rowid,:vector)", { rowid, vector });
-    });
+    // Embedding is intentionally detached: an unavailable model must never
+    // delay navigation, durable evidence storage, or lexical recall.
+    embedAndStore(page.url, page.embeddingText).catch(Cu.reportError);
   },
 
   async search(query, limit = 12) {
@@ -76,7 +91,7 @@ export const FluxionMemoryStore = Object.freeze({
     let semantic = [];
     try {
       const engine = generator();
-      const result = await engine.embed(query);
+      const result = await withTimeout(engine.embed(query), 1500);
       const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
       semantic = await db.executeCached(`SELECT pages.*, matches.distance FROM
         (SELECT rowid,distance FROM page_vectors WHERE embedding MATCH :vector AND k=:limit) matches

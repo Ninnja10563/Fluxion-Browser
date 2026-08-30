@@ -155,7 +155,10 @@ returns a bounded plain-data record to privileged browser code. No history or
 page evidence is sent to a network AI provider.
 Gecko generates and queries embeddings on-device in deferred chunks, monitors
 chunk latency, and disables the model path when hardware requirements are not
-met. Fluxion merges those results with exact/fuzzy Places evidence, recency,
+met. Fluxion commits bounded lexical evidence before starting best-effort
+embedding work and applies a short timeout to semantic queries, so model startup
+can never block navigation, indexing, or lexical recall. Fluxion merges semantic
+results with exact/fuzzy Places evidence, recency,
 visit frequency, and active-workspace relevance. Exact evidence has an explicit
 ranking advantage over a weaker semantic neighbour.
 

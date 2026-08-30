@@ -146,6 +146,7 @@ test("Browser Memory exposes functional privacy controls", () => {
 test("enriched Browser Memory crosses the content boundary through a narrow Gecko actor", () => {
   const config = runtimeConfig;
   const child = fs.readFileSync(path.join(root, "actors/FluxionMemoryPageChild.sys.mjs"), "utf8");
+  const store = fs.readFileSync(path.join(root, "modules/FluxionMemoryStore.sys.mjs"), "utf8");
   assert.match(config, /registerWindowActor\("FluxionMemoryPage"/);
   assert.match(config, /rootFileURI\.replace\(\/\\\/\$\/, ""\)/);
   assert.match(macBuilder, /ditto "\$fluxion_root\/actors" "\$bundled_root\/actors"/);
@@ -156,6 +157,8 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
   assert.match(memory, /FluxionMemoryPolicy\.canIndexPage/);
   assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
+  assert.match(store, /embedAndStore\(page\.url, page\.embeddingText\)\.catch/);
+  assert.match(store, /withTimeout\(engine\.embed\(query\), 1500\)/);
 });
 
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {
