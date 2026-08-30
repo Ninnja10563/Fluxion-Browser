@@ -856,52 +856,59 @@
         /^https:\/\/example\.com\//.test(tab.linkedBrowser?.currentURI?.spec || "")
       );
       if (ordinaryTab) ui.selectTab(ordinaryTab);
-      const labels = new Set(commandItems().map(item => item.label));
-      const required = [
-        "Find in Page", "Bookmark This Page", "Save Page As", "Print", "Zoom In",
-        "Toggle Full Screen", "Extensions & Themes", "Developer Tools",
-      ];
-      open("all");
-      input.value = "zoom in";
-      render(false);
-      const zoomInIndex = visibleItems.findIndex(item => item.label === "Zoom In");
-      const before = window.ZoomManager.zoom;
-      if (zoomInIndex >= 0) {
-        setActive(zoomInIndex);
-        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-      }
-      window.requestAnimationFrame(() => {
-        const enlarged = window.ZoomManager.zoom > before && layer.hidden;
+      const runPaletteCommandGate = (attempt = 0) => {
+        if (!ui.nativeCommandAvailable("cmd_find") && attempt < 40) {
+          window.setTimeout(() => runPaletteCommandGate(attempt + 1), 250);
+          return;
+        }
+        const labels = new Set(commandItems().map(item => item.label));
+        const required = [
+          "Find in Page", "Bookmark This Page", "Save Page As", "Print", "Zoom In",
+          "Toggle Full Screen", "Extensions & Themes", "Developer Tools",
+        ];
         open("all");
-        input.value = "actual size";
+        input.value = "zoom in";
         render(false);
-        const resetIndex = visibleItems.findIndex(item => item.label === "Actual Size");
-        if (resetIndex >= 0) {
-          setActive(resetIndex);
+        const zoomInIndex = visibleItems.findIndex(item => item.label === "Zoom In");
+        const before = window.ZoomManager.zoom;
+        if (zoomInIndex >= 0) {
+          setActive(zoomInIndex);
           input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
         }
         window.requestAnimationFrame(() => {
-          const reset = Math.abs(window.ZoomManager.zoom - 1) < 0.001 && layer.hidden;
-          const complete = required.every(label => labels.has(label));
-          if (previousTab?.parentNode) ui.selectTab(previousTab);
+          const enlarged = window.ZoomManager.zoom > before && layer.hidden;
           open("all");
-          input.value = "zoom";
+          input.value = "actual size";
           render(false);
-          if (complete && enlarged && reset && visibleItems.some(item => item.label === "Zoom In")) {
-            Services.prefs.setStringPref(
-              "fluxion.paletteCommands.health",
-              "native-page-commands-listed-and-keyboard-zoom-round-tripped",
-            );
-          } else {
-            Services.prefs.setStringPref(
-              "fluxion.paletteCommands.visual.error",
-              `complete=${complete} enlarged=${enlarged} reset=${reset} ` +
-                `missing=${required.filter(label => !labels.has(label)).join("|")}`,
-            );
+          const resetIndex = visibleItems.findIndex(item => item.label === "Actual Size");
+          if (resetIndex >= 0) {
+            setActive(resetIndex);
+            input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
           }
-          Services.prefs.savePrefFile(null);
+          window.requestAnimationFrame(() => {
+            const reset = Math.abs(window.ZoomManager.zoom - 1) < 0.001 && layer.hidden;
+            const complete = required.every(label => labels.has(label));
+            if (previousTab?.parentNode) ui.selectTab(previousTab);
+            open("all");
+            input.value = "zoom";
+            render(false);
+            if (complete && enlarged && reset && visibleItems.some(item => item.label === "Zoom In")) {
+              Services.prefs.setStringPref(
+                "fluxion.paletteCommands.health",
+                "native-page-commands-listed-and-keyboard-zoom-round-tripped",
+              );
+            } else {
+              Services.prefs.setStringPref(
+                "fluxion.paletteCommands.visual.error",
+                `complete=${complete} enlarged=${enlarged} reset=${reset} ` +
+                  `missing=${required.filter(label => !labels.has(label)).join("|")}`,
+              );
+            }
+            Services.prefs.savePrefFile(null);
+          });
         });
-      });
+      };
+      runPaletteCommandGate();
     }, 32000);
   }
   if (
