@@ -68,6 +68,7 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(sessionRecovery, /requestTabStateFlush/);
   assert.match(sessionRecovery, /Promise\.race/);
   assert.match(sessionRecovery, /SessionStore\.getWindowState/);
+  assert.match(sessionRecovery, /new Set\(\[\.\.\.groupTabs, \.\.\.splitTabs, pinned\]\)/);
   assert.match(sessionRecovery, /PlacesUtils\.history\.fetch/);
   assert.match(sessionRecovery, /FluxionMemory\.search/);
   assert.match(sessionRecovery, /PrivateBrowsingUtils\.isWindowPrivate/);

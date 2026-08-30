@@ -111,10 +111,11 @@
     window.gBrowser.selectedTab = splitTabs[0];
     write("fluxion.recovery.seed.progress", "native-layout-created");
 
-    const keep = new Set(Object.values(urls));
+    const keep = new Set([...groupTabs, ...splitTabs, pinned]);
     for (const tab of [...window.gBrowser.tabs]) {
-      if (!keep.has(tabURL(tab))) window.gBrowser.removeTab(tab, { animate: false });
+      if (!keep.has(tab)) window.gBrowser.removeTab(tab, { animate: false });
     }
+    write("fluxion.recovery.seed.progress", "extra-tabs-removed");
     await wait(1800);
     write("fluxion.recovery.seed.progress", "flushing-sessionstore");
     await flushTabs([...groupTabs, ...splitTabs, pinned]);
