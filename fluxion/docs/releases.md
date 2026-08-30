@@ -56,7 +56,7 @@ passes:
    A collapsed-group gate then creates a separate three-page native group and
    one following page, collapses the group around its selected member, and
    rejects the build unless Flow retains exactly that active row with an honest
-   `+2` hidden count. It drives Arrow Down into the following page, requires
+   `+2` hidden count. It drives Arrow Down into the next visible page, requires
    Gecko selection and DOM focus to agree after rerender, then selects another
    hidden member and requires that page to replace the retained row without
    expanding the group.

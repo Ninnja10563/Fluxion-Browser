@@ -3157,6 +3157,12 @@
           activeRow?.isConnected && activeRow.dataset.active === "true" &&
           groupItem.querySelector(".fluxion-group-count")?.textContent === "+2"
         );
+        const rowsBeforeMove = renderedTabElements();
+        const activeIndex = rowsBeforeMove.indexOf(activeRow);
+        const expectedNextRow = rowsBeforeMove[
+          FluxionFlowNavigation.rovingIndex(rowsBeforeMove.length, activeIndex, "ArrowDown")
+        ];
+        const expectedNextTab = expectedNextRow?._fluxionTab;
         activeRow?.focus();
         activeRow?.dispatchEvent(new window.KeyboardEvent("keydown", {
           key: "ArrowDown",
@@ -3166,9 +3172,13 @@
           const inactiveItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
             candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
           );
+          const keyboardSelectedTab = gBrowser.selectedTab;
+          const keyboardFocusedTab = document.activeElement?._fluxionTab;
           const keyboardContinuous = Boolean(
-            gBrowser.selectedTab === following &&
-            document.activeElement?._fluxionTab === following &&
+            expectedNextTab &&
+            !fixtureTabs.includes(expectedNextTab) &&
+            keyboardSelectedTab === expectedNextTab &&
+            keyboardFocusedTab === expectedNextTab &&
             inactiveItem?.querySelectorAll(".fluxion-tab").length === 0
           );
           gBrowser.selectedTab = fixtureTabs[2];
@@ -3193,7 +3203,11 @@
           } else {
             finish(
               `initial=${initiallyContinuous} keyboard=${keyboardContinuous} ` +
-                `replacement=${replacementVisible} collapsed=${Boolean(collapsedGroup.collapsed)}`,
+                `replacement=${replacementVisible} collapsed=${Boolean(collapsedGroup.collapsed)} ` +
+                `activeIndex=${activeIndex} rows=${rowsBeforeMove.length} ` +
+                `expected=${expectedNextTab?.getAttribute("label") || "none"} ` +
+                `selected=${keyboardSelectedTab?.getAttribute("label") || "none"} ` +
+                `focused=${keyboardFocusedTab?.getAttribute("label") || "none"}`,
             );
           }
         });

@@ -26,7 +26,7 @@ continuity in Flow:
   collapsed-inactive, replacement, and malformed states;
 - add a packaged macOS gate that creates a real three-page Gecko group,
   collapses it, requires exactly one active row and a `+2` count, drives Arrow
-  Down into the following ungrouped page, and selects another member to prove
+  Down into the next visible page, and selects another member to prove
   the visible row is replaced correctly.
 
 Gecko remains the sole owner of tab membership, selection, group collapse,
