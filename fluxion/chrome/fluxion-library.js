@@ -669,15 +669,24 @@
         const rootRect = root.getBoundingClientRect();
         const navRect = nav.getBoundingClientRect();
         const contentRect = content.getBoundingClientRect();
-        if (data.history.some(item => item.url === url) &&
-            data.bookmarks.some(item => item.url === url) &&
-            data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf") &&
+        const hasHistory = data.history.some(item => item.url === url);
+        const hasBookmark = data.bookmarks.some(item => item.url === url);
+        const hasDownload = data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf");
+        if (hasHistory && hasBookmark && hasDownload &&
             rootRect.left >= flowRect?.right - 1 && navRect.left >= rootRect.left - 1 &&
             contentRect.left >= navRect.right - 1) {
           Services.prefs.setStringPref("fluxion.library.visual.health", "history-bookmarks-downloads-rendered");
           Services.prefs.setStringPref(
             "fluxion.library.geometry.visual.health",
             "library-nav-and-content-clear-flow",
+          );
+          Services.prefs.savePrefFile(null);
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.library.visual.error",
+            `history=${hasHistory} bookmark=${hasBookmark} download=${hasDownload} ` +
+              `flow=${flowRect?.left},${flowRect?.right} root=${rootRect.left},${rootRect.right} ` +
+              `nav=${navRect.left},${navRect.right} content=${contentRect.left},${contentRect.right}`,
           );
           Services.prefs.savePrefFile(null);
         }
