@@ -67,6 +67,9 @@ The current preview is runnable and includes:
 - a restrained trailing Fluxion toolbar menu for new/private windows, palette,
   tab search, Library, settings, and About, replacing Firefox's inherited
   hamburger while keeping the same commands available from the macOS menu bar;
+- native Page and Tools submenus for find, save, print, zoom, fullscreen,
+  extensions, developer tools, and privacy controls, retaining complete command
+  access on platforms without macOS's persistent application menu bar;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

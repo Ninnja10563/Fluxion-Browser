@@ -541,6 +541,8 @@
     return item;
   };
   const nativeSeparator = () => xul("menuseparator");
+  const nativeCommand = (label, command, attributes = {}) =>
+    xul("menuitem", { label, command, ...attributes });
 
   nativeFlowPopup.append(
     nativeAction("Command Palette…", () => window.FluxionPalette?.open("all"), {
@@ -653,6 +655,52 @@
     nativeAction("Downloads", () => window.FluxionLibrary?.open("downloads")),
   );
   toolbarLibraryMenu.appendChild(toolbarLibraryPopup);
+  const toolbarPageMenu = xul("menu", { label: "Page" });
+  const toolbarPagePopup = xul("menupopup", { id: "fluxion-toolbar-page-popup" });
+  const toolbarPageCommands = new Map([
+    ["find", nativeCommand("Find in Page…", "cmd_find", { acceltext: toolbarAccel("⌘F", "Ctrl+F") })],
+    ["save", nativeCommand("Save Page As…", "Browser:SavePage", { acceltext: toolbarAccel("⌘S", "Ctrl+S") })],
+    ["print", nativeCommand("Print…", "cmd_print", { acceltext: toolbarAccel("⌘P", "Ctrl+P") })],
+    ["zoomOut", nativeCommand("Zoom Out", "cmd_fullZoomReduce", { acceltext: toolbarAccel("⌘−", "Ctrl+−") })],
+    ["zoomReset", nativeCommand("Actual Size", "cmd_fullZoomReset", { acceltext: toolbarAccel("⌘0", "Ctrl+0") })],
+    ["zoomIn", nativeCommand("Zoom In", "cmd_fullZoomEnlarge", { acceltext: toolbarAccel("⌘+", "Ctrl++") })],
+    ["fullscreen", nativeCommand("Enter Full Screen", "View:FullScreen", {
+      acceltext: toolbarAccel("⌃⌘F", "F11"),
+    })],
+  ]);
+  toolbarPagePopup.append(
+    toolbarPageCommands.get("find"),
+    toolbarPageCommands.get("save"),
+    toolbarPageCommands.get("print"),
+    nativeSeparator(),
+    toolbarPageCommands.get("zoomOut"),
+    toolbarPageCommands.get("zoomReset"),
+    toolbarPageCommands.get("zoomIn"),
+    nativeSeparator(),
+    toolbarPageCommands.get("fullscreen"),
+  );
+  toolbarPageMenu.appendChild(toolbarPagePopup);
+
+  const toolbarToolsMenu = xul("menu", { label: "Tools" });
+  const toolbarToolsPopup = xul("menupopup", { id: "fluxion-toolbar-tools-popup" });
+  const toolbarAddonsItem = nativeCommand("Extensions & Themes", "Tools:Addons", {
+    acceltext: toolbarAccel("⇧⌘A", "Ctrl+Shift+A"),
+  });
+  const toolbarDeveloperItem = nativeAction("Developer Tools", () => {
+    document.getElementById("menu_devToolbox")?.doCommand();
+  }, { acceltext: toolbarAccel("⌥⌘I", "F12") });
+  on(toolbarToolsPopup, "popupshowing", event => {
+    if (event.target === toolbarToolsPopup) {
+      toolbarDeveloperItem.toggleAttribute("disabled", !document.getElementById("menu_devToolbox"));
+    }
+  });
+  toolbarToolsPopup.append(
+    toolbarAddonsItem,
+    toolbarDeveloperItem,
+    nativeSeparator(),
+    nativeAction("Privacy & Site Data…", () => openProductTab("about:preferences#privacy")),
+  );
+  toolbarToolsMenu.appendChild(toolbarToolsPopup);
   toolbarMenuPopup.append(
     toolbarNewTabItem,
     nativeAction("New Window", () => window.OpenBrowserWindow(), {
@@ -670,6 +718,8 @@
     }),
     nativeSeparator(),
     toolbarLibraryMenu,
+    toolbarPageMenu,
+    toolbarToolsMenu,
     nativeAction("Fluxion Settings…", () => openProductTab("about:preferences"), {
       acceltext: toolbarAccel("⌘,", "Ctrl+,"),
     }),
@@ -2660,6 +2710,49 @@
       }
       Services.prefs.savePrefFile(null);
     }, 25500);
+  }
+  if (Services.env.get("FLUXION_VISUAL_PAGE_MENU_TEST") === "1") {
+    window.setTimeout(() => {
+      const requiredCommands = new Map([
+        ["find", "cmd_find"],
+        ["save", "Browser:SavePage"],
+        ["print", "cmd_print"],
+        ["zoomOut", "cmd_fullZoomReduce"],
+        ["zoomReset", "cmd_fullZoomReset"],
+        ["zoomIn", "cmd_fullZoomEnlarge"],
+        ["fullscreen", "View:FullScreen"],
+      ]);
+      const commandsWired = [...requiredCommands].every(([name, command]) =>
+        toolbarPageCommands.get(name)?.getAttribute("command") === command &&
+        Boolean(document.getElementById(command))
+      );
+      const toolsWired = toolbarAddonsItem.getAttribute("command") === "Tools:Addons" &&
+        Boolean(document.getElementById("Tools:Addons")) &&
+        Boolean(document.getElementById("menu_devToolbox")) &&
+        toolbarDeveloperItem.getAttribute("label") === "Developer Tools";
+      const before = window.ZoomManager.zoom;
+      toolbarPageCommands.get("zoomIn").doCommand();
+      window.requestAnimationFrame(() => {
+        const enlarged = window.ZoomManager.zoom > before;
+        toolbarPageCommands.get("zoomReset").doCommand();
+        window.requestAnimationFrame(() => {
+          const reset = Math.abs(window.ZoomManager.zoom - 1) < 0.001;
+          if (commandsWired && toolsWired && enlarged && reset) {
+            Services.prefs.setStringPref(
+              "fluxion.pageMenu.health",
+              "native-page-tools-wired-and-zoom-round-tripped",
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.pageMenu.visual.error",
+              `commands=${commandsWired} tools=${toolsWired} enlarged=${enlarged} reset=${reset} ` +
+                `zoom=${before},${window.ZoomManager.zoom}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+        });
+      });
+    }, 26500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);

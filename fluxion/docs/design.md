@@ -30,6 +30,9 @@ SigmaOS is deliberately excluded as a reference.
   address/security field. Secondary product routes live under one trailing
   geometric Fluxion menu and remain duplicated in the macOS menu bar; the
   inherited Firefox application hamburger is not part of the visible product.
+- The trailing menu uses shallow native Library, Page, and Tools groups. Page
+  commands inherit Gecko's own enabled state and shortcuts; lower-frequency
+  actions do not become permanent toolbar icons merely because PanelUI is gone.
 - Flow is 232px expanded, a 44px icon rail when compact, and a 3px reveal edge
   in Focus mode. Focus reveals the complete 232px surface over the live page;
   it never changes the content rectangle merely to inspect or select a tab.

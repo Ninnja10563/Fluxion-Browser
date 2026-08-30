@@ -8,6 +8,27 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.29 completes the Fluxion toolbar menu as a cross-platform command
+surface:
+
+- add a concise Page submenu for Find in Page, Save Page, Print, Zoom Out,
+  Actual Size, Zoom In, and Full Screen;
+- add a Tools submenu for Firefox-compatible extensions, the real page
+  Developer Tools, and Fluxion's Privacy & Site Data controls;
+- bind Page items directly to Gecko's existing XUL command nodes so disabled
+  state, keyboard behavior, PDF handling, print dialogs, save dialogs, zoom,
+  and fullscreen remain browser-native;
+- delegate Developer Tools to Gecko's dynamically registered toolbox command
+  instead of exposing a second debugging implementation;
+- retain platform-correct shortcut labels and the restrained native menu
+  hierarchy without turning the toolbar into a wall of icons;
+- require the packaged browser to resolve every native command and execute a
+  real Zoom In → Actual Size round trip before a DMG can publish.
+
+This closes the page-command access gap created when Fluxion removed Firefox's
+visible PanelUI, especially on Windows and Linux where a persistent macOS-style
+application menu bar is not available.
+
 Version 0.28 gives the visible toolbar a distinct Fluxion application menu:
 
 - replace Firefox's inherited hamburger button with one quiet geometric

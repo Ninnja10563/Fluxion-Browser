@@ -187,6 +187,22 @@ test("the trailing toolbar uses a working Fluxion menu instead of Firefox PanelU
   assert.match(macVerifier, /product-menu-mounted-and-native-command-executed/);
 });
 
+test("Fluxion page tools delegate to Gecko commands and round-trip native zoom", () => {
+  for (const command of [
+    "cmd_find", "Browser:SavePage", "cmd_print", "cmd_fullZoomReduce",
+    "cmd_fullZoomReset", "cmd_fullZoomEnlarge", "View:FullScreen", "Tools:Addons",
+  ]) {
+    assert.match(chrome, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(chrome, /document\.getElementById\("menu_devToolbox"\)\?\.doCommand/);
+  assert.match(chrome, /about:preferences#privacy/);
+  assert.match(chrome, /toolbarPageCommands\.get\("zoomIn"\)\.doCommand/);
+  assert.match(chrome, /toolbarPageCommands\.get\("zoomReset"\)\.doCommand/);
+  assert.match(chrome, /window\.ZoomManager\.zoom > before/);
+  assert.match(macVerifier, /FLUXION_VISUAL_PAGE_MENU_TEST=1/);
+  assert.match(macVerifier, /native-page-tools-wired-and-zoom-round-tripped/);
+});
+
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
   assert.match(
     chrome,

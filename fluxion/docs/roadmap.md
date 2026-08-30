@@ -55,6 +55,9 @@ controls work and its failure paths have been tested.
   semantics, inert keyboard-revealable non-reflowing Focus overlay, complete
   native tab-status descriptions, and static reduced-motion loading state
   implemented; broader platform audit remains)
+- cross-platform command access after replacing PanelUI (native Fluxion Page
+  and Tools menus with Gecko find/save/print/zoom/fullscreen/extensions and
+  DevTools delegation implemented)
 - performance, battery, memory, and hundreds-of-tabs profiling (packaged
   200-tab Flow render gate and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
