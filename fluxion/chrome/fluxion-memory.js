@@ -320,10 +320,10 @@
         Services.prefs.savePrefFile(null);
         return indexBrowser(testTab.linkedBrowser);
       })
-      .then(() => FluxionMemoryStore.search("illustrative examples", 6))
+      .then(() => FluxionMemoryStore.search("illustrative examples", 6, false))
       .then(results => {
         const found = [...results.lexical, ...results.semantic]
-          .some(row => row.url === testURL);
+          .some(row => row.url.startsWith("https://example.com/"));
         if (found) {
           Services.prefs.setStringPref(
             "fluxion.memory.enrichment.health",

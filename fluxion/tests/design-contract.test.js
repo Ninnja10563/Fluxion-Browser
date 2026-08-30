@@ -159,6 +159,7 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
   assert.match(store, /embedAndStore\(page\.url, page\.embeddingText\)\.catch/);
   assert.match(store, /withTimeout\(engine\.embed\(query\), 1500\)/);
+  assert.match(store, /SELECT count\(\*\) AS count FROM page_vectors/);
 });
 
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {

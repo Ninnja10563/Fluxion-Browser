@@ -93,7 +93,7 @@ export const FluxionMemoryStore = Object.freeze({
     embedAndStore(page.url, page.embeddingText).catch(Cu.reportError);
   },
 
-  async search(query, limit = 12) {
+  async search(query, limit = 12, includeSemantic = true) {
     const db = await connection();
     const pattern = `%${query.replace(/[\\%_]/g, value => `\\${value}`)}%`;
     const lexical = await db.executeCached(`SELECT *, 0.0 AS distance FROM pages
@@ -101,12 +101,15 @@ export const FluxionMemoryStore = Object.freeze({
       OR content LIKE :pattern ESCAPE '\\' ORDER BY last_visit DESC LIMIT :limit`, { pattern, limit });
     let semantic = [];
     try {
-      const engine = generator();
-      const result = await withTimeout(engine.embed(query), 1500);
-      const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
-      semantic = await db.executeCached(`SELECT pages.*, matches.distance FROM
-        (SELECT rowid,distance FROM page_vectors WHERE embedding MATCH :vector AND k=:limit) matches
-        JOIN pages ON pages.id=matches.rowid WHERE matches.distance < 0.72`, { vector, limit });
+      const counts = await db.execute("SELECT count(*) AS count FROM page_vectors");
+      if (includeSemantic && counts[0].getResultByName("count") > 0) {
+        const engine = generator();
+        const result = await withTimeout(engine.embed(query), 1500);
+        const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
+        semantic = await db.executeCached(`SELECT pages.*, matches.distance FROM
+          (SELECT rowid,distance FROM page_vectors WHERE embedding MATCH :vector AND k=:limit) matches
+          JOIN pages ON pages.id=matches.rowid WHERE matches.distance < 0.72`, { vector, limit });
+      }
     } catch (error) {
       Cu.reportError(error);
     }
