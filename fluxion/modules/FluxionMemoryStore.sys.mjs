@@ -1,4 +1,5 @@
 import { Sqlite } from "resource://gre/modules/Sqlite.sys.mjs";
+import { AsyncShutdown } from "resource://gre/modules/AsyncShutdown.sys.mjs";
 import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
 import { EmbeddingsGenerator } from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
 import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
@@ -7,6 +8,10 @@ const FILE_NAME = "fluxion_memory.sqlite";
 const SCHEMA_VERSION = 1;
 let connectionPromise;
 let embedder;
+let shutdownStarted = false;
+let shutdownBlockerRegistered = false;
+let shutdownPromise;
+let shutdownStep = "Database has not been opened";
 
 function vectorFrom(result, expectedSize) {
   let value = result?.output ?? result;
@@ -17,29 +22,84 @@ function vectorFrom(result, expectedSize) {
 }
 
 async function connection() {
-  if (!connectionPromise) connectionPromise = (async () => {
-    const db = await Sqlite.openConnection({ path: PathUtils.join(PathUtils.profileDir, FILE_NAME), extensions: ["vec"] });
-    await db.execute("PRAGMA journal_mode = WAL");
-    const version = await db.getSchemaVersion();
-    if (version > SCHEMA_VERSION) throw new Error("Fluxion Memory database is newer than this build");
-    if (version < 1) {
-      const generator = EmbeddingsGenerator.forPlaces();
-      await db.executeTransaction(async () => {
-        await db.execute(`CREATE TABLE pages (
-          id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
-          description TEXT NOT NULL, headings TEXT NOT NULL, content TEXT NOT NULL,
-          workspace TEXT NOT NULL, tab_group TEXT NOT NULL, last_visit INTEGER NOT NULL,
-          visit_count INTEGER NOT NULL DEFAULT 1, indexed_at INTEGER NOT NULL
-        )`);
-        await db.execute(`CREATE VIRTUAL TABLE page_vectors USING vec0(
-          embedding FLOAT[${generator.embeddingSize}] distance_metric=cosine
-        )`);
-        await db.setSchemaVersion(SCHEMA_VERSION);
-      });
-    }
-    return db;
-  })();
+  if (shutdownStarted) throw new Error("Fluxion Memory database is shutting down");
+  if (!connectionPromise) {
+    ensureShutdownBlocker();
+    shutdownStep = "Opening database";
+    connectionPromise = (async () => {
+      const db = await Sqlite.openConnection({ path: PathUtils.join(PathUtils.profileDir, FILE_NAME), extensions: ["vec"] });
+      try {
+        await db.execute("PRAGMA journal_mode = WAL");
+        const version = await db.getSchemaVersion();
+        if (version > SCHEMA_VERSION) throw new Error("Fluxion Memory database is newer than this build");
+        if (version < 1) {
+          const generator = EmbeddingsGenerator.forPlaces();
+          await db.executeTransaction(async () => {
+            await db.execute(`CREATE TABLE pages (
+              id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
+              description TEXT NOT NULL, headings TEXT NOT NULL, content TEXT NOT NULL,
+              workspace TEXT NOT NULL, tab_group TEXT NOT NULL, last_visit INTEGER NOT NULL,
+              visit_count INTEGER NOT NULL DEFAULT 1, indexed_at INTEGER NOT NULL
+            )`);
+            await db.execute(`CREATE VIRTUAL TABLE page_vectors USING vec0(
+              embedding FLOAT[${generator.embeddingSize}] distance_metric=cosine
+            )`);
+            await db.setSchemaVersion(SCHEMA_VERSION);
+          });
+        }
+        shutdownStep = "Database open";
+        return db;
+      } catch (error) {
+        shutdownStep = "Closing database after initialization failure";
+        try {
+          await db.close();
+        } catch (closeError) {
+          Cu.reportError(closeError);
+        }
+        shutdownStep = "Database closed after initialization failure";
+        throw error;
+      }
+    })();
+  }
   return connectionPromise;
+}
+
+async function closeConnection() {
+  shutdownStarted = true;
+  shutdownPromise ||= (async () => {
+    const pending = connectionPromise;
+    if (!pending) {
+      shutdownStep = "Database was never opened";
+      return;
+    }
+    shutdownStep = "Waiting for database connection";
+    let db;
+    try {
+      db = await pending;
+    } catch (_) {
+      shutdownStep = "Database initialization already failed";
+      connectionPromise = undefined;
+      return;
+    }
+    shutdownStep = "Closing database";
+    try {
+      await db.close();
+      shutdownStep = "Database closed";
+    } finally {
+      connectionPromise = undefined;
+    }
+  })();
+  return shutdownPromise;
+}
+
+function ensureShutdownBlocker() {
+  if (shutdownBlockerRegistered) return;
+  AsyncShutdown.profileBeforeChange.addBlocker(
+    "Fluxion Memory: close enriched history database",
+    closeConnection,
+    () => ({ step: shutdownStep, connectionOpen: Boolean(connectionPromise) }),
+  );
+  shutdownBlockerRegistered = true;
 }
 
 function generator() {
@@ -159,5 +219,9 @@ export const FluxionMemoryStore = Object.freeze({
   async clear() {
     const db = await connection();
     await db.executeTransaction(async () => { await db.execute("DELETE FROM page_vectors"); await db.execute("DELETE FROM pages"); });
+  },
+
+  async shutdown() {
+    await closeConnection();
   },
 });

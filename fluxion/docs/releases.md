@@ -111,6 +111,9 @@ passes:
    accents, pin/group/split state, and keyword-only Browser Memory choice,
    switches between both remembered pages, opens and quits a private session,
    and restores normal mode again without enabling ML.
+   The seed opens the enriched Browser Memory SQLite store, so each clean quit
+   also proves its profile-before-change shutdown blocker awaited connection
+   closure instead of relying on process termination.
    Publication is blocked if any workspace metadata changes or the private URL
    appears in restored tabs, Gecko Places, or Browser Memory.
 2. Inspect the checks and screenshot. Fix the source instead of editing an

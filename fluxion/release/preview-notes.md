@@ -33,6 +33,9 @@ to choose between semantic models and Browser Memory itself:
 - preserve Keywords only through normal restoration, a private-window launch,
   and the following normal restart without admitting private history or
   momentarily enabling ML;
+- close the enriched Browser Memory SQLite connection through Gecko's profile
+  shutdown barrier, including a quit that races initialization, rather than
+  leaving profile writes to process teardown;
 - drive the real Settings selector in the packaged macOS app, prove lexical
   recall still finds extracted page evidence with ML disabled, restore local
   semantic mode, and reject packaging unless every state is exact.

@@ -330,6 +330,14 @@ before indexing begins, so a keyword-only profile does not briefly start the
 model pipeline. Re-enabling semantic search uses only Gecko's packaged local
 embedder and never routes page data through the generative AI provider.
 
+The enriched-page store owns its SQLite lifetime explicitly. Before its first
+connection begins opening, the module registers a Gecko
+`AsyncShutdown.profileBeforeChange` blocker. Clean profile shutdown waits for
+that blocker to close the connection and any queued statements; initialization
+failures close their partially opened connection as well. Once shutdown begins,
+the module refuses new database work. This prevents late profile writes and
+keeps session restoration from depending on an unclean process exit.
+
 Firefox excludes private-window visits before they enter Places, and Fluxion
 also refuses Browser Memory operations from private windows. Pages containing
 password fields are rejected before storage. Auth, mail, payment, billing, and

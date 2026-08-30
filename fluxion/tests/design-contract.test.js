@@ -511,6 +511,9 @@ test("Browser Memory exposes functional privacy controls", () => {
   assert.match(memory, /FluxionMemoryStore\.search\(query, 18, useEmbeddings\)/);
   assert.match(store, /async clearVectors\(\)/);
   assert.match(store, /async vectorCount\(\)/);
+  assert.match(store, /AsyncShutdown\.profileBeforeChange\.addBlocker/);
+  assert.match(store, /await db\.close\(\)/);
+  assert.match(store, /if \(shutdownStarted\) throw new Error/);
   assert.match(settings, /id = "fluxion-memory-embedding-provider"/);
   assert.match(settings, /\["disabled", "Keywords only"\]/);
   assert.match(runtimeConfig, /places\.semanticHistory\.featureGate", embeddingsEnabled/);
