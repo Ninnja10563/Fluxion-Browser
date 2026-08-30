@@ -31,7 +31,7 @@ controls work and its failure paths have been tested.
 - opt-in Gecko-local embeddings, sensitive-origin/domain exclusions, hybrid
   history ranker, and complete vector deletion controls (implemented)
 - privacy-gated heading/body extraction and richer local metadata (implemented)
-- inspectable Browser Memory answer evidence
+- inspectable Browser Memory answer evidence (implemented)
 
 ## Phase 5 — optional AI providers
 

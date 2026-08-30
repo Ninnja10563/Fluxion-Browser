@@ -162,6 +162,15 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.match(store, /SELECT count\(\*\) AS count FROM page_vectors/);
 });
 
+test("Browser Memory answers expose source evidence and never invent empty results", () => {
+  const grounding = fs.readFileSync(path.join(root, "chrome/core/memory-grounding.js"), "utf8");
+  assert.match(memory, /answer: FluxionMemoryGrounding\.ground/);
+  assert.match(palette, /Generated only from the local source records below/);
+  assert.match(grounding, /Nothing relevant was found in Browser Memory/);
+  assert.match(grounding, /sourceURL: best\.url/);
+  assert.doesNotMatch(grounding, /fetch\(|AIProvider|OpenAI|Ollama/);
+});
+
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {
   assert.match(chrome, /gBrowser\.addTabSplitView/);
   assert.match(chrome, /splitView\.unsplitTabs/);

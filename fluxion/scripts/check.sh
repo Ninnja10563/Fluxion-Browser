@@ -20,6 +20,7 @@ node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
 node --check chrome/core/memory-content.js
 node --check chrome/core/memory-ranking.js
+node --check chrome/core/memory-grounding.js
 node --check chrome/core/peek.js
 node --check chrome/core/settings.js
 node --check chrome/core/shortcuts.js

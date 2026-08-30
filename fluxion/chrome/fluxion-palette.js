@@ -43,7 +43,7 @@
       background: transparent; color: var(--fluxion-ink);
     }
     #fluxion-palette {
-      width: min(560px, calc(100vw - 36px)); max-height: min(470px, calc(100vh - 96px));
+      width: min(590px, calc(100vw - 36px)); max-height: min(540px, calc(100vh - 96px));
       display: flex; flex-direction: column; overflow: hidden;
       border: 1px solid var(--fluxion-line); border-radius: 6px;
       background: var(--fluxion-bg-raised); box-shadow: 0 8px 24px rgba(0,0,0,.18);
@@ -78,11 +78,26 @@
     .fluxion-palette-result-label,
     .fluxion-palette-result-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fluxion-palette-result-detail { color: var(--fluxion-muted); font-size: 11px; }
+    .fluxion-palette-result-evidence {
+      display: -webkit-box; overflow: hidden; margin-top: 2px;
+      color: color-mix(in srgb, var(--fluxion-ink) 72%, transparent); font-size: 11px;
+      line-height: 1.35; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    }
     .fluxion-palette-result-kind {
       color: var(--fluxion-muted); font-size: 10px; letter-spacing: .035em;
       text-transform: uppercase;
     }
     .fluxion-palette-empty { padding: 24px 14px; color: var(--fluxion-muted); text-align: center; }
+    .fluxion-memory-answer {
+      padding: 11px 12px 10px; border-bottom: 1px solid var(--fluxion-line);
+      color: var(--fluxion-ink); line-height: 1.4;
+    }
+    .fluxion-memory-answer-label {
+      display: block; margin-bottom: 3px; color: var(--fluxion-muted);
+      font-size: 9.5px; font-weight: 600; letter-spacing: .07em; text-transform: uppercase;
+    }
+    .fluxion-memory-answer-text { font-size: 12.5px; }
+    .fluxion-memory-answer-note { margin-top: 4px; color: var(--fluxion-muted); font-size: 10.5px; }
     @keyframes fluxion-palette-in {
       from { opacity: 0; transform: translateY(-2px); }
     }
@@ -405,7 +420,7 @@
       return;
     }
     activeIndex = (index + visibleItems.length) % visibleItems.length;
-    [...results.children].forEach((element, resultIndex) => {
+    [...results.querySelectorAll(".fluxion-palette-result")].forEach((element, resultIndex) => {
       const selected = resultIndex === activeIndex;
       element.setAttribute("aria-selected", String(selected));
       if (selected) {
@@ -415,10 +430,11 @@
     });
   }
 
-  function renderItems(items, emptyText) {
+  function renderItems(items, emptyText, lead = null) {
     visibleItems = items;
     activeIndex = Math.min(activeIndex, Math.max(visibleItems.length - 1, 0));
     results.replaceChildren();
+    if (lead) results.appendChild(lead);
     if (!visibleItems.length) {
       const empty = create("div", "fluxion-palette-empty");
       empty.textContent = emptyText;
@@ -437,9 +453,12 @@
       label.textContent = item.label;
       const detail = create("span", "fluxion-palette-result-detail");
       detail.textContent = item.detail || "";
+      const evidence = create("span", "fluxion-palette-result-evidence");
+      evidence.textContent = item.evidence || "";
       const kind = create("span", "fluxion-palette-result-kind");
       kind.textContent = item.kind || "";
       main.append(label, detail);
+      if (item.evidence) main.appendChild(evidence);
       button.append(main, kind);
       button.addEventListener("pointermove", () => setActive(index));
       button.addEventListener("click", () => choose(index));
@@ -473,13 +492,40 @@
       private: "Browser Memory is unavailable in private windows",
     };
     status.textContent = stateLabels[response.state] || stateLabels.ready;
-    const items = response.results.map(row => ({
+    const answer = create("div", "fluxion-memory-answer");
+    answer.setAttribute("role", "status");
+    const answerLabel = create("span", "fluxion-memory-answer-label");
+    answerLabel.textContent = response.answer?.state === "grounded" ? "From your browsing evidence" : "Browser Memory";
+    const answerText = create("div", "fluxion-memory-answer-text");
+    answerText.textContent = response.answer?.text || "Nothing relevant was found in Browser Memory.";
+    answer.append(answerLabel, answerText);
+    if (response.answer?.state === "grounded") {
+      const note = create("div", "fluxion-memory-answer-note");
+      note.textContent = "Generated only from the local source records below";
+      answer.appendChild(note);
+    }
+    const evidenceByUrl = new Map((response.answer?.evidence || []).map(item => [item.url, item]));
+    const items = response.results.map(row => {
+      const evidence = evidenceByUrl.get(row.url);
+      return {
       label: row.title || row.url,
-      detail: row.url,
-      kind: "Memory",
+      detail: evidence
+        ? `${evidence.domain} · ${evidence.visitLabel}${evidence.workspace ? ` · ${evidence.workspace}` : ""}`
+        : row.url,
+      evidence: evidence?.excerpt || "",
+      kind: evidence?.reasons?.[0] || "Memory",
       run: () => openUrl(row.url),
-    }));
-    renderItems(items, "Nothing relevant was found in Browser Memory");
+      };
+    });
+    renderItems(items, "No source records support this memory", answer);
+    if (
+      Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" &&
+      response.answer?.state === "grounded" &&
+      response.answer.evidence.some(item => item.excerpt)
+    ) {
+      Services.prefs.setStringPref("fluxion.memory.grounding.health", "grounded-evidence-visible");
+      Services.prefs.savePrefFile(null);
+    }
   }
 
   function render(includePlaces = false) {
@@ -584,6 +630,13 @@
       input.value = "example.com";
       render(false);
     }, 1200);
+  }
+  if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1") {
+    window.setTimeout(() => {
+      open("memory");
+      input.value = "example";
+      render(false);
+    }, 5200);
   }
   Services.prefs.setStringPref("fluxion.palette.health", "command-palette-loaded");
   Services.prefs.savePrefFile(null);

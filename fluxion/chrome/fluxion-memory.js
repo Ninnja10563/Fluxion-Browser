@@ -1,4 +1,4 @@
-/* global Services, ChromeUtils, Ci, Cu, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking */
+/* global Services, ChromeUtils, Ci, Cu, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking, FluxionMemoryGrounding */
 (function initialiseFluxionMemory(window) {
   "use strict";
 
@@ -121,11 +121,15 @@
   async function search(searchText, currentWorkspace = "") {
     const query = String(searchText || "").trim();
     if (PrivateBrowsingUtils.isWindowPrivate(window)) {
-      return { results: [], state: "private" };
+      return { results: [], state: "private", answer: FluxionMemoryGrounding.ground(query, []) };
     }
     const keyword = keywordRows(query);
     if (!enabled() || query.length < 2) {
-      return { results: keyword, state: enabled() ? "ready" : "disabled" };
+      return {
+        results: keyword,
+        state: enabled() ? "ready" : "disabled",
+        answer: FluxionMemoryGrounding.ground(query, keyword),
+      };
     }
 
     let semantic = [];
@@ -166,14 +170,16 @@
       const tab = openTabsByUrl.get(row.url);
       return tab ? { ...row, workspace: window.FluxionUI.tabWorkspace(tab) } : row;
     };
-    return {
-      results: FluxionMemoryRanking.mergeMemoryResults(
+    const results = FluxionMemoryRanking.mergeMemoryResults(
         query,
         [...keyword, ...enrichedKeyword].map(annotate),
         semantic.map(annotate),
         { currentWorkspace, limit: 12 },
-      ),
+      );
+    return {
+      results,
       state,
+      answer: FluxionMemoryGrounding.ground(query, results),
     };
   }
 

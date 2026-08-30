@@ -8,6 +8,22 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.13 makes Browser Memory recall inspectable and grounded:
+
+- present a concise best match derived only from the top stored history record;
+- show a bounded source excerpt, match reason, domain, visit timing, workspace,
+  and tab-group context alongside each result;
+- rank exact heading, description, and page-body evidence ahead of weaker
+  semantic neighbors;
+- return an explicit insufficient-evidence response instead of inventing a
+  browsing memory;
+- keep the entire answer path deterministic and functional without generative
+  AI or a network provider.
+
+The macOS release gate now extracts a real HTTPS page, reads its evidence back
+from the packaged local database, renders the grounded recall surface, and
+requires that evidence to be visible before the DMG is created.
+
 Version 0.12 enriches local Browser Memory with page evidence:
 
 - extract bounded titles, descriptions, headings, and useful article/main text

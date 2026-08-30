@@ -34,3 +34,17 @@ test("recency, frequency, and workspace relevance break close rankings", () => {
   ], { now, currentWorkspace: "build" });
   assert.equal(results[0].url, "https://new.example/article");
 });
+
+test("exact body and heading evidence outrank unrelated semantic results", () => {
+  const results = mergeMemoryResults("websocket authentication", [{
+    url: "https://docs.example/realtime",
+    title: "Realtime guide",
+    headings: "WebSocket authentication",
+    content: "Authenticate a socket with a short-lived token.",
+  }], [{
+    url: "https://example.com/networking",
+    title: "General networking",
+    distance: 0.04,
+  }]);
+  assert.equal(results[0].url, "https://docs.example/realtime");
+});

@@ -197,6 +197,12 @@ content locally, making remembered ideas discoverable even when their words do
 not appear in the page title. Private pages, password forms, sensitive routes,
 and excluded domains never enter this enriched store.
 
+Each recall now begins with a concise best match grounded in the returned
+history record. Source rows show the matching local excerpt, why it matched,
+when it was visited, and its workspace. Fluxion says that nothing relevant was
+found when no stored record supports the query; it does not invent a browsing
+memory or require a generative model.
+
 ## License
 
 Fluxion-authored code is available under the repository's MIT license. Preview

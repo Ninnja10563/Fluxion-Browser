@@ -16,10 +16,16 @@
     if (!needle) return 0;
     const title = normalise(row.title);
     const url = normalise(row.url);
+    const description = normalise(row.description);
+    const headings = normalise(row.headings);
+    const content = normalise(row.content);
     if (title === needle || url === needle) return 8;
     if (title.startsWith(needle) || url.includes(needle)) return 5;
+    if (headings.includes(needle) || description.includes(needle)) return 4.5;
+    if (content.includes(needle)) return 3.2;
     const tokens = needle.split(" ");
-    if (tokens.every(token => title.includes(token) || url.includes(token))) return 3;
+    const evidence = `${title} ${url} ${description} ${headings} ${content}`;
+    if (tokens.every(token => evidence.includes(token))) return 2.4;
     return 0;
   }
 

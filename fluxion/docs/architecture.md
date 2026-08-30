@@ -162,6 +162,14 @@ results with exact/fuzzy Places evidence, recency,
 visit frequency, and active-workspace relevance. Exact evidence has an explicit
 ranking advantage over a weaker semantic neighbour.
 
+Recall answers are deterministic projections of the ranked records, not model
+output. The answer names only the top record and retains its source URL. Every
+visible result includes a bounded excerpt from its stored description, headings,
+or page text plus explicit match reasons and visit context. An empty result set
+has no source and produces only the insufficient-evidence message. This keeps
+Browser Memory useful with generative AI disabled and makes every claim
+inspectable against local browser data.
+
 Firefox excludes private-window visits before they enter Places, and Fluxion
 also refuses Browser Memory operations from private windows. Pages containing
 password fields are rejected before storage. Auth, mail, payment, billing, and
