@@ -48,6 +48,11 @@ passes:
    the same drop application path, performs an edge reorder, and rejects the
    build unless native pair order, orientation, and tab order all match the
    pointer intent.
+   A Focus gate then collapses Flow to its real 3px layout rail, requires its
+   translated controls to be inert and keyboard discoverable, reveals the
+   232px surface, and compares Gecko's content rectangle before and after. Any
+   horizontal shift or resize blocks publication; the revealed overlay remains
+   visible in the inspection screenshot.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

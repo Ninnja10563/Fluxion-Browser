@@ -8,6 +8,27 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.27 turns Focus into a complete distraction-free Flow mode:
+
+- collapse browser chrome to a quiet 3px reveal rail while the live webpage
+  uses the reclaimed width;
+- reveal the full 232px Flow over the page on hover, rail click, keyboard focus,
+  Enter, Space, or Right Arrow, without resizing or shifting page content;
+- dismiss with Escape or when both pointer and focus leave the surface, using a
+  short delay that prevents accidental closure while crossing the edge;
+- remove hidden workspace, tab, and footer controls from keyboard and assistive
+  interaction with the native `inert` boundary, then restore them on reveal;
+- expose literal collapsed/expanded state and a focusable reveal rail to
+  assistive technology;
+- use only a short transform and restrained edge shadow, with immediate motion
+  removal when the system or Fluxion reduced-motion preference requests it;
+- require the packaged macOS app to prove hidden and revealed geometry,
+  accessibility state, and an unchanged live Gecko content rectangle before a
+  DMG can publish.
+
+The overlay is browser chrome, not webpage content, and it does not introduce a
+second tab or rendering surface.
+
 Version 0.26 makes Flow tab dragging spatial and split-aware:
 
 - retain narrow top and bottom edge zones for precise before/after reordering;

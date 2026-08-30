@@ -29,7 +29,8 @@ The current preview is runnable and includes:
   command-palette, context-menu, and direct center-drop creation, Shift-drag
   stacking, precise edge-drop reordering, order swapping, separation, and
   orientation-aware native session restoration;
-- three-state sidebar (expanded, compact, focus rail);
+- three-state sidebar with expanded and compact layouts plus a 3px Focus rail
+  that reveals the full Flow as a non-reflowing pointer or keyboard overlay;
 - persistent workspace creation, renaming, reordering, symbols, restrained
   accents, deletion with safe tab migration, and drag-to-workspace movement;
 - a restrained Fluxion navigation skin over Gecko's native security-aware URL

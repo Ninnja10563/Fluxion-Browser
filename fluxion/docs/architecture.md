@@ -62,6 +62,15 @@ into windows whose chrome document is `browser.xhtml`. The Flow sidebar is
 inserted beside Firefox's browser deck. It renders state from native tabs; it
 does not create a parallel rendering or navigation stack.
 
+Flow separates layout ownership from its visible surface. Expanded and Compact
+give the outer rail a 232px or 44px layout width. Focus reduces that rail to 3px
+and positions the same 232px Flow surface over Gecko's browser deck with a
+transform. Revealing it therefore does not resize, reload, or replace the live
+content panel. While translated offscreen the surface is `inert`; pointer and
+keyboard reveal restore its existing native-tab controls, and Escape returns
+focus to the rail. Reduced-motion settings remove both rail and surface
+transitions.
+
 Workspace membership is stored as a persisted SessionStore tab attribute.
 The current workspace and sidebar state use Firefox preferences. This keeps
 crash recovery atomic with the actual tab session and avoids a second database

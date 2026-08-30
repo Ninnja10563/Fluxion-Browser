@@ -27,7 +27,11 @@ SigmaOS is deliberately excluded as a reference.
   skin. Security state, permission anchors, autofill, and URL completion stay
   on Firefox's audited implementations.
 - Flow is 232px expanded, a 44px icon rail when compact, and a 3px reveal edge
-  in focus mode.
+  in Focus mode. Focus reveals the complete 232px surface over the live page;
+  it never changes the content rectangle merely to inspect or select a tab.
+- The Focus rail is itself keyboard reachable. Hidden Flow controls are inert,
+  Enter/Space/Right Arrow reveal them, Escape returns focus to the rail, and
+  leaving the surface dismisses it only after a short crossing tolerance.
 - Ordinary tabs are flat 32px rows. A selected tab uses one quiet surface and a
   2px workspace-coloured rule; it does not become a floating card.
 - Pinned tabs are icon-only and spatially stable. Their titles remain available

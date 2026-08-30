@@ -156,6 +156,20 @@ test("compact Flow uses the researched 44px rail", () => {
   assert.match(chrome, /data-state="compact"[^}]*width:\s*44px/);
 });
 
+test("Focus Flow is an inert, keyboard-revealable overlay that preserves page geometry", () => {
+  assert.match(chrome, /data-state="focus"[^}]*width:\s*3px/);
+  assert.match(chrome, /\.fluxion-surface/);
+  assert.match(chrome, /translateX\(calc\(-100% \+ 3px\)\)/);
+  assert.match(chrome, /surface\.inert = !surfaceVisible/);
+  assert.match(chrome, /\["Enter", " ", "ArrowRight"\]/);
+  assert.match(chrome, /event\.key === "Escape"/);
+  assert.match(chrome, /prefers-reduced-motion/);
+  assert.match(chrome, /contentAfter\.left - contentBefore\.left/);
+  assert.match(chrome, /contentAfter\.width - contentBefore\.width/);
+  assert.match(macVerifier, /FLUXION_VISUAL_FOCUS_TEST=1/);
+  assert.match(macVerifier, /focus-rail-overlay-revealed-without-content-reflow/);
+});
+
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
   assert.match(
     chrome,

@@ -56,7 +56,7 @@ if (( provider_attempt == 40 )); then
 fi
 
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_STATUS_TEST=1 FLUXION_VISUAL_DROP_TEST=1 FLUXION_VISUAL_ORGANISATION_TEST=1 FLUXION_VISUAL_SCALE_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 FLUXION_VISUAL_AI_COMPARE_TEST=1 FLUXION_VISUAL_LIBRARY_TEST=1 FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1 FLUXION_VISUAL_PERMISSIONS_TEST=1 FLUXION_VISUAL_ABOUT_TEST=1 \
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_STATUS_TEST=1 FLUXION_VISUAL_DROP_TEST=1 FLUXION_VISUAL_FOCUS_TEST=1 FLUXION_VISUAL_ORGANISATION_TEST=1 FLUXION_VISUAL_SCALE_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 FLUXION_VISUAL_AI_COMPARE_TEST=1 FLUXION_VISUAL_LIBRARY_TEST=1 FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1 FLUXION_VISUAL_PERMISSIONS_TEST=1 FLUXION_VISUAL_ABOUT_TEST=1 \
   "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
@@ -96,10 +96,11 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.splitview.health", "native-side-by-side-and-stacked-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.status.health", "native-gecko-tab-states-projected-and-controllable")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.drop.health", "native-drag-reorder-and-two-orientation-split")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.focus.health", "focus-rail-overlay-revealed-without-content-reflow")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.organisation.health", "local-proposal-visible-and-confirmation-required")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.scale.health", "200-tabs-rendered-with-roving-keyboard-focus")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then
-    printf 'Verified: Fluxion chrome, spatial drag reorder and native drag-to-split, live Gecko tab status and media controls, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native side-by-side and stacked split views loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, non-reflowing Focus overlay, spatial drag reorder and native drag-to-split, live Gecko tab status and media controls, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native side-by-side and stacked split views loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
@@ -149,6 +150,7 @@ if [[ -f "$profile/prefs.js" ]]; then
   grep 'user_pref("fluxion\.splitview\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.status\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.drop\.visual\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.focus\.visual\.error"' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,80p' "$provider_log" >&2
 sed -n '1,160p' "$log" >&2

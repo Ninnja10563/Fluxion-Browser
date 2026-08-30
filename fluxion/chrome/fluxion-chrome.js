@@ -182,15 +182,41 @@
     }
     #fluxion-flow {
       width: 232px; min-width: 232px; max-width: 232px;
-      color: var(--fluxion-ink); background: var(--fluxion-bg);
-      border-inline-end: 1px solid var(--fluxion-line);
-      font: menu; font-size: 12px; overflow: hidden;
+      position: relative; z-index: 4; color: var(--fluxion-ink); background: transparent;
+      font: menu; font-size: 12px; overflow: visible;
       transition: width var(--fluxion-fast), min-width var(--fluxion-fast), max-width var(--fluxion-fast);
     }
+    .fluxion-surface {
+      width: 100%; min-width: 0; height: 100%; display: flex; flex-direction: column;
+      overflow: hidden; background: var(--fluxion-bg);
+      border-inline-end: 1px solid var(--fluxion-line);
+      transform: translateX(0); transform-origin: left center;
+      transition: transform var(--fluxion-fast), box-shadow var(--fluxion-fast);
+    }
     #fluxion-flow[data-state="compact"] { width: 44px; min-width: 44px; max-width: 44px; }
-    #fluxion-flow[data-state="focus"] { width: 3px; min-width: 3px; max-width: 3px; cursor: e-resize; }
-    #fluxion-flow[data-state="focus"] > * { opacity: 0; pointer-events: none; }
-    #fluxion-flow[data-state="focus"]:hover { background: var(--fluxion-accent); }
+    #fluxion-flow[data-state="focus"] {
+      width: 3px; min-width: 3px; max-width: 3px; cursor: pointer;
+      background: var(--fluxion-line);
+    }
+    #fluxion-flow[data-state="focus"]:hover,
+    #fluxion-flow[data-state="focus"]:focus-visible { background: var(--fluxion-accent); }
+    #fluxion-flow[data-state="focus"]:focus-visible {
+      outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
+    }
+    #fluxion-flow[data-state="focus"] > .fluxion-surface {
+      position: absolute; inset-block: 0; inset-inline-start: 0; width: 232px;
+      pointer-events: none; transform: translateX(calc(-100% + 3px)); box-shadow: none;
+    }
+    #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
+      pointer-events: auto; transform: translateX(0);
+      box-shadow: 8px 0 22px rgba(0, 0, 0, .16);
+    }
+    :root[chromedir="rtl"] #fluxion-flow[data-state="focus"] > .fluxion-surface {
+      transform: translateX(calc(100% - 3px)); transform-origin: right center;
+    }
+    :root[chromedir="rtl"] #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
+      transform: translateX(0); box-shadow: -8px 0 22px rgba(0, 0, 0, .16);
+    }
     #fluxion-flow * { box-sizing: border-box; }
     .fluxion-header {
       min-height: 38px; display: flex; align-items: center; gap: 6px;
@@ -260,6 +286,7 @@
     :root[data-fluxion-density="compact"] .fluxion-tab { height: 28px; }
     :root[data-fluxion-density="roomy"] .fluxion-tab { height: 36px; }
     :root[data-fluxion-no-motion] #fluxion-flow,
+    :root[data-fluxion-no-motion] .fluxion-surface,
     :root[data-fluxion-no-motion] .fluxion-tab,
     :root[data-fluxion-no-motion] .fluxion-group-disclosure { transition: none !important; }
     :root[data-fluxion-no-motion] .fluxion-status[data-kind="loading"]::before {
@@ -436,7 +463,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-footer { padding-inline: 7px; }
     #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
-      #fluxion-flow, .fluxion-tab { transition-duration: 0.01ms !important; }
+      #fluxion-flow, .fluxion-surface, .fluxion-tab { transition-duration: 0.01ms !important; }
       .fluxion-status[data-kind="loading"]::before { animation: none !important; }
     }
   `;
@@ -615,7 +642,8 @@
   };
   updateModeButtonTitle();
   modeButton.setAttribute("aria-label", "Cycle sidebar size");
-  modeButton.textContent = "‹";
+  modeButton.textContent = flow.dataset.state === "expanded" ? "‹" :
+    flow.dataset.state === "compact" ? "·" : "›";
   header.append(mark, name, modeButton);
 
   const workspaceBar = create("div", "fluxion-workspaces");
@@ -654,9 +682,11 @@
   dragAnnouncement.setAttribute("aria-live", "polite");
   dragAnnouncement.setAttribute("aria-atomic", "true");
   footer.append(newTabButton, count);
-  flow.append(
+  const surface = create("div", "fluxion-surface");
+  surface.append(
     header, workspaceBar, pinnedLabel, pinnedTabs, openLabel, tabsList, footer, dragAnnouncement,
   );
+  flow.append(surface);
   browser.prepend(flow);
 
   function tabWorkspace(tab) {
@@ -1023,9 +1053,69 @@
     scheduleRender();
   }
 
+  let focusHideTimer = 0;
+  let focusPointerInside = false;
+
+  function clearFocusHideTimer() {
+    if (!focusHideTimer) return;
+    window.clearTimeout(focusHideTimer);
+    focusHideTimer = 0;
+  }
+
+  function syncSidebarAccessibility(revealed = flow.dataset.revealed === "true") {
+    const focused = flow.dataset.state === "focus";
+    const surfaceVisible = !focused || revealed;
+    surface.inert = !surfaceVisible;
+    if (focused) {
+      flow.tabIndex = 0;
+      flow.setAttribute("aria-label", surfaceVisible ? "Flow sidebar, expanded over page" : "Reveal Flow sidebar");
+      flow.setAttribute("aria-expanded", String(surfaceVisible));
+    } else {
+      flow.tabIndex = -1;
+      flow.setAttribute("aria-label", "Fluxion Flow");
+      flow.removeAttribute("aria-expanded");
+    }
+  }
+
+  function revealFocusSurface({ focusActive = false } = {}) {
+    if (flow.dataset.state !== "focus") return false;
+    clearFocusHideTimer();
+    flow.dataset.revealed = "true";
+    syncSidebarAccessibility(true);
+    if (focusActive) {
+      window.requestAnimationFrame(() => {
+        const active = tabElements.get(gBrowser.selectedTab) || renderedTabElements()[0] || modeButton;
+        active?.focus();
+      });
+    }
+    return true;
+  }
+
+  function hideFocusSurface({ force = false } = {}) {
+    if (flow.dataset.state !== "focus") return false;
+    clearFocusHideTimer();
+    if (!force && (focusPointerInside || surface.contains(document.activeElement))) return false;
+    if (force && surface.contains(document.activeElement)) flow.focus();
+    flow.dataset.revealed = "false";
+    syncSidebarAccessibility(false);
+    return true;
+  }
+
+  function scheduleFocusSurfaceHide() {
+    clearFocusHideTimer();
+    focusHideTimer = window.setTimeout(() => {
+      focusHideTimer = 0;
+      hideFocusSurface();
+    }, 160);
+  }
+
   function setSidebarState(value) {
     const state = SIDEBAR_STATES.includes(value) ? value : "expanded";
     flow.dataset.state = state;
+    clearFocusHideTimer();
+    focusPointerInside = false;
+    flow.dataset.revealed = "false";
+    syncSidebarAccessibility(false);
     Services.prefs.setStringPref(PREF_SIDEBAR, state);
     Services.prefs.savePrefFile(null);
     modeButton.textContent = state === "expanded" ? "‹" : state === "compact" ? "·" : "›";
@@ -1036,6 +1126,8 @@
     const index = SIDEBAR_STATES.indexOf(flow.dataset.state);
     setSidebarState(SIDEBAR_STATES[(index + 1) % SIDEBAR_STATES.length]);
   }
+
+  syncSidebarAccessibility(false);
 
   function setTabDensity(value) {
     const density = ["compact", "standard", "roomy"].includes(value) ? value : "standard";
@@ -2019,8 +2111,37 @@
   on(modeButton, "click", cycleSidebar);
   on(window, "FluxionShortcutsChanged", updateModeButtonTitle);
   on(addWorkspaceButton, "click", addWorkspace);
+  on(flow, "pointerenter", () => {
+    focusPointerInside = true;
+    revealFocusSurface();
+  });
+  on(flow, "pointerleave", () => {
+    focusPointerInside = false;
+    scheduleFocusSurfaceHide();
+  });
+  on(flow, "focusin", () => {
+    revealFocusSurface();
+  });
+  on(flow, "focusout", () => {
+    scheduleFocusSurfaceHide();
+  });
   on(flow, "click", event => {
-    if (flow.dataset.state === "focus" && event.target === flow) cycleSidebar();
+    if (flow.dataset.state === "focus" && event.target === flow) revealFocusSurface();
+  });
+  on(flow, "keydown", event => {
+    if (flow.dataset.state !== "focus") return;
+    if (event.key === "Escape" && flow.dataset.revealed === "true") {
+      event.preventDefault();
+      event.stopPropagation();
+      flow.focus();
+      hideFocusSurface({ force: true });
+      return;
+    }
+    if (event.target === flow && ["Enter", " ", "ArrowRight"].includes(event.key)) {
+      event.preventDefault();
+      event.stopPropagation();
+      revealFocusSurface({ focusActive: true });
+    }
   });
   on(newTabButton, "click", () => {
     openWorkspaceTab();
@@ -2068,6 +2189,7 @@
     }
   }, true);
   on(window, "unload", () => {
+    clearFocusHideTimer();
     while (cleanup.length) cleanup.pop()();
     contextMenu.remove();
     groupMenu.remove();
@@ -2097,6 +2219,8 @@
     refresh: scheduleRender,
     renameWorkspace,
     reverseSplitView,
+    revealSidebar: revealFocusSurface,
+    hideSidebar: hideFocusSurface,
     separateSplitView,
     setSplitOrientation,
     setSidebarState,
@@ -2381,6 +2505,50 @@
         });
       });
     }, 3600);
+  }
+  if (Services.env.get("FLUXION_VISUAL_FOCUS_TEST") === "1") {
+    window.setTimeout(() => {
+      setSidebarState("focus");
+      window.setTimeout(() => {
+        focusPointerInside = false;
+        hideFocusSurface({ force: true });
+        const railRect = flow.getBoundingClientRect();
+        const hiddenSurfaceRect = surface.getBoundingClientRect();
+        const contentBefore = gBrowser.tabpanels.getBoundingClientRect();
+        const hidden = railRect.width >= 2 && railRect.width <= 4 &&
+          surface.inert && flow.tabIndex === 0 && flow.getAttribute("aria-expanded") === "false" &&
+          hiddenSurfaceRect.width >= 228 && hiddenSurfaceRect.width <= 236 &&
+          Math.abs(hiddenSurfaceRect.right - railRect.right) <= 1.5;
+        revealFocusSurface();
+        window.setTimeout(() => {
+          const revealedSurfaceRect = surface.getBoundingClientRect();
+          const contentAfter = gBrowser.tabpanels.getBoundingClientRect();
+          const contentStable = Math.abs(contentAfter.left - contentBefore.left) <= 1 &&
+            Math.abs(contentAfter.width - contentBefore.width) <= 1;
+          const revealed = flow.dataset.revealed === "true" && !surface.inert &&
+            flow.getAttribute("aria-expanded") === "true" &&
+            revealedSurfaceRect.width >= 228 && revealedSurfaceRect.width <= 236 &&
+            Math.abs(revealedSurfaceRect.left - railRect.left) <= 1.5;
+          if (hidden && revealed && contentStable) {
+            Services.prefs.setStringPref(
+              "fluxion.focus.health",
+              "focus-rail-overlay-revealed-without-content-reflow",
+            );
+          } else {
+            const rect = value =>
+              `${Math.round(value.left)},${Math.round(value.top)},${Math.round(value.width)},${Math.round(value.height)}`;
+            Services.prefs.setStringPref(
+              "fluxion.focus.visual.error",
+              `hidden=${hidden} revealed=${revealed} stable=${contentStable} ` +
+                `rail=[${rect(railRect)}] hiddenSurface=[${rect(hiddenSurfaceRect)}] ` +
+                `revealedSurface=[${rect(revealedSurfaceRect)}] ` +
+                `content=[${rect(contentBefore)}|${rect(contentAfter)}] inert=${surface.inert}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+        }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
+      }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
+    }, 5200);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);
