@@ -2995,12 +2995,26 @@
         closeButton.dispatchEvent(new window.MouseEvent("click", {
           ...pointer, bubbles: true, button: 0, detail: 1,
         }));
+        const started = closingRow.classList.contains("is-closing");
+        const holdStarted = Boolean(pointerCloseHold?.tabs.has(closing));
+        const tracked = closingTabs.has(closing);
         window.setTimeout(() => {
           const repeatTarget = document.elementFromPoint(pointer.clientX, pointer.clientY);
           const protectedTarget = Boolean(repeatTarget && !repeatTarget.closest?.(".fluxion-close"));
           const held = !closing.parentNode && closingRow.isConnected &&
             closingRow.classList.contains("is-closing") &&
             Math.abs(followingRow.getBoundingClientRect().top - followingTop) <= 1;
+          const checkpoint = [
+            `started=${started}`,
+            `holdStarted=${holdStarted}`,
+            `tracked=${tracked}`,
+            `parent=${Boolean(closing.parentNode)}`,
+            `nativeClosing=${Boolean(closing.closing)}`,
+            `connected=${closingRow.isConnected}`,
+            `class=${closingRow.classList.contains("is-closing")}`,
+            `hold=${Boolean(pointerCloseHold?.tabs.has(closing))}`,
+            `delta=${Math.round(followingRow.getBoundingClientRect().top - followingTop)}`,
+          ].join(" ");
           repeatTarget?.dispatchEvent(new window.MouseEvent("click", {
             ...pointer, bubbles: true, button: 0, detail: 1,
           }));
@@ -3023,7 +3037,8 @@
               } else {
                 Services.prefs.setStringPref(
                   "fluxion.closeStability.visual.error",
-                  `protected=${protectedTarget} held=${held} neighbours=${Boolean(neighboursSafe)} compressed=${Boolean(compressed)}`,
+                  `protected=${protectedTarget} held=${held} neighbours=${Boolean(neighboursSafe)} ` +
+                    `compressed=${Boolean(compressed)} ${checkpoint}`,
                 );
               }
               Services.prefs.savePrefFile(null);
