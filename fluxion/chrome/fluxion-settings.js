@@ -37,12 +37,12 @@
     #fluxion-settings {
       position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
       inset-inline-end: 0; z-index: 3; min-width: 0;
-      display: block; color: var(--fluxion-ink); background: var(--fluxion-bg-raised); overflow: hidden;
+      display: flex; color: var(--fluxion-ink); background: var(--fluxion-bg-raised); overflow: hidden;
       font: menu; font-size: 13px;
     }
     .fluxion-settings-nav {
-      box-sizing: border-box; position: absolute; inset-block: 0; inset-inline-start: 0;
-      width: 184px; min-width: 184px; padding: 28px 14px; overflow: auto;
+      box-sizing: border-box; flex: 0 0 184px; width: 184px; min-width: 184px;
+      padding: 28px 14px; overflow: auto;
       background: var(--fluxion-bg); border-inline-end: 1px solid var(--fluxion-line);
     }
     .fluxion-settings-nav h1 { margin: 0 8px 22px; font-size: 16px; letter-spacing: -.02em; }
@@ -53,8 +53,8 @@
     .fluxion-settings-nav button:hover { color: var(--fluxion-ink); background: var(--fluxion-hover); }
     .fluxion-settings-nav button[aria-current="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); font-weight: 600; }
     .fluxion-settings-main {
-      box-sizing: border-box; height: 100%; min-width: 420px; max-width: 720px;
-      margin-inline-start: 184px; padding: 34px 36px 80px; overflow: auto;
+      box-sizing: border-box; flex: 0 1 720px; height: 100%; min-width: 420px;
+      padding: 34px 36px 80px; overflow: auto;
     }
     .fluxion-settings-section[hidden] { display: none; }
     .fluxion-settings-section > h2 { margin: 0 0 6px; font-size: 22px; font-weight: 650; letter-spacing: -.025em; }
@@ -129,8 +129,8 @@
     .fluxion-about-mark h3 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.015em; }
     .fluxion-about-mark p { margin: 4px 0 0; color: var(--fluxion-muted); line-height: 1.4; }
     @media (max-width: 760px) {
-      .fluxion-settings-nav { width: 150px; min-width: 150px; }
-      .fluxion-settings-main { min-width: 360px; max-width: none; margin-inline-start: 150px; padding-inline: 24px; }
+      .fluxion-settings-nav { flex-basis: 150px; width: 150px; min-width: 150px; }
+      .fluxion-settings-main { min-width: 360px; padding-inline: 24px; }
       .fluxion-setting { grid-template-columns: 1fr; gap: 8px; }
       .fluxion-switch { justify-self: start; }
       .fluxion-permission-row { grid-template-columns: minmax(100px, 1fr) auto auto; }
