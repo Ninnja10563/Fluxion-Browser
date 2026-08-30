@@ -106,6 +106,8 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   bundled_root="$resources/fluxion"
   mkdir -p "$bundled_root"
   ditto "$fluxion_root/chrome" "$bundled_root/chrome"
+  ditto "$fluxion_root/actors" "$bundled_root/actors"
+  ditto "$fluxion_root/modules" "$bundled_root/modules"
   ditto "$fluxion_root/newtab" "$bundled_root/newtab"
   ditto "$fluxion_root/about" "$bundled_root/about"
   ditto "$fluxion_root/assets" "$bundled_root/assets"

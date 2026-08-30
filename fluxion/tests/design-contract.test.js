@@ -148,6 +148,8 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   const child = fs.readFileSync(path.join(root, "actors/FluxionMemoryPageChild.sys.mjs"), "utf8");
   assert.match(config, /registerWindowActor\("FluxionMemoryPage"/);
   assert.match(config, /rootFileURI\.replace\(\/\\\/\$\/, ""\)/);
+  assert.match(macBuilder, /ditto "\$fluxion_root\/actors" "\$bundled_root\/actors"/);
+  assert.match(macBuilder, /ditto "\$fluxion_root\/modules" "\$bundled_root\/modules"/);
   assert.match(config, /safeForUntrustedWebProcess: true/);
   assert.match(child, /input\[type="password"\]/);
   assert.match(child, /script, style, noscript, nav, footer, form/);
