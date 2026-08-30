@@ -99,6 +99,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.about.route.health", "settings-about-route-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.visual.health", "versioned-about-fluxion-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.groups.collapsed.health", "active-page-visible-and-keyboard-continuous")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-side-by-side-and-stacked-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.status.health", "native-gecko-tab-states-projected-and-controllable")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.drop.health", "native-drag-reorder-and-two-orientation-split")' "$profile/prefs.js" && \
@@ -119,7 +120,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.organisation.health", "local-proposal-visible-and-confirmation-required")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.scale.health", "200-tabs-rendered-with-roving-keyboard-focus")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then
-    printf 'Verified: Fluxion chrome, per-workspace active-page resume, stable pointer-close rows, live workspace creation/editing/reordering/deletion with safe tab migration, independent keyword-only and Gecko-local Browser Memory modes, live System/Light/Dark Gecko themes, distinct toolbar and native page-tools menus, universal palette page and settings commands, Gecko-owned web search, Gecko-native browsing-data controls, and closed-tab recovery, non-reflowing Focus overlay, spatial drag reorder and native drag-to-split, live Gecko tab status and media controls, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native side-by-side and stacked split views loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, per-workspace active-page resume, stable pointer-close rows, collapsed groups with a visible active page and continuous keyboard navigation, live workspace creation/editing/reordering/deletion with safe tab migration, independent keyword-only and Gecko-local Browser Memory modes, live System/Light/Dark Gecko themes, distinct toolbar and native page-tools menus, universal palette page and settings commands, Gecko-owned web search, Gecko-native browsing-data controls, and closed-tab recovery, non-reflowing Focus overlay, spatial drag reorder and native drag-to-split, live Gecko tab status and media controls, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native side-by-side and stacked split views loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
@@ -173,6 +174,7 @@ if [[ -f "$profile/prefs.js" ]]; then
   grep 'user_pref("fluxion\.status\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.drop\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.closeStability\.visual\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.groups\.collapsed\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.focus\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.toolbarMenu\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.pageMenu\.visual\.error"' "$profile/prefs.js" >&2 || true

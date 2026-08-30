@@ -42,7 +42,29 @@
     return rows;
   }
 
-  const api = Object.freeze({ GROUP_COLORS, normaliseGroupName, projectTabRows });
+  function collapsedGroupProjection(tabs, selectedTab, collapsed) {
+    const members = Array.isArray(tabs) ? tabs.filter(Boolean) : [];
+    if (!collapsed) {
+      return Object.freeze({
+        activeVisible: members.includes(selectedTab),
+        hiddenCount: 0,
+        visibleTabs: Object.freeze([...members]),
+      });
+    }
+    const activeTab = members.includes(selectedTab) ? selectedTab : null;
+    return Object.freeze({
+      activeVisible: Boolean(activeTab),
+      hiddenCount: members.length - (activeTab ? 1 : 0),
+      visibleTabs: Object.freeze(activeTab ? [activeTab] : []),
+    });
+  }
+
+  const api = Object.freeze({
+    GROUP_COLORS,
+    collapsedGroupProjection,
+    normaliseGroupName,
+    projectTabRows,
+  });
   scope.FluxionTabGroups = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis === "object" ? globalThis : this);

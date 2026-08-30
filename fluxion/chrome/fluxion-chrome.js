@@ -389,7 +389,10 @@
     .fluxion-group-name { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fluxion-group-count { color: var(--fluxion-muted); font-variant-numeric: tabular-nums; }
     .fluxion-group-tabs { margin-inline-start: 8px; padding-inline-start: 3px; border-inline-start: 1px solid var(--fluxion-line); }
-    .fluxion-group.is-collapsed .fluxion-group-tabs { display: none; }
+    .fluxion-group-tabs[hidden] { display: none; }
+    .fluxion-group.is-collapsed.has-visible-active .fluxion-group-tabs {
+      margin-block-start: -1px; border-inline-start-color: var(--group-accent);
+    }
     .fluxion-favicon {
       width: 16px; height: 16px; flex: none; object-fit: contain; border-radius: 2px;
     }
@@ -1564,7 +1567,7 @@
 
   function renderedTabElements() {
     return [...flow.querySelectorAll(".fluxion-tab")]
-      .filter(element => !element.closest(".fluxion-group.is-collapsed"));
+      .filter(element => !element.closest(".fluxion-group-tabs[hidden]"));
   }
 
   function clearTabDropFeedback() {
@@ -2071,14 +2074,29 @@
       orange: "#907052", yellow: "#8a7b4c", pink: "#896777",
       green: "#667c69", gray: "#68747b", red: "#8b646b",
     };
+    const projection = FluxionTabGroups.collapsedGroupProjection(
+      tabs,
+      gBrowser.selectedTab,
+      Boolean(group.collapsed),
+    );
     const item = create("div", "fluxion-group");
     item.classList.toggle("is-collapsed", Boolean(group.collapsed));
+    item.classList.toggle(
+      "has-visible-active",
+      Boolean(group.collapsed) && projection.activeVisible,
+    );
     item.style.setProperty("--group-accent", colours[group.color] || colours.gray);
 
     const heading = create("button", "fluxion-group-heading");
     heading.type = "button";
     heading.classList.toggle("has-active", tabs.includes(gBrowser.selectedTab));
     heading.setAttribute("aria-expanded", String(!group.collapsed));
+    heading.setAttribute(
+      "aria-label",
+      `${group.label || "Group"}, ${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, ` +
+        `${group.collapsed ? "collapsed" : "expanded"}` +
+        `${group.collapsed && projection.activeVisible ? ", active page shown" : ""}`,
+    );
     heading.title = group.label || "Tab group";
     const disclosure = create("span", "fluxion-group-disclosure");
     disclosure.textContent = "›";
@@ -2088,7 +2106,13 @@
     const label = create("span", "fluxion-group-name");
     label.textContent = group.label || "Group";
     const groupCount = create("span", "fluxion-group-count");
-    groupCount.textContent = String(tabs.length);
+    groupCount.textContent = group.collapsed && projection.activeVisible
+      ? (projection.hiddenCount ? `+${projection.hiddenCount}` : "")
+      : String(tabs.length);
+    groupCount.hidden = !groupCount.textContent;
+    groupCount.title = group.collapsed
+      ? `${projection.hiddenCount} hidden ${projection.hiddenCount === 1 ? "tab" : "tabs"}`
+      : `${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}`;
     heading.append(disclosure, mark, label, groupCount);
     heading.addEventListener("click", () => {
       group.collapsed = !group.collapsed;
@@ -2115,7 +2139,8 @@
     });
 
     const groupTabs = create("div", "fluxion-group-tabs");
-    appendSplitRows(groupTabs, tabs);
+    groupTabs.hidden = projection.visibleTabs.length === 0;
+    appendSplitRows(groupTabs, projection.visibleTabs);
     item.append(heading, groupTabs);
     return item;
   }
@@ -2231,7 +2256,7 @@
     if (focusTabAfterRender) {
       const element = tabElements.get(focusTabAfterRender);
       focusTabAfterRender = null;
-      if (element && !element.closest(".fluxion-group.is-collapsed")) {
+      if (element && !element.closest(".fluxion-group-tabs[hidden]")) {
         element.focus({ preventScroll: true });
         element.scrollIntoView({ block: "nearest" });
       }
@@ -3080,6 +3105,100 @@
     group.collapsed = false;
     Services.prefs.setStringPref("fluxion.groups.health", "native-group-rendered");
     scheduleRender();
+
+    window.setTimeout(() => {
+      const originalTab = gBrowser.selectedTab;
+      const fixtureTabs = ["First", "Active", "Third"].map((name, index) => {
+        const tab = gBrowser.addTrustedTab(`about:blank?fluxion-collapsed-group=${index}`, {
+          skipAnimation: true,
+        });
+        setTabWorkspace(tab, currentWorkspace);
+        tab.setAttribute("label", `${name} grouped page`);
+        return tab;
+      });
+      const following = gBrowser.addTrustedTab("about:blank?fluxion-collapsed-group=following", {
+        skipAnimation: true,
+      });
+      setTabWorkspace(following, currentWorkspace);
+      following.setAttribute("label", "Following ungrouped page");
+      const collapsedGroup = gBrowser.addTabGroup(fixtureTabs, {
+        label: "Collapsed continuity",
+        color: "green",
+        insertBefore: fixtureTabs[0],
+      });
+      const finish = error => {
+        if (error) {
+          Services.prefs.setStringPref("fluxion.groups.collapsed.visual.error", String(error));
+        }
+        if (originalTab?.parentNode) gBrowser.selectedTab = originalTab;
+        collapsedGroup?.ungroupTabs();
+        gBrowser.removeTabs([...fixtureTabs, following].filter(tab => tab.parentNode), {
+          animate: false,
+        });
+        Services.prefs.savePrefFile(null);
+        scheduleRender();
+      };
+      if (!collapsedGroup) {
+        finish("native collapsed-group fixture was not created");
+        return;
+      }
+      gBrowser.selectedTab = fixtureTabs[1];
+      collapsedGroup.collapsed = true;
+      render();
+      window.requestAnimationFrame(() => {
+        const groupItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+          candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
+        );
+        const activeRow = tabElements.get(fixtureTabs[1]);
+        const initiallyContinuous = Boolean(
+          groupItem?.classList.contains("is-collapsed") &&
+          groupItem?.classList.contains("has-visible-active") &&
+          groupItem.querySelectorAll(".fluxion-tab").length === 1 &&
+          activeRow?.isConnected && activeRow.dataset.active === "true" &&
+          groupItem.querySelector(".fluxion-group-count")?.textContent === "+2"
+        );
+        activeRow?.focus();
+        activeRow?.dispatchEvent(new window.KeyboardEvent("keydown", {
+          key: "ArrowDown",
+          bubbles: true,
+        }));
+        window.requestAnimationFrame(() => {
+          const inactiveItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+            candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
+          );
+          const keyboardContinuous = Boolean(
+            gBrowser.selectedTab === following &&
+            document.activeElement?._fluxionTab === following &&
+            inactiveItem?.querySelectorAll(".fluxion-tab").length === 0
+          );
+          gBrowser.selectedTab = fixtureTabs[2];
+          render();
+          const replacementItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+            candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
+          );
+          const replacementVisible = Boolean(
+            replacementItem?.querySelectorAll(".fluxion-tab").length === 1 &&
+            tabElements.get(fixtureTabs[2])?.isConnected &&
+            replacementItem?.querySelector(".fluxion-group-count")?.textContent === "+2"
+          );
+          if (initiallyContinuous && keyboardContinuous && replacementVisible) {
+            Services.prefs.setStringPref(
+              "fluxion.groups.collapsed.health",
+              "active-page-visible-and-keyboard-continuous",
+            );
+            if (Services.prefs.prefHasUserValue("fluxion.groups.collapsed.visual.error")) {
+              Services.prefs.clearUserPref("fluxion.groups.collapsed.visual.error");
+            }
+            finish();
+          } else {
+            finish(
+              `initial=${initiallyContinuous} keyboard=${keyboardContinuous} ` +
+                `replacement=${replacementVisible} collapsed=${Boolean(collapsedGroup.collapsed)}`,
+            );
+          }
+        });
+      });
+    }, 100);
   }
   if (Services.env.get("FLUXION_VISUAL_SPLIT_TEST") === "1") {
     const primary = gBrowser.addTrustedTab("https://example.com/?fluxion-split=left");

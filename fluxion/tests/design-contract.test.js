@@ -225,6 +225,14 @@ test("Flow pointer closing holds the vacated row until intentional movement", ()
   assert.match(macVerifier, /pointer-close-held-one-row-until-movement/);
 });
 
+test("collapsed native groups keep the selected page in Flow's keyboard order", () => {
+  assert.match(chrome, /FluxionTabGroups\.collapsedGroupProjection/);
+  assert.match(chrome, /has-visible-active/);
+  assert.match(chrome, /`\+\$\{projection\.hiddenCount\}`/);
+  assert.match(chrome, /active-page-visible-and-keyboard-continuous/);
+  assert.match(macVerifier, /fluxion\.groups\.collapsed\.health/);
+});
+
 test("new tab stays blank instead of duplicating the address field", () => {
   assert.doesNotMatch(newTab, /<form|<input|welcome|motivat/i);
   assert.match(newTab, /Blank new tab/);

@@ -53,6 +53,13 @@ passes:
    screen coordinates. Packaging stops unless only that tab closes, the next
    row retains its position while the pointer is stationary, and the inert
    placeholder compresses away after a pointer move.
+   A collapsed-group gate then creates a separate three-page native group and
+   one following page, collapses the group around its selected member, and
+   rejects the build unless Flow retains exactly that active row with an honest
+   `+2` hidden count. It drives Arrow Down into the following page, requires
+   Gecko selection and DOM focus to agree after rerender, then selects another
+   hidden member and requires that page to replace the retained row without
+   expanding the group.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any

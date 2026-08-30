@@ -27,7 +27,9 @@ The current preview is runnable and includes:
   including two normal windows restored to different workspaces while private
   tabs remain excluded from the session;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
-  workspace movement, and crash/session restoration;
+  workspace movement, and crash/session restoration; a collapsed group keeps
+  its active page visible, reports the remaining hidden pages as `+N`, and
+  stays continuous with Flow's roving keyboard order;
 - local, evidence-backed tab-group suggestions across related ungrouped pages,
   with a concise preview and explicit confirmation before native grouping;
 - Gecko-native two-page split view with side-by-side and stacked layouts, a
@@ -232,6 +234,11 @@ Use the `+` beside the workspace strip to create a workspace. Right-click a
 workspace name or symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
+
+Collapsing a native tab group keeps its currently selected page visible as one
+compact row and labels the remaining hidden members as `+N`. Arrow navigation
+continues through that row into neighbouring pages; selecting another member
+replaces it without expanding the group.
 
 To browse two pages together, right-click a tab and choose **Open in Split View
 With**, or use **Open split side by side** / **Open stacked split** in the

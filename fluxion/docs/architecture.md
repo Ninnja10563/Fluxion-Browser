@@ -523,6 +523,22 @@ tab objects to `gBrowser.addTabGroup`; cancellation is a no-op. Gecko therefore
 continues to own group membership, ordering, collapse state, drag behaviour,
 and SessionStore restoration.
 
+### Collapsed native-group projection
+
+`core/tab-groups.js` derives one immutable visible-row projection from the
+current native members, native selected tab, and Gecko-owned `collapsed` flag.
+Expanded groups expose every member. An inactive collapsed group exposes none;
+a collapsed group containing the selected tab exposes only that tab and an
+exact hidden-member count. The chrome rebuilds from this projection and does
+not persist it.
+
+That retained active row remains in Flow's ordinary roving focus collection.
+When keyboard navigation selects an adjacent ungrouped page, the group becomes
+heading-only on the following frame. If Gecko later selects another member,
+the same projection replaces the retained row without changing native collapse
+state. This preserves a visible explanation of the rendered page without
+turning Fluxion into a competing owner of groups or selection.
+
 ## Flow focus and scale boundary
 
 Flow uses one roving tab stop per tablist instead of placing every open tab in
