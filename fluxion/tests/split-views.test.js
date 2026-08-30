@@ -4,10 +4,13 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const {
   canSplit,
+  forgetOrientation,
   normaliseOrientation,
   orientationOf,
   positionLabel,
   projectSplitRows,
+  parseOrientationMap,
+  rememberOrientation,
   splitPosition,
 } = require("../chrome/core/split-views.js");
 
@@ -73,4 +76,15 @@ test("split positions use spatial labels for both layouts", () => {
   assert.equal(positionLabel(1, "stacked"), "top");
   assert.equal(positionLabel(2, "stacked"), "bottom");
   assert.equal(positionLabel(3, "stacked", 4), "pane 3 of 4");
+});
+
+test("native split orientation metadata is validated and bounded", () => {
+  assert.deepEqual(parseOrientationMap('{"4":"stacked","bad":"stacked","5":"diagonal"}'), {
+    4: "stacked",
+  });
+  let map = {};
+  for (let id = 1; id <= 4; id += 1) map = rememberOrientation(map, id, id === 4 ? "stacked" : "side-by-side", 3);
+  assert.deepEqual(map, { 2: "side-by-side", 3: "side-by-side", 4: "stacked" });
+  assert.deepEqual(forgetOrientation(map, 3), { 2: "side-by-side", 4: "stacked" });
+  assert.deepEqual(parseOrientationMap("not json"), {});
 });

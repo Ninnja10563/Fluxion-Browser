@@ -91,10 +91,12 @@ divider, active-panel focus, security state, dialog containment, teardown, and
 SessionStore restoration. No iframe, webview, or second navigation model is
 introduced. Fluxion's orientation layer changes the native tab-panel flex axis
 between a row and column, resets incompatible width/height residues, and keeps
-the splitter's spatial ARIA values aligned with the selected direction. A
-validated `fluxion-split-orientation` attribute is persisted on both native
-tabs through SessionStore, so a stacked pair restores without a shadow layout
-database or page reload.
+the splitter's spatial ARIA values aligned with the selected direction. Fluxion
+stores a bounded validated orientation map keyed by Gecko's own SessionStore-
+restored `splitViewId`; live tab attributes provide immediate projection and a
+compatibility fallback. The map contains no URLs or page state, and private
+windows neither read nor write it. A stacked pair therefore restores without a
+shadow tab/session database or page reload.
 
 The visible navigation bar is styled by Fluxion but deliberately retains
 Firefox's native URL bar internals. This preserves certificate identity,

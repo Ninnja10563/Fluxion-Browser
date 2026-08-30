@@ -82,9 +82,35 @@
     return index > 0 ? `pane ${index} of ${Math.max(index, count || 0)}` : "split pane";
   }
 
+  function parseOrientationMap(raw, limit = 256) {
+    let parsed = raw;
+    if (typeof raw === "string") {
+      try { parsed = JSON.parse(raw); } catch (_) { parsed = {}; }
+    }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return Object.freeze({});
+    const entries = Object.entries(parsed)
+      .filter(([id, orientation]) => /^\d+$/.test(id) && ORIENTATIONS.includes(orientation))
+      .slice(-Math.max(1, Number(limit) || 256));
+    return Object.freeze(Object.fromEntries(entries));
+  }
+
+  function rememberOrientation(map, splitViewId, orientation, limit = 256) {
+    const id = String(splitViewId ?? "");
+    if (!/^\d+$/.test(id)) return parseOrientationMap(map, limit);
+    const next = { ...parseOrientationMap(map, limit), [id]: normaliseOrientation(orientation) };
+    return parseOrientationMap(next, limit);
+  }
+
+  function forgetOrientation(map, splitViewId, limit = 256) {
+    const next = { ...parseOrientationMap(map, limit) };
+    delete next[String(splitViewId ?? "")];
+    return parseOrientationMap(next, limit);
+  }
+
   const api = Object.freeze({
     ORIENTATIONS, SIDE_BY_SIDE, STACKED, canSplit, normaliseOrientation,
-    orientationOf, positionLabel, projectSplitRows, splitPosition,
+    forgetOrientation, orientationOf, parseOrientationMap, positionLabel,
+    projectSplitRows, rememberOrientation, splitPosition,
   });
   scope.FluxionSplitViews = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

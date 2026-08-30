@@ -327,6 +327,9 @@ test("split view delegates content panes to Gecko and remains controllable from 
   assert.match(chrome, /splitView\.reverseTabs/);
   assert.match(chrome, /\[TAB_WORKSPACE, TAB_SPLIT_ORIENTATION\]/);
   assert.match(chrome, /SessionStore\.persistTabAttribute\(attribute\)/);
+  assert.match(chrome, /PREF_SPLIT_ORIENTATIONS/);
+  assert.match(chrome, /splitView\.splitViewId/);
+  assert.match(chrome, /privateWindow \|\| !splitView/);
   assert.match(chrome, /data-fluxion-split-orientation="stacked"/);
   assert.match(chrome, /tabpanels\.setAttribute\("orient", orientation === FluxionSplitViews\.STACKED/);
   assert.match(chrome, /aria-orientation/);

@@ -19,7 +19,8 @@ Version 0.24 completes two-orientation native split browsing:
   state, DevTools ownership, and split teardown;
 - expose left/right and top/bottom pane positions to Flow and keep the divider's
   separator orientation and size values aligned for assistive technology;
-- persist the validated orientation on both native tabs through SessionStore;
+- persist only the validated orientation against Gecko's SessionStore-restored
+  native split ID, with no URL or page-state shadow record;
 - require a real stacked split to survive Fluxion's clean quit and multi-launch
   macOS recovery gate;
 - drive the packaged app through both geometries before a DMG can publish.

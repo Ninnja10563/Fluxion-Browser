@@ -5,11 +5,16 @@
   if (!window.gBrowser || window.document.getElementById("fluxion-flow")) return;
 
   const { document } = window;
+  const { PrivateBrowsingUtils } = ChromeUtils.importESModule(
+    "resource://gre/modules/PrivateBrowsingUtils.sys.mjs",
+  );
+  const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
   const XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
   const HTML = "http://www.w3.org/1999/xhtml";
   const PREF_WORKSPACES = "fluxion.workspaces";
   const PREF_CURRENT = "fluxion.workspace.current";
   const PREF_SIDEBAR = "fluxion.sidebar.state";
+  const PREF_SPLIT_ORIENTATIONS = "fluxion.split.orientations";
   const TAB_WORKSPACE = "fluxion-workspace";
   const TAB_SPLIT_ORIENTATION = "fluxion-split-orientation";
   const NEW_TAB_URL = Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab");
@@ -390,6 +395,9 @@
     workspaces = FluxionWorkspaces.DEFAULTS.map(item => ({ ...item }));
   }
   Services.prefs.setStringPref(PREF_WORKSPACES, JSON.stringify(workspaces));
+  let splitOrientations = FluxionSplitViews.parseOrientationMap(
+    privateWindow ? "" : Services.prefs.getStringPref(PREF_SPLIT_ORIENTATIONS, ""),
+  );
   let currentWorkspace = Services.prefs.getStringPref(PREF_CURRENT, workspaces[0].id);
   if (!workspaces.some(item => item.id === currentWorkspace)) currentWorkspace = workspaces[0].id;
 
@@ -803,7 +811,27 @@
   }
 
   function splitOrientation(tab = gBrowser.selectedTab) {
-    return FluxionSplitViews.orientationOf(tab?.splitview);
+    const splitView = tab?.splitview;
+    const persisted = !privateWindow && splitView
+      ? splitOrientations[String(splitView.splitViewId)]
+      : "";
+    return persisted || FluxionSplitViews.orientationOf(splitView);
+  }
+
+  function rememberSplitOrientation(splitView, orientation) {
+    if (privateWindow || !splitView) return;
+    splitOrientations = FluxionSplitViews.rememberOrientation(
+      splitOrientations, splitView.splitViewId, orientation,
+    );
+    Services.prefs.setStringPref(PREF_SPLIT_ORIENTATIONS, JSON.stringify(splitOrientations));
+    Services.prefs.savePrefFile(null);
+  }
+
+  function forgetSplitOrientation(splitViewId) {
+    if (privateWindow) return;
+    splitOrientations = FluxionSplitViews.forgetOrientation(splitOrientations, splitViewId);
+    Services.prefs.setStringPref(PREF_SPLIT_ORIENTATIONS, JSON.stringify(splitOrientations));
+    Services.prefs.savePrefFile(null);
   }
 
   function resetSplitPanelSizing(splitView) {
@@ -854,6 +882,7 @@
     if (!splitView || splitView.tabs.length !== 2) return false;
     const orientation = FluxionSplitViews.normaliseOrientation(value);
     for (const member of splitView.tabs) member.setAttribute(TAB_SPLIT_ORIENTATION, orientation);
+    rememberSplitOrientation(splitView, orientation);
     applyActiveSplitOrientation({ reset: true });
     scheduleRender();
     return true;
@@ -883,6 +912,7 @@
       secondary.removeAttribute(TAB_SPLIT_ORIENTATION);
       return null;
     }
+    rememberSplitOrientation(splitView, orientation);
     gBrowser.selectedTab = options.selectSecondary ? secondary : primary;
     applyActiveSplitOrientation({ reset: true });
     scheduleRender();
@@ -908,8 +938,10 @@
     const splitView = tab?.splitview;
     if (!splitView) return;
     const members = [...splitView.tabs];
+    const splitViewId = splitView.splitViewId;
     splitView.unsplitTabs("menu_separate");
     for (const member of members) member.removeAttribute(TAB_SPLIT_ORIENTATION);
+    forgetSplitOrientation(splitViewId);
     applyActiveSplitOrientation();
     scheduleRender();
   }
