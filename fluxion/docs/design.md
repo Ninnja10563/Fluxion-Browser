@@ -26,6 +26,10 @@ SigmaOS is deliberately excluded as a reference.
 - Browser controls use native Gecko behavior and a restrained macOS-oriented
   skin. Security state, permission anchors, autofill, and URL completion stay
   on Firefox's audited implementations.
+- The navigation toolbar prioritises Back, Forward, Reload, and the native
+  address/security field. Secondary product routes live under one trailing
+  geometric Fluxion menu and remain duplicated in the macOS menu bar; the
+  inherited Firefox application hamburger is not part of the visible product.
 - Flow is 232px expanded, a 44px icon rail when compact, and a 3px reveal edge
   in Focus mode. Focus reveals the complete 232px surface over the live page;
   it never changes the content rectangle merely to inspect or select a tab.

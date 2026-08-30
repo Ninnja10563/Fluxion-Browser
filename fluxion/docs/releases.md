@@ -53,6 +53,11 @@ passes:
    232px surface, and compares Gecko's content rectangle before and after. Any
    horizontal shift or resize blocks publication; the revealed overlay remains
    visible in the inspection screenshot.
+   A toolbar-menu gate then requires Firefox PanelUI to be absent from the
+   visible toolbar, checks the mounted Fluxion control and its full concise
+   command set, executes New Tab through the actual menu listener, verifies the
+   workspace-aware Gecko tab, and leaves the native menu open in the inspection
+   screenshot.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

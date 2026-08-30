@@ -20,7 +20,8 @@ controls work and its failure paths have been tested.
   for workspaces, pins, native groups, split views, Places, and Browser Memory
   (implemented)
 - signed macOS application bundle and native application menus (custom Flow
-  menu and About route implemented; Developer ID signing remains)
+  menu, distinct trailing toolbar menu, and About route implemented; Developer
+  ID signing remains)
 
 ## Phase 3 — interaction model
 

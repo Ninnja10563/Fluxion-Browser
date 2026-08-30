@@ -134,6 +134,11 @@ menubar rather than replacing AppKit menu handling. Its items call the same
 workspace, sidebar, palette, and Library controllers as the visible chrome, so
 menu commands cannot drift into decorative duplicates. Standard File, Edit,
 View, History, Bookmarks, Tools, Window, and Help commands remain Gecko-owned.
+The trailing navigation-toolbar menu is another XUL entry point into those
+controllers and `OpenBrowserWindow`; it replaces the visible Firefox PanelUI
+button without replacing the native URL/security field or page-action widgets.
+Its new-tab command delegates to Fluxion's workspace-aware `gBrowser` path, and
+its window/private-window commands delegate to Gecko's own window constructor.
 The application menu's About command is captured at chrome scope and opens the
 versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle

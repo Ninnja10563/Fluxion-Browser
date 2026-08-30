@@ -8,6 +8,26 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.28 gives the visible toolbar a distinct Fluxion application menu:
+
+- replace Firefox's inherited hamburger button with one quiet geometric
+  Fluxion mark at the trailing edge of the real Gecko navigation toolbar;
+- keep the native Back, Forward, Reload, URL/security field, downloads, and
+  extension actions that directly support the page instead of rebuilding them;
+- expose concise working commands for new tabs, windows, private windows,
+  command palette, tab search, Fluxion Library, settings, and About;
+- use native XUL menu semantics, platform-correct shortcut labels, keyboard
+  navigation, focus handling, and macOS appearance rather than a web-styled
+  card or custom imitation;
+- mirror these actions in the existing macOS menu bar, so the toolbar is not
+  their only entry point;
+- require the packaged application to hide the inherited control, execute a
+  real new-tab command through the menu, and leave the product menu visibly
+  open for inspection before publication.
+
+The change does not replace Gecko's security-aware address field or page-action
+implementations.
+
 Version 0.27 turns Focus into a complete distraction-free Flow mode:
 
 - collapse browser chrome to a quiet 3px reveal rail while the live webpage

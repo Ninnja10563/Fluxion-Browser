@@ -117,7 +117,13 @@
       background: var(--fluxion-bg-raised) !important;
       box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
     }
-    #PanelUI-button { padding-inline-start: 2px !important; }
+    #PanelUI-button { display: none !important; }
+    #fluxion-toolbar-menu {
+      -moz-context-properties: fill, stroke; fill: currentColor; stroke: currentColor;
+    }
+    #fluxion-toolbar-menu > .toolbarbutton-icon {
+      list-style-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 4.5h13.5l-7.2 6.3H18L6 20l3.5-7H5z' fill='none' stroke='context-stroke' stroke-width='1.55' stroke-linejoin='round'/%3E%3C/svg%3E");
+    }
     @media (-moz-platform: macos) {
       #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
     }
@@ -614,6 +620,64 @@
     cleanup.push(() => nativeFlowMenu.remove());
     Services.prefs.setStringPref("fluxion.nativeMenu.health", "flow-application-menu-loaded");
     Services.prefs.savePrefFile(null);
+  }
+
+  function openProductTab(url) {
+    const tab = gBrowser.addTrustedTab(url);
+    tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+    gBrowser.selectedTab = tab;
+    return tab;
+  }
+
+  const toolbarTarget = document.getElementById("nav-bar-customization-target");
+  const toolbarMenuButton = xul("toolbarbutton", {
+    id: "fluxion-toolbar-menu",
+    class: "toolbarbutton-1 chromeclass-toolbar-additional",
+    type: "menu",
+    label: "Fluxion menu",
+    tooltiptext: "Fluxion menu",
+    removable: "false",
+  });
+  toolbarMenuButton.setAttribute("aria-label", "Fluxion menu");
+  const toolbarMenuPopup = xul("menupopup", { id: "fluxion-toolbar-menu-popup" });
+  const toolbarAccel = (mac, other) => Services.appinfo.OS === "Darwin" ? mac : other;
+  const toolbarNewTabItem = nativeAction("New Tab", openWorkspaceTab, {
+    id: "fluxion-toolbar-new-tab", acceltext: toolbarAccel("⌘T", "Ctrl+T"),
+  });
+  const toolbarLibraryMenu = xul("menu", { label: "Library" });
+  const toolbarLibraryPopup = xul("menupopup", { id: "fluxion-toolbar-library-popup" });
+  toolbarLibraryPopup.append(
+    nativeAction("History", () => window.FluxionLibrary?.open("history")),
+    nativeAction("Bookmarks", () => window.FluxionLibrary?.open("bookmarks")),
+    nativeAction("Downloads", () => window.FluxionLibrary?.open("downloads")),
+  );
+  toolbarLibraryMenu.appendChild(toolbarLibraryPopup);
+  toolbarMenuPopup.append(
+    toolbarNewTabItem,
+    nativeAction("New Window", () => window.OpenBrowserWindow(), {
+      acceltext: toolbarAccel("⌘N", "Ctrl+N"),
+    }),
+    nativeAction("New Private Window", () => window.OpenBrowserWindow({ private: true }), {
+      acceltext: toolbarAccel("⇧⌘P", "Ctrl+Shift+P"),
+    }),
+    nativeSeparator(),
+    nativeAction("Command Palette…", () => window.FluxionPalette?.open("all"), {
+      acceltext: window.FluxionShortcuts?.format("palette") || "",
+    }),
+    nativeAction("Search Tabs…", () => window.FluxionPalette?.open("tabs"), {
+      acceltext: window.FluxionShortcuts?.format("tabSearch") || "",
+    }),
+    nativeSeparator(),
+    toolbarLibraryMenu,
+    nativeAction("Fluxion Settings…", () => openProductTab("about:preferences"), {
+      acceltext: toolbarAccel("⌘,", "Ctrl+,"),
+    }),
+    nativeAction("About Fluxion", () => openProductTab(ABOUT_URL)),
+  );
+  toolbarMenuButton.appendChild(toolbarMenuPopup);
+  if (toolbarTarget) {
+    toolbarTarget.appendChild(toolbarMenuButton);
+    cleanup.push(() => toolbarMenuButton.remove());
   }
 
   const flow = xul("vbox", { id: "fluxion-flow", role: "navigation", "aria-label": "Fluxion Flow" });
@@ -2549,6 +2613,46 @@
         }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
       }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
     }, 23500);
+  }
+  if (Services.env.get("FLUXION_VISUAL_TOOLBAR_MENU_TEST") === "1") {
+    window.setTimeout(() => {
+      const panelButton = document.getElementById("PanelUI-button");
+      const inheritedHidden = !panelButton || window.getComputedStyle(panelButton).display === "none";
+      const buttonRect = toolbarMenuButton.getBoundingClientRect();
+      const labels = [...toolbarMenuPopup.children].map(item => item.getAttribute("label")).filter(Boolean);
+      const expectedLabels = [
+        "New Tab", "New Window", "New Private Window", "Command Palette…",
+        "Search Tabs…", "Library", "Fluxion Settings…", "About Fluxion",
+      ];
+      const mounted = toolbarMenuButton.parentNode === toolbarTarget &&
+        buttonRect.width >= 24 && buttonRect.width <= 38 && buttonRect.height >= 24 &&
+        toolbarMenuButton.getAttribute("aria-label") === "Fluxion menu" &&
+        expectedLabels.every(label => labels.includes(label));
+      const before = gBrowser.tabs.length;
+      toolbarNewTabItem.dispatchEvent(new window.CustomEvent("command", { bubbles: true }));
+      const created = gBrowser.selectedTab;
+      const commandWorked = gBrowser.tabs.length === before + 1 &&
+        tabWorkspace(created) === currentWorkspace && created.linkedBrowser.currentURI.spec === NEW_TAB_URL;
+      if (commandWorked) gBrowser.removeTab(created, { animate: false });
+      toolbarMenuPopup.openPopup(toolbarMenuButton, "after_end");
+      window.setTimeout(() => {
+        const opened = ["open", "showing"].includes(toolbarMenuPopup.state);
+        if (inheritedHidden && mounted && commandWorked && opened) {
+          Services.prefs.setStringPref(
+            "fluxion.toolbarMenu.health",
+            "product-menu-opened-and-native-command-executed",
+          );
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.toolbarMenu.visual.error",
+            `hidden=${inheritedHidden} mounted=${mounted} command=${commandWorked} ` +
+              `opened=${opened} state=${toolbarMenuPopup.state} ` +
+              `button=${Math.round(buttonRect.width)}x${Math.round(buttonRect.height)} labels=${labels.join("|")}`,
+          );
+        }
+        Services.prefs.savePrefFile(null);
+      }, 180);
+    }, 25500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);

@@ -64,6 +64,9 @@ The current preview is runnable and includes:
   Flow sidebar, and workspace navigation, with conflict and reserved-key checks;
 - a native **Flow** application menu on macOS for the palette, tab search,
   sidebar modes, workspaces, Library routes, and a versioned About Fluxion page;
+- a restrained trailing Fluxion toolbar menu for new/private windows, palette,
+  tab search, Library, settings, and About, replacing Firefox's inherited
+  hamburger while keeping the same commands available from the macOS menu bar;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

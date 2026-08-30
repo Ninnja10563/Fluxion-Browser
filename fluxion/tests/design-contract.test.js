@@ -170,6 +170,22 @@ test("Focus Flow is an inert, keyboard-revealable overlay that preserves page ge
   assert.match(macVerifier, /focus-rail-overlay-revealed-without-content-reflow/);
 });
 
+test("the trailing toolbar uses a working Fluxion menu instead of Firefox PanelUI", () => {
+  assert.match(chrome, /#PanelUI-button \{ display: none !important; \}/);
+  assert.match(chrome, /id: "fluxion-toolbar-menu"/);
+  assert.match(chrome, /context-stroke/);
+  for (const label of [
+    "New Tab", "New Window", "New Private Window", "Command Palette…",
+    "Search Tabs…", "Library", "Fluxion Settings…", "About Fluxion",
+  ]) {
+    assert.match(chrome, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  assert.match(chrome, /toolbarNewTabItem\.dispatchEvent/);
+  assert.match(chrome, /toolbarMenuPopup\.openPopup/);
+  assert.match(macVerifier, /FLUXION_VISUAL_TOOLBAR_MENU_TEST=1/);
+  assert.match(macVerifier, /product-menu-opened-and-native-command-executed/);
+});
+
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
   assert.match(
     chrome,
