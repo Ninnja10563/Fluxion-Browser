@@ -63,7 +63,8 @@ passes:
    selection or intentionally holding Flow geometry. It then focuses that
    heading, expands it with Right Arrow, collapses it with Left Arrow, and
    requires the heading to remain the only roving Tab stop after each native
-   state change.
+   state change. The pointer-close gate waits for this keyboard fixture to
+   release Flow before it begins its own intentional geometry hold.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any

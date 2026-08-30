@@ -3104,7 +3104,22 @@
     }, 3000);
   }
   if (Services.env.get("FLUXION_VISUAL_CLOSE_STABILITY_TEST") === "1") {
-    window.setTimeout(() => {
+    const runCloseStabilityGate = (attempt = 0) => {
+      const groupReady = Services.env.get("FLUXION_VISUAL_GROUP_TEST") !== "1" ||
+        Services.prefs.getStringPref("fluxion.groups.collapsed.health", "") ===
+          "active-page-visible-and-group-heading-roving";
+      if (!groupReady) {
+        if (attempt < 80) {
+          window.setTimeout(() => runCloseStabilityGate(attempt + 1), 100);
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.closeStability.visual.error",
+            "collapsed-group keyboard fixture did not release Flow",
+          );
+          Services.prefs.savePrefFile(null);
+        }
+        return;
+      }
       const fixtures = ["First", "Closing", "Following"].map((label, index) => {
         const tab = gBrowser.addTrustedTab(`about:blank?fluxion-close-stability=${index}`, {
           skipAnimation: true,
@@ -3203,7 +3218,8 @@
           }, 160);
         }, 180);
       }, 80);
-    }, 500);
+    };
+    window.setTimeout(() => runCloseStabilityGate(), 500);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
     const groupTabs = [...gBrowser.tabs]
