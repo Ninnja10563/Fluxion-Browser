@@ -3186,6 +3186,7 @@
             keyboardFocusedTab === expectedNextTab &&
             inactiveItem?.querySelectorAll(".fluxion-tab").length === 0
           );
+          tabElements.get(keyboardFocusedTab)?.blur();
           gBrowser.selectedTab = fixtureTabs[2];
           render();
           const replacementItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
@@ -3212,7 +3213,11 @@
                 `activeIndex=${activeIndex} rows=${rowsBeforeMove.length} ` +
                 `expected=${expectedNextTab?.getAttribute("label") || "none"} ` +
                 `selected=${keyboardSelectedTab?.getAttribute("label") || "none"} ` +
-                `focused=${keyboardFocusedTab?.getAttribute("label") || "none"}`,
+                `focused=${keyboardFocusedTab?.getAttribute("label") || "none"} ` +
+                `replacementRows=${replacementItem?.querySelectorAll(".fluxion-tab").length ?? -1} ` +
+                `replacementConnected=${Boolean(tabElements.get(fixtureTabs[2])?.isConnected)} ` +
+                `replacementCount=${replacementItem?.querySelector(".fluxion-group-count")?.textContent || "none"} ` +
+                `replacementSelected=${gBrowser.selectedTab === fixtureTabs[2]}`,
             );
           }
         }, 80);
