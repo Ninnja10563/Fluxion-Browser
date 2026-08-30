@@ -26,7 +26,8 @@ contexts instead of sharing one profile-wide active workspace:
   separate remembered Build page inside the companion;
 - cleanly quit and restore both windows, switch the primary through Focus and
   Build, and fail unless the companion remains on its selected Life page;
-- repeat the two-window assertion after a real private-window launch, while
+- repeat the two-window assertion after opening and closing a real private
+  window inside the restored app, while
   continuing to reject the private URL from SessionStore, Places, and Browser
   Memory;
 - extend the packaged gate to reject a missing window, merged window state,

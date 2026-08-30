@@ -89,6 +89,7 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(sessionRecovery, /validatePrivateAbsence\(normalSnapshots\(\)\)/);
   assert.match(sessionRecovery, /FluxionMemory\.search/);
   assert.match(sessionRecovery, /PrivateBrowsingUtils\.isWindowPrivate/);
+  assert.match(sessionRecovery, /OpenBrowserWindow\(\{ private: true \}\)/);
   assert.match(sessionRecovery, /setEmbeddingProvider\("disabled"\)/);
   assert.match(sessionRecovery, /keyword-only Browser Memory did not survive startup without ML/);
   assert.match(macSessionVerifier, /FLUXION_SESSION_SEED_TEST/);

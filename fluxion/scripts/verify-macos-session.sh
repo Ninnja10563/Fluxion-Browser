@@ -93,8 +93,7 @@ run_stage \
 run_stage \
   'private-window boundary' \
   FLUXION_PRIVATE_ISOLATION_TEST \
-  'user_pref("fluxion.recovery.private.health", "private-memory-boundary-enforced")' \
-  --private-window 'https://example.com/?fluxion-private-only=1'
+  'user_pref("fluxion.recovery.private.health", "private-memory-boundary-enforced")'
 run_stage \
   'post-private normal restoration' \
   FLUXION_PRIVATE_ABSENCE_TEST \

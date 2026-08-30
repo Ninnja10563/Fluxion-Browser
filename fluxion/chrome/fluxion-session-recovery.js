@@ -17,7 +17,7 @@
     "resource://gre/modules/PlacesUtils.sys.mjs",
   );
   const isPrivate = PrivateBrowsingUtils.isWindowPrivate(window);
-  if ((mode === "private") !== isPrivate) return;
+  if (isPrivate) return;
   const leaderPref = `fluxion.recovery.${mode}.leader`;
   if (Services.prefs.getBoolPref(leaderPref, false)) return;
   Services.prefs.setBoolPref(leaderPref, true);
@@ -246,24 +246,47 @@
   }
 
   async function validatePrivateWindow() {
+    await SessionStore.promiseAllWindowsRestored;
+    const restored = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
+    if (!restored.ok) throw new Error(`pre-private window restore invalid: ${restored.reasons.join("; ")}`);
+    const windowsBefore = new Set([...Services.wm.getEnumerator("navigator:browser")]);
+    window.OpenBrowserWindow({ private: true });
+    const privateResult = await waitFor(() => {
+      const candidate = [...Services.wm.getEnumerator("navigator:browser")].find(browserWindow =>
+        !windowsBefore.has(browserWindow) && !browserWindow.closed &&
+        PrivateBrowsingUtils.isWindowPrivate(browserWindow) &&
+        browserWindow.FluxionUI && browserWindow.FluxionMemory
+      );
+      return { ok: Boolean(candidate), candidate };
+    });
+    const privateBrowserWindow = privateResult.candidate;
+    if (!privateBrowserWindow) throw new Error("private Fluxion window did not open");
     const privateURL = FluxionSessionRecovery.URLS.privateOnly;
-    let tab = [...window.gBrowser.tabs].find(candidate => tabURL(candidate) === privateURL);
-    if (!tab) tab = window.gBrowser.addTrustedTab(privateURL, { skipAnimation: true });
-    window.gBrowser.selectedTab = tab;
+    let tab = [...privateBrowserWindow.gBrowser.tabs].find(candidate => tabURL(candidate) === privateURL);
+    if (!tab) tab = privateBrowserWindow.gBrowser.addTrustedTab(privateURL, { skipAnimation: true });
+    privateBrowserWindow.gBrowser.selectedTab = tab;
     await wait(1500);
-    const memory = await window.FluxionMemory.search("fluxion private only");
-    const enabled = await window.FluxionMemory.enable();
-    if (window.FluxionMemory.embeddingProvider() !== "disabled") {
+    const memory = await privateBrowserWindow.FluxionMemory.search("fluxion private only");
+    const enabled = await privateBrowserWindow.FluxionMemory.enable();
+    if (privateBrowserWindow.FluxionMemory.embeddingProvider() !== "disabled") {
       throw new Error("private launch changed the persisted embedding mode");
     }
     const result = FluxionSessionRecovery.validatePrivate({
-      isPrivate,
+      isPrivate: PrivateBrowsingUtils.isWindowPrivate(privateBrowserWindow),
       memoryState: memory.state,
       memoryResults: memory.results.length,
       memoryEnabled: enabled,
     });
     if (!result.ok) throw new Error(`private boundary invalid: ${result.reasons.join("; ")}`);
     write("fluxion.recovery.private.health", "private-memory-boundary-enforced");
+    privateBrowserWindow.close();
+    const closed = await waitFor(() => ({ ok: privateBrowserWindow.closed }), 8000);
+    if (!closed.ok) throw new Error("private Fluxion window did not close");
+    const normalState = FluxionSessionRecovery.validateWindowSet(normalSnapshots());
+    if (!normalState.ok) throw new Error(`post-private live session invalid: ${normalState.reasons.join("; ")}`);
+    for (const browserWindow of normalWindows()) {
+      await flushTabs([...browserWindow.gBrowser.tabs], browserWindow);
+    }
     await quit();
   }
 
