@@ -120,6 +120,17 @@ export const FluxionMemoryStore = Object.freeze({
     return { lexical: lexical.map(row), semantic: semantic.map(row) };
   },
 
+  async get(url) {
+    const db = await connection();
+    const rows = await db.executeCached(
+      "SELECT url,title,description,headings,content FROM pages WHERE url=:url",
+      { url },
+    );
+    if (!rows.length) return null;
+    return Object.fromEntries(["url", "title", "description", "headings", "content"]
+      .map(name => [name, rows[0].getResultByName(name)]));
+  },
+
   async deleteBlocked(domains) {
     const db = await connection();
     const rows = await db.execute("SELECT id,url FROM pages");

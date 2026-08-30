@@ -257,6 +257,7 @@
     }
     indexedAt.set(page.url, Date.now());
     Services.prefs.setStringPref("fluxion.memory.content.health", "content-indexed");
+    return page.url;
   }
 
   function scheduleIndex(browser) {
@@ -320,16 +321,17 @@
         Services.prefs.savePrefFile(null);
         return indexBrowser(testTab.linkedBrowser);
       })
-      .then(() => FluxionMemoryStore.search("illustrative examples", 6, false))
-      .then(results => {
-        const found = [...results.lexical, ...results.semantic]
-          .some(row => row.url.startsWith("https://example.com/"));
+      .then(indexedURL => FluxionMemoryStore.get(indexedURL))
+      .then(record => {
+        const found = record?.content?.toLocaleLowerCase().includes("illustrative examples");
         if (found) {
           Services.prefs.setStringPref(
             "fluxion.memory.enrichment.health",
             "content-indexed-and-retrieved",
           );
           Services.prefs.savePrefFile(null);
+        } else {
+          throw new Error("enrichment gate could not read extracted page evidence");
         }
       }).catch(error => {
         Services.prefs.setStringPref("fluxion.memory.enrichment.error", String(error));
