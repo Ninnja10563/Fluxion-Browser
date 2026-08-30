@@ -357,3 +357,17 @@ prevents duplicate Fluxion bindings, and reserves operating-system or mature
 Gecko combinations such as quit, close tab, new tab, location, reload, find,
 and print. Standard browser shortcuts remain Gecko-owned and are displayed as
 reference-only rows rather than being intercepted by Fluxion.
+
+## Tab organisation boundary
+
+Tab-group suggestions are produced locally from the titles and hostnames of
+eligible unpinned, ungrouped tabs in the active workspace. The pure policy
+module requires at least three supporting tabs, ignores privileged locations,
+and caps proposals at eight pages so the confirmation remains inspectable. It
+does not read page bodies, call an AI provider, or move anything on its own.
+
+The command palette shows one strongest proposal with its evidence count and
+suggested name. Accepting the native confirmation passes the exact still-open
+tab objects to `gBrowser.addTabGroup`; cancellation is a no-op. Gecko therefore
+continues to own group membership, ordering, collapse state, drag behaviour,
+and SessionStore restoration.

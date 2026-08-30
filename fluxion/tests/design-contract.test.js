@@ -16,6 +16,7 @@ const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js")
 const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
+const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -79,6 +80,17 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ABSENCE_TEST/);
   assert.match(macSessionVerifier, /workspace-tabs-groups-split-restored/);
   assert.match(macSessionVerifier, /private-tabs-history-memory-excluded/);
+});
+
+test("tab organisation stays local, evidence-backed, and confirmation-only", () => {
+  assert.match(organisation, /minimum = 3/);
+  assert.match(organisation, /!record\.pinned && !record\.grouped && !record\.split/);
+  assert.doesNotMatch(organisation, /fetch\(|AIProvider|OpenAI|Ollama/);
+  assert.match(palette, /Suggest tab group/);
+  assert.match(palette, /Services\.prompt\.confirm/);
+  assert.match(palette, /ui\.createSuggestedGroup/);
+  assert.match(chrome, /gBrowser\.addTabGroup/);
+  assert.match(macVerifier, /local-proposal-visible-and-confirmation-required/);
 });
 
 test("new tab stays blank instead of duplicating the address field", () => {

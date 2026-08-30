@@ -575,11 +575,10 @@
     return createGroupForTabs(tab ? [tab] : []);
   }
 
-  function createGroupForTabs(tabs) {
+  function createNamedGroup(tabs, requestedName) {
     const candidates = [...new Set(tabs)].filter(tab => tab?.parentNode && !tab.pinned && !tab.splitview);
     if (!candidates.length) return null;
-    const name = askGroupName("New Tab Group");
-    if (name === null) return null;
+    const name = FluxionTabGroups.normaliseGroupName(requestedName);
     if (!name) {
       Services.prompt.alert(window, "Group Not Created", "Enter a group name.");
       return null;
@@ -588,6 +587,11 @@
     gBrowser.clearMultiSelectedTabs();
     scheduleRender();
     return group;
+  }
+
+  function createGroupForTabs(tabs) {
+    const name = askGroupName("New Tab Group");
+    return name === null ? null : createNamedGroup(tabs, name);
   }
 
   function renameGroup(group) {
@@ -1496,6 +1500,7 @@
   window.FluxionUI = Object.freeze({
     addWorkspace,
     createGroup: () => createGroupForTab(gBrowser.selectedTab),
+    createSuggestedGroup: (tabs, name) => createNamedGroup(tabs, name),
     createSplitView,
     cycleSidebar,
     currentWorkspace: () => currentWorkspace,
@@ -1548,6 +1553,19 @@
       throw new Error("Fluxion: native Gecko split-view integration failed");
     }
     Services.prefs.setStringPref("fluxion.splitview.health", "native-split-rendered");
+    scheduleRender();
+  }
+  if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {
+    const fixtures = [
+      ["https://react.dev/learn?fluxion-organise=guide", "React learning guide"],
+      ["https://github.com/facebook/react?fluxion-organise=source", "React source repository"],
+      ["https://www.npmjs.com/package/react?fluxion-organise=package", "React package"],
+    ];
+    for (const [url, label] of fixtures) {
+      const tab = gBrowser.addTrustedTab(url, { skipAnimation: true });
+      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      tab.setAttribute("label", label);
+    }
     scheduleRender();
   }
   if (Services.env.get("FLUXION_VISUAL_MULTISELECT_TEST") === "1") {

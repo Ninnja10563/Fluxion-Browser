@@ -8,6 +8,26 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.21 adds deliberate, local tab-organisation suggestions:
+
+- inspect only titles and hostnames from eligible unpinned, ungrouped tabs in
+  the active workspace;
+- require at least three supporting pages before offering a proposal;
+- recognise a shared site or a cross-site topic such as React research while
+  filtering generic words and privileged locations;
+- show the exact tab count and proposed native group name in the command
+  palette;
+- list every proposed page in a native confirmation and make cancellation a
+  complete no-op;
+- apply an accepted proposal through Gecko's real `gBrowser.addTabGroup`, so
+  drag, collapse, ordering, and SessionStore restoration remain native;
+- keep the feature independent of AI providers and never reorganise tabs in
+  the background.
+
+The packaged macOS gate now creates a cross-site React fixture and refuses the
+DMG unless **Suggest tab group** is visible with the local proposal and its
+confirmation-only execution path.
+
 Version 0.20 hardens real session restoration and private-window isolation:
 
 - seed a normal packaged-app session containing five real Gecko tabs in the

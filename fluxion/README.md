@@ -18,6 +18,8 @@ The current preview is runnable and includes:
   groups, and split views, with private tabs excluded from the restored session;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration;
+- local, evidence-backed tab-group suggestions across related ungrouped pages,
+  with a concise preview and explicit confirmation before native grouping;
 - Gecko-native two-page split view with a live draggable divider, Flow pairing,
   command-palette and context-menu creation, side swapping, separation, and
   native session restoration;

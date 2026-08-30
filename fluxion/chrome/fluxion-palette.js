@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionSearch, FluxionUrl, ChromeUtils, Ci, Cu */
+/* global gBrowser, Services, SessionStore, FluxionSearch, FluxionTabOrganisation, FluxionUrl, ChromeUtils, Ci, Cu */
 (function initialiseFluxionPalette(window) {
   "use strict";
 
@@ -166,6 +166,39 @@
     gBrowser.selectedTab = tab;
   }
 
+  function organisationSuggestion() {
+    const records = [...gBrowser.tabs]
+      .filter(tab => ui.tabWorkspace(tab) === ui.currentWorkspace())
+      .map(tab => {
+        const url = tab.linkedBrowser?.currentURI?.spec || "";
+        let hostname = "";
+        try { hostname = new URL(url).hostname; } catch (_) {}
+        return {
+          tab,
+          title: tab.label || tab.getAttribute("label") || "",
+          hostname,
+          url,
+          pinned: tab.pinned,
+          grouped: Boolean(tab.group),
+          split: Boolean(tab.splitview),
+        };
+      });
+    return FluxionTabOrganisation.suggestGroup(records);
+  }
+
+  function applyOrganisationSuggestion(suggestion) {
+    if (!suggestion?.records?.length) return;
+    const tabs = suggestion.records.map(record => record.tab).filter(tab => tab?.parentNode);
+    if (tabs.length < 3) return;
+    const preview = tabs.map(tab => `• ${tab.label || "Untitled page"}`).join("\n");
+    const accepted = Services.prompt.confirm(
+      window,
+      "Group Related Tabs",
+      `Group these ${tabs.length} tabs as “${suggestion.name}”?\n\n${preview}`,
+    );
+    if (accepted) ui.createSuggestedGroup(tabs, suggestion.name);
+  }
+
   function commandItems() {
     const doCommand = id => document.getElementById(id)?.doCommand();
     const items = [
@@ -248,6 +281,17 @@
     const selectedTab = gBrowser.selectedTab;
     const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
     const aiConfig = window.FluxionAI?.config();
+    const suggestion = organisationSuggestion();
+    if (suggestion) {
+      items.splice(9, 0, {
+        label: "Suggest tab group",
+        detail: `Group ${suggestion.records.length} related tabs as “${suggestion.name}”`,
+        kind: "Tabs",
+        boost: 8,
+        keywords: ["organise organize cluster related tabs", suggestion.name],
+        run: () => applyOrganisationSuggestion(suggestion),
+      });
+    }
     items.splice(9, 0, {
       label: "Ask Current Page",
       detail: aiConfig?.provider === "disabled"
@@ -804,6 +848,30 @@
       input.value = "How do these pages differ in purpose?";
       runAsk().catch(Cu.reportError);
     }, 9400);
+  }
+  if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {
+    window.setTimeout(() => {
+      const suggestion = organisationSuggestion();
+      const item = commandItems().find(candidate => candidate.label === "Suggest tab group");
+      if (!suggestion || suggestion.records.length < 3 || !item || !/React/.test(item.detail)) {
+        Services.prefs.setStringPref(
+          "fluxion.organisation.visual.error",
+          "A local evidence-backed tab-group proposal was not available",
+        );
+        Services.prefs.savePrefFile(null);
+        return;
+      }
+      open("all");
+      input.value = "suggest tab group";
+      render(false);
+      if (visibleItems.some(candidate => candidate.label === "Suggest tab group")) {
+        Services.prefs.setStringPref(
+          "fluxion.organisation.health",
+          "local-proposal-visible-and-confirmation-required",
+        );
+        Services.prefs.savePrefFile(null);
+      }
+    }, 3200);
   }
   Services.prefs.setStringPref("fluxion.palette.health", "command-palette-loaded");
   Services.prefs.savePrefFile(null);

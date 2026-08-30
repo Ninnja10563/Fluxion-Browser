@@ -43,7 +43,8 @@ controls work and its failure paths have been tested.
 - grounded, cancellable current-page questions with visible source evidence
   (implemented)
 - explicit, source-backed selected-tab comparison (implemented)
-- opt-in organisation suggestions without automatic tab movement
+- local organisation suggestions with explicit confirmation and no automatic
+  tab movement (implemented)
 - no network AI dependency in ordinary browsing (implemented)
 
 ## Phase 6 — release polish

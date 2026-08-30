@@ -26,6 +26,9 @@ passes:
    About version matches the application bundle version, and captures the real
    `about:preferences#about` product surface instead of an inherited Firefox
    route or exposed bundle file path.
+   The interaction gate also creates three related ungrouped pages and requires
+   the local **Suggest tab group** command, proposed name, and confirmation-only
+   execution path to be available in the packaged command palette.
    A separate four-launch gate then seeds and cleanly quits a normal session,
    restores its workspace/pin/group/split state, opens and quits a private
    session, and restores normal mode again. Publication is blocked if the

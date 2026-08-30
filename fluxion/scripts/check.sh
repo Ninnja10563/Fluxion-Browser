@@ -21,6 +21,7 @@ node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js
 node --check chrome/core/permissions.js
 node --check chrome/core/session-recovery.js
+node --check chrome/core/tab-organisation.js
 node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
