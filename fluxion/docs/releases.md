@@ -59,7 +59,9 @@ passes:
    `+2` hidden count. It drives Arrow Down into the next visible page, requires
    Gecko selection and DOM focus to agree after rerender, then selects another
    hidden member and requires that page to replace the retained row without
-   expanding the group.
+   expanding the group. The gate begins only after the pointer-close and
+   workspace-resume fixtures release Flow, so an intentional close-layout hold
+   cannot turn group projection into a timing-dependent result.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any
