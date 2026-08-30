@@ -71,9 +71,11 @@ keyboard reveal restore its existing native-tab controls, and Escape returns
 focus to the rail. Reduced-motion settings remove both rail and surface
 transitions.
 
-Workspace membership is stored as a persisted SessionStore tab attribute.
-Each workspace's last active page is another bounded SessionStore tab marker;
-selecting a page atomically clears any duplicate marker in that workspace.
+Workspace membership is stored as a per-tab custom SessionStore value. Each
+workspace's last active page is another bounded custom value; selecting a page
+atomically clears any duplicate marker in that workspace. Matching tab
+attributes are only the immediate browser-chrome projection and migration path;
+the custom values are restored by Gecko before Fluxion's delayed UI starts.
 Switching back prefers that native tab and falls back to Gecko's `lastAccessed`
 recency when a workspace has not yet been visited. Moving tabs or deleting a
 workspace clears stale markers rather than overwriting the destination's resume

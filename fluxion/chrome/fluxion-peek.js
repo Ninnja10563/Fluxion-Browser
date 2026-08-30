@@ -25,7 +25,7 @@
     if (!tab) return null;
     if (activePeek?.parentNode && activePeek !== tab) close(activePeek, { returnToSource: false });
     tab.setAttribute(PEEK, "true");
-    tab.setAttribute("fluxion-workspace", window.FluxionUI.tabWorkspace(source));
+    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.tabWorkspace(source));
     sources.set(tab, source);
     activePeek = tab;
     gBrowser.selectedTab = tab;

@@ -50,7 +50,7 @@
       postData: submission.postData,
       globalHistoryOptions: { triggeringSearchEngine: submission.engineName },
     });
-    tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
     return Object.freeze({ ...submission, tab });
   }

@@ -12,7 +12,7 @@ Version 0.35 makes workspace switching resume where the user actually left off:
 
 - remember one active native tab per workspace instead of selecting the first
   tab whenever the user returns;
-- persist that ownership as a bounded SessionStore tab attribute beside the
+- persist that ownership as a bounded custom SessionStore tab value beside the
   existing workspace membership, keeping page history, scroll position, forms,
   groups, pins, and crash recovery under Gecko rather than a shadow database;
 - repair duplicate or stale active markers on selection and clear ownership

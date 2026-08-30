@@ -422,7 +422,7 @@
     const testURL = "https://example.com/?fluxion-memory-test=1";
     indexScheduler.defer("packaged-runtime-test", 30000);
     const testTab = window.gBrowser.addTrustedTab(testURL, { skipAnimation: true });
-    testTab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    window.FluxionUI.setTabWorkspace(testTab, window.FluxionUI.currentWorkspace());
     enable().then(() => new Promise(resolve => window.setTimeout(resolve, 3000)))
       .then(async () => {
         if (testTab.closing || testTab.linkedBrowser?.currentURI?.spec !== testURL) {

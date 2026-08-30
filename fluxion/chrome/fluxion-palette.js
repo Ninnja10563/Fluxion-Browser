@@ -165,7 +165,7 @@
 
   function openUrl(url) {
     const tab = gBrowser.addTrustedTab(url);
-    tab.setAttribute("fluxion-workspace", ui.currentWorkspace());
+    ui.setTabWorkspace(tab, ui.currentWorkspace());
     gBrowser.selectedTab = tab;
   }
 
@@ -981,7 +981,7 @@
       const workspace = ui.currentWorkspace();
       const fixtureURL = "https://example.net/?fluxion-closed-tabs=1";
       const fixture = gBrowser.addTrustedTab(fixtureURL, { skipAnimation: true });
-      fixture.setAttribute("fluxion-workspace", workspace);
+      ui.setTabWorkspace(fixture, workspace);
       ui.selectTab(fixture);
       window.setTimeout(() => {
         fixture.setAttribute("label", "Recoverable Reference");
@@ -1015,7 +1015,7 @@
               window.setTimeout(() => waitForRestored(restoreAttempt + 1), 100);
               return;
             }
-            const workspaceRestored = restored?.getAttribute("fluxion-workspace") === workspace;
+            const workspaceRestored = restored && ui.tabWorkspace(restored) === workspace;
             const fixtureConsumed = !ui.closedTabs().some(item => item.url === fixtureURL);
             const nativeListed = nativeItem?.getAttribute("label") === "Recoverable Reference";
             if (restored) gBrowser.removeTab(restored, { animate: false });
@@ -1098,7 +1098,7 @@
             return;
           }
           gBrowser.tabContainer.removeEventListener("TabOpen", captureTab);
-          const workspace = openedTab?.getAttribute("fluxion-workspace") === ui.currentWorkspace();
+          const workspace = openedTab && ui.tabWorkspace(openedTab) === ui.currentWorkspace();
           const engineResolved = submission.engineId === (alternate.id || alternate.name) &&
             submission.engineName === alternate.name;
           if (openedTab) gBrowser.removeTab(openedTab, { animate: false });

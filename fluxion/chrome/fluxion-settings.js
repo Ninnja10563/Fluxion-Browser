@@ -636,7 +636,7 @@
   );
   const openAboutDestination = url => {
     const tab = gBrowser.addTrustedTab(url);
-    tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
   };
   const source = create("button", "fluxion-settings-button", "Open source repository");
@@ -699,7 +699,7 @@
   Services.prefs.savePrefFile(null);
   if (Services.env.get("FLUXION_VISUAL_SETTINGS_TEST") === "1") {
     const tab = gBrowser.addTrustedTab("about:preferences");
-    tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
     window.requestAnimationFrame(syncVisibility);
   }
@@ -738,7 +738,7 @@
   if (Services.env.get("FLUXION_VISUAL_ABOUT_TEST") === "1") {
     window.setTimeout(() => {
       const tab = gBrowser.addTrustedTab("about:preferences#about");
-      tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+      window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
       gBrowser.selectedTab = tab;
       window.setTimeout(() => {
         syncVisibility();

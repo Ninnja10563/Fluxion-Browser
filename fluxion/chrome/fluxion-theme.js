@@ -68,7 +68,7 @@
       try {
         await set("dark");
         const tab = window.gBrowser.addTrustedTab("about:preferences#appearance");
-        tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+        window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
         window.gBrowser.selectedTab = tab;
         window.setTimeout(() => {
           const control = window.document.getElementById("fluxion-theme-choice");

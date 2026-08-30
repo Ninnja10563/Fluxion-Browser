@@ -338,7 +338,7 @@
     const route = FluxionUrl.classifyNavigation(url);
     if (route.kind === "search") return window.FluxionWebSearch.open(route.value);
     const tab = gBrowser.addTrustedTab(route.value);
-    tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
     return tab;
   }
@@ -621,7 +621,7 @@
     let tab = [...gBrowser.tabs].find(isLibraryTab);
     if (!tab) {
       tab = gBrowser.addTrustedTab(`about:downloads#${id}`);
-      tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+      window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     }
     tab.setAttribute("fluxion-library-section", id);
     window.FluxionUI.selectTab(tab);

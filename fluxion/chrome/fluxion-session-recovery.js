@@ -52,7 +52,7 @@
           group: tab.group?.label || "",
           split,
           splitOrientation: tab.splitview ? window.FluxionUI.splitOrientation(tab) : "",
-          active: tab.getAttribute("fluxion-workspace-active") === "true",
+          active: window.FluxionUI.workspaceTabActive(tab),
           selected: tab === window.gBrowser.selectedTab,
         };
       }),
@@ -98,7 +98,7 @@
 
     const makeTab = (url, workspace = "build") => {
       const tab = window.gBrowser.addTrustedTab(url, { skipAnimation: true });
-      tab.setAttribute("fluxion-workspace", workspace);
+      window.FluxionUI.setTabWorkspace(tab, workspace);
       return tab;
     };
     const groupTabs = [makeTab(urls.groupA), makeTab(urls.groupB)];

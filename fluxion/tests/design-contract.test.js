@@ -100,7 +100,10 @@ test("workspaces resume their last active native page without shadow sessions", 
   assert.match(runtimeConfig, /chrome\/core\/workspace-tabs\.js/);
   assert.match(workspaceTabs, /preferredTab/);
   assert.match(workspaceTabs, /markerPlan/);
-  assert.match(chrome, /SessionStore\.persistTabAttribute\(attribute\)/);
+  assert.match(chrome, /SessionStore\.getCustomTabValue\(tab, TAB_WORKSPACE\)/);
+  assert.match(chrome, /SessionStore\.setCustomTabValue\(tab, TAB_WORKSPACE, id\)/);
+  assert.match(chrome, /SessionStore\.setCustomTabValue\(tab, TAB_WORKSPACE_ACTIVE, "true"\)/);
+  assert.match(chrome, /SessionStore\.deleteCustomTabValue\(tab, TAB_WORKSPACE_ACTIVE\)/);
   assert.match(chrome, /TAB_WORKSPACE_ACTIVE = "fluxion-workspace-active"/);
   assert.match(chrome, /rememberWorkspaceTab\(previous\)/);
   assert.match(chrome, /preferredWorkspaceTab\(id, workspaceTabs\)/);

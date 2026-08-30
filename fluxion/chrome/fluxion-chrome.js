@@ -531,7 +531,7 @@
       event.preventDefault();
       event.stopImmediatePropagation();
       const tab = gBrowser.addTrustedTab(ABOUT_URL);
-      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      setTabWorkspace(tab, currentWorkspace);
       gBrowser.selectedTab = tab;
     }, true);
   }
@@ -685,7 +685,7 @@
 
   function openProductTab(url) {
     const tab = gBrowser.addTrustedTab(url);
-    tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+    setTabWorkspace(tab, currentWorkspace);
     gBrowser.selectedTab = tab;
     return tab;
   }
@@ -902,12 +902,47 @@
   browser.prepend(flow);
 
   function tabWorkspace(tab) {
-    let id = tab.getAttribute(TAB_WORKSPACE);
+    let id = "";
+    try { id = SessionStore.getCustomTabValue(tab, TAB_WORKSPACE); } catch (_) {}
+    if (!id) id = tab.getAttribute(TAB_WORKSPACE);
     if (!workspaces.some(item => item.id === id)) {
       id = currentWorkspace;
-      tab.setAttribute(TAB_WORKSPACE, id);
+    }
+    setTabWorkspace(tab, id);
+    return id;
+  }
+
+  function setTabWorkspace(tab, id) {
+    if (!tab?.parentNode || !workspaces.some(item => item.id === id)) return null;
+    if (tab.getAttribute(TAB_WORKSPACE) !== id) tab.setAttribute(TAB_WORKSPACE, id);
+    try {
+      if (SessionStore.getCustomTabValue(tab, TAB_WORKSPACE) !== id) {
+        SessionStore.setCustomTabValue(tab, TAB_WORKSPACE, id);
+      }
+    } catch (error) {
+      Cu.reportError(error);
     }
     return id;
+  }
+
+  function workspaceTabActive(tab) {
+    if (!tab?.parentNode) return false;
+    let active = false;
+    try { active = SessionStore.getCustomTabValue(tab, TAB_WORKSPACE_ACTIVE) === "true"; }
+    catch (_) { active = tab.getAttribute(TAB_WORKSPACE_ACTIVE) === "true"; }
+    tab.toggleAttribute(TAB_WORKSPACE_ACTIVE, active);
+    return active;
+  }
+
+  function setWorkspaceTabActive(tab, active) {
+    if (!tab?.parentNode) return;
+    tab.toggleAttribute(TAB_WORKSPACE_ACTIVE, active);
+    try {
+      if (active) SessionStore.setCustomTabValue(tab, TAB_WORKSPACE_ACTIVE, "true");
+      else SessionStore.deleteCustomTabValue(tab, TAB_WORKSPACE_ACTIVE);
+    } catch (error) {
+      Cu.reportError(error);
+    }
   }
 
   function rememberWorkspaceTab(tab) {
@@ -920,8 +955,7 @@
       { workspaceOf: tabWorkspace },
     );
     for (const entry of plan) {
-      if (entry.remembered) entry.tab.setAttribute(TAB_WORKSPACE_ACTIVE, "true");
-      else entry.tab.removeAttribute(TAB_WORKSPACE_ACTIVE);
+      setWorkspaceTabActive(entry.tab, entry.remembered);
     }
     return plan.length > 0;
   }
@@ -929,7 +963,7 @@
   function preferredWorkspaceTab(workspace, tabs = [...gBrowser.tabs]) {
     return FluxionWorkspaceTabs.preferredTab(tabs, workspace, {
       workspaceOf: tabWorkspace,
-      isRemembered: tab => tab.getAttribute(TAB_WORKSPACE_ACTIVE) === "true",
+      isRemembered: workspaceTabActive,
     });
   }
 
@@ -994,8 +1028,8 @@
   function moveGroupToWorkspace(group, id) {
     if (!group?.isConnected || !workspaces.some(item => item.id === id)) return;
     for (const tab of group.tabs) {
-      tab.removeAttribute(TAB_WORKSPACE_ACTIVE);
-      tab.setAttribute(TAB_WORKSPACE, id);
+      setWorkspaceTabActive(tab, false);
+      setTabWorkspace(tab, id);
     }
     if (id !== currentWorkspace && group.tabs.includes(gBrowser.selectedTab)) {
       const replacement = [...gBrowser.tabs].find(
@@ -1089,8 +1123,8 @@
     );
     if (!confirmed) return;
     for (const tab of ownedTabs) {
-      tab.removeAttribute(TAB_WORKSPACE_ACTIVE);
-      tab.setAttribute(TAB_WORKSPACE, result.fallbackId);
+      setWorkspaceTabActive(tab, false);
+      setTabWorkspace(tab, result.fallbackId);
     }
     if (currentWorkspace === id) currentWorkspace = result.fallbackId;
     saveWorkspaces(result.items);
@@ -1112,7 +1146,7 @@
     }
     if (!workspaceTabs.length) {
       const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
-      tab.setAttribute(TAB_WORKSPACE, id);
+      setTabWorkspace(tab, id);
       workspaceTabs = [tab];
     }
 
@@ -1141,8 +1175,8 @@
     if (!tabs.length || !workspaces.some(item => item.id === id)) return;
     const movingTabs = [...new Set(tabs.flatMap(tab => tab?.splitview?.tabs || [tab]).filter(Boolean))];
     for (const movingTab of movingTabs) {
-      movingTab.removeAttribute(TAB_WORKSPACE_ACTIVE);
-      movingTab.setAttribute(TAB_WORKSPACE, id);
+      setWorkspaceTabActive(movingTab, false);
+      setTabWorkspace(movingTab, id);
     }
     gBrowser.clearMultiSelectedTabs();
     if (id !== currentWorkspace && movingTabs.includes(gBrowser.selectedTab)) {
@@ -1248,7 +1282,7 @@
     if (!FluxionSplitViews.canSplit(primary, secondary)) return null;
     const orientation = FluxionSplitViews.normaliseOrientation(options.orientation);
     const workspace = tabWorkspace(primary);
-    secondary.setAttribute(TAB_WORKSPACE, workspace);
+    setTabWorkspace(secondary, workspace);
     primary.setAttribute(TAB_SPLIT_ORIENTATION, orientation);
     secondary.setAttribute(TAB_SPLIT_ORIENTATION, orientation);
     const insertionPoint = primary.group || primary;
@@ -1271,7 +1305,7 @@
   function openNewSplit(primary = gBrowser.selectedTab, orientation = FluxionSplitViews.SIDE_BY_SIDE) {
     if (!primary || primary.pinned || primary.splitview) return null;
     const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
-    tab.setAttribute(TAB_WORKSPACE, tabWorkspace(primary));
+    setTabWorkspace(tab, tabWorkspace(primary));
     const splitView = createSplitView(primary, tab, { selectSecondary: true, orientation });
     if (!splitView) {
       gBrowser.removeTab(tab, { animate: false });
@@ -1387,7 +1421,7 @@
 
   function openWorkspaceTab() {
     const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
-    tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+    setTabWorkspace(tab, currentWorkspace);
     gBrowser.selectedTab = tab;
     window.requestAnimationFrame(() => {
       if (window.gURLBar && tab === gBrowser.selectedTab) window.gURLBar.select();
@@ -2453,7 +2487,10 @@
   }, { once: true });
 
   // Assign restored/unowned tabs before filtering, then reveal the saved workspace.
-  for (const tab of gBrowser.tabs) tabWorkspace(tab);
+  for (const tab of gBrowser.tabs) {
+    tabWorkspace(tab);
+    workspaceTabActive(tab);
+  }
   switchWorkspace(currentWorkspace);
   render();
   applyActiveSplitOrientation();
@@ -2493,7 +2530,9 @@
       gBrowser.selectedTab = tab;
     },
     switchWorkspace,
+    setTabWorkspace,
     tabWorkspace,
+    workspaceTabActive,
     toggleSplitOrientation,
     workspaces: () => workspaces.map(workspace => ({ ...workspace })),
   });
@@ -2512,7 +2551,7 @@
           const tab = gBrowser.addTrustedTab(`about:blank?fluxion-workspace-resume=${workspace}-${name}`, {
             skipAnimation: true,
           });
-          tab.setAttribute(TAB_WORKSPACE, workspace);
+          setTabWorkspace(tab, workspace);
           fixtures.push(tab);
           return tab;
         };
@@ -2534,12 +2573,12 @@
         const buildRestored = gBrowser.selectedTab === buildActive;
         const unique = ["focus", "build"].every(workspace =>
           [...gBrowser.tabs].filter(tab =>
-            tabWorkspace(tab) === workspace && tab.hasAttribute(TAB_WORKSPACE_ACTIVE)
+            tabWorkspace(tab) === workspace && workspaceTabActive(tab)
           ).length === 1
         );
         if (focusRestored && buildRestored && unique &&
-            !focusFirst.hasAttribute(TAB_WORKSPACE_ACTIVE) &&
-            !buildFirst.hasAttribute(TAB_WORKSPACE_ACTIVE)) {
+            !workspaceTabActive(focusFirst) &&
+            !workspaceTabActive(buildFirst)) {
           Services.prefs.setStringPref(
             "fluxion.workspaceResume.health",
             "two-workspace-active-pages-round-tripped",
@@ -2566,7 +2605,7 @@
       const video = gBrowser.addTrustedTab("about:blank?fluxion-status=video", { skipAnimation: true });
       const capture = gBrowser.addTrustedTab("about:blank?fluxion-status=capture", { skipAnimation: true });
       const crashed = gBrowser.addTrustedTab("about:blank?fluxion-status=crash", { skipAnimation: true });
-      for (const tab of [video, capture, crashed]) tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      for (const tab of [video, capture, crashed]) setTabWorkspace(tab, currentWorkspace);
       video.setAttribute("label", "Video reference");
       video.setAttribute("pictureinpicture", "true");
       video.setAttribute("soundplaying", "true");
@@ -2629,8 +2668,8 @@
     window.setTimeout(() => {
       const dragged = gBrowser.addTrustedTab("about:blank?fluxion-drop=dragged", { skipAnimation: true });
       const target = gBrowser.addTrustedTab("about:blank?fluxion-drop=target", { skipAnimation: true });
-      dragged.setAttribute(TAB_WORKSPACE, currentWorkspace);
-      target.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      setTabWorkspace(dragged, currentWorkspace);
+      setTabWorkspace(target, currentWorkspace);
       dragged.setAttribute("label", "Dragged reference");
       target.setAttribute("label", "Drop target");
       render();
@@ -2692,7 +2731,7 @@
       .slice(0, 2);
     if (groupTabs.length < 2) {
       const tab = gBrowser.addTrustedTab("https://example.org/");
-      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      setTabWorkspace(tab, currentWorkspace);
       groupTabs.push(tab);
     }
     const group = gBrowser.addTabGroup(groupTabs, {
@@ -2708,8 +2747,8 @@
   if (Services.env.get("FLUXION_VISUAL_SPLIT_TEST") === "1") {
     const primary = gBrowser.addTrustedTab("https://example.com/?fluxion-split=left");
     const secondary = gBrowser.addTrustedTab("https://example.org/?fluxion-split=right");
-    primary.setAttribute(TAB_WORKSPACE, currentWorkspace);
-    secondary.setAttribute(TAB_WORKSPACE, currentWorkspace);
+    setTabWorkspace(primary, currentWorkspace);
+    setTabWorkspace(secondary, currentWorkspace);
     const splitView = createSplitView(primary, secondary);
     if (!splitView || splitView.tabs.length !== 2 || !gBrowser.activeSplitView) {
       throw new Error("Fluxion: native Gecko split-view integration failed");
@@ -2754,7 +2793,7 @@
     ];
     for (const [url, label] of fixtures) {
       const tab = gBrowser.addTrustedTab(url, { skipAnimation: true });
-      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      setTabWorkspace(tab, currentWorkspace);
       tab.setAttribute("label", label);
     }
     scheduleRender();
@@ -2782,7 +2821,7 @@
         const tab = gBrowser.addTrustedTab(`about:blank?fluxion-scale=${index}`, {
           skipAnimation: true,
         });
-        tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
+        setTabWorkspace(tab, currentWorkspace);
         tab.setAttribute("label", `Scale tab ${index + 1}`);
         return tab;
       });
