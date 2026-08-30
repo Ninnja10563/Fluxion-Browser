@@ -167,6 +167,8 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);
   assert.match(macVerifier, /"page_count": 2/);
   assert.match(palette, /fluxion-memory-test=1/);
+  assert.match(memory, /FluxionMemoryVisualReady/);
+  assert.match(palette, /on\(window, "FluxionMemoryVisualReady"/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);

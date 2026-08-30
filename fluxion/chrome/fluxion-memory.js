@@ -468,6 +468,7 @@
             "content-indexed-and-retrieved",
           );
           Services.prefs.savePrefFile(null);
+          window.dispatchEvent(new window.CustomEvent("FluxionMemoryVisualReady"));
         } else {
           throw new Error("enrichment gate could not read extracted page evidence");
         }

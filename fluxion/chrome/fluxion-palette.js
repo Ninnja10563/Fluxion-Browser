@@ -812,11 +812,15 @@
     }, 1200);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1") {
-    window.setTimeout(() => {
+    on(window, "FluxionMemoryVisualReady", () => {
       open("memory");
       input.value = "example";
-      render(false);
-    }, 5200);
+      renderMemory().catch(error => {
+        Services.prefs.setStringPref("fluxion.memory.grounding.error", String(error));
+        Services.prefs.savePrefFile(null);
+        Cu.reportError(error);
+      });
+    }, { once: true });
   }
   if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
     window.setTimeout(() => {
