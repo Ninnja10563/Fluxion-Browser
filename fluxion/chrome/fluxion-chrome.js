@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionFlowNavigation, FluxionSplitViews, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionSplitViews, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -543,6 +543,60 @@
   const nativeSeparator = () => xul("menuseparator");
   const nativeCommand = (label, command, attributes = {}) =>
     xul("menuitem", { label, command, ...attributes });
+  function closedTabCount() {
+    try { return SessionStore.getClosedTabCountForWindow(window); }
+    catch (error) { Cu.reportError(error); return 0; }
+  }
+  function closedTabs() {
+    try {
+      return FluxionClosedTabs.projectClosedTabs(
+        SessionStore.getClosedTabDataForWindow(window),
+        12,
+      );
+    } catch (error) {
+      Cu.reportError(error);
+      return [];
+    }
+  }
+  function reopenClosedTab(sourceIndex = 0) {
+    if (!closedTabs().some(row => row.sourceIndex === sourceIndex)) return null;
+    try {
+      const tab = SessionStore.undoCloseTab(window, sourceIndex);
+      if (tab) {
+        tabWorkspace(tab);
+        scheduleRender();
+      }
+      return tab;
+    } catch (error) {
+      Cu.reportError(error);
+      return null;
+    }
+  }
+  function populateRecentlyClosedPopup(popup) {
+    popup.replaceChildren();
+    const rows = closedTabs();
+    if (!rows.length) {
+      popup.appendChild(xul("menuitem", { label: "No Recently Closed Tabs", disabled: "true" }));
+      return rows;
+    }
+    for (const row of rows) {
+      const label = row.title.length > 72 ? `${row.title.slice(0, 71)}…` : row.title;
+      popup.appendChild(nativeAction(label, () => reopenClosedTab(row.sourceIndex), {
+        "data-fluxion-closed-index": String(row.sourceIndex),
+        tooltiptext: row.url,
+      }, false));
+    }
+    return rows;
+  }
+  function recentlyClosedMenu(id) {
+    const menu = xul("menu", { label: "Recently Closed Tabs" });
+    const popup = xul("menupopup", { id });
+    on(popup, "popupshowing", event => {
+      if (event.target === popup) populateRecentlyClosedPopup(popup);
+    });
+    menu.appendChild(popup);
+    return menu;
+  }
 
   nativeFlowPopup.append(
     nativeAction("Command Palette…", () => window.FluxionPalette?.open("all"), {
@@ -604,6 +658,8 @@
     nativeAction("History", () => window.FluxionLibrary?.open("history")),
     nativeAction("Bookmarks", () => window.FluxionLibrary?.open("bookmarks")),
     nativeAction("Downloads", () => window.FluxionLibrary?.open("downloads")),
+    nativeSeparator(),
+    recentlyClosedMenu("fluxion-native-recently-closed-popup"),
   );
   nativeLibraryMenu.appendChild(nativeLibraryPopup);
   nativeFlowPopup.append(
@@ -653,6 +709,8 @@
     nativeAction("History", () => window.FluxionLibrary?.open("history")),
     nativeAction("Bookmarks", () => window.FluxionLibrary?.open("bookmarks")),
     nativeAction("Downloads", () => window.FluxionLibrary?.open("downloads")),
+    nativeSeparator(),
+    recentlyClosedMenu("fluxion-toolbar-recently-closed-popup"),
   );
   toolbarLibraryMenu.appendChild(toolbarLibraryPopup);
   const toolbarPageMenu = xul("menu", { label: "Page" });
@@ -2355,6 +2413,8 @@
   updateWindowTitle();
   window.FluxionUI = Object.freeze({
     addWorkspace,
+    closedTabCount,
+    closedTabs,
     createGroup: () => createGroupForTab(gBrowser.selectedTab),
     createSuggestedGroup: (tabs, name) => createNamedGroup(tabs, name),
     createSplitView,
@@ -2369,6 +2429,7 @@
     openNewSplit,
     refresh: scheduleRender,
     renameWorkspace,
+    reopenClosedTab,
     reverseSplitView,
     runNativeCommand,
     revealSidebar: revealFocusSurface,

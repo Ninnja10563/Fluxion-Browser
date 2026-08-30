@@ -149,6 +149,10 @@ registered toolbox command; Fluxion neither embeds nor recreates DevTools.
 That controller and a small checked native-command dispatcher are exported only
 inside privileged browser chrome for the command palette. The palette omits
 commands Gecko marks unavailable and never exposes this bridge to page content.
+Recently Closed views similarly project a bounded display model from
+`SessionStore.getClosedTabDataForWindow` and restore by the original index.
+Fluxion stores no duplicate session record; Gecko continues to own navigation,
+group, private-window, form, scroll, and crash-recovery state.
 The application menu's About command is captured at chrome scope and opens the
 versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle

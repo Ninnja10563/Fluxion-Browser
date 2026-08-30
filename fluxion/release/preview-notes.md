@@ -8,6 +8,27 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.31 makes closed-tab recovery a first-class Fluxion workflow:
+
+- add a live **Recently Closed Tabs** submenu to both the native Flow menu and
+  the cross-platform toolbar menu;
+- search up to ten recent closed pages by title or address in the universal
+  command palette, while keeping the full menu projection bounded at twelve;
+- show **Reopen Last Closed Tab** only when Gecko has recoverable state, rather
+  than leaving a visible command that throws or does nothing;
+- restore by SessionStore index, preserving Gecko navigation history, form and
+  scroll state, tab-group metadata, and Fluxion workspace identity;
+- scope recovery to the current Gecko window, retaining private-window
+  separation and never copying session state into a Fluxion database;
+- redact embedded HTTP credentials from displayed addresses without altering
+  the underlying SessionStore record;
+- require the packaged browser to close a real tab, project it in the native
+  menu, select it as the first palette result, restore it by keyboard, and
+  prove its workspace identity before a DMG can publish.
+
+This fills a practical recovery gap left by removing Firefox's visible
+PanelUI, without recreating session storage.
+
 Version 0.30 completes the command palette's native page-control layer:
 
 - expose Find in Page, Bookmark This Page, Save Page As, Print, page zoom,

@@ -68,6 +68,10 @@ passes:
    native page, bookmark, extension, and Developer Tools actions to appear,
    then drives Zoom In and Actual Size through actual keyboard selection. The
    gate leaves a settled query visible for screenshot inspection.
+   A closed-tab gate then closes a real web tab, requires the SessionStore row
+   to appear in Fluxion's native menu and first in palette ranking, restores it
+   by pressing Return, and proves that its persisted workspace identity and
+   closed-tab count round-trip exactly.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

@@ -16,6 +16,7 @@ const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js")
 const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
+const closedTabs = fs.readFileSync(path.join(root, "chrome/core/closed-tabs.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
 const tabStatus = fs.readFileSync(path.join(root, "chrome/core/tab-status.js"), "utf8");
@@ -220,6 +221,21 @@ test("the universal palette exposes live Gecko page commands without stale comma
   assert.doesNotMatch(palette, /Tools:DevToolbox/);
   assert.match(macVerifier, /FLUXION_VISUAL_PALETTE_COMMAND_TEST=1/);
   assert.match(macVerifier, /native-page-commands-listed-and-keyboard-zoom-round-tripped/);
+});
+
+test("recently closed tabs use Gecko SessionStore in menus and keyboard recovery", () => {
+  assert.match(closedTabs, /projectClosedTabs/);
+  assert.match(closedTabs, /sourceIndex/);
+  assert.match(chrome, /SessionStore\.getClosedTabDataForWindow\(window\)/);
+  assert.match(chrome, /SessionStore\.getClosedTabCountForWindow\(window\)/);
+  assert.match(chrome, /SessionStore\.undoCloseTab\(window, sourceIndex\)/);
+  assert.match(chrome, /fluxion-native-recently-closed-popup/);
+  assert.match(chrome, /fluxion-toolbar-recently-closed-popup/);
+  assert.match(palette, /kind: "Closed Tab"/);
+  assert.match(palette, /ui\.closedTabs\(\)/);
+  assert.doesNotMatch(palette, /SessionStore\.undoCloseTab/);
+  assert.match(macVerifier, /FLUXION_VISUAL_CLOSED_TABS_TEST=1/);
+  assert.match(macVerifier, /native-list-and-keyboard-restore-preserved-workspace/);
 });
 
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {

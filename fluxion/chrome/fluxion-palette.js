@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionSearch, FluxionTabOrganisation, FluxionUrl, ChromeUtils, Ci, Cu */
+/* global gBrowser, Services, FluxionSearch, FluxionTabOrganisation, FluxionUrl, ChromeUtils, Ci, Cu */
 (function initialiseFluxionPalette(window) {
   "use strict";
 
@@ -217,10 +217,6 @@
         keywords: ["incognito privacy"], run: () => window.OpenBrowserWindow({ private: true }),
       },
       {
-        label: "Reopen closed tab", detail: "Restore the most recently closed tab", kind: "Command",
-        keywords: ["undo close"], run: () => SessionStore.undoCloseTab(window, 0),
-      },
-      {
         label: "Duplicate current tab", detail: "Create a copy in this workspace", kind: "Command",
         keywords: ["copy page"], run: () => gBrowser.duplicateTab(gBrowser.selectedTab),
       },
@@ -295,6 +291,25 @@
         label: "Developer Tools", detail: "Inspect the current page with Gecko DevTools", kind: "Page",
         keywords: ["devtools inspector console"], run: () => ui.openDeveloperTools(),
       });
+    }
+    const recoverableTabs = ui.closedTabs();
+    if (recoverableTabs.length) {
+      items.splice(3, 0, {
+        label: "Reopen Last Closed Tab",
+        detail: recoverableTabs[0].title,
+        kind: "Recovery",
+        keywords: ["undo close restore"],
+        run: () => ui.reopenClosedTab(recoverableTabs[0].sourceIndex),
+      });
+      for (const row of recoverableTabs.slice(0, 10)) {
+        items.push({
+          label: `Reopen ${row.title}`,
+          detail: row.url,
+          kind: "Closed Tab",
+          keywords: ["undo close restore", row.title, row.url],
+          run: () => ui.reopenClosedTab(row.sourceIndex),
+        });
+      }
     }
     const selectedTab = gBrowser.selectedTab;
     const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
@@ -901,6 +916,7 @@
                 "fluxion.paletteCommands.health",
                 "native-page-commands-listed-and-keyboard-zoom-round-tripped",
               );
+              window.dispatchEvent(new window.CustomEvent("FluxionPaletteCommandsVisualReady"));
             } else {
               Services.prefs.setStringPref(
                 "fluxion.paletteCommands.visual.error",
@@ -914,6 +930,85 @@
       };
       runPaletteCommandGate();
     }, 32000);
+  }
+  if (Services.env.get("FLUXION_VISUAL_CLOSED_TABS_TEST") === "1") {
+    const runClosedTabsGate = () => {
+      const beforeCount = ui.closedTabCount();
+      const workspace = ui.currentWorkspace();
+      const fixtureURL = "https://example.net/?fluxion-closed-tabs=1";
+      const fixture = gBrowser.addTrustedTab(fixtureURL, { skipAnimation: true });
+      fixture.setAttribute("fluxion-workspace", workspace);
+      ui.selectTab(fixture);
+      window.setTimeout(() => {
+        fixture.setAttribute("label", "Recoverable Reference");
+        gBrowser.removeTab(fixture, { animate: false });
+        const waitForClosed = (attempt = 0) => {
+          const row = ui.closedTabs().find(item => item.url === fixtureURL);
+          if (!row && attempt < 40) {
+            window.setTimeout(() => waitForClosed(attempt + 1), 100);
+            return;
+          }
+          const popup = document.getElementById("fluxion-toolbar-recently-closed-popup");
+          popup?.dispatchEvent(new window.Event("popupshowing", { bubbles: true }));
+          const nativeItem = popup?.querySelector(
+            `[data-fluxion-closed-index="${row?.sourceIndex ?? -1}"]`,
+          );
+          open("all");
+          input.value = "reopen Recoverable Reference";
+          render(false);
+          const recoveryIndex = visibleItems.findIndex(item =>
+            item.kind === "Closed Tab" && item.detail === fixtureURL
+          );
+          const selectedDefault = recoveryIndex === 0;
+          if (selectedDefault) {
+            input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+          }
+          const waitForRestored = (restoreAttempt = 0) => {
+            const restored = [...gBrowser.tabs].find(tab =>
+              tab.linkedBrowser?.currentURI?.spec === fixtureURL
+            );
+            if (!restored && restoreAttempt < 40) {
+              window.setTimeout(() => waitForRestored(restoreAttempt + 1), 100);
+              return;
+            }
+            const workspaceRestored = restored?.getAttribute("fluxion-workspace") === workspace;
+            const countRestored = ui.closedTabCount() === beforeCount;
+            const nativeListed = nativeItem?.getAttribute("label") === "Recoverable Reference";
+            if (restored) gBrowser.removeTab(restored, { animate: false });
+            window.setTimeout(() => {
+              open("all");
+              input.value = "reopen";
+              render(false);
+              const recoveryVisible = visibleItems.some(item => item.kind === "Closed Tab");
+              if (
+                row && nativeListed && selectedDefault && restored &&
+                workspaceRestored && countRestored && recoveryVisible
+              ) {
+                Services.prefs.setStringPref(
+                  "fluxion.closedTabs.health",
+                  "native-list-and-keyboard-restore-preserved-workspace",
+                );
+              } else {
+                Services.prefs.setStringPref(
+                  "fluxion.closedTabs.visual.error",
+                  `row=${Boolean(row)} native=${nativeListed} selected=${selectedDefault} ` +
+                    `restored=${Boolean(restored)} workspace=${workspaceRestored} ` +
+                    `count=${countRestored} visible=${recoveryVisible}`,
+                );
+              }
+              Services.prefs.savePrefFile(null);
+            }, 200);
+          };
+          waitForRestored();
+        };
+        waitForClosed();
+      }, 900);
+    };
+    if (Services.env.get("FLUXION_VISUAL_PALETTE_COMMAND_TEST") === "1") {
+      on(window, "FluxionPaletteCommandsVisualReady", runClosedTabsGate, { once: true });
+    } else {
+      window.setTimeout(runClosedTabsGate, 34000);
+    }
   }
   if (
     Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1" &&
