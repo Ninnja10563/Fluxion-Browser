@@ -2537,11 +2537,10 @@
     workspaces: () => workspaces.map(workspace => ({ ...workspace })),
   });
   if (Services.env.get("FLUXION_VISUAL_WORKSPACE_RESUME_TEST") === "1") {
-    window.setTimeout(async () => {
+    window.setTimeout(() => {
       const fixtures = [];
       const originalWorkspace = currentWorkspace;
       const originalTab = gBrowser.selectedTab;
-      const nextFrame = () => new Promise(resolve => window.requestAnimationFrame(resolve));
       try {
         if (!workspaces.some(item => item.id === "focus") ||
             !workspaces.some(item => item.id === "build")) {
@@ -2561,15 +2560,11 @@
         const buildActive = makeTab("build", "active");
         switchWorkspace("focus");
         gBrowser.selectedTab = focusActive;
-        await nextFrame();
         switchWorkspace("build");
         gBrowser.selectedTab = buildActive;
-        await nextFrame();
         switchWorkspace("focus");
-        await nextFrame();
         const focusRestored = gBrowser.selectedTab === focusActive;
         switchWorkspace("build");
-        await nextFrame();
         const buildRestored = gBrowser.selectedTab === buildActive;
         const unique = ["focus", "build"].every(workspace =>
           [...gBrowser.tabs].filter(tab =>
