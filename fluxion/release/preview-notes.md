@@ -8,6 +8,24 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.17 completes native bookmark-folder management in Fluxion Library:
+
+- browse the actual Places folder hierarchy, including nested user folders and
+  clearly named toolbar, menu, mobile, and other-bookmark roots;
+- save the last ordinary webpage directly into the selected folder without
+  bookmarking the internal Library page;
+- filter bookmarks by folder, rename saved pages, and move them atomically with
+  Gecko's required destination index;
+- create top-level folders or subfolders and rename user-created folders;
+- protect Places roots and tag pseudo-folders from invalid mutations;
+- refuse non-empty folder deletion at the database API boundary, even if the
+  visible child count became stale before confirmation;
+- keep Gecko's advanced organizer available for bulk import/export workflows.
+
+The macOS release gate now creates a real Places folder, moves and renames a
+real bookmark into it, filters Fluxion Library to that folder, and requires the
+resulting filed bookmark to be visible before the DMG can be published.
+
 Version 0.16 introduces Fluxion Library as the primary history, bookmark, and
 download surface:
 

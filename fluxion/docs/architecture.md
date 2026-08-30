@@ -248,6 +248,14 @@ and `PlacesUtils.bookmarks` after explicit confirmation. Bookmark URLs pass
 through Fluxion's safe navigation policy so a stored script-bearing scheme is
 never executed from privileged chrome.
 
+Folder hierarchy is projected from Places parent GUIDs; Fluxion does not keep a
+parallel folder tree. The toolbar, menu, unfiled, mobile, root, and tag folders
+are protected from rename or deletion. Moving a bookmark supplies Gecko's
+required `DEFAULT_INDEX` so it appends atomically in the destination. Folder
+deletion uses `preventRemovalOfNonEmptyFolders`, ensuring a stale UI count can
+never cause recursive data loss. Tag pseudo-folders are excluded from move
+destinations because they have different Places semantics.
+
 Downloads come from `Downloads.PUBLIC` in ordinary windows and
 `Downloads.PRIVATE` in private windows. A live `DownloadList` view refreshes
 progress without polling or duplicating download state. Open, containing-folder,

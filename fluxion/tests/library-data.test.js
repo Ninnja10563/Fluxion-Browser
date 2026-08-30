@@ -29,3 +29,25 @@ test("library filtering preserves source order and applies a hard cap", () => {
     "Saved page 12", "Saved page 112",
   ]);
 });
+
+test("bookmark folder trees preserve roots, nesting, and orphan safety", () => {
+  const folder = (id, title, parentGuid) => Library.normalise({ id, title, parentGuid }, "folders");
+  const tree = Library.folderTree([
+    folder("child", "Child", "root-a"),
+    folder("root-b", "Other Root", "places-root"),
+    folder("root-a", "Primary Root", "places-root"),
+    folder("orphan", "Recovered", "missing"),
+  ], ["root-a", "root-b"]);
+  assert.deepEqual(tree.map(item => [item.id, item.depth]), [
+    ["root-a", 0], ["child", 1], ["root-b", 0], ["orphan", 0],
+  ]);
+});
+
+test("bookmark folder filters do not duplicate or mutate source records", () => {
+  const records = [
+    Library.normalise({ id: "one", title: "One", parentGuid: "folder-a" }, "bookmarks"),
+    Library.normalise({ id: "two", title: "Two", parentGuid: "folder-b" }, "bookmarks"),
+  ];
+  assert.deepEqual(Library.bookmarksInFolder(records, "folder-a").map(item => item.id), ["one"]);
+  assert.equal(Library.bookmarksInFolder(records, "all"), records);
+});

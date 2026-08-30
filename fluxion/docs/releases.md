@@ -15,7 +15,10 @@ passes:
    fixture then requires a second request containing two explicitly selected
    page contexts and Fluxion must render both sources. The final gate seeds a
    real Places visit, bookmark, and native download-list record, opens Fluxion
-   Library, and requires all three backends to render before capture.
+   Library, and requires all three backends to render before capture. It then
+   creates a Places folder, moves and renames the test bookmark using the public
+   mutation API, filters Library to that folder, and requires the filed record
+   to be visible.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

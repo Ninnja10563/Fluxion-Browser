@@ -92,6 +92,7 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_AI_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_AI_COMPARE_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_LIBRARY_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1/);
   assert.match(macVerifier, /ollama-stub\.py/);
   assert.match(macVerifier, /current-page-answer-visible/);
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);
@@ -113,6 +114,13 @@ test("Fluxion Library owns visible history, bookmark, and download workflows", (
   assert.match(library, /downloadList\.remove\(download\)/);
   assert.match(library, /PlacesUtils\.history\.remove/);
   assert.match(library, /PlacesUtils\.bookmarks\.remove/);
+  assert.match(library, /PlacesUtils\.bookmarks\.insert/);
+  assert.match(library, /PlacesUtils\.bookmarks\.update/);
+  assert.match(library, /PlacesUtils\.bookmarks\.DEFAULT_INDEX/);
+  assert.match(library, /preventRemovalOfNonEmptyFolders: true/);
+  assert.match(library, /PROTECTED_FOLDER_GUIDS/);
+  assert.match(library, /Save current page/);
+  assert.match(library, /Move Bookmark/);
   assert.match(library, /data-fluxion-library-visible\] #identity-icon-box/);
   assert.match(library, /FluxionPalette\?\.close\(\)/);
   assert.match(palette, /FluxionLibrary\?\.open\("history"\)/);

@@ -231,8 +231,11 @@ palette to enter Fluxion Library. History and bookmarks are read from the real
 Places database; downloads update from Gecko's live download list and remain
 separate in private windows. Finished files can be opened or revealed, active
 downloads canceled, interrupted downloads retried, and list entries removed.
-The concise **Manage bookmark folders…** route retains Gecko's complete folder
-organizer while Fluxion's native folder editor is developed.
+The Bookmarks section can save the last ordinary webpage, filter by a nested
+folder, rename bookmarks, and move them between folders. The Folders section
+creates root folders or subfolders, renames user folders, and safely refuses to
+delete non-empty folders. Gecko's advanced organizer remains available for
+bulk operations and import/export.
 
 ## License
 
