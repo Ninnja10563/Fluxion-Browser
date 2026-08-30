@@ -37,6 +37,10 @@ SigmaOS is deliberately excluded as a reference.
   picture, attention, sleep, crash, and audio state remain still and legible in
   grayscale. Camera, microphone, screen sharing, and crash are the only states
   permitted to use warning colour.
+- A dragged tab treats the narrow top and bottom edges of a row as insertion
+  lines and the broad centre as a split target. Split feedback temporarily
+  replaces the row content with a literal spatial action such as “Split left”
+  or “Stack below”; it does not rely on colour alone.
 - Workspace colour appears only in a one-pixel selection indicator.
 - The new-tab page is blank by default. The address field is the primary entry
   point, not a duplicated hero search box.

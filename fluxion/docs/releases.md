@@ -43,6 +43,11 @@ passes:
    elements, verifies visible and accessible output, clicks Fluxion's media
    control, and refuses publication unless Gecko records mute and the action
    rerenders as Unmute.
+   A spatial-drop gate then presents the real Flow split feedback on a native
+   tab row, creates and separates side-by-side and stacked Gecko pairs through
+   the same drop application path, performs an edge reorder, and rejects the
+   build unless native pair order, orientation, and tab order all match the
+   pointer intent.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

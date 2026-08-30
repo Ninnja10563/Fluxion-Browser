@@ -28,7 +28,8 @@ controls work and its failure paths have been tested.
 - fuzzy command palette and high-volume tab search (initial command, tab,
   workspace, history, and bookmark search implemented)
 - Gecko-native side-by-side and stacked split orientations, Peek Pages, and
-  configurable tab sleeping (implemented)
+  configurable tab sleeping (implemented, including direct spatial
+  drag-to-split and edge reordering)
 
 ## Phase 4 — local semantic history
 

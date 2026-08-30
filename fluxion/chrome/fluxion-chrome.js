@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionFlowNavigation, FluxionSplitViews, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionFlowNavigation, FluxionSplitViews, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -26,6 +26,7 @@
   let contextWorkspace = null;
   let dragTab = null;
   let dragTabs = [];
+  let dragTargetElement = null;
   let renderQueued = false;
   let focusTabAfterRender = null;
   let focusWorkspaceAfterRender = null;
@@ -276,8 +277,23 @@
     }
     .fluxion-tab.is-closing { opacity: 0; transform: scaleY(.72); pointer-events: none; }
     .fluxion-tab.is-sleeping { color: color-mix(in srgb, var(--fluxion-muted) 82%, transparent); }
-    .fluxion-tab.is-dragover::after {
-      content: ""; position: absolute; inset: -2px 4px auto; height: 2px; background: var(--fluxion-accent);
+    .fluxion-tab[data-drop-intent="reorder-before"]::after,
+    .fluxion-tab[data-drop-intent="reorder-after"]::after {
+      content: ""; position: absolute; inset-inline: 4px; height: 2px;
+      z-index: 3; background: var(--fluxion-accent); pointer-events: none;
+    }
+    .fluxion-tab[data-drop-intent="reorder-before"]::after { inset-block-start: -2px; }
+    .fluxion-tab[data-drop-intent="reorder-after"]::after { inset-block-end: -2px; }
+    .fluxion-tab[data-drop-action="split"] {
+      color: var(--fluxion-ink); box-shadow: inset 0 0 0 1px var(--fluxion-accent);
+    }
+    .fluxion-tab[data-drop-action="split"]::after {
+      content: attr(data-drop-label); position: absolute; inset: 3px 5px; z-index: 3;
+      display: flex; align-items: center; justify-content: center;
+      border: 1px solid color-mix(in srgb, var(--fluxion-accent) 72%, transparent);
+      border-radius: 2px; color: var(--fluxion-ink); background: var(--fluxion-bg-raised);
+      font-size: 9px; font-weight: 650; letter-spacing: .045em; text-transform: uppercase;
+      pointer-events: none;
     }
     .fluxion-split {
       position: relative; margin: 2px 0 3px; padding-inline-start: 3px;
@@ -362,6 +378,11 @@
     }
     .fluxion-new-tab:hover { background: var(--fluxion-hover); }
     .fluxion-count { color: var(--fluxion-muted); min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+    .fluxion-visually-hidden {
+      position: fixed !important; width: 1px !important; height: 1px !important;
+      padding: 0 !important; margin: -1px !important; overflow: hidden !important;
+      clip-path: inset(50%) !important; white-space: nowrap !important; border: 0 !important;
+    }
     #fluxion-flow[data-state="compact"] .fluxion-name,
     #fluxion-flow[data-state="compact"] .fluxion-section-label,
     #fluxion-flow[data-state="compact"] .fluxion-title,
@@ -406,6 +427,9 @@
     #fluxion-flow[data-state="compact"] .fluxion-add-workspace { width: 30px; height: 28px; }
     #fluxion-flow[data-state="compact"] .fluxion-tabs { padding-inline: 6px; }
     #fluxion-flow[data-state="compact"] .fluxion-tab { justify-content: center; padding: 0; }
+    #fluxion-flow[data-state="compact"] .fluxion-tab[data-drop-action="split"]::after {
+      content: ""; inset: 4px;
+    }
     #fluxion-flow[data-state="compact"] .fluxion-group-heading { justify-content: center; padding: 0; }
     #fluxion-flow[data-state="compact"] .fluxion-group-disclosure { display: none; }
     #fluxion-flow[data-state="compact"] .fluxion-group-tabs { margin-inline-start: 3px; padding-inline-start: 0; }
@@ -625,8 +649,14 @@
   newTabButton.innerHTML = `<b aria-hidden="true">+</b> <span>New tab</span>`;
   newTabButton.setAttribute("aria-label", "New tab");
   const count = create("span", "fluxion-count");
+  const dragAnnouncement = create("span", "fluxion-visually-hidden");
+  dragAnnouncement.setAttribute("role", "status");
+  dragAnnouncement.setAttribute("aria-live", "polite");
+  dragAnnouncement.setAttribute("aria-atomic", "true");
   footer.append(newTabButton, count);
-  flow.append(header, workspaceBar, pinnedLabel, pinnedTabs, openLabel, tabsList, footer);
+  flow.append(
+    header, workspaceBar, pinnedLabel, pinnedTabs, openLabel, tabsList, footer, dragAnnouncement,
+  );
   browser.prepend(flow);
 
   function tabWorkspace(tab) {
@@ -1029,6 +1059,94 @@
       .filter(element => !element.closest(".fluxion-group.is-collapsed"));
   }
 
+  function clearTabDropFeedback() {
+    if (dragTargetElement) {
+      dragTargetElement.removeAttribute("data-drop-intent");
+      dragTargetElement.removeAttribute("data-drop-action");
+      dragTargetElement.removeAttribute("data-drop-label");
+    }
+    dragTargetElement = null;
+    dragAnnouncement.textContent = "";
+  }
+
+  function resetTabDrag() {
+    clearTabDropFeedback();
+    dragTab = null;
+    dragTabs = [];
+  }
+
+  function tabDropIntent(event, element, target) {
+    const canSplit = dragTabs.length === 1 &&
+      !dragTabs.includes(target) &&
+      tabWorkspace(dragTabs[0]) === tabWorkspace(target) &&
+      FluxionSplitViews.canSplit(dragTabs[0], target);
+    return FluxionTabDrop.classify({
+      canSplit,
+      clientX: event.clientX,
+      clientY: event.clientY,
+      rect: element.getBoundingClientRect(),
+      rtl: window.getComputedStyle(element).direction === "rtl",
+      stacked: event.shiftKey,
+    });
+  }
+
+  function showTabDropFeedback(element, intent, target) {
+    clearTabDropFeedback();
+    if (!element || intent.action === "none") return;
+    dragTargetElement = element;
+    element.dataset.dropIntent = `${intent.action}-${intent.position}`;
+    element.dataset.dropAction = intent.action;
+    element.dataset.dropLabel = FluxionTabDrop.shortLabel(intent);
+    dragAnnouncement.textContent = FluxionTabDrop.announcement(
+      intent,
+      tabLabel(dragTab),
+      tabLabel(target),
+    );
+  }
+
+  function reorderTabsAt(movingTabs, target, position) {
+    const moving = movingTabs
+      .filter(candidate => candidate?.parentNode && candidate !== target)
+      .sort((left, right) => left._tPos - right._tPos);
+    if (!moving.length || !target?.parentNode) return false;
+    if (position === "after" && typeof gBrowser.moveTabsAfter === "function") {
+      gBrowser.moveTabsAfter(moving, target);
+    } else if (position !== "after" && typeof gBrowser.moveTabsBefore === "function") {
+      gBrowser.moveTabsBefore(moving, target);
+    } else if (position === "after") {
+      for (const candidate of [...moving].reverse()) {
+        gBrowser.moveTabTo(candidate, target._tPos + 1);
+      }
+    } else {
+      for (const candidate of moving) gBrowser.moveTabTo(candidate, target._tPos);
+    }
+    scheduleRender();
+    return true;
+  }
+
+  function applyTabDrop(movingTabs, target, intent) {
+    if (!intent || intent.action === "none" || movingTabs.includes(target)) return null;
+    if (intent.action === "split") {
+      if (
+        movingTabs.length !== 1 ||
+        tabWorkspace(movingTabs[0]) !== tabWorkspace(target) ||
+        !FluxionSplitViews.canSplit(movingTabs[0], target)
+      ) return null;
+      const dragged = movingTabs[0];
+      const before = intent.position !== "after";
+      const primary = before ? dragged : target;
+      const secondary = before ? target : dragged;
+      const splitView = createSplitView(primary, secondary, {
+        orientation: intent.orientation,
+        selectSecondary: dragged === secondary,
+      });
+      return splitView ? { action: "split", splitView } : null;
+    }
+    return reorderTabsAt(movingTabs, target, intent.position)
+      ? { action: "reorder", position: intent.position }
+      : null;
+  }
+
   function closeWithStability(tab, element) {
     if (!tab || tab.closing) return;
     const tabs = contextTabs(tab);
@@ -1300,27 +1418,32 @@
     item.addEventListener("dragstart", event => {
       dragTab = tab;
       dragTabs = contextTabs(tab);
-      event.dataTransfer.effectAllowed = "move";
-      event.dataTransfer.setData("application/x-fluxion-tab", "tab");
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/x-fluxion-tab", "tab");
+      }
+      dragAnnouncement.textContent =
+        "Drag to an edge to reorder, or over the centre to split. Hold Shift to stack pages.";
     });
     item.addEventListener("dragover", event => {
-      if (!dragTab || dragTab === tab) return;
+      if (!dragTab || dragTabs.includes(tab)) return;
       event.preventDefault();
-      item.classList.add("is-dragover");
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+      showTabDropFeedback(item, tabDropIntent(event, item, tab), tab);
     });
-    item.addEventListener("dragleave", () => item.classList.remove("is-dragover"));
+    item.addEventListener("dragleave", event => {
+      if (event.relatedTarget?.nodeType && item.contains(event.relatedTarget)) return;
+      if (dragTargetElement === item) clearTabDropFeedback();
+    });
     item.addEventListener("drop", event => {
       event.preventDefault();
-      item.classList.remove("is-dragover");
-      if (dragTab && dragTab !== tab) {
-        const moving = dragTabs.filter(candidate => candidate !== tab).sort((a, b) => a._tPos - b._tPos);
-        let index = tab._tPos;
-        for (const candidate of moving) gBrowser.moveTabTo(candidate, index++);
+      event.stopPropagation();
+      if (dragTab && !dragTabs.includes(tab)) {
+        applyTabDrop(dragTabs, tab, tabDropIntent(event, item, tab));
       }
-      dragTab = null;
-      dragTabs = [];
+      resetTabDrag();
     });
-    item.addEventListener("dragend", () => { dragTab = null; dragTabs = []; });
+    item.addEventListener("dragend", resetTabDrag);
     tabElements.set(tab, item);
     return item;
   }
@@ -1420,6 +1543,7 @@
     heading.addEventListener("dragover", event => {
       if (!dragTab || dragTab.group === group) return;
       event.preventDefault();
+      clearTabDropFeedback();
       heading.setAttribute("data-dragover", "true");
     });
     heading.addEventListener("dragleave", () => heading.removeAttribute("data-dragover"));
@@ -1427,8 +1551,7 @@
       event.preventDefault();
       heading.removeAttribute("data-dragover");
       if (dragTabs.length) group.addTabs(dragTabs.filter(tab => !tab.pinned && !tab.splitview));
-      dragTab = null;
-      dragTabs = [];
+      resetTabDrag();
       scheduleRender();
     });
 
@@ -1477,6 +1600,7 @@
       button.addEventListener("dragover", event => {
         if (!dragTab || tabWorkspace(dragTab) === workspace.id) return;
         event.preventDefault();
+        clearTabDropFeedback();
         button.setAttribute("data-dragover", "true");
       });
       button.addEventListener("dragleave", () => button.removeAttribute("data-dragover"));
@@ -1484,8 +1608,7 @@
         event.preventDefault();
         button.removeAttribute("data-dragover");
         if (dragTabs.length) moveTabsToWorkspace(dragTabs, workspace.id);
-        dragTab = null;
-        dragTabs = [];
+        resetTabDrag();
       });
       workspaceList.appendChild(button);
       workspaceElements.set(workspace.id, button);
@@ -2053,6 +2176,67 @@
       gBrowser.removeTab(crashed, { animate: false });
       scheduleRender();
     }, 2200);
+  }
+  if (Services.env.get("FLUXION_VISUAL_DROP_TEST") === "1") {
+    window.setTimeout(() => {
+      const dragged = gBrowser.addTrustedTab("about:blank?fluxion-drop=dragged", { skipAnimation: true });
+      const target = gBrowser.addTrustedTab("about:blank?fluxion-drop=target", { skipAnimation: true });
+      dragged.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      target.setAttribute(TAB_WORKSPACE, currentWorkspace);
+      dragged.setAttribute("label", "Dragged reference");
+      target.setAttribute("label", "Drop target");
+      render();
+
+      const rect = { left: 0, top: 0, width: 200, height: 100 };
+      const sideIntent = FluxionTabDrop.classify({
+        canSplit: true, clientX: 40, clientY: 50, rect,
+      });
+      dragTab = dragged;
+      dragTabs = [dragged];
+      const targetRow = tabElements.get(target);
+      showTabDropFeedback(targetRow, sideIntent, target);
+      const sideFeedback = targetRow?.dataset.dropAction === "split" &&
+        targetRow?.dataset.dropLabel === "Split left" &&
+        dragAnnouncement.textContent.includes("to the left of");
+      const sideResult = applyTabDrop([dragged], target, sideIntent);
+      const sideBySide = Boolean(
+        sideResult?.splitView?.tabs?.[0] === dragged &&
+        FluxionSplitViews.orientationOf(sideResult.splitView) === FluxionSplitViews.SIDE_BY_SIDE
+      );
+
+      separateSplitView(dragged);
+      const stackedIntent = FluxionTabDrop.classify({
+        canSplit: true, clientX: 100, clientY: 60, rect, stacked: true,
+      });
+      const stackedResult = applyTabDrop([dragged], target, stackedIntent);
+      const stacked = Boolean(
+        stackedResult?.splitView?.tabs?.[1] === dragged &&
+        FluxionSplitViews.orientationOf(stackedResult.splitView) === FluxionSplitViews.STACKED
+      );
+
+      separateSplitView(dragged);
+      const reorderIntent = FluxionTabDrop.classify({
+        canSplit: true, clientX: 100, clientY: 8, rect,
+      });
+      const reordered = applyTabDrop([dragged], target, reorderIntent)?.action === "reorder" &&
+        dragged._tPos + 1 === target._tPos;
+      if (sideFeedback && sideBySide && stacked && reordered) {
+        Services.prefs.setStringPref(
+          "fluxion.drop.health",
+          "native-drag-reorder-and-two-orientation-split",
+        );
+      } else {
+        Services.prefs.setStringPref(
+          "fluxion.drop.visual.error",
+          `feedback=${sideFeedback} side=${sideBySide} stacked=${stacked} reorder=${reordered}`,
+        );
+      }
+      Services.prefs.savePrefFile(null);
+      if (dragged.splitview) separateSplitView(dragged);
+      gBrowser.removeTabs([dragged, target], { animate: false });
+      resetTabDrag();
+      scheduleRender();
+    }, 3000);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
     const groupTabs = [...gBrowser.tabs]

@@ -8,6 +8,24 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.26 makes Flow tab dragging spatial and split-aware:
+
+- retain narrow top and bottom edge zones for precise before/after reordering;
+- turn the broad centre of an eligible target into a native side-by-side split
+  action, ordered by the pointer's left or right position;
+- hold Shift during the same centre drop to stack the dragged page above or
+  below the target;
+- show a flat literal preview such as **Split left** or **Stack below**, plus a
+  screen-reader announcement of the resulting geometry;
+- use Gecko's batch tab-move and `addTabSplitView` operations, preserving native
+  selected tabs, content processes, session state, security, and teardown;
+- fall back to ordinary reorder feedback for multi-selections, pinned tabs,
+  existing split members, cross-workspace targets, and other ineligible pairs;
+- gate the packaged app through actual side-by-side and stacked native drops,
+  separation, and an edge reorder before a DMG can publish.
+
+No content view is recreated or reloaded during a successful split drop.
+
 Version 0.25 completes Flow's live native tab-status language:
 
 - project Gecko loading, attention, picture-in-picture, camera, microphone,

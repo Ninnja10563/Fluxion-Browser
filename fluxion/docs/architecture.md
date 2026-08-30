@@ -98,6 +98,22 @@ compatibility fallback. The map contains no URLs or page state, and private
 windows neither read nor write it. A stacked pair therefore restores without a
 shadow tab/session database or page reload.
 
+Flow's drag layer classifies pointer geometry without moving a tab itself. The
+top and bottom 24% of a target row are stable before/after insertion zones; the
+centre becomes a split target only when exactly one eligible native tab is
+being dragged. Holding Shift selects stacked orientation, while ordinary
+centre drops use side-by-side orientation and left/right pointer position sets
+the native pair order. Visual RTL reverses that horizontal ordering.
+
+Accepted reorder drops call Gecko's batch `moveTabsBefore` or `moveTabsAfter`
+operations, with a compatibility fallback for older ESR chrome. Accepted split
+drops delegate to the same `gBrowser.addTabSplitView` path as the context menu
+and command palette. Multi-selections, pinned tabs, closing tabs, existing
+split members, self-drops, and cross-workspace targets never advertise a split.
+A polite live region describes the exact before/after/left/right/top/bottom
+result while pointer feedback uses both an insertion line or literal label and
+shape, not colour alone.
+
 The visible navigation bar is styled by Fluxion but deliberately retains
 Firefox's native URL bar internals. This preserves certificate identity,
 permission anchors, autofill, search suggestions, extension page actions, and

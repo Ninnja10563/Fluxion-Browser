@@ -26,7 +26,8 @@ The current preview is runnable and includes:
   with a concise preview and explicit confirmation before native grouping;
 - Gecko-native two-page split view with side-by-side and stacked layouts, a
   live draggable divider, Flow pairing, spatial accessibility labels,
-  command-palette and context-menu creation, order swapping, separation, and
+  command-palette, context-menu, and direct center-drop creation, Shift-drag
+  stacking, precise edge-drop reordering, order swapping, separation, and
   orientation-aware native session restoration;
 - three-state sidebar (expanded, compact, focus rail);
 - persistent workspace creation, renaming, reordering, symbols, restrained
@@ -203,8 +204,11 @@ adjacent workspace after confirmation.
 
 To browse two pages together, right-click a tab and choose **Open in Split View
 With**, or use **Open split side by side** / **Open stacked split** in the
-command palette. An existing pair can switch between columns and rows without
-reloading either page. It stays together in Flow and can be reordered,
+command palette. You can also drag one ordinary tab over the centre of another:
+the left or right half sets its side, and holding Shift changes the preview to
+**Stack above** or **Stack below**. Use the narrow top or bottom edge when you
+only want to reorder. An existing pair can switch between columns and rows
+without reloading either page. It stays together in Flow and can be reordered,
 separated, moved to another workspace, and restored after a restart as one
 unit.
 
