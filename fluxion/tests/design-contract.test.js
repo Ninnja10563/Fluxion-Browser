@@ -221,6 +221,8 @@ test("Flow pointer closing holds the vacated row until intentional movement", ()
   assert.match(chrome, /FluxionTabCloseStability\.guardRect/);
   assert.match(chrome, /FluxionTabCloseStability\.shouldRelease/);
   assert.match(chrome, /closingTabs\.has\(tab\)/);
+  assert.match(chrome, /releaseObserved/);
+  assert.match(chrome, /compressionAttempt < 30/);
   assert.match(macVerifier, /FLUXION_VISUAL_CLOSE_STABILITY_TEST=1/);
   assert.match(macVerifier, /pointer-close-held-one-row-until-movement/);
 });

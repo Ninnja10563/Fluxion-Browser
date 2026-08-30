@@ -3167,6 +3167,7 @@
         }));
         const started = closingRow.classList.contains("is-closing");
         const holdStarted = Boolean(pointerCloseHold?.tabs.has(closing));
+        const activeHold = pointerCloseHold;
         const tracked = closingTabs.has(closing);
         window.setTimeout(() => {
           const repeatTarget = document.elementFromPoint(pointer.clientX, pointer.clientY);
@@ -3195,26 +3196,35 @@
               clientY: pointer.clientY,
               bubbles: true,
             }));
-            window.setTimeout(() => {
+            const releaseObserved = Boolean(activeHold && (
+              activeHold.releasing || pointerCloseHold !== activeHold
+            ));
+            const verifyCompression = (compressionAttempt = 0) => {
               const followingAfter = tabElements.get(following);
               const compressed = !closingRow.isConnected && followingAfter &&
                 followingAfter.getBoundingClientRect().top < followingTop - 10;
-              if (protectedTarget && held && neighboursSafe && compressed) {
+              if (protectedTarget && held && neighboursSafe && releaseObserved && compressed) {
                 Services.prefs.setStringPref(
                   "fluxion.closeStability.health",
                   "pointer-close-held-one-row-until-movement",
                 );
+              } else if (compressionAttempt < 30) {
+                window.setTimeout(() => verifyCompression(compressionAttempt + 1), 50);
+                return;
               } else {
                 Services.prefs.setStringPref(
                   "fluxion.closeStability.visual.error",
                   `protected=${protectedTarget} held=${held} neighbours=${Boolean(neighboursSafe)} ` +
-                    `compressed=${Boolean(compressed)} ${checkpoint}`,
+                    `released=${releaseObserved} compressed=${Boolean(compressed)} ` +
+                    `releasing=${Boolean(activeHold?.releasing)} currentHold=${pointerCloseHold === activeHold} ` +
+                    checkpoint,
                 );
               }
               Services.prefs.savePrefFile(null);
               gBrowser.removeTabs([first, following].filter(tab => tab.parentNode), { animate: false });
               scheduleRender();
-            }, 180);
+            };
+            window.setTimeout(() => verifyCompression(), 180);
           }, 160);
         }, 180);
       }, 80);
