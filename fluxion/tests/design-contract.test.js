@@ -173,7 +173,8 @@ test("Focus Flow is an inert, keyboard-revealable overlay that preserves page ge
 test("the trailing toolbar uses a working Fluxion menu instead of Firefox PanelUI", () => {
   assert.match(chrome, /#PanelUI-button \{ display: none !important; \}/);
   assert.match(chrome, /id: "fluxion-toolbar-menu"/);
-  assert.match(chrome, /context-stroke/);
+  assert.match(chrome, /fill='context-fill'/);
+  assert.match(chrome, /image: toolbarMenuIcon/);
   for (const label of [
     "New Tab", "New Window", "New Private Window", "Command Palette…",
     "Search Tabs…", "Library", "Fluxion Settings…", "About Fluxion",

@@ -119,10 +119,7 @@
     }
     #PanelUI-button { display: none !important; }
     #fluxion-toolbar-menu {
-      -moz-context-properties: fill, stroke; fill: currentColor; stroke: currentColor;
-    }
-    #fluxion-toolbar-menu > .toolbarbutton-icon {
-      list-style-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 4.5h13.5l-7.2 6.3H18L6 20l3.5-7H5z' fill='none' stroke='context-stroke' stroke-width='1.55' stroke-linejoin='round'/%3E%3C/svg%3E");
+      -moz-context-properties: fill; fill: currentColor;
     }
     @media (-moz-platform: macos) {
       #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
@@ -630,12 +627,16 @@
   }
 
   const toolbarTarget = document.getElementById("nav-bar-customization-target");
+  const toolbarMenuIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' " +
+    "viewBox='0 0 24 24'%3E%3Cpath fill='context-fill' d='M5 4.5h13.5l-7.2 6.3H18L6 " +
+    "20l3.5-7H5z'/%3E%3C/svg%3E";
   const toolbarMenuButton = xul("toolbarbutton", {
     id: "fluxion-toolbar-menu",
     class: "toolbarbutton-1 chromeclass-toolbar-additional",
     type: "menu",
     label: "Fluxion menu",
     tooltiptext: "Fluxion menu",
+    image: toolbarMenuIcon,
     removable: "false",
   });
   toolbarMenuButton.setAttribute("aria-label", "Fluxion menu");
@@ -2629,6 +2630,7 @@
       const mounted = toolbarMenuButton.parentNode === toolbarTarget &&
         buttonRect.width >= 24 && buttonRect.width <= 38 && buttonRect.height >= 24 &&
         toolbarMenuButton.getAttribute("aria-label") === "Fluxion menu" &&
+        toolbarMenuButton.getAttribute("image") === toolbarMenuIcon &&
         expectedLabels.every(label => labels.includes(label));
       const navigationVisible = urlbarRect?.width >= 300 && urlbarRect?.height >= 28 &&
         backRect?.width >= 24 && backRect?.height >= 24;
