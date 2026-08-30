@@ -87,11 +87,14 @@ profile preference. This keeps crash recovery atomic with the actual tab and
 window session and avoids a second database whose state could drift from
 Firefox.
 
-Gecko may finish applying its native selected-tab state after Fluxion chrome is
-already interactive. Fluxion remembers the latest workspace chosen during that
-short startup interval and reconciles it after SessionStore's
-`promiseAllWindowsRestored` resolves. The user's choice wins without delaying
-Flow or replacing Gecko's restore lifecycle; the multi-launch verifier awaits
+Gecko may finish exposing restored window `extData` or applying its native
+selected-tab state after Fluxion chrome is already interactive. Fluxion uses
+the selected tab's already restored workspace as a provisional non-destructive
+choice and does not write a window value during initial projection. After
+SessionStore's `promiseAllWindowsRestored` resolves, it re-reads the native
+window value and reconciles it. An actual workspace choice made by the user
+during that interval is recorded separately and wins. This keeps Flow immediate
+without replacing Gecko's restore lifecycle; the multi-launch verifier awaits
 the same authoritative boundary before exercising workspace switches.
 
 Workspace definitions are a small bounded Firefox preference containing only

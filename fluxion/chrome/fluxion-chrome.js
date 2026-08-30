@@ -40,8 +40,14 @@
     sessionRestoreSettled = true;
     const pending = pendingRestoreWorkspace;
     pendingRestoreWorkspace = null;
-    if (pending && currentWorkspace === pending) {
-      switchWorkspace(pending, { reconcileRestore: false, updateProfileFallback: false });
+    const restored = windowSessionWorkspace();
+    const target = pending || FluxionWorkspaceTabs.windowWorkspace(
+      workspaces,
+      restored,
+      currentWorkspace,
+    );
+    if (target && (pending ? currentWorkspace === pending : true)) {
+      switchWorkspace(target, { reconcileRestore: false, updateProfileFallback: false });
     }
   }).catch(Cu.reportError);
 
@@ -509,13 +515,17 @@
   let splitOrientations = FluxionSplitViews.parseOrientationMap(
     privateWindow ? "" : Services.prefs.getStringPref(PREF_SPLIT_ORIENTATIONS, ""),
   );
-  let restoredWindowWorkspace = "";
-  try {
-    restoredWindowWorkspace = SessionStore.getCustomWindowValue(
-      window,
-      FluxionWorkspaceTabs.WINDOW_VALUE_KEY,
-    );
-  } catch (_) {}
+  function windowSessionWorkspace() {
+    try {
+      return SessionStore.getCustomWindowValue(
+        window,
+        FluxionWorkspaceTabs.WINDOW_VALUE_KEY,
+      );
+    } catch (_) {
+      return "";
+    }
+  }
+  let restoredWindowWorkspace = windowSessionWorkspace();
   let currentWorkspace = FluxionWorkspaceTabs.windowWorkspace(
     workspaces,
     restoredWindowWorkspace,
@@ -1217,10 +1227,12 @@
       rememberWorkspaceTab(previous);
     }
     currentWorkspace = id;
-    try {
-      SessionStore.setCustomWindowValue(window, FluxionWorkspaceTabs.WINDOW_VALUE_KEY, id);
-    } catch (error) {
-      Cu.reportError(error);
+    if (options.persistWindow !== false) {
+      try {
+        SessionStore.setCustomWindowValue(window, FluxionWorkspaceTabs.WINDOW_VALUE_KEY, id);
+      } catch (error) {
+        Cu.reportError(error);
+      }
     }
     if (!privateWindow && options.updateProfileFallback !== false) {
       Services.prefs.setStringPref(PREF_CURRENT, id);
@@ -1270,7 +1282,10 @@
         }
       }
       notifyWorkspaceChange();
-      switchWorkspace(currentWorkspace, { updateProfileFallback: false });
+      switchWorkspace(currentWorkspace, {
+        persistWindow: sessionRestoreSettled,
+        updateProfileFallback: false,
+      });
     },
   };
   Services.prefs.addObserver(PREF_WORKSPACES, workspacePrefObserver);
@@ -2596,11 +2611,23 @@
   }, { once: true });
 
   // Assign restored/unowned tabs before filtering, then reveal the saved workspace.
+  const selectedTabWorkspace = storedTabWorkspace(gBrowser.selectedTab);
   for (const tab of gBrowser.tabs) {
     tabWorkspace(tab);
     workspaceTabActive(tab);
   }
-  switchWorkspace(currentWorkspace, { updateProfileFallback: false });
+  if (!restoredWindowWorkspace) {
+    currentWorkspace = FluxionWorkspaceTabs.windowWorkspace(
+      workspaces,
+      selectedTabWorkspace,
+      currentWorkspace,
+    );
+  }
+  switchWorkspace(currentWorkspace, {
+    reconcileRestore: false,
+    persistWindow: false,
+    updateProfileFallback: false,
+  });
   render();
   applyActiveSplitOrientation();
   updateWindowTitle();

@@ -15,6 +15,9 @@ contexts instead of sharing one profile-wide active workspace:
   `extData`, beside the window's actual tabs and selected page;
 - retain the previous profile preference only as a migration/default for new
   normal windows, while a restored window always prefers its own valid value;
+- treat the selected native tab as a provisional startup hint, defer the first
+  window-value write until Gecko finishes restoring all windows, and then
+  re-read `extData` so startup cannot overwrite a late restored value;
 - prevent private-window workspace switching from rewriting that normal-window
   fallback;
 - repair stale values safely through the current workspace list without

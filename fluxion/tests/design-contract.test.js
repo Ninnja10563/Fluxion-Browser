@@ -97,6 +97,8 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ABSENCE_TEST/);
   assert.match(chrome, /SessionStore\.setCustomWindowValue\(window, FluxionWorkspaceTabs\.WINDOW_VALUE_KEY, id\)/);
   assert.match(chrome, /SessionStore\.getCustomWindowValue/);
+  assert.match(chrome, /const restored = windowSessionWorkspace\(\)/);
+  assert.match(chrome, /persistWindow: false/);
   assert.match(workspaceTabs, /WINDOW_VALUE_KEY = "fluxion-active-workspace"/);
   assert.match(sessionRecovery, /validateWindowSet\(normalSnapshots\(\)\)/);
   assert.match(macSessionVerifier, /two-window-workspaces-tabs-groups-stacked-split-restored/);
