@@ -51,6 +51,9 @@ The current preview is runnable and includes:
 - optional Browser Memory search over non-private history, combining exact
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;
+- independent Browser Memory embedding control: **Keywords only** keeps local
+  titles and page evidence searchable with ML and vectors disabled, while
+  **Gecko on-device semantic** restores private local meaning search;
 - a bounded, deduplicating Browser Memory queue that runs one page at a time
   and yields during user activity, low battery, active media/sharing, or memory
   pressure;
@@ -244,6 +247,10 @@ private-window history is never eligible. The palette also provides controls
 to exclude the current domain or delete the semantic database and turn the
 feature off. Machines that do not meet Gecko's local-model requirements retain
 exact and fuzzy local-history search without downloading or running a model.
+Search & Memory settings can also switch an enabled index to **Keywords only**;
+Fluxion deletes semantic vectors and disables Gecko's model gates while keeping
+local titles and bounded page evidence searchable. Switching back to **Gecko
+on-device semantic** never involves the configured generative AI provider.
 When enabled, Fluxion also indexes a bounded extract of ordinary article/main
 content locally, making remembered ideas discoverable even when their words do
 not appear in the page title. Private pages, password forms, sensitive routes,

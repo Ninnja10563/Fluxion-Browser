@@ -8,6 +8,38 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.37 makes embeddings independently optional instead of forcing users
+to choose between semantic models and Browser Memory itself:
+
+- add a live **Embedding mode** control to Search & Memory with **Gecko
+  on-device semantic** and **Keywords only** choices;
+- keep titles, URLs, headings, bounded page evidence, recency, frequency, and
+  workspace relevance searchable when embeddings are disabled;
+- stop Gecko ML and semantic-history feature gates in Keywords only mode and
+  bypass both native and enriched-page vector inference during indexing and
+  recall;
+- delete existing vectors from Gecko's semantic Places store and Fluxion's
+  enriched-page SQLite store without deleting ordinary history or lexical page
+  evidence;
+- keep the generative AI provider completely separate from embedding choice;
+  neither mode sends browsing data to Ollama, an OpenAI-compatible endpoint, or
+  any other model provider;
+- expose both mode transitions in the universal command palette with explicit
+  confirmation before vector deletion or local-model activation;
+- update Browser Memory status text so intentional Keywords only mode is not
+  misreported as a model failure;
+- synchronize embedding choice across open windows and apply the correct Gecko
+  feature gates from the first startup frame;
+- preserve Keywords only through normal restoration, a private-window launch,
+  and the following normal restart without admitting private history or
+  momentarily enabling ML;
+- drive the real Settings selector in the packaged macOS app, prove lexical
+  recall still finds extracted page evidence with ML disabled, restore local
+  semantic mode, and reject packaging unless every state is exact.
+
+The release capture settles on Search & Memory with the embedding selector
+visible after the 200-tab keyboard and workspace gates complete.
+
 Version 0.36 completes workspace management as a first-class preferences
 workflow:
 

@@ -401,22 +401,57 @@
           },
         },
         {
-          label: "Clear Browser Memory", detail: "Delete local vectors and turn memory off", kind: "Privacy",
+          label: "Clear Browser Memory", detail: "Delete local memory data and turn the feature off", kind: "Privacy",
           keywords: ["semantic history erase delete disable"], run: async () => {
-            if (Services.prompt.confirm(window, "Clear Browser Memory", "Delete Fluxion’s local semantic index and turn Browser Memory off? Browsing history itself will not be deleted.")) {
+            if (Services.prompt.confirm(window, "Clear Browser Memory", "Delete Fluxion’s local Browser Memory data and turn the feature off? Browsing history itself will not be deleted.")) {
               await window.FluxionMemory.clearAndDisable();
             }
           },
         },
       );
+      const localEmbeddings = window.FluxionMemory.embeddingProvider() === "gecko-local";
+      items.splice(9, 0, localEmbeddings ? {
+        label: "Use keyword-only Browser Memory",
+        detail: "Delete vectors while keeping local titles and page evidence searchable",
+        kind: "Privacy",
+        keywords: ["disable embeddings lexical no model vectors"],
+        run: async () => {
+          const accepted = Services.prompt.confirm(
+            window,
+            "Use Keyword-Only Browser Memory",
+            "Disable embedding models and delete existing semantic vectors? Local titles and page evidence will remain searchable.",
+          );
+          if (accepted) await window.FluxionMemory.setEmbeddingProvider("disabled");
+        },
+      } : {
+        label: "Enable on-device semantic search",
+        detail: "Add Gecko-local meaning search to existing keyword memory",
+        kind: "Memory",
+        keywords: ["enable embeddings semantic local model vectors"],
+        run: async () => {
+          const accepted = Services.prompt.confirm(
+            window,
+            "Enable On-Device Semantic Search",
+            "Allow Gecko to run its local embedding model and build semantic vectors? Browsing data is not sent to a model provider.",
+          );
+          if (accepted) await window.FluxionMemory.setEmbeddingProvider("gecko-local");
+        },
+      });
     } else if (!privateWindow) {
+      const localEmbeddings = window.FluxionMemory.embeddingProvider() === "gecko-local";
       items.splice(9, 0, {
-        label: "Enable Browser Memory", detail: "Build a private semantic index on this Mac", kind: "Memory",
+        label: "Enable Browser Memory",
+        detail: localEmbeddings
+          ? "Build a private semantic index on this Mac"
+          : "Search local titles and page evidence without embeddings",
+        kind: "Memory",
         keywords: ["semantic history local embeddings remember"], run: async () => {
           const accepted = Services.prompt.confirm(
             window,
             "Enable Browser Memory",
-            "Fluxion will download a local embedding model and build an index from non-private browsing history. Page addresses and history are not sent to an AI provider. Continue?",
+            localEmbeddings
+              ? "Fluxion will download a local embedding model and build an index from non-private browsing history. Page addresses and history are not sent to an AI provider. Continue?"
+              : "Fluxion will keep a local keyword index of non-private browsing history and page evidence without running an embedding model. Continue?",
           );
           if (accepted && await window.FluxionMemory.enable()) open("memory");
         },
@@ -657,7 +692,9 @@
     const search = input.value.trim();
     status.hidden = false;
     status.textContent = window.FluxionMemory.enabled()
-      ? "Local on this Mac · Private windows are never indexed"
+      ? window.FluxionMemory.embeddingProvider() === "disabled"
+        ? "Keywords only · No embedding model or vectors"
+        : "Local on this Mac · Private windows are never indexed"
       : "Browser Memory is off";
     if (search.length < 2) {
       renderItems([], "Describe a page you remember");
@@ -672,6 +709,7 @@
     const stateLabels = {
       building: "Local index is building · Exact history matches are available now",
       lexical: "Local semantic model unavailable · Showing exact history matches",
+      "keyword-only": "Keywords only · Titles and local page evidence · No embedding model",
       ready: "Hybrid match · Exact text, semantic similarity, recency, and workspace",
       disabled: "Browser Memory is off",
       private: "Browser Memory is unavailable in private windows",

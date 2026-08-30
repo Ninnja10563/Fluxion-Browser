@@ -5,7 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.36.0";
+  const PRODUCT_VERSION = "0.37.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -518,15 +518,59 @@
   const memoryToggle = toggle("Enabled", Boolean(window.FluxionMemory?.enabled()), async checked => {
     memoryToggle.querySelector("input").disabled = true;
     try {
-      if (checked) await window.FluxionMemory?.enable();
-      else await window.FluxionMemory?.clearAndDisable();
-      setNote(checked ? "Browser Memory enabled. Indexing runs locally in the background." : "Browser Memory disabled and its local vector index cleared.");
+      const capability = checked ? await window.FluxionMemory?.enable() : null;
+      if (!checked) await window.FluxionMemory?.clearAndDisable();
+      setNote(
+        checked
+          ? capability === "lexical"
+            ? "Browser Memory enabled in Keywords only mode. No embedding model or vectors are used."
+            : "Browser Memory enabled. Semantic indexing runs locally in the background."
+          : "Browser Memory disabled and its local data cleared.",
+        "search",
+      );
     } catch (error) {
       memoryToggle.querySelector("input").checked = !checked;
-      setNote(`Could not update Browser Memory: ${error.message}`);
+      setNote(`Could not update Browser Memory: ${error.message}`, "search");
     } finally { memoryToggle.querySelector("input").disabled = false; }
   });
-  row(search, "Browser Memory", "Find previously visited pages by meaning as well as exact words.", memoryToggle);
+  row(search, "Browser Memory", "Keep searchable non-private history and bounded page evidence on this Mac.", memoryToggle);
+  let embeddingChoiceTask = Promise.resolve("gecko-local");
+  const embeddingChoice = select([
+    ["gecko-local", "Gecko on-device semantic"],
+    ["disabled", "Keywords only"],
+  ], window.FluxionMemory?.embeddingProvider() || "gecko-local", value => {
+    embeddingChoiceTask = applyEmbeddingChoice(value);
+  });
+  async function applyEmbeddingChoice(value) {
+    embeddingChoice.disabled = true;
+    try {
+      const saved = await window.FluxionMemory?.setEmbeddingProvider(value) || "gecko-local";
+      embeddingChoice.value = saved;
+      setNote(
+        saved === "disabled"
+          ? "Embeddings disabled. Existing vectors were deleted; local titles and page evidence remain searchable."
+          : "Gecko on-device semantic search enabled. No browsing data is sent to a model provider.",
+        "search",
+      );
+      return saved;
+    } catch (error) {
+      embeddingChoice.value = window.FluxionMemory?.embeddingProvider() || "gecko-local";
+      setNote(`Could not change embedding mode: ${error.message}`, "search");
+      throw error;
+    } finally { embeddingChoice.disabled = false; }
+  }
+  embeddingChoice.id = "fluxion-memory-embedding-provider";
+  row(
+    search,
+    "Embedding mode",
+    "Keep lexical Browser Memory while independently disabling model execution and vector storage.",
+    embeddingChoice,
+  );
+  const syncEmbeddingChoice = event => {
+    embeddingChoice.value = event.detail?.provider ||
+      window.FluxionMemory?.embeddingProvider() || "gecko-local";
+  };
+  window.addEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
   const domains = create("input");
   domains.type = "text";
   domains.placeholder = "example.com, private.example";
@@ -541,12 +585,12 @@
   const clearMemory = create("button", "fluxion-settings-button danger", "Clear Browser Memory");
   clearMemory.type = "button";
   clearMemory.addEventListener("click", async () => {
-    if (!Services.prompt.confirm(window, "Clear Browser Memory", "Delete the local semantic index and turn Browser Memory off?")) return;
+    if (!Services.prompt.confirm(window, "Clear Browser Memory", "Delete local Browser Memory evidence and vectors, then turn the feature off?")) return;
     await window.FluxionMemory?.clearAndDisable();
     memoryToggle.querySelector("input").checked = false;
     setNote("Browser Memory was cleared.");
   });
-  row(search, "Delete semantic data", "This does not delete ordinary Gecko browsing history.", clearMemory);
+  row(search, "Delete Browser Memory data", "This does not delete ordinary Gecko browsing history.", clearMemory);
 
   const ai = section("ai", "AI", "Optional page tools. Ordinary browsing and Browser Memory remain fully functional when AI is disabled.");
   const initialAI = window.FluxionAI.config();
@@ -884,6 +928,7 @@
     document.documentElement.removeAttribute("data-fluxion-settings-visible");
     window.removeEventListener("FluxionThemeChanged", syncThemeChoice);
     window.removeEventListener("FluxionWorkspacesChanged", syncWorkspaceSettings);
+    window.removeEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
     unsubscribePermissions?.();
   }, { once: true });
   showSection("general");
@@ -895,6 +940,105 @@
     window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
     window.requestAnimationFrame(syncVisibility);
+  }
+  if (Services.env.get("FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST") === "1") {
+    window.addEventListener("FluxionMemoryVisualReady", async () => {
+      const original = window.FluxionMemory.embeddingProvider();
+      const choose = async provider => {
+        embeddingChoice.value = provider;
+        embeddingChoice.dispatchEvent(new window.Event("change", { bubbles: true }));
+        return embeddingChoiceTask;
+      };
+      try {
+        await choose("disabled");
+        const vectorCounts = await window.FluxionMemory.embeddingVectorCounts();
+        const recall = await window.FluxionMemory.search(
+          "Example Domain",
+          window.FluxionUI.currentWorkspace(),
+        );
+        const lexicalRecall = recall.state === "keyword-only" && recall.results.some(result =>
+          result.url?.startsWith("https://example.com/"));
+        const disabledExactly = window.FluxionMemory.embeddingProvider() === "disabled" &&
+          Services.prefs.getStringPref("fluxion.memory.embeddingProvider", "") === "disabled" &&
+          !Services.prefs.getBoolPref("browser.ml.enable", true) &&
+          !Services.prefs.getBoolPref("places.semanticHistory.featureGate", true) &&
+          vectorCounts.native === 0 && vectorCounts.enriched === 0 &&
+          embeddingChoice.value === "disabled";
+        await choose("gecko-local");
+        const restoredExactly = window.FluxionMemory.embeddingProvider() === "gecko-local" &&
+          Services.prefs.getBoolPref("browser.ml.enable", false) &&
+          Services.prefs.getBoolPref("places.semanticHistory.featureGate", false) &&
+          embeddingChoice.value === "gecko-local";
+        if (lexicalRecall && disabledExactly && restoredExactly) {
+          Services.prefs.setStringPref(
+            "fluxion.memory.embeddingSettings.health",
+            "keyword-mode-retained-recall-and-local-mode-restored",
+          );
+        } else {
+          throw new Error(
+            `embedding settings gate failed lexical=${lexicalRecall} ` +
+              `disabled=${disabledExactly} vectors=${vectorCounts.native}/${vectorCounts.enriched} ` +
+              `restored=${restoredExactly}`,
+          );
+        }
+      } catch (error) {
+        Services.prefs.setStringPref("fluxion.memory.embeddingSettings.error", String(error));
+        Cu.reportError(error);
+      } finally {
+        if (window.FluxionMemory.embeddingProvider() !== original) {
+          try { await choose(original); } catch (_) {}
+        }
+        Services.prefs.savePrefFile(null);
+      }
+    }, { once: true });
+    window.addEventListener("FluxionScaleVisualReady", () => {
+      const captureWorkspace = window.FluxionUI.currentWorkspace();
+      let settingsTab = [...gBrowser.tabs].find(candidate =>
+        candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences?fluxion=search") &&
+        window.FluxionUI.tabWorkspace(candidate) === captureWorkspace);
+      if (!settingsTab) {
+        settingsTab = gBrowser.addTrustedTab("about:preferences?fluxion=search", { skipAnimation: true });
+        window.FluxionUI.setTabWorkspace(settingsTab, captureWorkspace);
+      }
+      let stableFrames = 0;
+      const settleEmbeddingCapture = (attempt = 0) => {
+        if (settingsTab && !settingsTab.closing) {
+          if (settingsTab.hidden) gBrowser.showTab(settingsTab);
+          gBrowser.selectedTab = settingsTab;
+        }
+        syncVisibility();
+        showSection("search");
+        const status = notes.get("search");
+        if (status) status.textContent = "";
+        const embeddingRow = embeddingChoice.closest(".fluxion-setting");
+        const searchActive = sections.get("search")?.button.getAttribute("aria-current") === "true";
+        const settled = gBrowser.selectedTab === settingsTab && !root.hidden &&
+          activeSection === "search" && searchActive && !search.hidden &&
+          embeddingChoice.value === "gecko-local" &&
+          embeddingRow?.getBoundingClientRect().height > 40;
+        stableFrames = settled ? stableFrames + 1 : 0;
+        if (stableFrames >= 10) {
+          Services.prefs.setStringPref(
+            "fluxion.memory.embeddingSettings.capture.health",
+            "settled-embedding-controls-visible",
+          );
+          Services.prefs.savePrefFile(null);
+          return;
+        }
+        if (attempt >= 60) {
+          Services.prefs.setStringPref(
+            "fluxion.memory.embeddingSettings.error",
+            `capture=${gBrowser.selectedBrowser?.currentURI?.spec || "missing"} ` +
+              `selected=${gBrowser.selectedTab === settingsTab} section=${activeSection} ` +
+              `provider=${embeddingChoice.value}`,
+          );
+          Services.prefs.savePrefFile(null);
+          return;
+        }
+        window.setTimeout(() => settleEmbeddingCapture(attempt + 1), 100);
+      };
+      settleEmbeddingCapture();
+    }, { once: true });
   }
   if (Services.env.get("FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST") === "1") {
     window.addEventListener("FluxionDataClearingVisualReady", () => {

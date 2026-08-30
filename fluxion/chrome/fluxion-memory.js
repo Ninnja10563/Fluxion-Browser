@@ -1,4 +1,4 @@
-/* global Services, ChromeUtils, Cc, Ci, Cu, FluxionIndexScheduler, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking, FluxionMemoryGrounding */
+/* global Services, ChromeUtils, Cc, Ci, Cu, FluxionIndexScheduler, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking, FluxionMemoryGrounding, FluxionSettings */
 (function initialiseFluxionMemory(window) {
   "use strict";
 
@@ -6,6 +6,7 @@
 
   const PREF_ENABLED = "fluxion.memory.enabled";
   const PREF_EXCLUDED = "fluxion.memory.excludedDomains";
+  const PREF_EMBEDDING_PROVIDER = "fluxion.memory.embeddingProvider";
   const { PlacesUtils } = ChromeUtils.importESModule(
     "resource://gre/modules/PlacesUtils.sys.mjs"
   );
@@ -30,6 +31,22 @@
 
   function enabled() {
     return Services.prefs.getBoolPref(PREF_ENABLED, false);
+  }
+
+  function embeddingProvider() {
+    return FluxionSettings.normaliseEmbeddingProvider(
+      Services.prefs.getStringPref(PREF_EMBEDDING_PROVIDER, "gecko-local"),
+    );
+  }
+
+  function embeddingsEnabled() {
+    return enabled() && embeddingProvider() === "gecko-local";
+  }
+
+  function applyEmbeddingFeaturePrefs(active = embeddingsEnabled()) {
+    Services.prefs.setBoolPref("browser.ml.enable", active);
+    Services.prefs.setBoolPref("places.semanticHistory.featureGate", active);
+    Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", !active);
   }
 
   function setLowPriorityTimer(callback, delay) {
@@ -147,7 +164,7 @@
   }
 
   async function applyExclusions() {
-    if (!enabled() || !manager || exclusionSweep) return exclusionSweep;
+    if (!embeddingsEnabled() || !manager || exclusionSweep) return exclusionSweep;
     exclusionSweep = (async () => {
       const connection = await manager.getConnection();
       if (!connection) return;
@@ -180,6 +197,54 @@
     return exclusionSweep;
   }
 
+  async function clearEmbeddingData() {
+    let nativeError = null;
+    try {
+      const semanticManager = manager || getManager();
+      const nativeConnection = await semanticManager.getConnection();
+      if (nativeConnection) {
+        await nativeConnection.executeTransaction(async () => {
+          await nativeConnection.execute("DELETE FROM vec_history");
+          await nativeConnection.execute("DELETE FROM vec_history_mapping");
+        });
+      }
+    } catch (error) {
+      Cu.reportError(error);
+      nativeError = error;
+    }
+    await FluxionMemoryStore.clearVectors();
+    if (nativeError) throw nativeError;
+  }
+
+  async function embeddingVectorCounts() {
+    const semanticManager = manager || getManager();
+    const nativeConnection = await semanticManager.getConnection();
+    let native = 0;
+    if (nativeConnection) {
+      const rows = await nativeConnection.execute("SELECT count(*) AS count FROM vec_history");
+      native = Number(rows[0]?.getResultByName("count") || 0);
+    }
+    return { native, enriched: await FluxionMemoryStore.vectorCount() };
+  }
+
+  async function setEmbeddingProvider(value) {
+    if (PrivateBrowsingUtils.isWindowPrivate(window)) return embeddingProvider();
+    const next = FluxionSettings.normaliseEmbeddingProvider(value);
+    Services.prefs.setStringPref(PREF_EMBEDDING_PROVIDER, next);
+    applyEmbeddingFeaturePrefs(enabled() && next === "gecko-local");
+    if (next === "disabled") {
+      await clearEmbeddingData();
+    } else if (enabled()) {
+      const semanticManager = getManager();
+      await semanticManager.getConnection();
+      semanticManager.onPagesRankChanged();
+      applyExclusions();
+    }
+    Services.prefs.savePrefFile(null);
+    indexScheduler?.wake();
+    return next;
+  }
+
   async function search(searchText, currentWorkspace = "") {
     const query = String(searchText || "").trim();
     if (PrivateBrowsingUtils.isWindowPrivate(window)) {
@@ -194,29 +259,32 @@
       };
     }
 
+    const useEmbeddings = embeddingsEnabled();
     let semantic = [];
     let enrichedKeyword = [];
-    let state = "building";
-    try {
-      const semanticManager = getManager();
-      const connection = await semanticManager.getConnection();
-      if (!connection) {
+    let state = useEmbeddings ? "building" : "keyword-only";
+    if (useEmbeddings) {
+      try {
+        const semanticManager = getManager();
+        const connection = await semanticManager.getConnection();
+        if (!connection) {
+          state = "lexical";
+        } else if (await semanticManager.hasSufficientEntriesForSearching()) {
+          const response = await semanticManager.infer({ searchString: query });
+          semantic = (response.results || [])
+            .filter(row => isAllowedResult(row.url))
+            .map(row => ({ ...row, lastVisit: Number(row.lastVisit || 0) / 1000 }));
+          state = "ready";
+        }
+        applyExclusions();
+      } catch (error) {
+        Cu.reportError(error);
         state = "lexical";
-      } else if (await semanticManager.hasSufficientEntriesForSearching()) {
-        const response = await semanticManager.infer({ searchString: query });
-        semantic = (response.results || [])
-          .filter(row => isAllowedResult(row.url))
-          .map(row => ({ ...row, lastVisit: Number(row.lastVisit || 0) / 1000 }));
-        state = "ready";
       }
-      applyExclusions();
-    } catch (error) {
-      Cu.reportError(error);
-      state = "lexical";
     }
 
     try {
-      const enriched = await FluxionMemoryStore.search(query, 18);
+      const enriched = await FluxionMemoryStore.search(query, 18, useEmbeddings);
       enrichedKeyword = enriched.lexical.filter(row => isAllowedResult(row.url));
       semantic.push(...enriched.semantic.filter(row => isAllowedResult(row.url)));
     } catch (error) {
@@ -254,10 +322,12 @@
   async function enable() {
     if (PrivateBrowsingUtils.isWindowPrivate(window)) return false;
     Services.prefs.setBoolPref(PREF_ENABLED, true);
-    Services.prefs.setBoolPref("browser.ml.enable", true);
-    Services.prefs.setBoolPref("places.semanticHistory.featureGate", true);
-    Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", false);
+    applyEmbeddingFeaturePrefs();
     Services.prefs.savePrefFile(null);
+    if (!embeddingsEnabled()) {
+      indexScheduler?.wake();
+      return "lexical";
+    }
     const semanticManager = getManager();
     const connection = await semanticManager.getConnection();
     semanticManager.onPagesRankChanged();
@@ -267,20 +337,15 @@
   }
 
   async function clearAndDisable() {
-    const connection = manager ? await manager.getConnection() : null;
     Services.prefs.setBoolPref(PREF_ENABLED, false);
-    Services.prefs.setBoolPref("places.semanticHistory.featureGate", false);
-    Services.prefs.setBoolPref("browser.ml.enable", false);
-    Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", true);
+    applyEmbeddingFeaturePrefs(false);
     indexScheduler?.clear();
-    if (connection) {
-      await connection.executeTransaction(async () => {
-        await connection.execute("DELETE FROM vec_history");
-        await connection.execute("DELETE FROM vec_history_mapping");
-      });
-    }
+    let embeddingError = null;
+    try { await clearEmbeddingData(); }
+    catch (error) { embeddingError = error; }
     await FluxionMemoryStore.clear();
     Services.prefs.savePrefFile(null);
+    if (embeddingError) throw embeddingError;
   }
 
   async function excludeDomain(value) {
@@ -327,7 +392,7 @@
       lastVisit: Date.now(),
       indexedAt: Date.now(),
     });
-    if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") !== "1" && enabled()) {
+    if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") !== "1" && embeddingsEnabled()) {
       await FluxionMemoryStore.embed(page.url, embeddingText);
     }
     if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
@@ -367,10 +432,20 @@
   window.gBrowser.addTabsProgressListener(progressListener);
 
   const observer = () => { applyExclusions(); };
+  const embeddingPrefObserver = {
+    observe() {
+      applyEmbeddingFeaturePrefs();
+      window.dispatchEvent(new window.CustomEvent("FluxionMemoryEmbeddingProviderChanged", {
+        detail: { provider: embeddingProvider() },
+      }));
+      indexScheduler?.wake();
+    },
+  };
   const activityObserver = () => indexScheduler.notifyActivity();
   const memoryPressureObserver = () => indexScheduler.defer("memory-pressure", 30000);
   Services.obs.addObserver(observer, "places-semantichistorymanager-update-complete");
   Services.obs.addObserver(memoryPressureObserver, "memory-pressure");
+  Services.prefs.addObserver(PREF_EMBEDDING_PROVIDER, embeddingPrefObserver);
   for (const eventName of activityEvents) {
     window.addEventListener(eventName, activityObserver, { capture: true, passive: true });
   }
@@ -386,6 +461,7 @@
     window.gBrowser.removeTabsProgressListener(progressListener);
     Services.obs.removeObserver(observer, "places-semantichistorymanager-update-complete");
     Services.obs.removeObserver(memoryPressureObserver, "memory-pressure");
+    Services.prefs.removeObserver(PREF_EMBEDDING_PROVIDER, embeddingPrefObserver);
     for (const eventName of activityEvents) {
       window.removeEventListener(eventName, activityObserver, { capture: true });
     }
@@ -396,11 +472,14 @@
 
   window.FluxionMemory = Object.freeze({
     clearAndDisable,
+    embeddingProvider,
+    embeddingVectorCounts,
     enable,
     enabled,
     excludeDomain,
     excludedDomains,
     setExcludedDomains,
+    setEmbeddingProvider,
     search,
     indexBrowser,
     indexingStatus: () => indexScheduler.status(),

@@ -95,6 +95,16 @@
     Services.prefs.setIntPref("browser.startup.page", 3);
     Services.prefs.setBoolPref("browser.sessionstore.resume_from_crash", true);
     Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", true);
+    await window.FluxionMemory.setEmbeddingProvider("disabled");
+    const memoryCapability = await window.FluxionMemory.enable();
+    if (
+      memoryCapability !== "lexical" ||
+      window.FluxionMemory.embeddingProvider() !== "disabled" ||
+      Services.prefs.getBoolPref("browser.ml.enable", true) ||
+      Services.prefs.getBoolPref("places.semanticHistory.featureGate", true)
+    ) {
+      throw new Error("keyword-only Browser Memory seed state was not exact");
+    }
     const research = window.FluxionUI.workspaces().find(workspace => workspace.id === "research-desk") ||
       window.FluxionUI.createWorkspace("Research Desk", {
         accent: "sage", icon: "square", activate: false,
@@ -148,6 +158,14 @@
 
   async function validateRestoredSession() {
     await SessionStore.promiseAllWindowsRestored;
+    if (
+      !window.FluxionMemory.enabled() ||
+      window.FluxionMemory.embeddingProvider() !== "disabled" ||
+      Services.prefs.getBoolPref("browser.ml.enable", true) ||
+      Services.prefs.getBoolPref("places.semanticHistory.featureGate", true)
+    ) {
+      throw new Error("keyword-only Browser Memory did not survive startup without ML");
+    }
     let result = await waitFor(() => FluxionSessionRecovery.validateNormal(snapshot()));
     if (!result.ok) throw new Error(`session restore invalid: ${result.reasons.join("; ")}`);
     window.FluxionUI.switchWorkspace("focus");
@@ -172,6 +190,9 @@
     await wait(1500);
     const memory = await window.FluxionMemory.search("fluxion private only");
     const enabled = await window.FluxionMemory.enable();
+    if (window.FluxionMemory.embeddingProvider() !== "disabled") {
+      throw new Error("private launch changed the persisted embedding mode");
+    }
     const result = FluxionSessionRecovery.validatePrivate({
       isPrivate,
       memoryState: memory.state,
@@ -192,6 +213,12 @@
     const memory = await window.FluxionMemory.search("fluxion private only");
     if (memory.results.some(record => record.url === privateURL)) {
       throw new Error("private URL leaked into Browser Memory search");
+    }
+    if (
+      window.FluxionMemory.embeddingProvider() !== "disabled" ||
+      Services.prefs.getBoolPref("browser.ml.enable", true)
+    ) {
+      throw new Error("post-private startup did not preserve keyword-only mode");
     }
     write("fluxion.recovery.absence.health", "private-tabs-history-memory-excluded");
     await quit();

@@ -100,10 +100,17 @@ passes:
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks
    publication if Browser Memory bypasses its bounded serial queue.
+   An embedding-settings gate then drives the live Search & Memory selector to
+   Keywords only, requires Gecko's ML and semantic-history gates to turn off,
+   retrieves the extracted page through lexical evidence, and restores Gecko's
+   local semantic mode. After the scale gate cleans up its 200 tabs, the app
+   settles on Search & Memory and packaging waits for the embedding row to
+   remain visible for inspection.
    A separate four-launch gate then seeds and cleanly quits a normal session,
    restores its per-workspace active pages plus workspace names/order/symbols/
-   accents and pin/group/split state, switches between both remembered pages,
-   opens and quits a private session, and restores normal mode again.
+   accents, pin/group/split state, and keyword-only Browser Memory choice,
+   switches between both remembered pages, opens and quits a private session,
+   and restores normal mode again without enabling ML.
    Publication is blocked if any workspace metadata changes or the private URL
    appears in restored tabs, Gecko Places, or Browser Memory.
 2. Inspect the checks and screenshot. Fix the source instead of editing an

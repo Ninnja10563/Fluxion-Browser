@@ -89,6 +89,8 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(sessionRecovery, /validatePrivateAbsence\(snapshot\(\)\)/);
   assert.match(sessionRecovery, /FluxionMemory\.search/);
   assert.match(sessionRecovery, /PrivateBrowsingUtils\.isWindowPrivate/);
+  assert.match(sessionRecovery, /setEmbeddingProvider\("disabled"\)/);
+  assert.match(sessionRecovery, /keyword-only Browser Memory did not survive startup without ML/);
   assert.match(macSessionVerifier, /FLUXION_SESSION_SEED_TEST/);
   assert.match(macSessionVerifier, /FLUXION_SESSION_RESTORE_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ISOLATION_TEST/);
@@ -495,10 +497,26 @@ test("Browser Memory is optional, local, and unavailable in private windows", ()
 });
 
 test("Browser Memory exposes functional privacy controls", () => {
+  const store = fs.readFileSync(path.join(root, "modules/FluxionMemoryStore.sys.mjs"), "utf8");
   assert.match(palette, /Exclude this site from Browser Memory/);
   assert.match(palette, /Clear Browser Memory/);
+  assert.match(palette, /Use keyword-only Browser Memory/);
+  assert.match(palette, /Enable on-device semantic search/);
   assert.match(memory, /DELETE FROM vec_history/);
   assert.match(memory, /excludedDomains/);
+  assert.match(memory, /function embeddingProvider\(\)/);
+  assert.match(memory, /async function setEmbeddingProvider/);
+  assert.match(memory, /async function embeddingVectorCounts/);
+  assert.match(memory, /FluxionMemoryStore\.search\(query, 18, useEmbeddings\)/);
+  assert.match(store, /async clearVectors\(\)/);
+  assert.match(store, /async vectorCount\(\)/);
+  assert.match(settings, /id = "fluxion-memory-embedding-provider"/);
+  assert.match(settings, /\["disabled", "Keywords only"\]/);
+  assert.match(runtimeConfig, /places\.semanticHistory\.featureGate", embeddingsEnabled/);
+  assert.match(macVerifier, /FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST=1/);
+  assert.match(macVerifier, /keyword-mode-retained-recall-and-local-mode-restored/);
+  assert.match(macVerifier, /settled-embedding-controls-visible/);
+  assert.match(chrome, /FluxionScaleVisualReady/);
 });
 
 test("enriched Browser Memory crosses the content boundary through a narrow Gecko actor", () => {

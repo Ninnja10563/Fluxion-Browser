@@ -145,6 +145,17 @@ export const FluxionMemoryStore = Object.freeze({
     });
   },
 
+  async clearVectors() {
+    const db = await connection();
+    await db.execute("DELETE FROM page_vectors");
+  },
+
+  async vectorCount() {
+    const db = await connection();
+    const rows = await db.execute("SELECT count(*) AS count FROM page_vectors");
+    return Number(rows[0]?.getResultByName("count") || 0);
+  },
+
   async clear() {
     const db = await connection();
     await db.executeTransaction(async () => { await db.execute("DELETE FROM page_vectors"); await db.execute("DELETE FROM pages"); });

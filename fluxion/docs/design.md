@@ -60,6 +60,8 @@ SigmaOS is deliberately excluded as a reference.
   point, not a duplicated hero search box.
 - The command palette is a compact transient list. It uses no dimmed backdrop,
   blur, gradient, oversized radius, or decorative animation.
+- Search & Memory presents embedding mode as one compact settings row. Model
+  state is a privacy/performance choice, not an AI-branded dashboard.
 - Native page actions in the palette appear only when Gecko can execute them;
   a quiet interface must not trade visual simplicity for dead controls.
 - A generated web or address destination is always the last matching result;

@@ -4,6 +4,7 @@
 
   const SIDEBAR_STATES = Object.freeze(["expanded", "compact", "focus"]);
   const DENSITIES = Object.freeze(["compact", "standard", "roomy"]);
+  const EMBEDDING_PROVIDERS = Object.freeze(["gecko-local", "disabled"]);
 
   function choice(value, allowed, fallback) {
     return allowed.includes(value) ? value : fallback;
@@ -28,10 +29,12 @@
 
   scope.FluxionSettings = Object.freeze({
     DENSITIES,
+    EMBEDDING_PROVIDERS,
     SIDEBAR_STATES,
     excludedDomains,
     homepage,
     normaliseDensity: value => choice(value, DENSITIES, "standard"),
+    normaliseEmbeddingProvider: value => choice(value, EMBEDDING_PROVIDERS, "gecko-local"),
     normaliseSidebar: value => choice(value, SIDEBAR_STATES, "expanded"),
     startupPage,
   });

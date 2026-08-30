@@ -93,4 +93,4 @@ run_stage \
   FLUXION_PRIVATE_ABSENCE_TEST \
   'user_pref("fluxion.recovery.absence.health", "private-tabs-history-memory-excluded")'
 
-printf 'Verified: native tabs, per-workspace active pages, pins, groups, stacked split orientation, and workspaces restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2
+printf 'Verified: native tabs, per-workspace active pages, pins, groups, stacked split orientation, workspaces, and keyword-only Browser Memory startup state restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2

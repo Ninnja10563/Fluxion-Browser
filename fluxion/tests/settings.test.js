@@ -14,6 +14,13 @@ test("settings constrain persisted appearance choices", () => {
   assert.equal(settings.normaliseDensity("tiny"), "standard");
 });
 
+test("embedding choice remains independent from Browser Memory storage", () => {
+  assert.equal(settings.normaliseEmbeddingProvider("gecko-local"), "gecko-local");
+  assert.equal(settings.normaliseEmbeddingProvider("disabled"), "disabled");
+  assert.equal(settings.normaliseEmbeddingProvider("remote-vendor"), "gecko-local");
+  assert.deepEqual(settings.EMBEDDING_PROVIDERS, ["gecko-local", "disabled"]);
+});
+
 test("settings accept only Gecko startup modes exposed by Fluxion", () => {
   assert.equal(settings.startupPage("3"), 3);
   assert.equal(settings.startupPage(0), 0);

@@ -2952,7 +2952,8 @@
           gBrowser.selectedTab === scaleTabs[1];
         window.requestAnimationFrame(() => {
           const focusStable = document.activeElement?._fluxionTab === scaleTabs[1];
-          if (focusStable && selectionMoved) {
+          const succeeded = focusStable && selectionMoved;
+          if (succeeded) {
             Services.prefs.setStringPref(
               "fluxion.scale.health",
               "200-tabs-rendered-with-roving-keyboard-focus",
@@ -2968,6 +2969,11 @@
           }
           Services.prefs.savePrefFile(null);
           cleanScaleFixture();
+          if (succeeded) {
+            window.setTimeout(() => {
+              window.dispatchEvent(new window.CustomEvent("FluxionScaleVisualReady"));
+            }, 250);
+          }
         });
       });
     };

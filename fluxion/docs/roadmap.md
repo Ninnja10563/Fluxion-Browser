@@ -37,8 +37,9 @@ controls work and its failure paths have been tested.
 
 ## Phase 4 — local semantic history
 
-- opt-in Gecko-local embeddings, sensitive-origin/domain exclusions, hybrid
-  history ranker, and complete vector deletion controls (implemented)
+- opt-in Gecko-local embeddings, independently selectable keyword-only recall,
+  sensitive-origin/domain exclusions, hybrid history ranker, and complete
+  vector deletion controls (implemented)
 - privacy-gated heading/body extraction and richer local metadata (implemented)
 - inspectable Browser Memory answer evidence (implemented)
 
