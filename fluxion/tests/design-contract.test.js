@@ -122,6 +122,7 @@ test("Fluxion Library owns visible history, bookmark, and download workflows", (
   assert.match(library, /Save current page/);
   assert.match(library, /Move Bookmark/);
   assert.match(chrome, /Library · \$\{labels\[librarySection\]/);
+  assert.match(library, /FluxionUI\.refresh\(\)/);
   assert.match(library, /data-fluxion-library-visible\] #identity-icon-box/);
   assert.match(library, /FluxionPalette\?\.close\(\)/);
   assert.match(palette, /FluxionLibrary\?\.open\("history"\)/);

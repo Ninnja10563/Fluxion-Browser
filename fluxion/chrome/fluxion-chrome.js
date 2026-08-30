@@ -1413,6 +1413,7 @@
     moveTabToWorkspace,
     newTab: openWorkspaceTab,
     openNewSplit,
+    refresh: scheduleRender,
     renameWorkspace,
     reverseSplitView,
     separateSplitView,

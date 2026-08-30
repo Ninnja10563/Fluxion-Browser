@@ -529,6 +529,7 @@
     const tab = selectedLibraryTab();
     tab?.setAttribute("fluxion-library-section", currentSection);
     if (tab) tab.label = `Library · ${currentSection[0].toUpperCase()}${currentSection.slice(1)}`;
+    window.FluxionUI.refresh();
     search.value = "";
     note.textContent = "";
     render();
