@@ -164,6 +164,8 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /versioned-about-fluxion-visible/);
   assert.match(macVerifier, /ollama-stub\.py/);
   assert.match(macVerifier, /current-page-answer-visible/);
+  assert.match(palette, /FluxionAIVisualReady/);
+  assert.match(palette, /on\(window, "FluxionAIVisualReady"/);
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);
   assert.match(macVerifier, /"page_count": 2/);
   assert.match(palette, /fluxion-memory-test=1/);

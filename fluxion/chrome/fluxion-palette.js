@@ -689,6 +689,7 @@
       if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1" && answer.source?.excerpt) {
         Services.prefs.setStringPref("fluxion.ai.visual.health", "current-page-answer-visible");
         Services.prefs.savePrefFile(null);
+        window.dispatchEvent(new window.CustomEvent("FluxionAIVisualReady"));
       }
       if (
         Services.env.get("FLUXION_VISUAL_AI_COMPARE_TEST") === "1" &&
@@ -872,7 +873,7 @@
     }, 7200);
   }
   if (Services.env.get("FLUXION_VISUAL_AI_COMPARE_TEST") === "1") {
-    window.setTimeout(() => {
+    const runCompareVisualGate = () => {
       const tabs = [
         [...gBrowser.tabs].find(candidate =>
           candidate.linkedBrowser?.currentURI?.spec === "https://example.com/?fluxion-memory-test=1"
@@ -889,7 +890,12 @@
       open("compare", tabs);
       input.value = "How do these pages differ in purpose?";
       runAsk().catch(Cu.reportError);
-    }, 9400);
+    };
+    if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
+      on(window, "FluxionAIVisualReady", runCompareVisualGate, { once: true });
+    } else {
+      window.setTimeout(runCompareVisualGate, 9400);
+    }
   }
   function runOrganisationVisualGate(attempt = 0) {
     const suggestion = organisationSuggestion();
