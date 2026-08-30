@@ -70,7 +70,7 @@ jobs:
           ! plutil -extract CFBundleIconName raw "$info" >/dev/null 2>&1
           [[ "$(plutil -extract CFBundleName raw "$info")" == 'Fluxion' ]]
           app_version="$(plutil -extract CFBundleShortVersionString raw "$info")"
-          grep -q "Gecko Foundation Preview ${app_version}" \
+          grep -q "const PRODUCT_VERSION = \"${app_version}\";" \
             "$resources/fluxion/chrome/fluxion-settings.js"
           [[ ! -e "$resources/Assets.car" ]]
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
