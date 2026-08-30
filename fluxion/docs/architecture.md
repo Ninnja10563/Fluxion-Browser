@@ -92,8 +92,9 @@ workspace, sidebar, palette, and Library controllers as the visible chrome, so
 menu commands cannot drift into decorative duplicates. Standard File, Edit,
 View, History, Bookmarks, Tools, Window, and Help commands remain Gecko-owned.
 The application menu's About command is captured at chrome scope and opens the
-local, unprivileged, versioned `about:fluxion` page; Settings continues through the
-native preferences command into Fluxion's live overlay.
+versioned `about:preferences#about` Fluxion surface; Settings continues through
+the same stable Gecko preferences route into Fluxion's live overlay. No bundle
+file path is exposed and no dynamically registered protocol is required.
 
 The new-tab page is a local, unprivileged file. It can submit navigation but
 cannot call chrome methods.

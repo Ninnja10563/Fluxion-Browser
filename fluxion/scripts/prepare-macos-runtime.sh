@@ -74,7 +74,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$app_version|$requested|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/about" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
+signature="$target_arch|$app_version|$requested|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -109,7 +109,6 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   ditto "$fluxion_root/actors" "$bundled_root/actors"
   ditto "$fluxion_root/modules" "$bundled_root/modules"
   ditto "$fluxion_root/newtab" "$bundled_root/newtab"
-  ditto "$fluxion_root/about" "$bundled_root/about"
   ditto "$fluxion_root/assets" "$bundled_root/assets"
 
   launcher_arch_flags=(-arch "$target_arch")

@@ -89,7 +89,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.permissions.visual.health", "real-permissions-enumerated-and-reset")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.permissions.surface.visual.health", "native-site-decisions-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.nativeMenu.health", "flow-application-menu-loaded")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.about.route.health", "about-fluxion-registered")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.about.route.health", "settings-about-route-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.visual.health", "versioned-about-fluxion-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js" && \

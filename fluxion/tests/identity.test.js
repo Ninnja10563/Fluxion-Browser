@@ -7,22 +7,18 @@ const path = require("node:path");
 
 const root = path.resolve(__dirname, "..");
 const packageData = JSON.parse(fs.readFileSync(path.join(root, "package.json"), "utf8"));
-const about = fs.readFileSync(path.join(root, "about/index.html"), "utf8");
 const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf8");
+const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
 const runtime = fs.readFileSync(path.join(root, "runtime/fluxion.cfg"), "utf8");
 
 test("About Fluxion presents the current product version without remote scripts", () => {
   const productVersion = packageData.version.split("-")[0];
-  assert.match(about, new RegExp(`data-fluxion-version>${productVersion.replaceAll(".", "\\.")}<`));
-  assert.doesNotMatch(about, /<script|Firefox Browser|firefox\.com/i);
-  assert.match(about, /Mozilla Gecko/);
-  assert.match(about, /about:license/);
-  assert.match(about, /resource:\/\/fluxion\/about\/about\.css/);
-  assert.match(runtime, /protocol\/about;1\?what=fluxion/);
-  assert.match(runtime, /URI_SAFE_FOR_UNTRUSTED_CONTENT/);
-  assert.match(runtime, /URI_CAN_LOAD_IN_CHILD/);
-  assert.match(runtime, /createContentPrincipal\(uri, \{\}\)/);
-  assert.match(runtime, /aboutFluxionRegistered \? "about:fluxion"/);
+  assert.match(settings, new RegExp(`PRODUCT_VERSION = "${productVersion.replaceAll(".", "\\.")}"`));
+  assert.match(settings, /!about\.textContent\.includes\("Firefox Browser"\)/);
+  assert.match(settings, /Mozilla Gecko/);
+  assert.match(settings, /about:license/);
+  assert.match(runtime, /fluxion\.about\.url", "about:preferences#about"/);
+  assert.doesNotMatch(runtime, /registerFactory|nsIAboutModule/);
 });
 
 test("the native Flow menu owns product commands while retaining Gecko execution", () => {

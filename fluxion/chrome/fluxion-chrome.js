@@ -543,6 +543,7 @@
   }
 
   function tabLabel(tab) {
+    if (tab.linkedBrowser?.currentURI?.spec === ABOUT_URL) return "About Fluxion";
     const librarySection = tab.getAttribute("fluxion-library-section");
     if (librarySection) {
       const labels = {
@@ -1564,36 +1565,6 @@
         }
       });
     }, 2600);
-  }
-  if (Services.env.get("FLUXION_VISUAL_ABOUT_TEST") === "1") {
-    window.setTimeout(() => {
-      if (ABOUT_URL !== "about:fluxion") {
-        Services.prefs.setStringPref("fluxion.about.visual.error", `Unexpected route: ${ABOUT_URL}`);
-        Services.prefs.savePrefFile(null);
-        return;
-      }
-      const tab = gBrowser.addTrustedTab(ABOUT_URL);
-      tab.setAttribute(TAB_WORKSPACE, currentWorkspace);
-      const loaded = () => {
-        if (tab.linkedBrowser?.currentURI?.spec !== ABOUT_URL) return false;
-        Services.prefs.setStringPref(
-          "fluxion.about.visual.health", "versioned-about-fluxion-visible",
-        );
-        Services.prefs.savePrefFile(null);
-        tab.linkedBrowser.removeEventListener("load", loaded, true);
-        return true;
-      };
-      tab.linkedBrowser.addEventListener("load", loaded, true);
-      gBrowser.selectedTab = tab;
-      window.setTimeout(() => {
-        if (loaded()) return;
-        Services.prefs.setStringPref(
-          "fluxion.about.visual.error",
-          `about:fluxion resolved to ${tab.linkedBrowser?.currentURI?.spec || "no URI"}`,
-        );
-        Services.prefs.savePrefFile(null);
-      }, 1600);
-    }, 20500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);

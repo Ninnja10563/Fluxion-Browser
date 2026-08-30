@@ -5,6 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
+  const PRODUCT_VERSION = "0.19.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -115,6 +116,13 @@
     .fluxion-permission-state[data-tone="block"] { color: light-dark(#8e2f2b, #ef9690); }
     .fluxion-permission-expiry { color: var(--fluxion-muted); font-size: 11px; text-align: end; white-space: nowrap; }
     .fluxion-permissions-empty { margin: 0; padding: 36px 0; color: var(--fluxion-muted); text-align: center; border-top: 1px solid var(--fluxion-line); }
+    .fluxion-about-mark {
+      display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 15px;
+      align-items: center; padding: 8px 0 25px;
+    }
+    .fluxion-about-mark img { width: 48px; height: 48px; }
+    .fluxion-about-mark h3 { margin: 0; font-size: 17px; font-weight: 650; letter-spacing: -.015em; }
+    .fluxion-about-mark p { margin: 4px 0 0; color: var(--fluxion-muted); line-height: 1.4; }
     @media (max-width: 760px) {
       #fluxion-settings { grid-template-columns: 150px minmax(360px, 1fr); }
       .fluxion-settings-main { padding-inline: 24px; }
@@ -554,6 +562,42 @@
     ["Find in page", "⌘ F"], ["Downloads", "⌘ ⇧ J"],
   ]) row(keyboard, label, "Gecko browser shortcut", create("div", "fluxion-shortcut", shortcut));
 
+  const about = section(
+    "about", "About Fluxion", `Gecko Foundation Preview ${PRODUCT_VERSION}`,
+  );
+  const aboutMark = create("div", "fluxion-about-mark");
+  const aboutLogo = create("img");
+  aboutLogo.src = "resource://fluxion/assets/fluxion.svg";
+  aboutLogo.alt = "";
+  const aboutCopy = create("div");
+  aboutCopy.append(
+    create("h3", "", "A calm browser for active work."),
+    create("p", "", "Flow and workspaces over Mozilla’s Gecko web platform."),
+  );
+  aboutMark.append(aboutLogo, aboutCopy);
+  about.appendChild(aboutMark);
+  row(about, "Engine", "Mozilla Gecko", create("div", "fluxion-shortcut", "Standards-compatible"));
+  row(
+    about, "Privacy",
+    "Browser Memory is optional, local, and unavailable in private windows.",
+    create("div", "fluxion-shortcut", "Local by default"),
+  );
+  const openAboutDestination = url => {
+    const tab = gBrowser.addTrustedTab(url);
+    tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+    gBrowser.selectedTab = tab;
+  };
+  const source = create("button", "fluxion-settings-button", "Open source repository");
+  source.type = "button";
+  source.addEventListener("click", () => openAboutDestination(
+    "https://github.com/Ninnja10563/Fluxion-Browser",
+  ));
+  row(about, "Source", "Fluxion is developed in public and Gecko components retain their original licenses.", source);
+  const licenses = create("button", "fluxion-settings-button", "Open third-party licenses");
+  licenses.type = "button";
+  licenses.addEventListener("click", () => openAboutDestination("about:license"));
+  row(about, "Licenses", "Mozilla Public License and bundled third-party notices.", licenses);
+
   function setNote(message, sectionId = activeSection) {
     const panel = sections.get(sectionId)?.panel;
     if (!panel) return;
@@ -637,5 +681,27 @@
         Services.prefs.savePrefFile(null);
       }
     }, 18500);
+  }
+  if (Services.env.get("FLUXION_VISUAL_ABOUT_TEST") === "1") {
+    window.setTimeout(() => {
+      const tab = gBrowser.addTrustedTab("about:preferences#about");
+      tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
+      gBrowser.selectedTab = tab;
+      window.setTimeout(() => {
+        syncVisibility();
+        showSection("about");
+        window.FluxionUI.refresh();
+        if (
+          about.textContent.includes(`Gecko Foundation Preview ${PRODUCT_VERSION}`) &&
+          about.textContent.includes("Mozilla Gecko") &&
+          !about.textContent.includes("Firefox Browser")
+        ) {
+          Services.prefs.setStringPref(
+            "fluxion.about.visual.health", "versioned-about-fluxion-visible",
+          );
+          Services.prefs.savePrefFile(null);
+        }
+      }, 450);
+    }, 20500);
   }
 })(window);
