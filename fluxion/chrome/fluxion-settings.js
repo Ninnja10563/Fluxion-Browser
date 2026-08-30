@@ -887,15 +887,20 @@
   }
   if (Services.env.get("FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST") === "1") {
     window.addEventListener("FluxionDataClearingVisualReady", () => {
+      const captureWorkspace = window.FluxionUI.currentWorkspace();
       let settingsTab = [...gBrowser.tabs].find(candidate =>
-        candidate.linkedBrowser?.currentURI?.spec === "about:preferences#workspaces");
+        candidate.linkedBrowser?.currentURI?.spec === "about:preferences#workspaces" &&
+        window.FluxionUI.tabWorkspace(candidate) === captureWorkspace);
       if (!settingsTab) {
         settingsTab = gBrowser.addTrustedTab("about:preferences#workspaces", { skipAnimation: true });
-        window.FluxionUI.setTabWorkspace(settingsTab, window.FluxionUI.currentWorkspace());
+        window.FluxionUI.setTabWorkspace(settingsTab, captureWorkspace);
       }
       let stableFrames = 0;
       const settleWorkspaceCapture = (attempt = 0) => {
-        if (settingsTab && !settingsTab.closing) gBrowser.selectedTab = settingsTab;
+        if (settingsTab && !settingsTab.closing) {
+          if (settingsTab.hidden) gBrowser.showTab(settingsTab);
+          gBrowser.selectedTab = settingsTab;
+        }
         syncVisibility();
         showSection("workspaces");
         renderWorkspaces();
@@ -916,6 +921,8 @@
           Services.prefs.setStringPref(
             "fluxion.workspaceSettings.visual.error",
             `captureRoute=${gBrowser.selectedBrowser?.currentURI?.spec || "missing"} ` +
+              `targetRoute=${settingsTab?.linkedBrowser?.currentURI?.spec || "missing"} ` +
+              `selected=${gBrowser.selectedTab === settingsTab} hidden=${Boolean(settingsTab?.hidden)} ` +
               `root=${!root.hidden} panel=${!workspacePanel.hidden}`,
           );
           Services.prefs.savePrefFile(null);
