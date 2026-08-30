@@ -39,6 +39,8 @@ The current preview is runnable and includes:
   close, and side-by-side promotion actions and no closed-tab/session clutter;
 - native Command-click and Shift-click multi-selection in Flow, with batch
   reload, duplicate, pin, sleep, group, workspace, drag, and close actions;
+- editable, profile-persisted shortcuts for the command palette, tab search,
+  Flow sidebar, and workspace navigation, with conflict and reserved-key checks;
 - private windows and all mature Firefox browser services;
 - a deliberately blank new-tab page and Fluxion product identity.
 

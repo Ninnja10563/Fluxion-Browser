@@ -231,3 +231,17 @@ context-clicked tab belongs to that selection. Otherwise the command remains
 scoped to the clicked tab. Split children expand to their native pair for moves,
 and Gecko retains ownership of before-unload prompts and multi-tab close
 warnings.
+
+## Keyboard command registry
+
+Fluxion-owned commands resolve through one profile-backed shortcut registry.
+Chords are stored as platform-neutral physical codes such as
+`Accel+Shift+KeyA`; `Accel` maps to Command on macOS and Control elsewhere.
+Flow, workspace navigation, tab search, the command palette, and Settings read
+the same in-memory map and react to a `FluxionShortcutsChanged` window event.
+
+The pure policy layer validates codes, repairs malformed persisted values,
+prevents duplicate Fluxion bindings, and reserves operating-system or mature
+Gecko combinations such as quit, close tab, new tab, location, reload, find,
+and print. Standard browser shortcuts remain Gecko-owned and are displayed as
+reference-only rows rather than being intercepted by Fluxion.

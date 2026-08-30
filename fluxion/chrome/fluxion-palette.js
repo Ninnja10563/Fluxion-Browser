@@ -555,13 +555,11 @@
     if (event.target === layer) close();
   });
   on(window, "keydown", event => {
-    const accelerator = window.navigator.platform.includes("Mac") ? event.metaKey : event.ctrlKey;
-    if (!accelerator || event.altKey) return;
-    if (event.code === "KeyK" && !event.shiftKey) {
+    if (window.FluxionShortcuts?.matches(event, "palette")) {
       event.preventDefault();
       event.stopPropagation();
       layer.hidden ? open("all") : close();
-    } else if (event.code === "KeyA" && event.shiftKey) {
+    } else if (window.FluxionShortcuts?.matches(event, "tabSearch")) {
       event.preventDefault();
       event.stopPropagation();
       open("tabs");

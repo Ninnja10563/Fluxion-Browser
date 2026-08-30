@@ -72,6 +72,15 @@
     .fluxion-switch { justify-self: end; display: inline-flex; align-items: center; gap: 8px; color: var(--fluxion-muted); }
     .fluxion-switch input { width: 15px; height: 15px; accent-color: var(--fluxion-accent); }
     .fluxion-shortcut { font-family: ui-monospace, monospace; font-size: 12px; color: var(--fluxion-muted); text-align: end; }
+    .fluxion-shortcut-control { display: grid; grid-template-columns: 1fr 30px; gap: 5px; }
+    .fluxion-shortcut-key, .fluxion-shortcut-reset {
+      min-height: 30px; border: 1px solid var(--fluxion-line); border-radius: 4px;
+      color: var(--fluxion-ink); background: var(--fluxion-bg); font: inherit;
+    }
+    .fluxion-shortcut-key { padding: 4px 8px; font-family: ui-monospace, monospace; font-size: 12px; }
+    .fluxion-shortcut-reset { padding: 0; color: var(--fluxion-muted); font-size: 15px; }
+    .fluxion-shortcut-key:hover, .fluxion-shortcut-reset:hover { background: var(--fluxion-hover); }
+    .fluxion-shortcut-key[data-capturing="true"] { border-color: var(--fluxion-accent); color: var(--fluxion-muted); }
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     @media (max-width: 760px) {
       #fluxion-settings { grid-template-columns: 150px minmax(360px, 1fr); }
@@ -288,12 +297,61 @@
   });
   row(privacy, "Site permissions", "Reset saved allow and block decisions for all websites.", permissions);
 
-  const keyboard = section("keyboard", "Keyboard", "Fluxion keeps common browser conventions while making Flow fast to navigate.");
+  const keyboard = section("keyboard", "Keyboard", "Change Fluxion commands without overriding protected browser or macOS shortcuts.");
+  const shortcutButtons = new Map();
+  function refreshShortcutButtons() {
+    for (const [id, button] of shortcutButtons) button.textContent = window.FluxionShortcuts.format(id);
+  }
+  for (const action of window.FluxionShortcuts.actions()) {
+    const control = create("div", "fluxion-shortcut-control");
+    const key = create("button", "fluxion-shortcut-key", window.FluxionShortcuts.format(action.id));
+    key.type = "button";
+    key.setAttribute("aria-label", `Change ${action.label} shortcut`);
+    const reset = create("button", "fluxion-shortcut-reset", "↺");
+    reset.type = "button";
+    reset.title = `Reset ${action.label}`;
+    reset.setAttribute("aria-label", reset.title);
+    let beforeCapture = key.textContent;
+    const stopCapture = () => {
+      key.dataset.capturing = "false";
+      key.textContent = window.FluxionShortcuts.format(action.id) || beforeCapture;
+    };
+    key.addEventListener("click", () => {
+      beforeCapture = key.textContent;
+      key.dataset.capturing = "true";
+      key.textContent = "Press shortcut…";
+    });
+    key.addEventListener("keydown", event => {
+      if (key.dataset.capturing !== "true") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") { stopCapture(); return; }
+      const chord = window.FluxionShortcuts.capture(event);
+      if (!chord) return;
+      const result = window.FluxionShortcuts.set(action.id, chord);
+      if (!result.ok) {
+        setNote(result.reason, "keyboard");
+        key.textContent = "Press another…";
+        return;
+      }
+      stopCapture();
+      refreshShortcutButtons();
+      setNote(`${action.label} changed to ${window.FluxionShortcuts.format(action.id)}.`, "keyboard");
+    });
+    key.addEventListener("blur", stopCapture);
+    reset.addEventListener("click", () => {
+      window.FluxionShortcuts.reset(action.id);
+      refreshShortcutButtons();
+      setNote(`${action.label} reset.`, "keyboard");
+    });
+    shortcutButtons.set(action.id, key);
+    control.append(key, reset);
+    row(keyboard, action.label, "Click the shortcut, then press a new key combination.", control);
+  }
   for (const [label, shortcut] of [
-    ["Command palette", "⌘ K"], ["Search open tabs", "⌘ ⇧ A"], ["Cycle Flow sidebar", "⌘ ⇧ \\"],
-    ["Next / previous workspace", "⌘ ⌥ ]  /  ⌘ ⌥ ["], ["New tab", "⌘ T"],
-    ["Reopen closed tab", "⌘ ⇧ T"], ["Find in page", "⌘ F"], ["Downloads", "⌘ ⇧ J"],
-  ]) row(keyboard, label, "", create("div", "fluxion-shortcut", shortcut));
+    ["New tab", "⌘ T"], ["Reopen closed tab", "⌘ ⇧ T"],
+    ["Find in page", "⌘ F"], ["Downloads", "⌘ ⇧ J"],
+  ]) row(keyboard, label, "Gecko browser shortcut", create("div", "fluxion-shortcut", shortcut));
 
   function setNote(message, sectionId = activeSection) {
     const panel = sections.get(sectionId)?.panel;
@@ -344,5 +402,18 @@
     tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
     window.requestAnimationFrame(syncVisibility);
+  }
+  if (Services.env.get("FLUXION_VISUAL_SHORTCUT_TEST") === "1") {
+    window.setTimeout(() => {
+      const tab = [...gBrowser.tabs].find(candidate => candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
+      if (tab) gBrowser.selectedTab = tab;
+      showSection("keyboard");
+      const result = window.FluxionShortcuts.set("palette", "Accel+Alt+KeyK");
+      refreshShortcutButtons();
+      if (result.ok && window.FluxionShortcuts.get("palette") === "Accel+Alt+KeyK") {
+        Services.prefs.setStringPref("fluxion.shortcuts.visual.health", "custom-shortcut-persisted");
+        Services.prefs.savePrefFile(null);
+      }
+    }, 3200);
   }
 })(window);

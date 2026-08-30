@@ -407,7 +407,10 @@
   name.textContent = "Fluxion";
   const modeButton = create("button", "fluxion-icon-button");
   modeButton.type = "button";
-  modeButton.title = "Cycle sidebar (Ctrl/⌘ Shift \\)";
+  const updateModeButtonTitle = () => {
+    modeButton.title = `Cycle sidebar (${window.FluxionShortcuts?.format("sidebar") || "shortcut"})`;
+  };
+  updateModeButtonTitle();
   modeButton.setAttribute("aria-label", "Cycle sidebar size");
   modeButton.textContent = "‹";
   header.append(mark, name, modeButton);
@@ -1344,6 +1347,7 @@
   popupSet.append(contextMenu, groupMenu, workspaceMenu);
 
   on(modeButton, "click", cycleSidebar);
+  on(window, "FluxionShortcutsChanged", updateModeButtonTitle);
   on(addWorkspaceButton, "click", addWorkspace);
   on(flow, "click", event => {
     if (flow.dataset.state === "focus" && event.target === flow) cycleSidebar();
@@ -1363,14 +1367,18 @@
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }
   on(window, "keydown", event => {
-    const accelerator = navigator.platform.includes("Mac") ? event.metaKey : event.ctrlKey;
-    if (accelerator && event.shiftKey && event.code === "Backslash") {
+    if (window.FluxionShortcuts?.matches(event, "sidebar")) {
       event.preventDefault();
+      event.stopPropagation();
       cycleSidebar();
     }
-    if (accelerator && event.altKey && (event.code === "BracketRight" || event.code === "BracketLeft")) {
+    if (
+      window.FluxionShortcuts?.matches(event, "workspaceNext") ||
+      window.FluxionShortcuts?.matches(event, "workspacePrevious")
+    ) {
       event.preventDefault();
-      cycleWorkspace(event.code === "BracketRight" ? 1 : -1);
+      event.stopPropagation();
+      cycleWorkspace(window.FluxionShortcuts.matches(event, "workspaceNext") ? 1 : -1);
     }
   }, true);
   on(window, "unload", () => {

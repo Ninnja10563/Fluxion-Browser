@@ -8,6 +8,22 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.11 makes Fluxion's keyboard model user-editable:
+
+- change the command palette, tab search, Flow sidebar, next-workspace, and
+  previous-workspace shortcuts directly in Fluxion Settings;
+- capture physical key combinations with correct Command-key presentation on
+  macOS and Ctrl-key presentation on other platforms;
+- reject unmodified keys, protected browser/macOS combinations, and conflicts
+  with another Fluxion command before saving;
+- persist the normalized shortcut map in the browser profile and update live
+  command handlers immediately without restarting;
+- reset individual actions while keeping Gecko's standard browser shortcuts
+  clearly listed and untouched.
+
+The macOS release gate now changes a shortcut in the packaged app, reads the
+persisted value back, and visually inspects the Keyboard settings section.
+
 Version 0.10 adds native multi-select workflows to Flow:
 
 - Command-click individual tabs and Shift-click a visible range using familiar

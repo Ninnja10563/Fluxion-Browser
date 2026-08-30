@@ -12,6 +12,7 @@ const memory = fs.readFileSync(path.join(root, "chrome/fluxion-memory.js"), "utf
 const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
 const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js"), "utf8");
 const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
+const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -85,9 +86,19 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /temporary-gecko-tab-opened/);
   assert.match(macVerifier, /FLUXION_VISUAL_MULTISELECT_TEST=1/);
   assert.match(macVerifier, /native-multiselect-visible/);
+  assert.match(macVerifier, /FLUXION_VISUAL_SHORTCUT_TEST=1/);
+  assert.match(macVerifier, /custom-shortcut-persisted/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
+});
+
+test("custom shortcuts are persisted centrally and consumed by live commands", () => {
+  assert.match(shortcuts, /fluxion\.shortcuts/);
+  assert.match(shortcuts, /FluxionShortcutsChanged/);
+  assert.match(chrome, /FluxionShortcuts\?\.matches\(event, "sidebar"\)/);
+  assert.match(palette, /FluxionShortcuts\?\.matches\(event, "palette"\)/);
+  assert.match(settings, /Press shortcut…/);
 });
 
 test("Flow delegates multi-selection to Gecko and exposes batch actions", () => {
