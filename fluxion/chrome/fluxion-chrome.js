@@ -2725,6 +2725,7 @@
     }, 3600);
   }
   if (Services.env.get("FLUXION_VISUAL_FOCUS_TEST") === "1") {
+    const sidebarStateBeforeFocusGate = flow.dataset.state;
     window.setTimeout(() => {
       setSidebarState("focus");
       window.setTimeout(() => {
@@ -2764,6 +2765,7 @@
             );
           }
           Services.prefs.savePrefFile(null);
+          setSidebarState(sidebarStateBeforeFocusGate);
         }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
       }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
     }, 23500);

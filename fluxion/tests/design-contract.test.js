@@ -171,6 +171,7 @@ test("Focus Flow is an inert, keyboard-revealable overlay that preserves page ge
   assert.match(chrome, /prefers-reduced-motion/);
   assert.match(chrome, /contentAfter\.left - contentBefore\.left/);
   assert.match(chrome, /contentAfter\.width - contentBefore\.width/);
+  assert.match(chrome, /setSidebarState\(sidebarStateBeforeFocusGate\)/);
   assert.match(macVerifier, /FLUXION_VISUAL_FOCUS_TEST=1/);
   assert.match(macVerifier, /focus-rail-overlay-revealed-without-content-reflow/);
 });
