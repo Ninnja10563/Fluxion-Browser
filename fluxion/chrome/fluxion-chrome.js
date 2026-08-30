@@ -2972,10 +2972,10 @@
       });
       render();
       const [first, closing, following] = fixtures;
-      const closingRow = tabElements.get(closing);
-      const followingRow = tabElements.get(following);
-      const closeButton = closingRow?.querySelector(".fluxion-close");
-      if (!closingRow || !followingRow || !closeButton) {
+      const initialClosingRow = tabElements.get(closing);
+      const initialFollowingRow = tabElements.get(following);
+      const initialCloseButton = initialClosingRow?.querySelector(".fluxion-close");
+      if (!initialClosingRow || !initialFollowingRow || !initialCloseButton) {
         Services.prefs.setStringPref(
           "fluxion.closeStability.visual.error",
           "close fixture did not render three ordinary Flow rows",
@@ -2984,8 +2984,20 @@
         gBrowser.removeTabs(fixtures.filter(tab => tab.parentNode), { animate: false });
         return;
       }
-      followingRow.scrollIntoView({ block: "nearest" });
+      initialFollowingRow.scrollIntoView({ block: "nearest" });
       window.setTimeout(() => {
+        const closingRow = tabElements.get(closing);
+        const followingRow = tabElements.get(following);
+        const closeButton = closingRow?.querySelector(".fluxion-close");
+        if (!closingRow || !followingRow || !closeButton) {
+          Services.prefs.setStringPref(
+            "fluxion.closeStability.visual.error",
+            "close fixture did not survive its scroll-settle boundary",
+          );
+          Services.prefs.savePrefFile(null);
+          gBrowser.removeTabs(fixtures.filter(tab => tab.parentNode), { animate: false });
+          return;
+        }
         const targetRect = closeButton.getBoundingClientRect();
         const pointer = {
           clientX: targetRect.left + targetRect.width / 2,
