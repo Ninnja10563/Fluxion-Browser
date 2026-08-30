@@ -893,9 +893,9 @@
         settingsTab = gBrowser.addTrustedTab("about:preferences#workspaces", { skipAnimation: true });
         window.FluxionUI.setTabWorkspace(settingsTab, window.FluxionUI.currentWorkspace());
       }
-      gBrowser.selectedTab = settingsTab;
-      window.setTimeout(() => {
-        if (settingsTab?.parentNode) gBrowser.selectedTab = settingsTab;
+      let stableFrames = 0;
+      const settleWorkspaceCapture = (attempt = 0) => {
+        if (settingsTab && !settingsTab.closing) gBrowser.selectedTab = settingsTab;
         syncVisibility();
         showSection("workspaces");
         renderWorkspaces();
@@ -903,20 +903,27 @@
         if (status) status.textContent = "";
         const routed = gBrowser.selectedBrowser?.currentURI?.spec === "about:preferences#workspaces" &&
           !root.hidden && !workspacePanel.hidden && workspaceList.getBoundingClientRect().height > 100;
-        if (routed) {
+        stableFrames = routed ? stableFrames + 1 : 0;
+        if (stableFrames >= 10) {
           Services.prefs.setStringPref(
             "fluxion.workspaceSettings.capture.health",
             "settled-workspaces-route-visible",
           );
-        } else {
+          Services.prefs.savePrefFile(null);
+          return;
+        }
+        if (attempt >= 60) {
           Services.prefs.setStringPref(
             "fluxion.workspaceSettings.visual.error",
             `captureRoute=${gBrowser.selectedBrowser?.currentURI?.spec || "missing"} ` +
               `root=${!root.hidden} panel=${!workspacePanel.hidden}`,
           );
+          Services.prefs.savePrefFile(null);
+          return;
         }
-        Services.prefs.savePrefFile(null);
-      }, 250);
+        window.setTimeout(() => settleWorkspaceCapture(attempt + 1), 100);
+      };
+      settleWorkspaceCapture();
     }, { once: true });
     window.setTimeout(() => {
       let fixtureTab = null;
