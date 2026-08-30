@@ -25,7 +25,7 @@
     Services.prefs.savePrefFile(null);
   }
   function fail(error) {
-    write(`fluxion.recovery.${mode}.error`, error?.stack || error);
+    write(`fluxion.recovery.${mode}.error`, `${error?.message || error}\n${error?.stack || ""}`);
     Cu.reportError(error);
   }
   async function quit() {
@@ -154,10 +154,8 @@
   }
 
   async function validatePrivateAbsence() {
-    const result = await waitFor(() => FluxionSessionRecovery.validateNormal(
-      snapshot(), { requirePrivateAbsence: true },
-    ));
-    if (!result.ok) throw new Error(`post-private restore invalid: ${result.reasons.join("; ")}`);
+    const result = FluxionSessionRecovery.validatePrivateAbsence(snapshot());
+    if (!result.ok) throw new Error(`post-private tab isolation invalid: ${result.reasons.join("; ")}`);
     const privateURL = FluxionSessionRecovery.URLS.privateOnly;
     const historyRecord = await PlacesUtils.history.fetch(privateURL);
     if (historyRecord) throw new Error("private URL leaked into Gecko Places history");

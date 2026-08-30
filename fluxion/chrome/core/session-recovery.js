@@ -64,8 +64,18 @@
     return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
   }
 
+  function validatePrivateAbsence(snapshot) {
+    const reasons = [];
+    if (snapshot?.isPrivate) reasons.push("post-private verification window is private");
+    if ((snapshot?.tabs || []).map(normaliseTab).some(tab => tab.url === URLS.privateOnly)) {
+      reasons.push("private tab leaked into the normal session");
+    }
+    return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
+  }
+
   const api = Object.freeze({
-    EXPECTED_NORMAL_URLS, URLS, clean, normaliseTab, validateNormal, validatePrivate,
+    EXPECTED_NORMAL_URLS, URLS, clean, normaliseTab, validateNormal,
+    validatePrivate, validatePrivateAbsence,
   });
   scope.FluxionSessionRecovery = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

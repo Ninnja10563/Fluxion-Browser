@@ -34,6 +34,11 @@ test("private tabs are rejected from a post-private normal restoration", () => {
   const isolated = Recovery.validateNormal(snapshot, { requirePrivateAbsence: true });
   assert.equal(isolated.ok, false);
   assert.match(isolated.reasons[0], /private tab leaked/);
+  assert.equal(Recovery.validatePrivateAbsence(snapshot).ok, false);
+  assert.deepEqual(Recovery.validatePrivateAbsence({
+    isPrivate: false,
+    tabs: [{ url: "about:blank" }],
+  }), { ok: true, reasons: [] });
 });
 
 test("private mode requires empty private-state Browser Memory results", () => {
