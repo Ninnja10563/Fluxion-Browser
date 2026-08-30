@@ -17,7 +17,9 @@ The current preview is runnable and includes:
   indicators, working media controls, reordering, pinning, duplication, and
   native tab session restoration;
 - roving keyboard focus for tabs and workspaces, arrow/Home/End navigation,
-  stable focus after selection or close, and a packaged 200-tab render gate;
+  stable focus after selection or close, pointer-close rows that hold their
+  position against accidental repeat clicks and then compress on movement,
+  and a packaged 200-tab render gate;
 - per-workspace active-page memory: returning to a workspace resumes the exact
   native tab last used there, with Gecko recency as a safe first-visit fallback;
 - packaged multi-launch recovery for workspace membership, active pages,

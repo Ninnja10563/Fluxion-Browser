@@ -48,6 +48,11 @@ passes:
    the same drop application path, performs an edge reorder, and rejects the
    build unless native pair order, orientation, and tab order all match the
    pointer intent.
+   A pointer-close gate then creates three ordinary native tabs, clicks the
+   middle row's real Flow close control, and repeats a click at the exact same
+   screen coordinates. Packaging stops unless only that tab closes, the next
+   row retains its position while the pointer is stationary, and the inert
+   placeholder compresses away after a pointer move.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any

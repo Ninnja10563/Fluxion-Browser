@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionSplitViews, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
+/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionSplitViews, FluxionTabCloseStability, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -29,8 +29,11 @@
   let dragTabs = [];
   let dragTargetElement = null;
   let renderQueued = false;
+  let pointerCloseHold = null;
+  let renderDeferredForClose = false;
   let focusTabAfterRender = null;
   let focusWorkspaceAfterRender = null;
+  const closingTabs = new Set();
   const tabElements = new Map();
   const workspaceElements = new Map();
   let sessionRestoreSettled = false;
@@ -307,7 +310,9 @@
     .fluxion-tab {
       position: relative; height: 32px; display: flex; align-items: center; gap: 7px;
       padding: 0 6px; margin: 1px 0; border-radius: 3px; color: var(--fluxion-muted);
-      user-select: none; transition: opacity 100ms ease, transform var(--fluxion-fast), background-color 80ms linear;
+      user-select: none; transition: opacity 100ms ease, transform var(--fluxion-fast),
+        height 120ms cubic-bezier(.2,.7,.2,1), margin 120ms cubic-bezier(.2,.7,.2,1),
+        padding 120ms cubic-bezier(.2,.7,.2,1), background-color 80ms linear;
     }
     :root[data-fluxion-density="compact"] .fluxion-tab { height: 28px; }
     :root[data-fluxion-density="roomy"] .fluxion-tab { height: 36px; }
@@ -329,6 +334,10 @@
       background: var(--fluxion-accent);
     }
     .fluxion-tab.is-closing { opacity: 0; transform: scaleY(.72); pointer-events: none; }
+    .fluxion-tab.is-close-releasing {
+      height: 0 !important; min-height: 0 !important; margin-block: 0; padding-block: 0;
+      overflow: hidden; opacity: 0; transform: scaleY(.58); pointer-events: none;
+    }
     .fluxion-tab.is-sleeping { color: color-mix(in srgb, var(--fluxion-muted) 82%, transparent); }
     .fluxion-tab[data-drop-intent="reorder-before"]::after,
     .fluxion-tab[data-drop-intent="reorder-after"]::after {
@@ -1646,9 +1655,55 @@
       : null;
   }
 
-  function closeWithStability(tab, element) {
-    if (!tab || tab.closing) return;
+  function closeMotionDuration() {
+    return document.documentElement.hasAttribute("data-fluxion-no-motion") ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120;
+  }
+
+  function beginPointerCloseHold(tabs, elements, closeButton, event) {
+    if (!event || !closeButton || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) {
+      return;
+    }
+    if (pointerCloseHold) releasePointerCloseHold({ animate: false });
+    pointerCloseHold = {
+      closed: new Set(),
+      elements,
+      guard: FluxionTabCloseStability.guardRect(closeButton.getBoundingClientRect()),
+      releasing: false,
+      tabs: new Set(tabs),
+    };
+  }
+
+  function finishPointerCloseHold(hold) {
+    if (pointerCloseHold !== hold) return;
+    const needsRender = renderDeferredForClose ||
+      [...hold.tabs].some(tab => !tab.parentNode || hold.closed.has(tab));
+    pointerCloseHold = null;
+    renderDeferredForClose = false;
+    if (needsRender) scheduleRender();
+  }
+
+  function releasePointerCloseHold({ animate = true } = {}) {
+    const hold = pointerCloseHold;
+    if (!hold || hold.releasing) return false;
+    const closed = [...hold.tabs].every(tab => !tab.parentNode || hold.closed.has(tab));
+    if (!closed || !animate || !closeMotionDuration()) {
+      finishPointerCloseHold(hold);
+      return true;
+    }
+    hold.releasing = true;
+    for (const element of hold.elements) {
+      if (element?.isConnected) element.classList.add("is-close-releasing");
+    }
+    window.setTimeout(() => finishPointerCloseHold(hold), closeMotionDuration());
+    return true;
+  }
+
+  function closeWithStability(tab, element, pointer = null) {
+    if (!tab?.parentNode || tab.closing || closingTabs.has(tab)) return;
     const tabs = contextTabs(tab);
+    if (!tabs.length || tabs.some(candidate => closingTabs.has(candidate))) return;
+    for (const candidate of tabs) closingTabs.add(candidate);
     if (element.matches(":focus-within")) {
       const rendered = renderedTabElements();
       const index = rendered.indexOf(element);
@@ -1659,10 +1714,15 @@
       ].find(candidate => !closing.has(candidate._fluxionTab));
       focusTabAfterRender = replacement?._fluxionTab || null;
     }
-    element.classList.add("is-closing");
+    const closingElements = tabs.map(candidate => tabElements.get(candidate)).filter(Boolean);
+    for (const candidate of closingElements) candidate.classList.add("is-closing");
+    beginPointerCloseHold(tabs, closingElements, pointer?.closeButton, pointer?.event);
     window.setTimeout(() => {
       closeTabs(tabs, { animate: false });
-    }, window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120);
+      for (const candidate of tabs) {
+        if (candidate.parentNode && !candidate.closing) closingTabs.delete(candidate);
+      }
+    }, closeMotionDuration());
   }
 
   function closeTabs(tabs, options = {}) {
@@ -1853,7 +1913,7 @@
     close.tabIndex = -1;
     close.addEventListener("click", event => {
       event.stopPropagation();
-      closeWithStability(tab, item);
+      closeWithStability(tab, item, { closeButton: close, event });
     });
     item.appendChild(close);
 
@@ -2182,7 +2242,27 @@
     if (document.title !== title) document.title = title;
   }
 
-  function scheduleRender() {
+  function syncHeldTabSelection() {
+    for (const [tab, element] of tabElements) {
+      if (!element.isConnected) continue;
+      const active = tab === gBrowser.selectedTab;
+      element.dataset.active = String(active);
+      element.setAttribute("aria-selected", String(active || tab.multiselected));
+      element.tabIndex = active ? 0 : -1;
+    }
+  }
+
+  function scheduleRender(event = null) {
+    if (event?.type === "TabClose") {
+      closingTabs.delete(event.target);
+      if (pointerCloseHold?.tabs.has(event.target)) pointerCloseHold.closed.add(event.target);
+    }
+    if (pointerCloseHold) {
+      renderDeferredForClose = true;
+      syncHeldTabSelection();
+      updateWindowTitle();
+      return;
+    }
     if (renderQueued) return;
     renderQueued = true;
     window.requestAnimationFrame(() => {
@@ -2518,12 +2598,23 @@
   on(modeButton, "click", cycleSidebar);
   on(window, "FluxionShortcutsChanged", updateModeButtonTitle);
   on(addWorkspaceButton, "click", addWorkspace);
+  on(window, "pointermove", event => {
+    if (
+      pointerCloseHold && !pointerCloseHold.releasing &&
+      FluxionTabCloseStability.shouldRelease(pointerCloseHold.guard, event)
+    ) {
+      releasePointerCloseHold();
+    }
+  }, true);
+  on(window, "blur", () => releasePointerCloseHold({ animate: false }));
+  on(tabsList, "scroll", () => releasePointerCloseHold({ animate: false }), { passive: true });
   on(flow, "pointerenter", () => {
     focusPointerInside = true;
     revealFocusSurface();
   });
   on(flow, "pointerleave", () => {
     focusPointerInside = false;
+    releasePointerCloseHold();
     scheduleFocusSurfaceHide();
   });
   on(flow, "focusin", () => {
@@ -2585,6 +2676,7 @@
     }
   });
   on(window, "keydown", event => {
+    releasePointerCloseHold({ animate: false });
     if (window.FluxionShortcuts?.matches(event, "sidebar")) {
       event.preventDefault();
       event.stopPropagation();
@@ -2601,6 +2693,7 @@
   }, true);
   on(window, "unload", () => {
     clearFocusHideTimer();
+    pointerCloseHold = null;
     while (cleanup.length) cleanup.pop()();
     contextMenu.remove();
     groupMenu.remove();
@@ -2859,6 +2952,77 @@
       resetTabDrag();
       scheduleRender();
     }, 3000);
+  }
+  if (Services.env.get("FLUXION_VISUAL_CLOSE_STABILITY_TEST") === "1") {
+    window.setTimeout(() => {
+      const fixtures = ["First", "Closing", "Following"].map((label, index) => {
+        const tab = gBrowser.addTrustedTab(`about:blank?fluxion-close-stability=${index}`, {
+          skipAnimation: true,
+        });
+        setTabWorkspace(tab, currentWorkspace);
+        tab.setAttribute("label", `${label} close reference`);
+        return tab;
+      });
+      render();
+      const [first, closing, following] = fixtures;
+      const closingRow = tabElements.get(closing);
+      const followingRow = tabElements.get(following);
+      const closeButton = closingRow?.querySelector(".fluxion-close");
+      if (!closingRow || !followingRow || !closeButton) {
+        Services.prefs.setStringPref(
+          "fluxion.closeStability.visual.error",
+          "close fixture did not render three ordinary Flow rows",
+        );
+        Services.prefs.savePrefFile(null);
+        gBrowser.removeTabs(fixtures.filter(tab => tab.parentNode), { animate: false });
+        return;
+      }
+      followingRow.scrollIntoView({ block: "nearest" });
+      const targetRect = closeButton.getBoundingClientRect();
+      const pointer = {
+        clientX: targetRect.left + targetRect.width / 2,
+        clientY: targetRect.top + targetRect.height / 2,
+      };
+      const followingTop = followingRow.getBoundingClientRect().top;
+      closeButton.dispatchEvent(new window.MouseEvent("click", {
+        ...pointer, bubbles: true, button: 0, detail: 1,
+      }));
+      window.setTimeout(() => {
+        const repeatTarget = document.elementFromPoint(pointer.clientX, pointer.clientY);
+        const protectedTarget = Boolean(repeatTarget && !repeatTarget.closest?.(".fluxion-close"));
+        repeatTarget?.dispatchEvent(new window.MouseEvent("click", {
+          ...pointer, bubbles: true, button: 0, detail: 1,
+        }));
+        const held = !closing.parentNode && closingRow.isConnected &&
+          closingRow.classList.contains("is-closing") &&
+          Math.abs(followingRow.getBoundingClientRect().top - followingTop) <= 1;
+        const neighboursSafe = first.parentNode && following.parentNode;
+        window.dispatchEvent(new window.PointerEvent("pointermove", {
+          clientX: targetRect.left - FluxionTabCloseStability.DEFAULT_PADDING - 8,
+          clientY: pointer.clientY,
+          bubbles: true,
+        }));
+        window.setTimeout(() => {
+          const followingAfter = tabElements.get(following);
+          const compressed = !closingRow.isConnected && followingAfter &&
+            followingAfter.getBoundingClientRect().top < followingTop - 10;
+          if (protectedTarget && held && neighboursSafe && compressed) {
+            Services.prefs.setStringPref(
+              "fluxion.closeStability.health",
+              "pointer-close-held-one-row-until-movement",
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.closeStability.visual.error",
+              `protected=${protectedTarget} held=${held} neighbours=${Boolean(neighboursSafe)} compressed=${Boolean(compressed)}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+          gBrowser.removeTabs([first, following].filter(tab => tab.parentNode), { animate: false });
+          scheduleRender();
+        }, 180);
+      }, 180);
+    }, 3400);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
     const groupTabs = [...gBrowser.tabs]

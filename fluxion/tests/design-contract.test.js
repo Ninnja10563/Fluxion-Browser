@@ -25,6 +25,10 @@ const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisati
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
 const tabStatus = fs.readFileSync(path.join(root, "chrome/core/tab-status.js"), "utf8");
 const tabDrop = fs.readFileSync(path.join(root, "chrome/core/tab-drop.js"), "utf8");
+const tabCloseStability = fs.readFileSync(
+  path.join(root, "chrome/core/tab-close-stability.js"),
+  "utf8",
+);
 const indexScheduler = fs.readFileSync(path.join(root, "chrome/core/index-scheduler.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
@@ -206,6 +210,19 @@ test("Flow distinguishes reorder edges from native drag-to-split targets", () =>
   assert.match(macVerifier, /FLUXION_VISUAL_DROP_TEST=1/);
   assert.match(macVerifier, /native-drag-reorder-and-two-orientation-split/);
   assert.doesNotMatch(tabDrop, /gBrowser|Services\.|setAttribute|fetch\(/);
+});
+
+test("Flow pointer closing holds the vacated row until intentional movement", () => {
+  assert.match(runtimeConfig, /chrome\/core\/tab-close-stability\.js/);
+  assert.match(tabCloseStability, /DEFAULT_PADDING = 4/);
+  assert.match(tabCloseStability, /shouldRelease/);
+  assert.match(chrome, /pointerCloseHold/);
+  assert.match(chrome, /is-close-releasing/);
+  assert.match(chrome, /FluxionTabCloseStability\.guardRect/);
+  assert.match(chrome, /FluxionTabCloseStability\.shouldRelease/);
+  assert.match(chrome, /closingTabs\.has\(tab\)/);
+  assert.match(macVerifier, /FLUXION_VISUAL_CLOSE_STABILITY_TEST=1/);
+  assert.match(macVerifier, /pointer-close-held-one-row-until-movement/);
 });
 
 test("new tab stays blank instead of duplicating the address field", () => {

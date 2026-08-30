@@ -8,6 +8,31 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.39 makes repeated pointer closing safe and spatially calm in Flow's
+vertical tab list:
+
+- keep the just-closed row in its exact vertical slot while the pointer remains
+  over the original close target, so a second click cannot close the tab that
+  moved underneath it;
+- use a restrained 4px guard around the 22px close control, releasing as soon
+  as movement clearly leaves the target rather than imposing a timer;
+- fade the closed row first, then compress its held space over 120ms with the
+  same non-overshooting easing used by the rest of Flow;
+- update the newly selected row and native window title immediately even while
+  list geometry is briefly held;
+- treat a Gecko-native multi-selection or split pair as one close operation,
+  while preventing duplicate timers from rapid clicks on the same row;
+- keep keyboard Delete/Backspace and middle-click closing direct, without a
+  pointer hold, and remove animation entirely when motion is disabled or reduced;
+- retain Gecko ownership of before-unload prompts, tab selection, SessionStore,
+  recently closed tabs, URLs, and navigation state;
+- add a packaged macOS gate that clicks the middle of three real native tabs,
+  repeats the click at identical coordinates, proves both neighbours survive,
+  verifies the following row never moved under the stationary pointer, then
+  moves the pointer and requires the held row to compress away.
+
+No permanent preference or shadow tab record is introduced by the interaction.
+
 Version 0.38 makes multiple Fluxion windows restore as independent working
 contexts instead of sharing one profile-wide active workspace:
 

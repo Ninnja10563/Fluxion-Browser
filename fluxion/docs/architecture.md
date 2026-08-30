@@ -545,6 +545,33 @@ Gecko's changed selected tab after the rebuild. It removes the fixture before
 visual capture. This is a regression gate, not a substitute for later CPU,
 battery, and representative-content memory profiling.
 
+## Pointer-close stability
+
+Flow treats the close button's pointer coordinates as a short-lived layout
+anchor. After a pointer click, the native Gecko tab closes immediately after
+the 120ms fade, but its inert Flow row keeps occupying the same vertical slot.
+An accidental repeat click at the unchanged coordinates therefore reaches no
+other close control. The first pointer movement outside the original button's
+4px guard releases the row; it compresses to zero height over 120ms and then a
+single coalesced render projects the remaining native tabs. Scrolling, window
+deactivation, keyboard input, disabled animation, and reduced motion release
+the hold immediately.
+
+The hold contains only native-tab and transient DOM references. It never owns
+a URL, navigation entry, closed-tab record, or tab order. Gecko still performs
+the close, before-unload handling, selected-tab change, and SessionStore write.
+Flow updates selected-row accessibility state and the window title even while
+layout is held. A native multi-selection or split pair fades and releases as
+one operation, while keyboard Delete/Backspace and middle click keep their
+direct workflows.
+
+This adapts Firefox's horizontal close-target sizing principle to a vertical
+list; current upstream `tabs.js` explicitly skips its horizontal sizing lock in
+vertical mode. The packaged macOS gate closes the middle of three real Gecko
+tabs, repeats a click at the exact coordinates, and blocks packaging unless
+only the intended tab closes, the following row stays fixed until movement,
+and the held row then compresses away.
+
 ## Native tab-status ownership
 
 Flow derives page activity exclusively from Gecko's native tab state:
