@@ -593,6 +593,10 @@
       if (request !== aiRequest || mode !== "ask") return;
       renderItems([], error.message || "The AI provider could not answer");
       status.textContent = "No page content was retained by the provider layer";
+      if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
+        Services.prefs.setStringPref("fluxion.ai.visual.error", String(error));
+        Services.prefs.savePrefFile(null);
+      }
     }
   }
 
@@ -725,9 +729,15 @@
   if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
     window.setTimeout(() => {
       const tab = [...gBrowser.tabs].find(candidate =>
-        candidate.linkedBrowser?.currentURI?.spec.startsWith("https://example.com/")
+        candidate.linkedBrowser?.currentURI?.spec === "https://example.com/?fluxion-memory-test=1"
       );
-      if (!tab) return;
+      if (!tab) {
+        Services.prefs.setStringPref("fluxion.ai.visual.error", "Dedicated page-evidence tab was not found");
+        Services.prefs.savePrefFile(null);
+        return;
+      }
+      Services.prefs.setStringPref("fluxion.ai.visual.stage", "dedicated-page-found");
+      Services.prefs.savePrefFile(null);
       open("ask", tab.linkedBrowser);
       input.value = "What is this page for?";
       runAsk().catch(Cu.reportError);

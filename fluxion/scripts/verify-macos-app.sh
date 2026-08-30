@@ -122,6 +122,7 @@ if [[ -f "$profile/prefs.js" ]]; then
   grep 'user_pref("fluxion\.memory\.enrichment\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.settings\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.ai\.visual\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.ai\.visual\.stage"' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,80p' "$provider_log" >&2
 sed -n '1,160p' "$log" >&2
