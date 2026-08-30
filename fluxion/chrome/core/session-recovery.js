@@ -25,6 +25,12 @@
     [URLS.focusIdle]: "focus",
     [URLS.focusActive]: "focus",
   });
+  const EXPECTED_WORKSPACE_LIST = Object.freeze([
+    Object.freeze({ id: "focus", name: "Focus", accent: "slate", icon: "circle" }),
+    Object.freeze({ id: "build", name: "Build", accent: "blue", icon: "diamond" }),
+    Object.freeze({ id: "research-desk", name: "Research Desk", accent: "sage", icon: "square" }),
+    Object.freeze({ id: "life", name: "Life", accent: "ochre", icon: "arc" }),
+  ]);
 
   function clean(value, limit = 4096) {
     return String(value ?? "").trim().slice(0, limit);
@@ -45,6 +51,12 @@
 
   function validateNormal(snapshot, { requirePrivateAbsence = false } = {}) {
     const tabs = (snapshot?.tabs || []).map(normaliseTab);
+    const workspaces = (snapshot?.workspaces || []).map(workspace => ({
+      id: clean(workspace?.id, 80),
+      name: clean(workspace?.name, 80),
+      accent: clean(workspace?.accent, 24),
+      icon: clean(workspace?.icon, 24),
+    }));
     const reasons = [];
     if (snapshot?.isPrivate) reasons.push("restored window is private");
     if (clean(snapshot?.currentWorkspace, 80) !== "build") reasons.push("active workspace was not restored");
@@ -78,6 +90,9 @@
     if (!tabs.some(tab => tab.url === URLS.splitA && tab.selected)) {
       reasons.push("active Build page was not selected");
     }
+    if (JSON.stringify(workspaces) !== JSON.stringify(EXPECTED_WORKSPACE_LIST)) {
+      reasons.push("workspace names, symbols, accents, or order were not restored");
+    }
     if (requirePrivateAbsence && tabs.some(tab => tab.url === URLS.privateOnly)) {
       reasons.push("private tab leaked into the normal session");
     }
@@ -103,7 +118,8 @@
   }
 
   const api = Object.freeze({
-    EXPECTED_NORMAL_URLS, EXPECTED_WORKSPACES, URLS, clean, normaliseTab, validateNormal,
+    EXPECTED_NORMAL_URLS, EXPECTED_WORKSPACES, EXPECTED_WORKSPACE_LIST, URLS,
+    clean, normaliseTab, validateNormal,
     validatePrivate, validatePrivateAbsence,
   });
   scope.FluxionSessionRecovery = api;

@@ -111,6 +111,21 @@ test("workspaces resume their last active native page without shadow sessions", 
   assert.match(macVerifier, /two-workspace-active-pages-round-tripped/);
 });
 
+test("Workspace settings mutate the shared controller and prove safe native-tab migration", () => {
+  assert.match(settings, /section\(\s*"workspaces", "Workspaces"/);
+  assert.match(settings, /window\.FluxionUI\.createWorkspace\(workspaceName\.value, \{ activate: false \}\)/);
+  assert.match(settings, /window\.FluxionUI\.updateWorkspace/);
+  assert.match(settings, /window\.FluxionUI\.moveWorkspace/);
+  assert.match(settings, /window\.FluxionUI\.deleteWorkspace/);
+  assert.match(settings, /FluxionWorkspacesChanged/);
+  assert.match(palette, /Workspace settings/);
+  assert.match(chrome, /Services\.wm\.getEnumerator\("navigator:browser"\)/);
+  assert.match(chrome, /migrateWorkspaceTabs\(id, result\.fallbackId\)/);
+  assert.match(chrome, /Services\.prefs\.addObserver\(PREF_WORKSPACES/);
+  assert.match(macVerifier, /FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST=1/);
+  assert.match(macVerifier, /live-controls-persisted-and-tabs-migrated/);
+});
+
 test("tab organisation stays local, evidence-backed, and confirmation-only", () => {
   assert.match(organisation, /minimum = 3/);
   assert.match(organisation, /!record\.pinned && !record\.grouped && !record\.split/);

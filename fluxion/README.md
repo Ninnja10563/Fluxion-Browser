@@ -35,7 +35,8 @@ The current preview is runnable and includes:
 - three-state sidebar with expanded and compact layouts plus a 3px Focus rail
   that reveals the full Flow as a non-reflowing pointer or keyboard overlay;
 - persistent workspace creation, renaming, reordering, symbols, restrained
-  accents, deletion with safe tab migration, and drag-to-workspace movement;
+  accents, deletion with safe cross-window tab migration, and drag-to-workspace
+  movement, available from both Flow and a dedicated live Settings section;
 - a restrained Fluxion navigation skin over Gecko's native security-aware URL
   field and a universal `Cmd/Ctrl+K` command palette;
 - fuzzy keyboard search across commands, open tabs, workspaces, history, and

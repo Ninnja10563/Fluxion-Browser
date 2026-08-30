@@ -83,6 +83,17 @@ point. The current workspace and sidebar state use Firefox preferences. This
 keeps crash recovery atomic with the actual tab session and avoids a second
 database whose state could drift from Firefox.
 
+Workspace definitions are a small bounded Firefox preference containing only
+stable IDs, names, geometric symbols, restrained accent names, and order.
+Flow's context menu and Fluxion Settings call one window controller for every
+mutation. The controller emits a chrome-only change event for live surfaces and
+observes the preference in every open browser window. Deletion enumerates
+Fluxion windows and rewrites each affected native tab's SessionStore workspace
+value to the adjacent surviving destination before removing the definition;
+it never closes a page as a side effect. The packaged gate drives the visible
+Settings controls, while the multi-launch gate independently proves the
+metadata returns after Gecko restores the profile.
+
 Packaged recovery validation uses Gecko's real shutdown and startup path rather
 than serialising Fluxion state in a test fixture. One app launch creates tabs in
 Focus and Build, records a distinct active page in each, and adds a pinned tab,

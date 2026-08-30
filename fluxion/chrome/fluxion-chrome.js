@@ -901,10 +901,15 @@
   flow.append(surface);
   browser.prepend(flow);
 
-  function tabWorkspace(tab) {
+  function storedTabWorkspace(tab) {
     let id = "";
     try { id = SessionStore.getCustomTabValue(tab, TAB_WORKSPACE); } catch (_) {}
     if (!id) id = tab.getAttribute(TAB_WORKSPACE);
+    return id;
+  }
+
+  function tabWorkspace(tab) {
+    let id = storedTabWorkspace(tab);
     if (!workspaces.some(item => item.id === id)) {
       id = currentWorkspace;
     }
@@ -1052,11 +1057,26 @@
     scheduleRender();
   }
 
+  function workspaceSnapshot() {
+    return workspaces.map(workspace => ({ ...workspace }));
+  }
+
+  function notifyWorkspaceChange() {
+    window.dispatchEvent(new window.CustomEvent("FluxionWorkspacesChanged", {
+      detail: {
+        current: currentWorkspace,
+        workspaces: workspaceSnapshot(),
+      },
+    }));
+  }
+
   function saveWorkspaces(next) {
     workspaces = next.map(workspace => ({ ...workspace }));
     Services.prefs.setStringPref(PREF_WORKSPACES, JSON.stringify(workspaces));
     Services.prefs.savePrefFile(null);
+    notifyWorkspaceChange();
     scheduleRender();
+    return workspaceSnapshot();
   }
 
   function askWorkspaceName(title, message, initialValue = "") {
@@ -1067,11 +1087,19 @@
     return accepted ? value.value : null;
   }
 
+  function createWorkspace(name, options = {}) {
+    const result = FluxionWorkspaces.createWorkspace(workspaces, name, options);
+    if (!result) return null;
+    saveWorkspaces(result.items);
+    if (options.activate !== false) switchWorkspace(result.workspace.id);
+    return { ...result.workspace };
+  }
+
   function addWorkspace() {
     const name = askWorkspaceName("New Workspace", "Name this workspace:");
     if (name === null) return null;
-    const result = FluxionWorkspaces.createWorkspace(workspaces, name);
-    if (!result) {
+    const workspace = createWorkspace(name);
+    if (!workspace) {
       Services.prompt.alert(
         window,
         "Workspace Not Created",
@@ -1079,11 +1107,15 @@
           ? `Fluxion supports up to ${FluxionWorkspaces.MAX_WORKSPACES} workspaces.`
           : "Enter a workspace name.",
       );
-      return null;
     }
-    saveWorkspaces(result.items);
-    switchWorkspace(result.workspace.id);
-    return result.workspace;
+    return workspace;
+  }
+
+  function updateWorkspace(id, changes) {
+    const next = FluxionWorkspaces.updateWorkspace(workspaces, id, changes);
+    if (!next) return null;
+    saveWorkspaces(next);
+    return workspaces.find(workspace => workspace.id === id) || null;
   }
 
   function renameWorkspace(id) {
@@ -1091,44 +1123,67 @@
     if (!workspace) return;
     const name = askWorkspaceName("Rename Workspace", "Workspace name:", workspace.name);
     if (name === null) return;
-    const next = FluxionWorkspaces.updateWorkspace(workspaces, id, { name });
-    if (next) saveWorkspaces(next);
+    return updateWorkspace(id, { name });
   }
 
   function updateWorkspaceAppearance(id, changes) {
-    const next = FluxionWorkspaces.updateWorkspace(workspaces, id, changes);
-    if (next) saveWorkspaces(next);
+    return updateWorkspace(id, changes);
   }
 
   function reorderWorkspace(id, direction) {
     const next = FluxionWorkspaces.moveWorkspace(workspaces, id, direction);
-    if (next) saveWorkspaces(next);
+    if (!next) return false;
+    const changed = next.some((workspace, index) => workspace.id !== workspaces[index]?.id);
+    if (changed) saveWorkspaces(next);
+    return changed;
   }
 
-  function deleteWorkspace(id) {
+  function migrateWorkspaceTabs(id, destinationId) {
+    if (!workspaces.some(workspace => workspace.id === destinationId)) return 0;
+    const ownedTabs = [...gBrowser.tabs].filter(tab => storedTabWorkspace(tab) === id);
+    for (const tab of ownedTabs) {
+      setWorkspaceTabActive(tab, false);
+      setTabWorkspace(tab, destinationId);
+    }
+    if (currentWorkspace === id) currentWorkspace = destinationId;
+    return ownedTabs.length;
+  }
+
+  function deleteWorkspace(id, options = {}) {
     const workspace = workspaces.find(item => item.id === id);
     const result = FluxionWorkspaces.removeWorkspace(workspaces, id);
     if (!workspace || !result) {
-      Services.prompt.alert(window, "Workspace Required", "Fluxion must keep at least one workspace.");
-      return;
+      if (options.confirm !== false) {
+        Services.prompt.alert(window, "Workspace Required", "Fluxion must keep at least one workspace.");
+      }
+      return false;
     }
-    const ownedTabs = [...gBrowser.tabs].filter(tab => tab.getAttribute(TAB_WORKSPACE) === id);
+    let ownedTabCount = 0;
+    for (const browserWindow of Services.wm.getEnumerator("navigator:browser")) {
+      ownedTabCount += [...(browserWindow.gBrowser?.tabs || [])].filter(tab => {
+        try {
+          return SessionStore.getCustomTabValue(tab, TAB_WORKSPACE) === id ||
+            tab.getAttribute(TAB_WORKSPACE) === id;
+        } catch (_) {
+          return tab.getAttribute(TAB_WORKSPACE) === id;
+        }
+      }).length;
+    }
     const destination = result.items.find(item => item.id === result.fallbackId);
-    const confirmed = Services.prompt.confirm(
-      window,
-      "Delete Workspace",
-      ownedTabs.length
-        ? `Delete “${workspace.name}” and move its ${ownedTabs.length} tab${ownedTabs.length === 1 ? "" : "s"} to “${destination.name}”?`
+    const confirmed = options.confirm === false || Services.prompt.confirm(
+      window, "Delete Workspace",
+      ownedTabCount
+        ? `Delete “${workspace.name}” and move its ${ownedTabCount} tab${ownedTabCount === 1 ? "" : "s"} to “${destination.name}”?`
         : `Delete “${workspace.name}”?`,
     );
-    if (!confirmed) return;
-    for (const tab of ownedTabs) {
-      setWorkspaceTabActive(tab, false);
-      setTabWorkspace(tab, result.fallbackId);
+    if (!confirmed) return false;
+    for (const browserWindow of Services.wm.getEnumerator("navigator:browser")) {
+      browserWindow.FluxionUI?.migrateWorkspaceTabs(id, result.fallbackId);
     }
     if (currentWorkspace === id) currentWorkspace = result.fallbackId;
     saveWorkspaces(result.items);
     switchWorkspace(currentWorkspace);
+    return true;
   }
 
   function switchWorkspace(id) {
@@ -1166,6 +1221,29 @@
     const id = FluxionWorkspaces.nextWorkspaceId(workspaces, currentWorkspace, direction);
     if (id) switchWorkspace(id);
   }
+
+  const workspacePrefObserver = {
+    observe() {
+      const next = FluxionWorkspaces.parseWorkspaces(
+        Services.prefs.getStringPref(PREF_WORKSPACES, ""),
+      );
+      if (JSON.stringify(next) === JSON.stringify(workspaces)) return;
+      workspaces = next.map(workspace => ({ ...workspace }));
+      if (!workspaces.some(workspace => workspace.id === currentWorkspace)) {
+        currentWorkspace = workspaces[0].id;
+      }
+      for (const tab of gBrowser.tabs) {
+        if (!workspaces.some(workspace => workspace.id === storedTabWorkspace(tab))) {
+          setWorkspaceTabActive(tab, false);
+          setTabWorkspace(tab, currentWorkspace);
+        }
+      }
+      notifyWorkspaceChange();
+      switchWorkspace(currentWorkspace);
+    },
+  };
+  Services.prefs.addObserver(PREF_WORKSPACES, workspacePrefObserver);
+  cleanup.push(() => Services.prefs.removeObserver(PREF_WORKSPACES, workspacePrefObserver));
 
   function moveTabToWorkspace(tab, id) {
     moveTabsToWorkspace(tab ? [tab] : [], id);
@@ -2502,10 +2580,13 @@
     createGroup: () => createGroupForTab(gBrowser.selectedTab),
     createSuggestedGroup: (tabs, name) => createNamedGroup(tabs, name),
     createSplitView,
+    createWorkspace,
     cycleSidebar,
     currentWorkspace: () => currentWorkspace,
     developerToolsAvailable,
     deleteWorkspace,
+    migrateWorkspaceTabs,
+    moveWorkspace: reorderWorkspace,
     moveTabToWorkspace,
     nativeCommandAvailable,
     newTab: openWorkspaceTab,
@@ -2532,9 +2613,10 @@
     switchWorkspace,
     setTabWorkspace,
     tabWorkspace,
+    updateWorkspace,
     workspaceTabActive,
     toggleSplitOrientation,
-    workspaces: () => workspaces.map(workspace => ({ ...workspace })),
+    workspaces: workspaceSnapshot,
   });
   if (Services.env.get("FLUXION_VISUAL_WORKSPACE_RESUME_TEST") === "1") {
     window.setTimeout(() => {

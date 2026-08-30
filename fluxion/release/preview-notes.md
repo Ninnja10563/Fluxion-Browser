@@ -8,6 +8,33 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.36 completes workspace management as a first-class preferences
+workflow:
+
+- add a restrained **Workspaces** section to Fluxion Settings with inline
+  creation, renaming, symbol and accent choices, one-step reordering, and
+  confirmed deletion;
+- keep management rows flat and information-dense instead of turning each
+  workspace into a decorative card or colourful dashboard;
+- route Flow context actions and Settings controls through the same privileged
+  workspace controller, so the two surfaces cannot drift into separate state;
+- publish workspace changes live to Settings and observe the persisted list in
+  every open Fluxion window;
+- count and migrate tabs across all open normal and private windows before a
+  workspace is removed, preserving each native tab instead of closing it or
+  leaving it assigned to a deleted identifier;
+- expose **Workspace settings** in the universal command palette;
+- drive the real Settings form and inline controls in the packaged macOS app,
+  persist a renamed/reordered square-and-sage workspace, attach a native tab,
+  delete the workspace, and refuse packaging unless that tab moves safely;
+- extend the four-launch recovery test to require workspace names, order,
+  symbols, and accents to survive a real Gecko quit and restart alongside tabs,
+  groups, pins, split views, and per-workspace active pages.
+
+The release capture settles on the actual Workspaces preferences surface so
+its density, alignment, and grayscale hierarchy can be inspected before
+publication.
+
 Version 0.35 makes workspace switching resume where the user actually left off:
 
 - remember one active native tab per workspace instead of selecting the first

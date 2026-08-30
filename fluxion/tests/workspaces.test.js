@@ -97,3 +97,16 @@ test("workspace deletion always retains an adjacent destination", () => {
   assert.equal(removeWorkspace([DEFAULTS[0]], "focus"), null);
   assert.equal(removeWorkspace(DEFAULTS, "missing"), null);
 });
+
+test("a settings-style edit sequence preserves identity and a deterministic migration target", () => {
+  const created = createWorkspace(DEFAULTS, "Reference Lab", { icon: "square", accent: "sage" });
+  const renamed = updateWorkspace(created.items, created.workspace.id, { name: "Reference Desk" });
+  const reordered = moveWorkspace(renamed, created.workspace.id, -1);
+  const configured = reordered.find(item => item.id === created.workspace.id);
+  assert.deepEqual(configured, {
+    id: "reference-lab", name: "Reference Desk", icon: "square", accent: "sage",
+  });
+  const removed = removeWorkspace(reordered, configured.id);
+  assert.equal(removed.fallbackId, "life");
+  assert.deepEqual(removed.items, DEFAULTS);
+});

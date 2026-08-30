@@ -276,6 +276,7 @@
     const settingsDestinations = [
       ["Appearance settings", "Theme, Flow sidebar, density, and interface motion", "appearance", ["dark light system compact focus"]],
       ["Tab settings", "Sleeping, close confirmation, and new-tab focus", "tabs", ["sleep inactive background quit"]],
+      ["Workspace settings", "Create, rename, reorder, and style workspaces", "workspaces", ["spaces flow symbol accent delete"]],
       ["Search & Memory settings", "Semantic history, ranking, and excluded domains", "search", ["browser memory embeddings exclusions"]],
       ["AI settings", "Optional local or OpenAI-compatible page tools", "ai", ["ollama lm studio endpoint model"]],
       ["Keyboard settings", "View and edit Fluxion shortcuts", "keyboard", ["hotkeys commands keys"]],

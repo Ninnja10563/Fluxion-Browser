@@ -1,11 +1,11 @@
-/* global gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy */
+/* global Cu, gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy, FluxionWorkspaces */
 (function initialiseFluxionSettings(window) {
   "use strict";
 
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.35.0";
+  const PRODUCT_VERSION = "0.36.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -89,6 +89,35 @@
     .fluxion-shortcut-key[data-capturing="true"] { border-color: var(--fluxion-accent); color: var(--fluxion-muted); }
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .fluxion-workspace-create {
+      display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 7px;
+      align-items: center; margin-bottom: 18px;
+    }
+    .fluxion-workspace-create .fluxion-settings-button { width: auto; min-width: 76px; }
+    .fluxion-workspace-summary {
+      display: flex; justify-content: space-between; gap: 12px; margin-bottom: 7px;
+      color: var(--fluxion-muted); font-size: 11px;
+    }
+    .fluxion-workspace-list { border-bottom: 1px solid var(--fluxion-line); }
+    .fluxion-workspace-row { padding: 13px 0; border-top: 1px solid var(--fluxion-line); }
+    .fluxion-workspace-identity {
+      display: grid; grid-template-columns: 18px minmax(120px, 1fr) auto; gap: 9px;
+      align-items: center; margin-bottom: 8px;
+    }
+    .fluxion-workspace-mark { width: 13px; height: 13px; color: var(--workspace-accent); }
+    .fluxion-workspace-name { min-height: 29px !important; font-weight: 600 !important; }
+    .fluxion-workspace-current {
+      min-width: 48px; color: var(--fluxion-muted); font-size: 11px; text-align: end;
+    }
+    .fluxion-workspace-controls {
+      display: grid; grid-template-columns: minmax(100px, 1fr) minmax(100px, 1fr) auto;
+      gap: 7px; padding-inline-start: 27px;
+    }
+    .fluxion-workspace-actions { display: flex; gap: 4px; }
+    .fluxion-workspace-actions .fluxion-settings-button {
+      width: auto; min-width: 48px; padding-inline: 8px;
+    }
+    .fluxion-workspace-actions .fluxion-settings-button.danger { min-width: 58px; }
     .fluxion-permissions-toolbar {
       display: grid; grid-template-columns: minmax(220px, 1fr) auto; gap: 14px;
       align-items: center; margin: 0 0 12px;
@@ -133,6 +162,8 @@
       .fluxion-settings-main { min-width: 360px; padding-inline: 24px; }
       .fluxion-setting { grid-template-columns: 1fr; gap: 8px; }
       .fluxion-switch { justify-self: start; }
+      .fluxion-workspace-controls { grid-template-columns: 1fr 1fr; }
+      .fluxion-workspace-actions { grid-column: 1 / -1; }
       .fluxion-permission-row { grid-template-columns: minmax(100px, 1fr) auto auto; }
       .fluxion-permission-expiry { display: none; }
     }
@@ -154,6 +185,7 @@
   let activeSection = "general";
   const notes = new Map();
   let renderPermissions = () => {};
+  let renderWorkspaces = () => {};
 
   function showSection(id) {
     if (!sections.has(id)) id = "general";
@@ -163,6 +195,7 @@
       entry.button.setAttribute("aria-current", String(key === id));
     }
     if (id === "permissions") renderPermissions();
+    if (id === "workspaces") renderWorkspaces();
   }
 
   function section(id, title, description) {
@@ -320,6 +353,154 @@
   row(tabs, "Confirm closing many tabs", "Ask before closing a window with multiple open tabs.", toggle("Enabled", pref.bool("browser.tabs.warnOnClose", true), checked => pref.setBool("browser.tabs.warnOnClose", checked)));
   row(tabs, "Switch to new tabs", "Immediately focus links that request a new foreground tab.", toggle("Enabled", pref.bool("browser.tabs.loadInBackground", true) === false, checked => pref.setBool("browser.tabs.loadInBackground", !checked)));
   row(tabs, "Confirm quitting", "Protect the current browsing session when quitting with ⌘Q.", toggle("Enabled", pref.bool("browser.warnOnQuit", true), checked => pref.setBool("browser.warnOnQuit", checked)));
+
+  const workspacePanel = section(
+    "workspaces", "Workspaces",
+    "Keep separate tab sets for different parts of your day. Names, order, symbols, and quiet accents persist across launches.",
+  );
+  const workspaceCreate = create("form", "fluxion-workspace-create");
+  const workspaceName = create("input", "fluxion-settings-control");
+  workspaceName.type = "text";
+  workspaceName.maxLength = 32;
+  workspaceName.placeholder = "New workspace name";
+  workspaceName.setAttribute("aria-label", "New workspace name");
+  const workspaceAdd = create("button", "fluxion-settings-button", "Add");
+  workspaceAdd.type = "submit";
+  workspaceCreate.append(workspaceName, workspaceAdd);
+  const workspaceSummary = create("div", "fluxion-workspace-summary");
+  const workspaceCount = create("span");
+  const workspaceCurrent = create("span");
+  workspaceSummary.append(workspaceCount, workspaceCurrent);
+  const workspaceList = create("div", "fluxion-workspace-list");
+  workspaceList.setAttribute("role", "list");
+  workspacePanel.append(workspaceCreate, workspaceSummary, workspaceList);
+
+  const workspaceAccents = new Map([
+    ["slate", "#68747b"], ["blue", "#51748a"], ["ochre", "#92794d"],
+    ["sage", "#667c69"], ["rose", "#8b646b"],
+  ]);
+  function workspaceMark(icon, accent) {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    svg.setAttribute("class", "fluxion-workspace-mark");
+    svg.setAttribute("viewBox", "0 0 12 12");
+    svg.setAttribute("fill", "none");
+    svg.setAttribute("aria-hidden", "true");
+    svg.style.setProperty("--workspace-accent", workspaceAccents.get(accent) || workspaceAccents.get("slate"));
+    const addShape = (tag, attributes) => {
+      const shape = document.createElementNS("http://www.w3.org/2000/svg", tag);
+      for (const [name, value] of Object.entries(attributes)) shape.setAttribute(name, value);
+      svg.appendChild(shape);
+    };
+    const stroke = { stroke: "currentColor", "stroke-width": "1.2" };
+    if (icon === "diamond") {
+      addShape("path", { d: "M6 1.5 10.5 6 6 10.5 1.5 6Z", ...stroke });
+    } else if (icon === "square") {
+      addShape("rect", { x: "1.75", y: "1.75", width: "8.5", height: "8.5", rx: ".6", ...stroke });
+    } else if (icon === "arc") {
+      addShape("path", { d: "M2 8.5a4.5 4.5 0 0 1 8 0", "stroke-linecap": "round", ...stroke });
+    } else if (icon === "grid") {
+      for (const [x, y] of [[2, 2], [7, 2], [2, 7], [7, 7]]) {
+        addShape("rect", { x: String(x), y: String(y), width: "3", height: "3", rx: ".35", ...stroke });
+      }
+    } else {
+      addShape("circle", { cx: "6", cy: "6", r: "4.25", ...stroke });
+    }
+    return svg;
+  }
+
+  renderWorkspaces = () => {
+    const items = window.FluxionUI.workspaces();
+    const currentId = window.FluxionUI.currentWorkspace();
+    workspaceCount.textContent = `${items.length} of ${FluxionWorkspaces.MAX_WORKSPACES}`;
+    workspaceCurrent.textContent = `Current: ${items.find(item => item.id === currentId)?.name || "Workspace"}`;
+    workspaceAdd.disabled = items.length >= FluxionWorkspaces.MAX_WORKSPACES;
+    workspaceName.disabled = workspaceAdd.disabled;
+    workspaceList.replaceChildren();
+    for (const [index, workspace] of items.entries()) {
+      const item = create("section", "fluxion-workspace-row");
+      item.dataset.workspaceId = workspace.id;
+      item.setAttribute("role", "listitem");
+      const identity = create("div", "fluxion-workspace-identity");
+      const name = create("input", "fluxion-settings-control fluxion-workspace-name");
+      name.type = "text";
+      name.maxLength = 32;
+      name.value = workspace.name;
+      name.setAttribute("aria-label", `Name for ${workspace.name}`);
+      name.addEventListener("change", () => {
+        const updated = window.FluxionUI.updateWorkspace(workspace.id, { name: name.value });
+        if (updated) setNote(`Renamed workspace to ${updated.name}.`, "workspaces");
+        else {
+          renderWorkspaces();
+          setNote("Workspace names cannot be empty.", "workspaces");
+        }
+      });
+      const state = create("span", "fluxion-workspace-current", workspace.id === currentId ? "Current" : "");
+      identity.append(workspaceMark(workspace.icon, workspace.accent), name, state);
+
+      const controls = create("div", "fluxion-workspace-controls");
+      const symbol = select([
+        ["circle", "Circle"], ["diamond", "Diamond"], ["square", "Square"],
+        ["arc", "Arc"], ["grid", "Grid"],
+      ], workspace.icon, value => {
+        window.FluxionUI.updateWorkspace(workspace.id, { icon: value });
+        setNote(`${workspace.name} symbol updated.`, "workspaces");
+      });
+      symbol.classList.add("fluxion-settings-control");
+      symbol.setAttribute("aria-label", `Symbol for ${workspace.name}`);
+      const accent = select([
+        ["slate", "Slate"], ["blue", "Blue"], ["ochre", "Ochre"],
+        ["sage", "Sage"], ["rose", "Rose"],
+      ], workspace.accent, value => {
+        window.FluxionUI.updateWorkspace(workspace.id, { accent: value });
+        setNote(`${workspace.name} accent updated.`, "workspaces");
+      });
+      accent.classList.add("fluxion-settings-control");
+      accent.setAttribute("aria-label", `Accent for ${workspace.name}`);
+      const actions = create("div", "fluxion-workspace-actions");
+      const up = create("button", "fluxion-settings-button", "Up");
+      up.type = "button";
+      up.disabled = index === 0;
+      up.setAttribute("aria-label", `Move ${workspace.name} earlier`);
+      up.addEventListener("click", () => window.FluxionUI.moveWorkspace(workspace.id, -1));
+      const down = create("button", "fluxion-settings-button", "Down");
+      down.type = "button";
+      down.disabled = index === items.length - 1;
+      down.setAttribute("aria-label", `Move ${workspace.name} later`);
+      down.addEventListener("click", () => window.FluxionUI.moveWorkspace(workspace.id, 1));
+      const remove = create("button", "fluxion-settings-button danger", "Delete");
+      remove.type = "button";
+      remove.disabled = items.length === 1;
+      remove.setAttribute("aria-label", `Delete ${workspace.name}`);
+      remove.addEventListener("click", () => {
+        if (window.FluxionUI.deleteWorkspace(workspace.id)) {
+          setNote(`${workspace.name} deleted; its tabs were moved safely.`, "workspaces");
+        }
+      });
+      actions.append(up, down, remove);
+      controls.append(symbol, accent, actions);
+      item.append(identity, controls);
+      workspaceList.appendChild(item);
+    }
+  };
+  workspaceCreate.addEventListener("submit", event => {
+    event.preventDefault();
+    const created = window.FluxionUI.createWorkspace(workspaceName.value, { activate: false });
+    if (!created) {
+      setNote(
+        window.FluxionUI.workspaces().length >= FluxionWorkspaces.MAX_WORKSPACES
+          ? `Fluxion supports up to ${FluxionWorkspaces.MAX_WORKSPACES} workspaces.`
+          : "Enter a workspace name.",
+        "workspaces",
+      );
+      return;
+    }
+    workspaceName.value = "";
+    setNote(`${created.name} created.`, "workspaces");
+    workspaceList.querySelector(`[data-workspace-id="${CSS.escape(created.id)}"] input`)?.focus();
+  });
+  const syncWorkspaceSettings = () => renderWorkspaces();
+  window.addEventListener("FluxionWorkspacesChanged", syncWorkspaceSettings);
+  renderWorkspaces();
 
   const search = section("search", "Search & Memory", "Browser Memory is local, optional, and never runs in private windows.");
   const memoryToggle = toggle("Enabled", Boolean(window.FluxionMemory?.enabled()), async checked => {
@@ -691,6 +872,7 @@
     style.remove();
     document.documentElement.removeAttribute("data-fluxion-settings-visible");
     window.removeEventListener("FluxionThemeChanged", syncThemeChoice);
+    window.removeEventListener("FluxionWorkspacesChanged", syncWorkspaceSettings);
     unsubscribePermissions?.();
   }, { once: true });
   showSection("general");
@@ -702,6 +884,93 @@
     window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
     window.requestAnimationFrame(syncVisibility);
+  }
+  if (Services.env.get("FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST") === "1") {
+    window.addEventListener("FluxionDataClearingVisualReady", () => {
+      const settingsTab = [...gBrowser.tabs].find(candidate =>
+        candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
+      if (settingsTab) gBrowser.selectedTab = settingsTab;
+      showSection("workspaces");
+      renderWorkspaces();
+    }, { once: true });
+    window.setTimeout(() => {
+      let fixtureTab = null;
+      let createdId = "";
+      try {
+        const settingsTab = [...gBrowser.tabs].find(candidate =>
+          candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
+        if (settingsTab) gBrowser.selectedTab = settingsTab;
+        showSection("workspaces");
+        const originalIds = window.FluxionUI.workspaces().map(workspace => workspace.id);
+        workspaceName.value = "Reference Lab";
+        workspaceCreate.dispatchEvent(new window.Event("submit", { bubbles: true, cancelable: true }));
+        createdId = window.FluxionUI.workspaces().find(workspace =>
+          !originalIds.includes(workspace.id) && workspace.name === "Reference Lab")?.id || "";
+        let item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
+        const name = item?.querySelector(".fluxion-workspace-name");
+        if (name) {
+          name.value = "Reference Desk";
+          name.dispatchEvent(new window.Event("change", { bubbles: true }));
+        }
+        item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
+        const symbol = item?.querySelector('select[aria-label^="Symbol for"]');
+        const accent = item?.querySelector('select[aria-label^="Accent for"]');
+        if (symbol) {
+          symbol.value = "square";
+          symbol.dispatchEvent(new window.Event("change", { bubbles: true }));
+        }
+        item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
+        const refreshedAccent = item?.querySelector('select[aria-label^="Accent for"]') || accent;
+        if (refreshedAccent) {
+          refreshedAccent.value = "sage";
+          refreshedAccent.dispatchEvent(new window.Event("change", { bubbles: true }));
+        }
+        item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
+        item?.querySelector('button[aria-label^="Move "][aria-label$=" earlier"]')?.click();
+        const configured = window.FluxionUI.workspaces().find(workspace => workspace.id === createdId);
+        const persisted = FluxionWorkspaces.parseWorkspaces(
+          Services.prefs.getStringPref("fluxion.workspaces", ""),
+        ).find(workspace => workspace.id === createdId);
+        const controlsVisible = Boolean(
+          item?.querySelector('button[aria-label^="Delete "]') &&
+          workspaceList.getBoundingClientRect().height > 100,
+        );
+        fixtureTab = gBrowser.addTrustedTab("about:blank?fluxion-workspace-settings=migration", {
+          skipAnimation: true,
+        });
+        window.FluxionUI.setTabWorkspace(fixtureTab, createdId);
+        const deleted = window.FluxionUI.deleteWorkspace(createdId, { confirm: false });
+        const removed = !window.FluxionUI.workspaces().some(workspace => workspace.id === createdId) &&
+          !Services.prefs.getStringPref("fluxion.workspaces", "").includes(createdId);
+        const migrated = fixtureTab.parentNode &&
+          window.FluxionUI.tabWorkspace(fixtureTab) !== createdId;
+        const configuredExactly = configured?.name === "Reference Desk" &&
+          configured.icon === "square" && configured.accent === "sage" &&
+          persisted?.name === configured.name && persisted.icon === configured.icon &&
+          persisted.accent === configured.accent;
+        if (createdId && controlsVisible && configuredExactly && deleted && removed && migrated) {
+          Services.prefs.setStringPref(
+            "fluxion.workspaceSettings.health",
+            "live-controls-persisted-and-tabs-migrated",
+          );
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.workspaceSettings.visual.error",
+            `created=${Boolean(createdId)} controls=${controlsVisible} configured=${configuredExactly} ` +
+              `deleted=${deleted} removed=${removed} migrated=${migrated}`,
+          );
+        }
+      } catch (error) {
+        Services.prefs.setStringPref("fluxion.workspaceSettings.visual.error", String(error));
+        Cu.reportError(error);
+      } finally {
+        if (fixtureTab?.parentNode) gBrowser.removeTab(fixtureTab, { animate: false });
+        if (createdId && window.FluxionUI.workspaces().some(workspace => workspace.id === createdId)) {
+          window.FluxionUI.deleteWorkspace(createdId, { confirm: false });
+        }
+        Services.prefs.savePrefFile(null);
+      }
+    }, 5200);
   }
   if (Services.env.get("FLUXION_VISUAL_SHORTCUT_TEST") === "1") {
     window.setTimeout(() => {

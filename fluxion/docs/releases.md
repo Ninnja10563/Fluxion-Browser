@@ -56,6 +56,11 @@ passes:
    A workspace-resume gate records different active native tabs in Focus and
    Build, switches away and back, and refuses publication unless each workspace
    returns to its own page with exactly one SessionStore ownership marker.
+   A workspace-settings gate then drives the real creation form, inline name,
+   symbol, accent, and reorder controls, confirms their preference projection,
+   assigns a native tab to the new workspace, and deletes it through the shared
+   controller. Packaging stops unless the workspace disappears from both UI
+   and persistence while the live tab migrates to the adjacent destination.
    A toolbar-menu gate then requires Firefox PanelUI to be absent from the
    visible toolbar, checks the mounted Fluxion control and its full concise
    command set, executes New Tab through the actual menu listener, verifies the
@@ -96,9 +101,10 @@ passes:
    same page and its evidence to appear after the scheduler resumes. This blocks
    publication if Browser Memory bypasses its bounded serial queue.
    A separate four-launch gate then seeds and cleanly quits a normal session,
-   restores its per-workspace active pages plus workspace/pin/group/split state,
-   switches between both remembered pages, opens and quits a private session,
-   and restores normal mode again. Publication is blocked if the private URL
+   restores its per-workspace active pages plus workspace names/order/symbols/
+   accents and pin/group/split state, switches between both remembered pages,
+   opens and quits a private session, and restores normal mode again.
+   Publication is blocked if any workspace metadata changes or the private URL
    appears in restored tabs, Gecko Places, or Browser Memory.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.

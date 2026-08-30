@@ -42,6 +42,7 @@
     return {
       currentWorkspace: window.FluxionUI.currentWorkspace(),
       isPrivate,
+      workspaces: window.FluxionUI.workspaces(),
       tabs: [...window.gBrowser.tabs].map(tab => {
         const split = tab.splitview?.tabs
           ?.map(member => tabURL(member)).sort().join("|") || "";
@@ -94,6 +95,14 @@
     Services.prefs.setIntPref("browser.startup.page", 3);
     Services.prefs.setBoolPref("browser.sessionstore.resume_from_crash", true);
     Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", true);
+    const research = window.FluxionUI.workspaces().find(workspace => workspace.id === "research-desk") ||
+      window.FluxionUI.createWorkspace("Research Desk", {
+        accent: "sage", icon: "square", activate: false,
+      });
+    if (!research) throw new Error("recovery workspace was not created");
+    while (window.FluxionUI.workspaces().findIndex(workspace => workspace.id === research.id) > 2) {
+      if (!window.FluxionUI.moveWorkspace(research.id, -1)) break;
+    }
     window.FluxionUI.switchWorkspace("build");
 
     const makeTab = (url, workspace = "build") => {

@@ -17,7 +17,13 @@ function normalSnapshot(overrides = {}) {
     { url: Recovery.URLS.focusIdle, workspace: "focus" },
     { url: Recovery.URLS.focusActive, workspace: "focus", active: true },
   ];
-  return { currentWorkspace: "build", isPrivate: false, tabs, ...overrides };
+  return {
+    currentWorkspace: "build",
+    isPrivate: false,
+    workspaces: Recovery.EXPECTED_WORKSPACE_LIST.map(workspace => ({ ...workspace })),
+    tabs,
+    ...overrides,
+  };
 }
 
 test("normal recovery requires workspaces, pins, groups, and native split identity", () => {
@@ -49,6 +55,15 @@ test("normal recovery requires one remembered active page per workspace", () => 
   assert.equal(result.ok, false);
   assert.match(result.reasons.join("\n"), /focus active page/);
   assert.match(result.reasons.join("\n"), /active Build page was not selected/);
+});
+
+test("normal recovery requires workspace names, symbols, accents, and order", () => {
+  const broken = normalSnapshot();
+  broken.workspaces[2].accent = "rose";
+  broken.workspaces.reverse();
+  const result = Recovery.validateNormal(broken);
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join("\n"), /workspace names, symbols, accents, or order/);
 });
 
 test("private tabs are rejected from a post-private normal restoration", () => {
