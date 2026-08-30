@@ -895,11 +895,27 @@
       }
       gBrowser.selectedTab = settingsTab;
       window.setTimeout(() => {
+        if (settingsTab?.parentNode) gBrowser.selectedTab = settingsTab;
         syncVisibility();
         showSection("workspaces");
         renderWorkspaces();
         const status = notes.get("workspaces");
         if (status) status.textContent = "";
+        const routed = gBrowser.selectedBrowser?.currentURI?.spec === "about:preferences#workspaces" &&
+          !root.hidden && !workspacePanel.hidden && workspaceList.getBoundingClientRect().height > 100;
+        if (routed) {
+          Services.prefs.setStringPref(
+            "fluxion.workspaceSettings.capture.health",
+            "settled-workspaces-route-visible",
+          );
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.workspaceSettings.visual.error",
+            `captureRoute=${gBrowser.selectedBrowser?.currentURI?.spec || "missing"} ` +
+              `root=${!root.hidden} panel=${!workspacePanel.hidden}`,
+          );
+        }
+        Services.prefs.savePrefFile(null);
       }, 250);
     }, { once: true });
     window.setTimeout(() => {

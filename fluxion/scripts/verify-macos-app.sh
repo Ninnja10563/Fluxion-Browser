@@ -74,6 +74,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.settings.health", "live-preferences-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.settings.visual.health", "settings-surface-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.workspaceSettings.health", "live-controls-persisted-and-tabs-migrated")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.workspaceSettings.capture.health", "settled-workspaces-route-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.sleeping.health", "native-discard-scheduler-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.sleeping.visual.health", "native-tab-discarded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.peek.health", "secure-context-link-peek-loaded")' "$profile/prefs.js" && \
