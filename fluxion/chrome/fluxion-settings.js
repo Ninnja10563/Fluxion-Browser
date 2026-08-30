@@ -187,6 +187,18 @@
   let renderPermissions = () => {};
   let renderWorkspaces = () => {};
 
+  function sectionFromLocation(spec) {
+    const queryRoute = spec.match(/[?&]fluxion=([^&#]+)/)?.[1];
+    if (queryRoute) {
+      try {
+        const decoded = decodeURIComponent(queryRoute);
+        if (sections.has(decoded)) return decoded;
+      } catch (_) {}
+    }
+    const hash = spec.split("#")[1] || "general";
+    return sections.has(hash) ? hash : activeSection;
+  }
+
   function showSection(id) {
     if (!sections.has(id)) id = "general";
     activeSection = id;
@@ -855,8 +867,7 @@
     else if (!document.documentElement.hasAttribute("data-fluxion-library-visible")) contentDeck.hidden = false;
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
-      const hash = gBrowser.selectedBrowser.currentURI.spec.split("#")[1] || "general";
-      showSection(sections.has(hash) ? hash : activeSection);
+      showSection(sectionFromLocation(gBrowser.selectedBrowser.currentURI.spec));
       Services.prefs.setStringPref("fluxion.settings.visual.health", "settings-surface-visible");
       Services.prefs.savePrefFile(null);
     }
@@ -889,10 +900,10 @@
     window.addEventListener("FluxionDataClearingVisualReady", () => {
       const captureWorkspace = window.FluxionUI.currentWorkspace();
       let settingsTab = [...gBrowser.tabs].find(candidate =>
-        candidate.linkedBrowser?.currentURI?.spec === "about:preferences#workspaces" &&
+        candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences?fluxion=workspaces") &&
         window.FluxionUI.tabWorkspace(candidate) === captureWorkspace);
       if (!settingsTab) {
-        settingsTab = gBrowser.addTrustedTab("about:preferences#workspaces", { skipAnimation: true });
+        settingsTab = gBrowser.addTrustedTab("about:preferences?fluxion=workspaces", { skipAnimation: true });
         window.FluxionUI.setTabWorkspace(settingsTab, captureWorkspace);
       }
       let stableFrames = 0;
@@ -1049,7 +1060,7 @@
   }
   if (Services.env.get("FLUXION_VISUAL_ABOUT_TEST") === "1") {
     window.setTimeout(() => {
-      const tab = gBrowser.addTrustedTab("about:preferences#about");
+      const tab = gBrowser.addTrustedTab("about:preferences?fluxion=about");
       window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
       gBrowser.selectedTab = tab;
       window.setTimeout(() => {

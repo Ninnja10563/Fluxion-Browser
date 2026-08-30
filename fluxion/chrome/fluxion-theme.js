@@ -67,7 +67,7 @@
       ran = true;
       try {
         await set("dark");
-        const tab = window.gBrowser.addTrustedTab("about:preferences#appearance");
+        const tab = window.gBrowser.addTrustedTab("about:preferences?fluxion=appearance");
         window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
         window.gBrowser.selectedTab = tab;
         window.setTimeout(() => {

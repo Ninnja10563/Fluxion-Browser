@@ -24,7 +24,7 @@ passes:
    visible in the Permissions settings surface. The last identity gate requires
    Fluxion's native Flow application menu to exist, verifies that the bundled
    About version matches the application bundle version, and captures the real
-   `about:preferences#about` product surface instead of an inherited Firefox
+   `about:preferences?fluxion=about` product surface instead of an inherited Firefox
    route or exposed bundle file path.
    The interaction gate also creates three related ungrouped pages and requires
    the local **Suggest tab group** command, proposed name, and confirmation-only

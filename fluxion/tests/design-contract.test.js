@@ -76,7 +76,7 @@ test("site permissions use Gecko records and expose exact reset scopes", () => {
   assert.match(settings, /FluxionPermissionPolicy\.group/);
   assert.match(settings, /removeSite\(group\.siteKey\)/);
   assert.match(settings, /remove\(permission\.id\)/);
-  assert.match(palette, /about:preferences#permissions/);
+  assert.match(palette, /about:preferences\?fluxion=permissions/);
 });
 
 test("packaged recovery gate crosses real normal and private app launches", () => {

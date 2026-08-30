@@ -193,9 +193,11 @@ single-flight privileged controller and entry points in Settings and the
 command palette; it does not issue partial direct deletes or expose the
 sanitizer to page JavaScript.
 The application menu's About command is captured at chrome scope and opens the
-versioned `about:preferences#about` Fluxion surface; Settings continues through
-the same stable Gecko preferences route into Fluxion's live overlay. No bundle
-file path is exposed and no dynamically registered protocol is required.
+versioned `about:preferences?fluxion=about` Fluxion surface; Settings continues
+through the same stable Gecko preferences document into Fluxion's live overlay.
+Fluxion-owned sections use a query route because Gecko is free to canonicalise
+unknown preferences fragments to a built-in pane. No bundle file path is
+exposed and no dynamically registered protocol is required.
 
 Appearance selection uses Gecko's built-in theme packages rather than a second
 Fluxion theme renderer. The privileged controller asks `BuiltInThemes` to make

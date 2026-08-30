@@ -17,7 +17,7 @@ test("About Fluxion presents the current product version without remote scripts"
   assert.match(settings, /!about\.textContent\.includes\("Firefox Browser"\)/);
   assert.match(settings, /Mozilla Gecko/);
   assert.match(settings, /about:license/);
-  assert.match(runtime, /fluxion\.about\.url", "about:preferences#about"/);
+  assert.match(runtime, /fluxion\.about\.url", "about:preferences\?fluxion=about"/);
   assert.doesNotMatch(runtime, /registerFactory|nsIAboutModule/);
 });
 

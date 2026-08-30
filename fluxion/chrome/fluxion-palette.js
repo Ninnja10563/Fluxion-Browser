@@ -260,7 +260,7 @@
       },
       {
         label: "Site permissions", detail: "Review saved camera, microphone, location, and notification decisions", kind: "Command",
-        keywords: ["permissions allow block reset sites"], run: () => openUrl("about:preferences#permissions"),
+        keywords: ["permissions allow block reset sites"], run: () => openUrl("about:preferences?fluxion=permissions"),
       },
       {
         label: "Open bookmarks", detail: "Search and manage saved pages in Fluxion Library", kind: "Command",
@@ -284,7 +284,7 @@
     for (const [label, detail, route, keywords] of settingsDestinations) {
       items.push({
         label, detail, kind: "Setting", keywords, boost: -12,
-        run: () => openUrl(`about:preferences#${route}`),
+        run: () => openUrl(`about:preferences?fluxion=${encodeURIComponent(route)}`),
       });
     }
     const currentTheme = window.FluxionTheme?.current();
@@ -364,7 +364,7 @@
       kind: "AI",
       keywords: ["question summarize explain current page local ollama"],
       run: () => aiConfig?.provider === "disabled"
-        ? openUrl("about:preferences#ai")
+        ? openUrl("about:preferences?fluxion=ai")
         : open("ask", gBrowser.selectedBrowser),
     });
     if (gBrowser.selectedTabs.length >= 2) {
@@ -379,7 +379,7 @@
         kind: "AI",
         keywords: ["compare pages tabs selected differences similarities"],
         run: () => aiConfig?.provider === "disabled"
-          ? openUrl("about:preferences#ai")
+          ? openUrl("about:preferences?fluxion=ai")
           : open("compare", comparisonTabs),
       });
     }

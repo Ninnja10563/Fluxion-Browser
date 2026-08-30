@@ -385,7 +385,7 @@ Version 0.19 gives Fluxion ownership of its native macOS application model:
 - keep Gecko's standard File, Edit, View, History, Bookmarks, Tools, Window, and
   Help command implementations intact for platform behaviour and accessibility;
 - replace the stale About route with the restrained
-  `about:preferences#about` Fluxion surface, hide bundle file paths, and enforce
+  `about:preferences?fluxion=about` Fluxion surface, hide bundle file paths, and enforce
   that its displayed version matches the shipped application.
 
 The macOS release gate now requires the native Flow menu health marker, checks
