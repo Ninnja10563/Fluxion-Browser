@@ -90,7 +90,9 @@ export const FluxionMemoryStore = Object.freeze({
         visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, parameters);
     // Embedding is intentionally detached: an unavailable model must never
     // delay navigation, durable evidence storage, or lexical recall.
-    embedAndStore(page.url, page.embeddingText).catch(Cu.reportError);
+    setTimeout(() => {
+      embedAndStore(page.url, page.embeddingText).catch(Cu.reportError);
+    }, 8000);
   },
 
   async search(query, limit = 12, includeSemantic = true) {

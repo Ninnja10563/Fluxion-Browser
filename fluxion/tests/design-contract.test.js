@@ -157,7 +157,7 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
   assert.match(memory, /FluxionMemoryPolicy\.canIndexPage/);
   assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
-  assert.match(store, /embedAndStore\(page\.url, page\.embeddingText\)\.catch/);
+  assert.match(store, /setTimeout\(\(\) => \{[\s\S]*embedAndStore\(page\.url, page\.embeddingText\)\.catch/);
   assert.match(store, /withTimeout\(engine\.embed\(query\), 1500\)/);
   assert.match(store, /SELECT count\(\*\) AS count FROM page_vectors/);
 });
