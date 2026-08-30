@@ -321,12 +321,14 @@ Embedding execution is a separate persisted choice from Browser Memory
 storage. `gecko-local` enables Gecko's on-device semantic-history and ML feature
 gates; `disabled` keeps lexical Places and enriched-page recall active while
 skipping every embedding call. Switching to Keywords only deletes vectors from
-both `vec_history` and Fluxion's `page_vectors` table but retains ordinary
-history and bounded textual evidence. The same choice is applied during
-autoconfig startup before indexing begins, so a keyword-only profile does not
-briefly start the model pipeline. Re-enabling semantic search uses only Gecko's
-packaged local embedder and never routes page data through the generative AI
-provider.
+both `vec_history` and Fluxion's `page_vectors` table when the native semantic
+connection is active, but retains ordinary history and bounded textual
+evidence. A process that has never opened the semantic manager does not open it
+merely to clear an empty fresh profile; Gecko's `removeOnStartup` flag covers
+any dormant native store. The same choice is applied during autoconfig startup
+before indexing begins, so a keyword-only profile does not briefly start the
+model pipeline. Re-enabling semantic search uses only Gecko's packaged local
+embedder and never routes page data through the generative AI provider.
 
 Firefox excludes private-window visits before they enter Places, and Fluxion
 also refuses Browser Memory operations from private windows. Pages containing

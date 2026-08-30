@@ -71,7 +71,14 @@ run_stage() {
     printf 'Fluxion did not quit cleanly after %s.\n' "$name" >&2
     return 1
   fi
-  wait "$process_id"
+  local exit_status=0
+  wait "$process_id" || exit_status=$?
+  if (( exit_status != 0 )); then
+    printf 'Fluxion exited with status %s after %s.\n' "$exit_status" "$name" >&2
+    sed -n '1,180p' "$log" >&2
+    [[ -f "$profile/prefs.js" ]] && grep 'fluxion\.recovery\..*\.error' "$profile/prefs.js" >&2 || true
+    return "$exit_status"
+  fi
   process_id=""
 }
 

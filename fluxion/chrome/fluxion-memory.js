@@ -200,8 +200,7 @@
   async function clearEmbeddingData() {
     let nativeError = null;
     try {
-      const semanticManager = manager || getManager();
-      const nativeConnection = await semanticManager.getConnection();
+      const nativeConnection = manager ? await manager.getConnection() : null;
       if (nativeConnection) {
         await nativeConnection.executeTransaction(async () => {
           await nativeConnection.execute("DELETE FROM vec_history");
@@ -217,8 +216,7 @@
   }
 
   async function embeddingVectorCounts() {
-    const semanticManager = manager || getManager();
-    const nativeConnection = await semanticManager.getConnection();
+    const nativeConnection = manager ? await manager.getConnection() : null;
     let native = 0;
     if (nativeConnection) {
       const rows = await nativeConnection.execute("SELECT count(*) AS count FROM vec_history");

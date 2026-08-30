@@ -507,6 +507,7 @@ test("Browser Memory exposes functional privacy controls", () => {
   assert.match(memory, /function embeddingProvider\(\)/);
   assert.match(memory, /async function setEmbeddingProvider/);
   assert.match(memory, /async function embeddingVectorCounts/);
+  assert.match(memory, /nativeConnection = manager \? await manager\.getConnection\(\) : null/);
   assert.match(memory, /FluxionMemoryStore\.search\(query, 18, useEmbeddings\)/);
   assert.match(store, /async clearVectors\(\)/);
   assert.match(store, /async vectorCount\(\)/);
