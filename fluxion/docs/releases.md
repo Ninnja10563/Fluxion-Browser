@@ -58,10 +58,9 @@ passes:
    rejects the build unless Flow retains exactly that active row with an honest
    `+2` hidden count. It drives Arrow Down into the next visible page, requires
    Gecko selection and DOM focus to agree after rerender, and requires the
-   inactive group to return to one heading row. The gate begins only after the
-   pointer-close and workspace-resume fixtures release Flow, so an intentional
-   close-layout hold cannot turn group projection into a timing-dependent
-   result.
+   inactive group to return to one heading row. This compact gate completes in
+   the startup window before pointer-close and workspace fixtures begin changing
+   selection or intentionally holding Flow geometry.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any

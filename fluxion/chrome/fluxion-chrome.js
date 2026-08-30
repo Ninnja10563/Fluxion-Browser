@@ -3111,25 +3111,7 @@
     Services.prefs.setStringPref("fluxion.groups.health", "native-group-rendered");
     scheduleRender();
 
-    const runCollapsedGroupGate = (attempt = 0) => {
-      const closeReady = Services.env.get("FLUXION_VISUAL_CLOSE_STABILITY_TEST") !== "1" ||
-        Services.prefs.getStringPref("fluxion.closeStability.health", "") ===
-          "pointer-close-held-one-row-until-movement";
-      const workspaceReady = Services.env.get("FLUXION_VISUAL_WORKSPACE_RESUME_TEST") !== "1" ||
-        Services.prefs.getStringPref("fluxion.workspaceResume.health", "") ===
-          "two-workspace-active-pages-round-tripped";
-      if (!closeReady || !workspaceReady) {
-        if (attempt < 80) {
-          window.setTimeout(() => runCollapsedGroupGate(attempt + 1), 100);
-        } else {
-          Services.prefs.setStringPref(
-            "fluxion.groups.collapsed.visual.error",
-            `prerequisites close=${closeReady} workspace=${workspaceReady}`,
-          );
-          Services.prefs.savePrefFile(null);
-        }
-        return;
-      }
+    const runCollapsedGroupGate = () => {
       const originalTab = gBrowser.selectedTab;
       const fixtureTabs = ["First", "Active", "Third"].map((name, index) => {
         const tab = gBrowser.addTrustedTab(`about:blank?fluxion-collapsed-group=${index}`, {
