@@ -664,11 +664,11 @@
         });
         await downloadList.add(download);
         open("downloads");
-        await refreshAll();
         const flowRect = document.getElementById("fluxion-flow")?.getBoundingClientRect();
         const rootRect = root.getBoundingClientRect();
         const navRect = nav.getBoundingClientRect();
         const contentRect = content.getBoundingClientRect();
+        await refreshAll();
         const hasHistory = data.history.some(item => item.url === url);
         const hasBookmark = data.bookmarks.some(item => item.url === url);
         const hasDownload = data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf");
