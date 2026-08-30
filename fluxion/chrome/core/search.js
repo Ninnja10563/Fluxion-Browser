@@ -48,10 +48,19 @@
       .map((item, index) => {
         const fields = [item.label, item.detail, ...(item.keywords || [])];
         const score = Math.max(...fields.map(field => fuzzyScore(query, field)));
-        return { item, index, score: score + Number(item.boost || 0) };
+        return {
+          item,
+          index,
+          fallback: item.fallback === true,
+          score: score + Number(item.boost || 0),
+        };
       })
       .filter(record => Number.isFinite(record.score))
-      .sort((left, right) => right.score - left.score || left.index - right.index)
+      .sort((left, right) =>
+        Number(left.fallback) - Number(right.fallback) ||
+        right.score - left.score ||
+        left.index - right.index
+      )
       .slice(0, safeLimit)
       .map(record => record.item);
   }

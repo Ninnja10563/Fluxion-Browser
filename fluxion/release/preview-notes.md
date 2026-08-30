@@ -15,6 +15,8 @@ Version 0.30 completes the command palette's native page-control layer:
   workspace, history, bookmark, settings, and privacy commands;
 - resolve native command availability from the live Gecko window, so a command
   unavailable for the current page is omitted instead of becoming a dead row;
+- keep generated web/address destinations below every matching real command,
+  tab, workspace, history, or bookmark so Return performs the expected action;
 - route every action through one privileged Fluxion-to-Gecko bridge while page
   JavaScript remains unable to call browser chrome;
 - replace the palette's obsolete Developer Tools command ID with the same lazy

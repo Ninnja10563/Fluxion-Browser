@@ -59,6 +59,8 @@ SigmaOS is deliberately excluded as a reference.
   blur, gradient, oversized radius, or decorative animation.
 - Native page actions in the palette appear only when Gecko can execute them;
   a quiet interface must not trade visual simplicity for dead controls.
+- A generated web or address destination is always the last matching result;
+  exact browser actions must remain the fastest keyboard path.
 - Motion stays between 100ms and 160ms and disappears under reduced motion.
 - Gradients, glass effects, neon, ornamental borders, and marketing-style empty
   space are prohibited in browser chrome.

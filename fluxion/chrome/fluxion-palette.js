@@ -524,6 +524,7 @@
         detail: destination,
         kind: isSearch ? "Search" : "Address",
         boost: -40,
+        fallback: true,
         keywords: [search],
         run: () => openUrl(destination),
       });
@@ -870,9 +871,9 @@
         input.value = "zoom in";
         render(false);
         const zoomInIndex = visibleItems.findIndex(item => item.label === "Zoom In");
+        const selectedDefault = zoomInIndex === 0;
         const before = window.ZoomManager.zoom;
-        if (zoomInIndex >= 0) {
-          setActive(zoomInIndex);
+        if (selectedDefault) {
           input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
         }
         window.requestAnimationFrame(() => {
@@ -892,7 +893,10 @@
             open("all");
             input.value = "zoom";
             render(false);
-            if (complete && enlarged && reset && visibleItems.some(item => item.label === "Zoom In")) {
+            if (
+              complete && selectedDefault && enlarged && reset &&
+              visibleItems[0]?.label === "Zoom In"
+            ) {
               Services.prefs.setStringPref(
                 "fluxion.paletteCommands.health",
                 "native-page-commands-listed-and-keyboard-zoom-round-tripped",
@@ -900,7 +904,7 @@
             } else {
               Services.prefs.setStringPref(
                 "fluxion.paletteCommands.visual.error",
-                `complete=${complete} enlarged=${enlarged} reset=${reset} ` +
+                `complete=${complete} selected=${selectedDefault} enlarged=${enlarged} reset=${reset} ` +
                   `missing=${required.filter(label => !labels.has(label)).join("|")}`,
               );
             }

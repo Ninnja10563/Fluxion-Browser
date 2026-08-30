@@ -40,3 +40,21 @@ test("searches detail and keyword fields", () => {
   ];
   assert.equal(rankSearchItems("clear data", items)[0].label, "Preferences");
 });
+
+test("generated navigation fallbacks never displace a real matching action", () => {
+  const items = [
+    { label: "Search the web for zoom", keywords: ["zoom"], fallback: true },
+    { label: "Zoom In", detail: "Increase page zoom" },
+    { label: "Zoom Out", detail: "Reduce page zoom" },
+  ];
+  assert.deepEqual(
+    rankSearchItems("zoom", items).map(item => item.label),
+    ["Zoom In", "Zoom Out", "Search the web for zoom"],
+  );
+  assert.deepEqual(
+    rankSearchItems("unmatched destination", [
+      { label: "Search the web", keywords: ["unmatched destination"], fallback: true },
+    ]).map(item => item.label),
+    ["Search the web"],
+  );
+});
