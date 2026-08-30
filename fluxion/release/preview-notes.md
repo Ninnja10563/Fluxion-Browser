@@ -8,6 +8,25 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.14 introduces the first optional generative-AI boundary:
+
+- configure Disabled, local Ollama, or generic OpenAI-compatible providers in
+  live Fluxion Settings without restarting;
+- ask a question about the current page from the command palette and receive a
+  concise answer beside the exact title, URL, and extracted source excerpt;
+- keep AI disabled by default and keep ordinary browsing and deterministic
+  Browser Memory fully functional without a model or provider;
+- store compatible API keys in Firefox's encrypted Login Manager rather than
+  preferences or source code;
+- permit HTTP only on loopback, require HTTPS and explicit page-sharing consent
+  remotely, omit browser credentials and cache, and cancel requests with Escape;
+- reject private windows, password forms, sensitive routes, and user-excluded
+  domains before any page text reaches a provider.
+
+The macOS release gate now runs a loopback Ollama-compatible fixture and refuses
+the DMG unless the packaged app sends a correctly bounded page-context request,
+receives the grounded response, and visibly renders its source evidence.
+
 Version 0.13 makes Browser Memory recall inspectable and grounded:
 
 - present a concise best match derived only from the top stored history record;

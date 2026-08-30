@@ -29,6 +29,8 @@ The current preview is runnable and includes:
 - optional Browser Memory search over non-private history, combining exact
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;
+- optional Ollama and OpenAI-compatible providers for grounded current-page
+  questions, with AI disabled by default and ordinary browsing independent;
 - a Fluxion-owned settings surface with live controls for startup, search,
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
   permissions;
@@ -202,6 +204,18 @@ history record. Source rows show the matching local excerpt, why it matched,
 when it was visited, and its workspace. Fluxion says that nothing relevant was
 found when no stored record supports the query; it does not invent a browsing
 memory or require a generative model.
+
+AI is also disabled by default. Open **Fluxion Settings → AI** to choose a
+local Ollama endpoint or an OpenAI-compatible endpoint and model. Loopback HTTP
+is allowed for local tools; non-local endpoints must use HTTPS. Compatible API
+keys are stored in Firefox's encrypted login manager rather than preferences.
+After saving and testing the connection, run **Ask Current Page** from the
+command palette. Fluxion extracts a bounded, form-free page record through a
+Gecko content-process actor and shows the exact source beside the answer.
+Private windows, password-bearing pages, sensitive routes, and Browser Memory
+domain exclusions are refused. Sending page text to a non-local provider
+requires explicit consent for that endpoint. The page is treated as untrusted
+quoted data, and Escape cancels an in-flight request.
 
 ## License
 

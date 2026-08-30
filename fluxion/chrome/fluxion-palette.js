@@ -19,6 +19,9 @@
   let lastFocus = null;
   let mode = "all";
   let splitSource = null;
+  let askBrowser = null;
+  let askController = null;
+  let aiRequest = 0;
   let placesTimer = 0;
   let memoryRequest = 0;
 
@@ -98,6 +101,11 @@
     }
     .fluxion-memory-answer-text { font-size: 12.5px; }
     .fluxion-memory-answer-note { margin-top: 4px; color: var(--fluxion-muted); font-size: 10.5px; }
+    .fluxion-ai-answer-text { white-space: pre-wrap; font-size: 12.5px; line-height: 1.5; }
+    .fluxion-ai-source {
+      margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--fluxion-line);
+      color: var(--fluxion-muted); font-size: 10.5px; line-height: 1.4; white-space: pre-wrap;
+    }
     @keyframes fluxion-palette-in {
       from { opacity: 0; transform: translateY(-2px); }
     }
@@ -234,6 +242,18 @@
     ];
     const selectedTab = gBrowser.selectedTab;
     const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
+    const aiConfig = window.FluxionAI?.config();
+    items.splice(9, 0, {
+      label: "Ask Current Page",
+      detail: aiConfig?.provider === "disabled"
+        ? "Configure an optional AI provider first"
+        : `Use ${aiConfig.provider} with extracted page text`,
+      kind: "AI",
+      keywords: ["question summarize explain current page local ollama"],
+      run: () => aiConfig?.provider === "disabled"
+        ? openUrl("about:preferences#ai")
+        : open("ask", gBrowser.selectedBrowser),
+    });
     if (!privateWindow && window.FluxionMemory.enabled()) {
       items.splice(9, 0,
         {
@@ -528,7 +548,59 @@
     }
   }
 
+  function renderAskPrompt() {
+    status.hidden = false;
+    const current = window.FluxionAI?.config();
+    status.textContent = current?.provider === "disabled"
+      ? "AI is disabled · Configure a provider in Fluxion Settings"
+      : `${current.provider} · Page text is shared only when you press Return`;
+    renderItems([], "Type a question about the current page, then press Return");
+  }
+
+  async function runAsk() {
+    const question = input.value.trim();
+    if (question.length < 2) { renderAskPrompt(); return; }
+    const request = ++aiRequest;
+    askController?.abort();
+    askController = new window.AbortController();
+    visibleItems = [];
+    results.replaceChildren();
+    const pending = create("div", "fluxion-palette-empty");
+    pending.textContent = "Reading this page and asking the configured provider…";
+    results.appendChild(pending);
+    status.hidden = false;
+    status.textContent = "Treating page content as untrusted data · Escape cancels";
+    try {
+      const answer = await window.FluxionAI.askCurrentPage(question, askBrowser, {
+        signal: askController.signal,
+      });
+      if (request !== aiRequest || mode !== "ask") return;
+      const panel = create("div", "fluxion-memory-answer");
+      const label = create("span", "fluxion-memory-answer-label");
+      label.textContent = `Answer from ${answer.provider} · ${answer.model}`;
+      const text = create("div", "fluxion-ai-answer-text");
+      text.textContent = answer.text;
+      const source = create("div", "fluxion-ai-source");
+      source.textContent = `Source: ${answer.source.title} · ${answer.source.url}\n${answer.source.excerpt}`;
+      panel.append(label, text, source);
+      results.replaceChildren(panel);
+      status.textContent = "Current-page answer · Verify against the quoted local source";
+      if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1" && answer.source.excerpt) {
+        Services.prefs.setStringPref("fluxion.ai.visual.health", "current-page-answer-visible");
+        Services.prefs.savePrefFile(null);
+      }
+    } catch (error) {
+      if (request !== aiRequest || mode !== "ask") return;
+      renderItems([], error.message || "The AI provider could not answer");
+      status.textContent = "No page content was retained by the provider layer";
+    }
+  }
+
   function render(includePlaces = false) {
+    if (mode === "ask") {
+      renderAskPrompt();
+      return;
+    }
     if (mode === "memory") {
       renderMemory().catch(error => {
         Cu.reportError(error);
@@ -547,6 +619,7 @@
 
   function queuePlaces() {
     window.clearTimeout(placesTimer);
+    if (mode === "ask") { renderAskPrompt(); return; }
     if (mode === "memory") {
       memoryRequest += 1;
       placesTimer = window.setTimeout(() => render(false), 140);
@@ -561,6 +634,9 @@
   function open(nextMode = "all", sourceTab = null) {
     mode = nextMode;
     splitSource = nextMode === "split" ? sourceTab : null;
+    askBrowser = nextMode === "ask"
+      ? (sourceTab?.linkedBrowser || sourceTab || gBrowser.selectedBrowser)
+      : null;
     lastFocus = document.activeElement;
     layer.hidden = false;
     input.value = "";
@@ -568,6 +644,7 @@
       ? "Choose a tab to place beside this page"
       : mode === "tabs" ? "Search open tabs"
         : mode === "memory" ? "What do you remember about the page?"
+          : mode === "ask" ? "Ask a question about this page"
           : "Search commands, tabs, history, and bookmarks";
     activeIndex = 0;
     render(false);
@@ -577,9 +654,13 @@
   function close() {
     window.clearTimeout(placesTimer);
     memoryRequest += 1;
+    aiRequest += 1;
+    askController?.abort();
+    askController = null;
     layer.hidden = true;
     input.value = "";
     splitSource = null;
+    askBrowser = null;
     if (lastFocus?.isConnected) lastFocus.focus();
     lastFocus = null;
   }
@@ -589,6 +670,9 @@
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setActive(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+    } else if (event.key === "Enter" && mode === "ask") {
+      event.preventDefault();
+      runAsk().catch(Cu.reportError);
     } else if (event.key === "Enter") {
       event.preventDefault();
       choose();
@@ -637,6 +721,17 @@
       input.value = "example";
       render(false);
     }, 5200);
+  }
+  if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
+    window.setTimeout(() => {
+      const tab = [...gBrowser.tabs].find(candidate =>
+        candidate.linkedBrowser?.currentURI?.spec.startsWith("https://example.com/")
+      );
+      if (!tab) return;
+      open("ask", tab.linkedBrowser);
+      input.value = "What is this page for?";
+      runAsk().catch(Cu.reportError);
+    }, 7200);
   }
   Services.prefs.setStringPref("fluxion.palette.health", "command-palette-loaded");
   Services.prefs.savePrefFile(null);

@@ -1,4 +1,4 @@
-/* global gBrowser, Services, FluxionSettings */
+/* global gBrowser, Services, FluxionSettings, FluxionAIProviders */
 (function initialiseFluxionSettings(window) {
   "use strict";
 
@@ -82,6 +82,7 @@
     .fluxion-shortcut-key:hover, .fluxion-shortcut-reset:hover { background: var(--fluxion-hover); }
     .fluxion-shortcut-key[data-capturing="true"] { border-color: var(--fluxion-accent); color: var(--fluxion-muted); }
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
+    .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     @media (max-width: 760px) {
       #fluxion-settings { grid-template-columns: 150px minmax(360px, 1fr); }
       .fluxion-settings-main { padding-inline: 24px; }
@@ -269,6 +270,81 @@
   });
   row(search, "Delete semantic data", "This does not delete ordinary Gecko browsing history.", clearMemory);
 
+  const ai = section("ai", "AI", "Optional page tools. Ordinary browsing and Browser Memory remain fully functional when AI is disabled.");
+  const initialAI = window.FluxionAI.config();
+  const aiProvider = select([
+    ["disabled", "Disabled"],
+    ["ollama", "Ollama (local)"],
+    ["openai-compatible", "OpenAI-compatible"],
+  ], initialAI.provider, () => {});
+  row(ai, "Provider", "Local providers keep requests on this Mac. Remote compatible endpoints require HTTPS and explicit page-sharing consent.", aiProvider);
+  const aiEndpoint = create("input");
+  aiEndpoint.type = "url";
+  aiEndpoint.spellcheck = false;
+  aiEndpoint.value = initialAI.endpoint;
+  row(ai, "Endpoint", "HTTP is accepted only for localhost and loopback addresses.", aiEndpoint);
+  const aiModel = create("input");
+  aiModel.type = "text";
+  aiModel.spellcheck = false;
+  aiModel.value = initialAI.model;
+  row(ai, "Model", "The exact model identifier exposed by your provider.", aiModel);
+  const aiKey = create("input");
+  aiKey.type = "password";
+  aiKey.autocomplete = "new-password";
+  aiKey.placeholder = "Leave blank to keep saved key";
+  row(ai, "API key", "Stored in Firefox’s encrypted login store, never in Fluxion preferences or source code.", aiKey);
+  aiProvider.addEventListener("change", () => {
+    const defaults = FluxionAIProviders.DEFAULTS[aiProvider.value];
+    aiEndpoint.disabled = aiProvider.value === "disabled";
+    aiModel.disabled = aiProvider.value === "disabled";
+    aiKey.disabled = aiProvider.value !== "openai-compatible";
+    if (defaults && aiProvider.value !== initialAI.provider) {
+      aiEndpoint.value = defaults.endpoint;
+      aiModel.value = defaults.model;
+    }
+  });
+  aiProvider.dispatchEvent(new window.Event("change"));
+  const saveAI = create("button", "fluxion-settings-button", "Save provider");
+  saveAI.type = "button";
+  saveAI.addEventListener("click", async () => {
+    saveAI.disabled = true;
+    try {
+      const next = await window.FluxionAI.configure({
+        provider: aiProvider.value,
+        endpoint: aiEndpoint.value,
+        model: aiModel.value,
+        ...(aiKey.value ? { secret: aiKey.value } : {}),
+      });
+      aiEndpoint.value = next.endpoint;
+      aiModel.value = next.model;
+      aiKey.value = "";
+      setNote(next.provider === "disabled" ? "AI disabled." : `Saved ${next.provider} provider.`, "ai");
+    } catch (error) {
+      setNote(error.message, "ai");
+    } finally { saveAI.disabled = false; }
+  });
+  row(ai, "Save connection", "Provider changes apply immediately without restarting Fluxion.", saveAI);
+  const aiActions = create("div", "fluxion-settings-actions");
+  const testAI = create("button", "fluxion-settings-button", "Test connection");
+  testAI.type = "button";
+  testAI.addEventListener("click", async () => {
+    testAI.disabled = true;
+    try {
+      const result = await window.FluxionAI.testConnection();
+      setNote(result.detail, "ai");
+    } catch (error) { setNote(error.message, "ai"); }
+    finally { testAI.disabled = false; }
+  });
+  const clearAIKey = create("button", "fluxion-settings-button danger", "Clear API key");
+  clearAIKey.type = "button";
+  clearAIKey.addEventListener("click", async () => {
+    await window.FluxionAI.setSecret("");
+    aiKey.value = "";
+    setNote("Saved API key removed.", "ai");
+  });
+  aiActions.append(testAI, clearAIKey);
+  row(ai, "Connection tools", "Tests the configured model service without sharing a webpage.", aiActions);
+
   const privacy = section("privacy", "Privacy", "Manage locally stored browsing data using Gecko’s mature security services.");
   const clearHistory = create("button", "fluxion-settings-button danger", "Clear browsing history…");
   clearHistory.type = "button";
@@ -377,7 +453,7 @@
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
       const hash = gBrowser.selectedBrowser.currentURI.spec.split("#")[1] || "general";
-      showSection(hash === "privacy" ? "privacy" : activeSection);
+      showSection(["privacy", "ai"].includes(hash) ? hash : activeSection);
       Services.prefs.setStringPref("fluxion.settings.visual.health", "settings-surface-visible");
       Services.prefs.savePrefFile(null);
     }

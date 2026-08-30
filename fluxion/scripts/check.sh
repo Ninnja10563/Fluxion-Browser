@@ -15,6 +15,7 @@ bash -n \
   scripts/verify-macos-app.sh
 node --check chrome/core/url.js
 node --check chrome/core/search.js
+node --check chrome/core/ai-providers.js
 node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
@@ -30,6 +31,7 @@ node --check chrome/core/workspaces.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-shortcuts.js
 node --check chrome/fluxion-memory.js
+node --check chrome/fluxion-ai.js
 node --check chrome/fluxion-peek.js
 node --check chrome/fluxion-settings.js
 node --check chrome/fluxion-tab-sleeping.js
@@ -38,6 +40,7 @@ node --check actors/FluxionMemoryPageChild.sys.mjs
 node --check actors/FluxionMemoryPageParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --test tests/*.test.js
+python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-stub.py").read_text(encoding="utf-8"))'
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   xcrun clang -arch "$(uname -m)" -fsyntax-only -Wall -Wextra -Werror \

@@ -35,9 +35,11 @@ controls work and its failure paths have been tested.
 
 ## Phase 5 — optional AI providers
 
-- disabled, Ollama, and OpenAI-compatible provider interfaces
-- current-page questions, explicit tab comparison, and organisation suggestions
-- no network AI dependency in ordinary browsing
+- disabled, Ollama, and OpenAI-compatible provider interfaces (implemented)
+- grounded, cancellable current-page questions with visible source evidence
+  (implemented)
+- explicit tab comparison and organisation suggestions
+- no network AI dependency in ordinary browsing (implemented)
 
 ## Phase 6 — release polish
 

@@ -96,9 +96,10 @@ cannot call chrome methods.
   beneath `FLUXION_ROOT` and only targets browser chrome windows.
 - Fluxion uses native Firefox navigation APIs, URL fix-up, permission panels,
   download handling, and certificate state rather than shadow implementations.
-- Private windows retain Firefox's private-browsing origin attributes. No
-  semantic index exists in this milestone, so no private content is captured.
-- No credentials, telemetry keys, AI endpoints, or remote scripts are bundled.
+- Private windows retain Firefox's private-browsing origin attributes. Fluxion
+  also refuses Browser Memory and AI page tools in private windows.
+- No credentials, telemetry keys, remote AI endpoints, or remote scripts are
+  bundled. Local-provider defaults point only at loopback addresses.
 - Mozilla telemetry upload, studies, Firefox onboarding, and pre-onboarding
   experiments are disabled before the first browser window is restored.
   Fluxion does not write Firefox Terms-of-Use acceptance preferences on a
@@ -182,8 +183,36 @@ deletes vector rows and mappings, and schedules the semantic database files for
 removal at the next startup. The same actions delete matching records and
 vectors from Fluxion's enriched store. They do not silently delete ordinary
 history. Content normalization, private/password policy, domain exclusions,
-size limits, and deletion paths are independently tested. Optional generative
-`AIProvider` and `EmbeddingProvider` interfaces remain separate future work.
+size limits, and deletion paths are independently tested. Generative
+`AIProvider` and `EmbeddingProvider` interfaces remain separate; ordinary
+Browser Memory recall never calls the generative provider.
+
+## Optional AI provider boundary
+
+Generative AI is disabled by default. `DisabledProvider`, `OllamaProvider`, and
+`OpenAICompatibleProvider` implement a small privileged interface, while the
+embedding interface remains independently selectable. The provider service is
+loaded only into browser chrome and receives `window.fetch` from that privileged
+scope. It is never attached to a content window, and page JavaScript cannot
+reach the provider, its endpoint, or its credentials.
+
+Provider endpoints reject embedded credentials, query strings, and fragments.
+Plain HTTP is accepted only for `localhost`, IPv4 loopback, or IPv6 loopback;
+all remote endpoints require HTTPS. Requests explicitly omit browser cookies
+and HTTP authentication state, bypass the browser cache, have bounded payloads,
+refuse redirects, and use cancellable timeouts. OpenAI-compatible keys are stored under a
+synthetic origin in Firefox's Login Manager—not in preferences, source, or page
+storage—and enter only the outbound authorization header.
+
+Ask Current Page reuses the narrow `FluxionMemoryPage` actor. Before extraction,
+and again after receiving its plain-data result, the chrome service applies the
+private-window, sensitive-route, password-form, scheme, and excluded-domain
+policy. A remote provider receives no page text until the user confirms sharing
+with that endpoint. The provider prompt labels extracted page content as
+untrusted quoted data and requires answers to remain within it. The palette
+renders provider output only with `textContent` and always exposes the local
+source title, URL, and excerpt so an answer is inspectable. This reduces prompt
+injection risk but does not make model output authoritative.
 
 ## Privileged settings surface
 

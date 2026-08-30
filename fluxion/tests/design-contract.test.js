@@ -88,6 +88,10 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /native-multiselect-visible/);
   assert.match(macVerifier, /FLUXION_VISUAL_SHORTCUT_TEST=1/);
   assert.match(macVerifier, /custom-shortcut-persisted/);
+  assert.match(macVerifier, /FLUXION_VISUAL_AI_TEST=1/);
+  assert.match(macVerifier, /ollama-stub\.py/);
+  assert.match(macVerifier, /current-page-answer-visible/);
+  assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
   assert.match(macVerifier, /https:\/\/example\.com\//);
@@ -170,6 +174,22 @@ test("Browser Memory answers expose source evidence and never invent empty resul
   assert.match(grounding, /Nothing relevant was found in Browser Memory/);
   assert.match(grounding, /sourceURL: best\.url/);
   assert.doesNotMatch(grounding, /fetch\(|AIProvider|OpenAI|Ollama/);
+});
+
+test("optional AI stays privileged, cancellable, and separate from ordinary browsing", () => {
+  const ai = fs.readFileSync(path.join(root, "chrome/fluxion-ai.js"), "utf8");
+  const providers = fs.readFileSync(path.join(root, "chrome/core/ai-providers.js"), "utf8");
+  assert.match(ai, /Services\.logins\.searchLoginsAsync/);
+  assert.match(ai, /FluxionMemoryPolicy\.canIndexPage/);
+  assert.match(ai, /current\.remote/);
+  assert.match(ai, /AbortController/);
+  assert.match(providers, /credentials: "omit"/);
+  assert.doesNotMatch(ai, /setStringPref\([^\n]*secret|apiKey/i);
+  assert.match(providers, /class DisabledProvider extends AIProvider/);
+  assert.match(providers, /class OllamaProvider extends AIProvider/);
+  assert.match(providers, /class OpenAICompatibleProvider extends AIProvider/);
+  assert.match(providers, /class EmbeddingProvider/);
+  assert.match(settings, /Firefox’s encrypted login store/);
 });
 
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {

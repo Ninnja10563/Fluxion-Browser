@@ -17,19 +17,46 @@ fi
 check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-app-check.XXXXXX")"
 profile="$check_root/profile"
 log="$check_root/fluxion.log"
+provider_log="$check_root/ollama-stub.log"
+ai_request="$check_root/ai-request.json"
 process_id=""
+provider_process_id=""
 
 cleanup() {
   if [[ -n "$process_id" ]] && kill -0 "$process_id" 2>/dev/null; then
     kill "$process_id" 2>/dev/null || true
     wait "$process_id" 2>/dev/null || true
   fi
+  if [[ -n "$provider_process_id" ]] && kill -0 "$provider_process_id" 2>/dev/null; then
+    kill "$provider_process_id" 2>/dev/null || true
+    wait "$provider_process_id" 2>/dev/null || true
+  fi
   rm -rf -- "$check_root"
 }
 trap cleanup EXIT
 
+python3 "$fluxion_root/tests/fixtures/ollama-stub.py" 19876 "$ai_request" >"$provider_log" 2>&1 &
+provider_process_id=$!
+provider_attempt=0
+while (( provider_attempt < 40 )); do
+  if curl --fail --silent --show-error http://127.0.0.1:19876/api/tags >/dev/null; then
+    break
+  fi
+  if ! kill -0 "$provider_process_id" 2>/dev/null; then
+    printf 'The local AI provider fixture exited before Fluxion launched.\n' >&2
+    sed -n '1,80p' "$provider_log" >&2
+    exit 1
+  fi
+  sleep 0.25
+  ((provider_attempt += 1))
+done
+if (( provider_attempt == 40 )); then
+  printf 'The local AI provider fixture did not become ready.\n' >&2
+  exit 1
+fi
+
 printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 \
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 \
   "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
@@ -51,9 +78,13 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.multiselect.health", "native-multiselect-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.shortcuts.health", "editable-shortcut-registry-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.shortcuts.visual.health", "custom-shortcut-persisted")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.ai.health", "privileged-provider-layer-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.ai.connection.health", "ollama-loopback-connected")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.ai.visual.health", "current-page-answer-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js"; then
-    printf 'Verified: Fluxion chrome, live settings and shortcuts, Peek Pages, native multi-select, tab sleeping, palette, grounded Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
+      grep -q 'user_pref("fluxion.splitview.health", "native-split-rendered")' "$profile/prefs.js" && \
+      [[ -s "$ai_request" ]]; then
+    printf 'Verified: Fluxion chrome, live settings and shortcuts, grounded Ask Current Page, Peek Pages, native multi-select, tab sleeping, Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
@@ -90,6 +121,8 @@ if [[ -f "$profile/prefs.js" ]]; then
   grep 'user_pref("fluxion\..*\.health"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.enrichment\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.settings\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.ai\.visual\.error"' "$profile/prefs.js" >&2 || true
 fi
+sed -n '1,80p' "$provider_log" >&2
 sed -n '1,160p' "$log" >&2
 exit 1
