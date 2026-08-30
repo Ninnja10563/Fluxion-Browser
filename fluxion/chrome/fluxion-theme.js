@@ -82,7 +82,8 @@
             activeId === FluxionThemeCore.THEME_IDS.dark &&
             current() === "dark" && control?.value === "dark" && computed.includes("dark") &&
             settingsRect?.left >= flowRect?.right - 1 &&
-            navRect?.left >= settingsRect?.left - 1 && mainRect?.left >= navRect?.right - 1
+            navRect?.left >= settingsRect?.left - 1 && navRect?.width >= 150 &&
+            mainRect?.left >= navRect?.right - 1 && mainRect?.width >= 360
           ) {
             Services.prefs.setStringPref(
               "fluxion.theme.visual.health",

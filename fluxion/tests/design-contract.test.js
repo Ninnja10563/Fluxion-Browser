@@ -291,6 +291,11 @@ test("Appearance switches live Gecko themes and stays searchable from the palett
   assert.match(chrome, /--fluxion-flow-layout-width: 3px/);
   assert.match(settings, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);
   assert.match(library, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);
+  assert.match(settings, /width: 184px; min-width: 184px/);
+  assert.match(settings, /margin-inline-start: 184px/);
+  assert.match(theme, /navRect\?\.width >= 150/);
+  assert.match(library, /flex: 0 0 164px; min-width: 164px/);
+  assert.match(library, /contentRect\.width >= 360/);
   assert.match(palette, /Appearance settings/);
   assert.match(palette, /Search & Memory settings/);
   assert.match(palette, /Use Dark Appearance/);

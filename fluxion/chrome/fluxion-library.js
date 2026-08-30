@@ -60,15 +60,21 @@
       outline: 2px solid var(--fluxion-accent); outline-offset: 1px;
     }
     .fluxion-library-private { color: var(--fluxion-muted); font-size: 11px; }
-    .fluxion-library-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 164px minmax(420px, 820px) 1fr; overflow: auto; }
-    .fluxion-library-nav { padding: 24px 12px; border-inline-end: 1px solid var(--fluxion-line); background: var(--fluxion-bg); }
+    .fluxion-library-body { min-height: 0; flex: 1; display: flex; overflow: hidden; }
+    .fluxion-library-nav {
+      box-sizing: border-box; flex: 0 0 164px; min-width: 164px; padding: 24px 12px;
+      border-inline-end: 1px solid var(--fluxion-line); background: var(--fluxion-bg); overflow: auto;
+    }
     .fluxion-library-nav button {
       width: 100%; height: 32px; border: 0; border-radius: 4px; padding: 0 10px;
       color: var(--fluxion-muted); background: transparent; text-align: start; font: inherit;
     }
     .fluxion-library-nav button:hover { color: var(--fluxion-ink); background: var(--fluxion-hover); }
     .fluxion-library-nav button[aria-current="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); font-weight: 600; }
-    .fluxion-library-content { padding: 26px 30px 70px; }
+    .fluxion-library-content {
+      box-sizing: border-box; flex: 0 1 820px; min-width: 420px;
+      padding: 26px 30px 70px; overflow: auto;
+    }
     .fluxion-library-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
     .fluxion-library-section-head h2 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
     .fluxion-library-section-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
@@ -97,8 +103,8 @@
     .fluxion-library-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 11px; }
     @media (max-width: 820px) {
       .fluxion-library-header { grid-template-columns: 1fr; gap: 8px; padding: 12px 18px; }
-      .fluxion-library-body { grid-template-columns: 130px minmax(360px, 1fr); }
-      .fluxion-library-content { padding-inline: 20px; }
+      .fluxion-library-nav { flex-basis: 130px; min-width: 130px; }
+      .fluxion-library-content { min-width: 360px; padding-inline: 20px; }
     }
   `;
   document.documentElement.appendChild(style);
@@ -679,7 +685,8 @@
         const hasDownload = data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf");
         if (hasHistory && hasBookmark && hasDownload &&
             rootRect.left >= flowRect?.right - 1 && navRect.left >= rootRect.left - 1 &&
-            contentRect.left >= navRect.right - 1) {
+            navRect.width >= 130 && contentRect.left >= navRect.right - 1 &&
+            contentRect.width >= 360) {
           Services.prefs.setStringPref("fluxion.library.visual.health", "history-bookmarks-downloads-rendered");
           Services.prefs.setStringPref(
             "fluxion.library.geometry.visual.health",
