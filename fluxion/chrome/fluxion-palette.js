@@ -20,6 +20,7 @@
   let mode = "all";
   let splitSource = null;
   let askBrowser = null;
+  let compareBrowsers = [];
   let askController = null;
   let aiRequest = 0;
   let placesTimer = 0;
@@ -254,6 +255,22 @@
         ? openUrl("about:preferences#ai")
         : open("ask", gBrowser.selectedBrowser),
     });
+    if (gBrowser.selectedTabs.length >= 2) {
+      const comparisonTabs = [...gBrowser.selectedTabs]
+        .filter(tab => tab.linkedBrowser)
+        .slice(0, 4);
+      items.splice(10, 0, {
+        label: "Compare Selected Pages",
+        detail: aiConfig?.provider === "disabled"
+          ? "Configure an optional AI provider first"
+          : `Compare ${comparisonTabs.length} explicitly selected tabs`,
+        kind: "AI",
+        keywords: ["compare pages tabs selected differences similarities"],
+        run: () => aiConfig?.provider === "disabled"
+          ? openUrl("about:preferences#ai")
+          : open("compare", comparisonTabs),
+      });
+    }
     if (!privateWindow && window.FluxionMemory.enabled()) {
       items.splice(9, 0,
         {
@@ -554,7 +571,9 @@
     status.textContent = current?.provider === "disabled"
       ? "AI is disabled · Configure a provider in Fluxion Settings"
       : `${current.provider} · Page text is shared only when you press Return`;
-    renderItems([], "Type a question about the current page, then press Return");
+    renderItems([], mode === "compare"
+      ? `Type what to compare across ${compareBrowsers.length} selected pages, then press Return`
+      : "Type a question about the current page, then press Return");
   }
 
   async function runAsk() {
@@ -566,31 +585,45 @@
     visibleItems = [];
     results.replaceChildren();
     const pending = create("div", "fluxion-palette-empty");
-    pending.textContent = "Reading this page and asking the configured provider…";
+    pending.textContent = mode === "compare"
+      ? "Reading the selected pages and asking the configured provider…"
+      : "Reading this page and asking the configured provider…";
     results.appendChild(pending);
     status.hidden = false;
     status.textContent = "Treating page content as untrusted data · Escape cancels";
     try {
-      const answer = await window.FluxionAI.askCurrentPage(question, askBrowser, {
-        signal: askController.signal,
-      });
-      if (request !== aiRequest || mode !== "ask") return;
+      const answer = mode === "compare"
+        ? await window.FluxionAI.comparePages(question, compareBrowsers, { signal: askController.signal })
+        : await window.FluxionAI.askCurrentPage(question, askBrowser, { signal: askController.signal });
+      if (request !== aiRequest || !["ask", "compare"].includes(mode)) return;
       const panel = create("div", "fluxion-memory-answer");
       const label = create("span", "fluxion-memory-answer-label");
       label.textContent = `Answer from ${answer.provider} · ${answer.model}`;
       const text = create("div", "fluxion-ai-answer-text");
       text.textContent = answer.text;
       const source = create("div", "fluxion-ai-source");
-      source.textContent = `Source: ${answer.source.title} · ${answer.source.url}\n${answer.source.excerpt}`;
+      const sources = answer.sources || [answer.source];
+      source.textContent = sources.map((item, index) =>
+        `${sources.length > 1 ? `Source ${index + 1}` : "Source"}: ${item.title} · ${item.url}\n${item.excerpt}`
+      ).join("\n\n");
       panel.append(label, text, source);
       results.replaceChildren(panel);
-      status.textContent = "Current-page answer · Verify against the quoted local source";
-      if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1" && answer.source.excerpt) {
+      status.textContent = mode === "compare"
+        ? "Selected-page comparison · Verify against each quoted source"
+        : "Current-page answer · Verify against the quoted local source";
+      if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1" && answer.source?.excerpt) {
         Services.prefs.setStringPref("fluxion.ai.visual.health", "current-page-answer-visible");
         Services.prefs.savePrefFile(null);
       }
+      if (
+        Services.env.get("FLUXION_VISUAL_AI_COMPARE_TEST") === "1" &&
+        sources.length >= 2 && sources.every(item => item.excerpt)
+      ) {
+        Services.prefs.setStringPref("fluxion.ai.compare.visual.health", "selected-pages-compared");
+        Services.prefs.savePrefFile(null);
+      }
     } catch (error) {
-      if (request !== aiRequest || mode !== "ask") return;
+      if (request !== aiRequest || !["ask", "compare"].includes(mode)) return;
       renderItems([], error.message || "The AI provider could not answer");
       status.textContent = "No page content was retained by the provider layer";
       if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
@@ -601,7 +634,7 @@
   }
 
   function render(includePlaces = false) {
-    if (mode === "ask") {
+    if (mode === "ask" || mode === "compare") {
       renderAskPrompt();
       return;
     }
@@ -623,7 +656,7 @@
 
   function queuePlaces() {
     window.clearTimeout(placesTimer);
-    if (mode === "ask") { renderAskPrompt(); return; }
+    if (mode === "ask" || mode === "compare") { renderAskPrompt(); return; }
     if (mode === "memory") {
       memoryRequest += 1;
       placesTimer = window.setTimeout(() => render(false), 140);
@@ -641,6 +674,9 @@
     askBrowser = nextMode === "ask"
       ? (sourceTab?.linkedBrowser || sourceTab || gBrowser.selectedBrowser)
       : null;
+    compareBrowsers = nextMode === "compare"
+      ? (Array.isArray(sourceTab) ? sourceTab : []).map(item => item?.linkedBrowser || item).filter(Boolean).slice(0, 4)
+      : [];
     lastFocus = document.activeElement;
     layer.hidden = false;
     input.value = "";
@@ -649,6 +685,7 @@
       : mode === "tabs" ? "Search open tabs"
         : mode === "memory" ? "What do you remember about the page?"
           : mode === "ask" ? "Ask a question about this page"
+            : mode === "compare" ? "Compare the selected pages"
           : "Search commands, tabs, history, and bookmarks";
     activeIndex = 0;
     render(false);
@@ -665,6 +702,7 @@
     input.value = "";
     splitSource = null;
     askBrowser = null;
+    compareBrowsers = [];
     if (lastFocus?.isConnected) lastFocus.focus();
     lastFocus = null;
   }
@@ -674,7 +712,7 @@
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       setActive(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
-    } else if (event.key === "Enter" && mode === "ask") {
+    } else if (event.key === "Enter" && (mode === "ask" || mode === "compare")) {
       event.preventDefault();
       runAsk().catch(Cu.reportError);
     } else if (event.key === "Enter") {
@@ -742,6 +780,26 @@
       input.value = "What is this page for?";
       runAsk().catch(Cu.reportError);
     }, 7200);
+  }
+  if (Services.env.get("FLUXION_VISUAL_AI_COMPARE_TEST") === "1") {
+    window.setTimeout(() => {
+      const tabs = [
+        [...gBrowser.tabs].find(candidate =>
+          candidate.linkedBrowser?.currentURI?.spec === "https://example.com/?fluxion-memory-test=1"
+        ),
+        [...gBrowser.tabs].find(candidate =>
+          candidate.linkedBrowser?.currentURI?.spec === "https://example.org/?fluxion-split=right"
+        ),
+      ].filter(Boolean);
+      if (tabs.length !== 2) {
+        Services.prefs.setStringPref("fluxion.ai.compare.visual.error", "Dedicated comparison pages were not found");
+        Services.prefs.savePrefFile(null);
+        return;
+      }
+      open("compare", tabs);
+      input.value = "How do these pages differ in purpose?";
+      runAsk().catch(Cu.reportError);
+    }, 9400);
   }
   Services.prefs.setStringPref("fluxion.palette.health", "command-palette-loaded");
   Services.prefs.savePrefFile(null);

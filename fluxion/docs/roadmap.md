@@ -38,7 +38,8 @@ controls work and its failure paths have been tested.
 - disabled, Ollama, and OpenAI-compatible provider interfaces (implemented)
 - grounded, cancellable current-page questions with visible source evidence
   (implemented)
-- explicit tab comparison and organisation suggestions
+- explicit, source-backed selected-tab comparison (implemented)
+- opt-in organisation suggestions without automatic tab movement
 - no network AI dependency in ordinary browsing (implemented)
 
 ## Phase 6 — release polish

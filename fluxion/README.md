@@ -30,7 +30,8 @@ The current preview is runnable and includes:
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;
 - optional Ollama and OpenAI-compatible providers for grounded current-page
-  questions, with AI disabled by default and ordinary browsing independent;
+  questions and explicit selected-tab comparison, with AI disabled by default
+  and ordinary browsing independent;
 - a Fluxion-owned settings surface with live controls for startup, search,
   Flow density, motion, tab behaviour, Browser Memory, browsing data, and site
   permissions;
@@ -216,6 +217,11 @@ Private windows, password-bearing pages, sensitive routes, and Browser Memory
 domain exclusions are refused. Sending page text to a non-local provider
 requires explicit consent for that endpoint. The page is treated as untrusted
 quoted data, and Escape cancels an in-flight request.
+
+To compare pages, Command-click two to four tabs in Flow, open the command
+palette, and run **Compare Selected Pages**. Fluxion sends only those explicitly
+selected, policy-approved extracts and shows a separate source record for each
+page. It never chooses tabs or reorganises them automatically.
 
 ## License
 

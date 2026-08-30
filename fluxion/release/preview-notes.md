@@ -8,6 +8,22 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.15 adds explicit, grounded comparison across selected tabs:
+
+- Command-click or Shift-click two to four real Gecko tabs in Flow, then run
+  **Compare Selected Pages** from the command palette;
+- ask a focused comparison question and receive one answer with a separate
+  visible title, URL, and bounded excerpt for every source page;
+- cap every extracted page at 5.5 KB and refuse the whole request when any
+  selected page is private, sensitive, password-bearing, or user-excluded;
+- preserve cancellation, loopback/HTTPS restrictions, redirect refusal,
+  credential isolation, and remote page-sharing consent from v0.14;
+- never select, regroup, or move tabs on a model's behalf.
+
+The macOS release gate now requires both a grounded current-page request and a
+second two-page comparison request from the packaged universal app. The final
+comparison and both cited source records must be visible before publishing.
+
 Version 0.14 introduces the first optional generative-AI boundary:
 
 - configure Disabled, local Ollama, or generic OpenAI-compatible providers in

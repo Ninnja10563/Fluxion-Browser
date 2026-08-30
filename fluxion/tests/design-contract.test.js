@@ -89,9 +89,11 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_SHORTCUT_TEST=1/);
   assert.match(macVerifier, /custom-shortcut-persisted/);
   assert.match(macVerifier, /FLUXION_VISUAL_AI_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_AI_COMPARE_TEST=1/);
   assert.match(macVerifier, /ollama-stub\.py/);
   assert.match(macVerifier, /current-page-answer-visible/);
   assert.match(macVerifier, /\[\[ -s "\$ai_request" \]\]/);
+  assert.match(macVerifier, /"page_count": 2/);
   assert.match(palette, /fluxion-memory-test=1/);
   assert.match(macVerifier, /sleep 4/);
   assert.match(macVerifier, /screencapture -x/);
@@ -184,6 +186,9 @@ test("optional AI stays privileged, cancellable, and separate from ordinary brow
   assert.match(ai, /FluxionMemoryPolicy\.canIndexPage/);
   assert.match(ai, /current\.remote/);
   assert.match(ai, /AbortController/);
+  assert.match(ai, /comparePages/);
+  assert.match(ai, /\.slice\(0, 4\)/);
+  assert.match(ai, /extractPage\(browser, 5500\)/);
   assert.match(providers, /credentials: "omit"/);
   assert.doesNotMatch(ai, /setStringPref\([^\n]*secret|apiKey/i);
   assert.match(providers, /class DisabledProvider extends AIProvider/);
@@ -191,6 +196,7 @@ test("optional AI stays privileged, cancellable, and separate from ordinary brow
   assert.match(providers, /class OpenAICompatibleProvider extends AIProvider/);
   assert.match(providers, /class EmbeddingProvider/);
   assert.match(settings, /Firefox’s encrypted login store/);
+  assert.match(palette, /Compare Selected Pages/);
 });
 
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {

@@ -214,6 +214,14 @@ renders provider output only with `textContent` and always exposes the local
 source title, URL, and excerpt so an answer is inspectable. This reduces prompt
 injection risk but does not make model output authoritative.
 
+Compare Selected Pages uses Gecko's native `selectedTabs` as its explicit user
+selection. It accepts two to four live content browsers, applies the same page
+policy independently to every source, and refuses the entire request if any
+page fails. Each extract is capped at 5.5 KB before a single provider call;
+provider output is returned beside a separate bounded title, URL, and excerpt
+for every selected page. Fluxion never selects or reorganises tabs on a model's
+behalf.
+
 ## Privileged settings surface
 
 Fluxion Settings is browser chrome, not webpage content. When a selected tab

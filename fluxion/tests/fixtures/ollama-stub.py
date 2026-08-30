@@ -3,6 +3,7 @@
 
 import json
 import pathlib
+import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
@@ -47,19 +48,27 @@ class OllamaFixture(BaseHTTPRequestHandler):
             if not valid:
                 self.send_json(400, {"error": "invalid grounded chat request"})
                 return
+            page_count = len(re.findall(r"<page-\d+>", context)) or 1
             if EVIDENCE_PATH:
                 EVIDENCE_PATH.write_text(
                     json.dumps({
                         "model": request["model"],
                         "message_roles": [message["role"] for message in messages],
                         "has_page_context": True,
+                        "page_count": page_count,
                     }),
                     encoding="utf-8",
                 )
+            answer = (
+                "Both are reserved example domains; the first page describes documentation use, "
+                "while the second is a separate example origin."
+                if page_count > 1 else
+                "The page is reserved for use in documentation examples."
+            )
             self.send_json(200, {
                 "message": {
                     "role": "assistant",
-                    "content": "The page is reserved for use in documentation examples.",
+                    "content": answer,
                 }
             })
         except (ValueError, json.JSONDecodeError, OSError) as error:
