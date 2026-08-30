@@ -150,9 +150,14 @@
   let downloadList = null;
   let downloadView = null;
 
+  function isLibraryTab(tab) {
+    const url = tab?.linkedBrowser?.currentURI?.spec || "";
+    return url.startsWith("about:downloads") ||
+      (url === "about:blank" && tab?.hasAttribute("fluxion-library-section"));
+  }
+
   function selectedLibraryTab() {
-    const browser = gBrowser.selectedBrowser;
-    return browser?.currentURI?.spec.startsWith("about:downloads") ? gBrowser.selectedTab : null;
+    return isLibraryTab(gBrowser.selectedTab) ? gBrowser.selectedTab : null;
   }
 
   function tabSection(tab) {
@@ -607,7 +612,7 @@
   function open(section = "history") {
     rememberSelectedPage();
     const id = FluxionLibraryData.section(section);
-    let tab = [...gBrowser.tabs].find(candidate => candidate.linkedBrowser?.currentURI?.spec.startsWith("about:downloads"));
+    let tab = [...gBrowser.tabs].find(isLibraryTab);
     if (!tab) {
       tab = gBrowser.addTrustedTab(`about:downloads#${id}`);
       tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());

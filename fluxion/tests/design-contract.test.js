@@ -393,6 +393,8 @@ test("Fluxion Library owns visible history, bookmark, and download workflows", (
   assert.match(library, /FluxionUI\.refresh\(\)/);
   assert.match(library, /data-fluxion-library-visible\] #identity-icon-box/);
   assert.match(library, /FluxionPalette\?\.close\(\)/);
+  assert.match(library, /url === "about:blank" && tab\?\.hasAttribute\("fluxion-library-section"\)/);
+  assert.match(library, /find\(isLibraryTab\)/);
   assert.match(palette, /FluxionLibrary\?\.open\("history"\)/);
   assert.match(palette, /FluxionLibrary\?\.open\("bookmarks"\)/);
   assert.match(palette, /FluxionLibrary\?\.open\("downloads"\)/);
