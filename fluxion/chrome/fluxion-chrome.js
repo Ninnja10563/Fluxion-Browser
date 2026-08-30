@@ -2548,7 +2548,7 @@
           Services.prefs.savePrefFile(null);
         }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
       }, document.documentElement.hasAttribute("data-fluxion-no-motion") ? 20 : 240);
-    }, 5200);
+    }, 23500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");
   Services.prefs.savePrefFile(null);
