@@ -65,10 +65,16 @@
     }
     return latest || { ok: false, reasons: ["timed out without a result"] };
   }
+  async function withDeadline(promise, milliseconds = 1800) {
+    return Promise.race([
+      Promise.resolve(promise).catch(() => undefined),
+      wait(milliseconds),
+    ]);
+  }
   async function flushTabs(tabs) {
     await Promise.all(tabs.map(tab => {
       try {
-        return tab.linkedBrowser?.frameLoader?.requestTabStateFlush?.() || Promise.resolve();
+        return withDeadline(tab.linkedBrowser?.frameLoader?.requestTabStateFlush?.());
       } catch (_) {
         return Promise.resolve();
       }
@@ -81,6 +87,7 @@
 
   async function seedNormalSession() {
     const urls = FluxionSessionRecovery.URLS;
+    write("fluxion.recovery.seed.progress", "starting");
     Services.prefs.setIntPref("browser.startup.page", 3);
     Services.prefs.setBoolPref("browser.sessionstore.resume_from_crash", true);
     Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", true);
@@ -102,13 +109,16 @@
     if (!split || split.tabs.length !== 2) throw new Error("native recovery split was not created");
     window.gBrowser.pinTab(pinned);
     window.gBrowser.selectedTab = splitTabs[0];
+    write("fluxion.recovery.seed.progress", "native-layout-created");
 
     const keep = new Set(Object.values(urls));
     for (const tab of [...window.gBrowser.tabs]) {
       if (!keep.has(tabURL(tab))) window.gBrowser.removeTab(tab, { animate: false });
     }
     await wait(1800);
+    write("fluxion.recovery.seed.progress", "flushing-sessionstore");
     await flushTabs([...groupTabs, ...splitTabs, pinned]);
+    write("fluxion.recovery.seed.progress", "sessionstore-projected");
     const validation = FluxionSessionRecovery.validateNormal(snapshot());
     if (!validation.ok) throw new Error(`seed state invalid: ${validation.reasons.join("; ")}`);
     write("fluxion.recovery.seed.health", "workspace-tabs-groups-split-seeded");

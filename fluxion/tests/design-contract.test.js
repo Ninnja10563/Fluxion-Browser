@@ -66,6 +66,7 @@ test("site permissions use Gecko records and expose exact reset scopes", () => {
 
 test("packaged recovery gate crosses real normal and private app launches", () => {
   assert.match(sessionRecovery, /requestTabStateFlush/);
+  assert.match(sessionRecovery, /Promise\.race/);
   assert.match(sessionRecovery, /SessionStore\.getWindowState/);
   assert.match(sessionRecovery, /PlacesUtils\.history\.fetch/);
   assert.match(sessionRecovery, /FluxionMemory\.search/);
