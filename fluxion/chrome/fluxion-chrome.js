@@ -2006,47 +2006,52 @@
       crashed.setAttribute("crashed", "true");
       crashed.setAttribute("pictureinpicture", "true");
       crashed.setAttribute("soundplaying", "true");
-      scheduleRender();
-      window.requestAnimationFrame(() => {
-        const videoRow = tabElements.get(video);
-        const captureRow = tabElements.get(capture);
-        const crashedRow = tabElements.get(crashed);
-        const initial = Boolean(
-          videoRow?.querySelector('[data-kind="picture-in-picture"]') &&
-          videoRow?.querySelector('[data-kind="loading"]') &&
-          videoRow?.querySelector('.fluxion-audio[aria-label="Mute tab"]') &&
-          videoRow?.getAttribute("aria-label").includes("Video playing in Picture-in-Picture") &&
-          captureRow?.querySelector('[data-kind="sharing-camera-microphone"]') &&
-          captureRow?.getAttribute("aria-label").includes("Using the camera and microphone") &&
-          crashedRow?.querySelectorAll(".fluxion-status").length === 1 &&
-          crashedRow?.querySelector('[data-kind="crashed"]') &&
-          !crashedRow?.querySelector(".fluxion-audio")
+      render();
+      const videoRow = tabElements.get(video);
+      const captureRow = tabElements.get(capture);
+      const crashedRow = tabElements.get(crashed);
+      const checks = {
+        audio: Boolean(videoRow?.querySelector('.fluxion-audio[aria-label="Mute tab"]')),
+        capture: Boolean(captureRow?.querySelector('[data-kind="sharing-camera-microphone"]')),
+        captureLabel: Boolean(captureRow?.getAttribute("aria-label").includes("Using the camera and microphone")),
+        crash: Boolean(crashedRow?.querySelector('[data-kind="crashed"]')),
+        crashExclusive: crashedRow?.querySelectorAll(".fluxion-status").length === 1 &&
+          !crashedRow?.querySelector(".fluxion-audio"),
+        loading: Boolean(videoRow?.querySelector('[data-kind="loading"]')),
+        pictureInPicture: Boolean(videoRow?.querySelector('[data-kind="picture-in-picture"]')),
+        pictureInPictureLabel: Boolean(
+          videoRow?.getAttribute("aria-label").includes("Video playing in Picture-in-Picture")
+        ),
+      };
+      const initial = Object.values(checks).every(Boolean);
+      videoRow?.querySelector(".fluxion-audio")?.click();
+      video.removeAttribute("busy");
+      render();
+      const updated = tabElements.get(video);
+      const controlled = Boolean(
+        video.hasAttribute("muted") &&
+        updated?.querySelector('.fluxion-audio[aria-label="Unmute tab"]') &&
+        !updated?.querySelector('[data-kind="loading"]')
+      );
+      if (initial && controlled) {
+        Services.prefs.setStringPref(
+          "fluxion.status.health",
+          "native-gecko-tab-states-projected-and-controllable",
         );
-        videoRow?.querySelector(".fluxion-audio")?.click();
-        video.removeAttribute("busy");
-        window.requestAnimationFrame(() => {
-          const updated = tabElements.get(video);
-          const controlled = Boolean(
-            video.hasAttribute("muted") &&
-            updated?.querySelector('.fluxion-audio[aria-label="Unmute tab"]') &&
-            !updated?.querySelector('[data-kind="loading"]')
-          );
-          if (initial && controlled) {
-            Services.prefs.setStringPref(
-              "fluxion.status.health",
-              "native-gecko-tab-states-projected-and-controllable",
-            );
-          } else {
-            Services.prefs.setStringPref(
-              "fluxion.status.visual.error",
-              `initial=${initial} controlled=${controlled} muted=${video.hasAttribute("muted")}`,
-            );
-          }
-          Services.prefs.savePrefFile(null);
-          gBrowser.removeTab(crashed, { animate: false });
-          scheduleRender();
-        });
-      });
+      } else {
+        const failed = Object.entries(checks)
+          .filter(([, passed]) => !passed)
+          .map(([name]) => name)
+          .join(",") || "none";
+        Services.prefs.setStringPref(
+          "fluxion.status.visual.error",
+          `failed=${failed} controlled=${controlled} muted=${video.hasAttribute("muted")} ` +
+            `rows=${Boolean(videoRow)},${Boolean(captureRow)},${Boolean(crashedRow)}`,
+        );
+      }
+      Services.prefs.savePrefFile(null);
+      gBrowser.removeTab(crashed, { animate: false });
+      scheduleRender();
     }, 2200);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
