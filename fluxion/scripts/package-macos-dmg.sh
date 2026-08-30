@@ -57,20 +57,42 @@ output_dir="$(CDPATH= cd -- "$output_dir" && pwd)"
 dmg_name="Fluxion-${version}-macOS-universal.dmg"
 dmg="$output_dir/$dmg_name"
 stage="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-dmg.XXXXXX")"
+attempt_dmg=""
 
 cleanup() {
+  if [[ -n "$attempt_dmg" && "$attempt_dmg" == "$output_dir"/."$dmg_name".attempt-*.dmg ]]; then
+    rm -f -- "$attempt_dmg"
+  fi
   rm -rf -- "$stage"
 }
 trap cleanup EXIT
 
 ditto "$app" "$stage/Fluxion.app"
 ln -s /Applications "$stage/Applications"
-hdiutil create \
-  -volname "Fluxion ${version}" \
-  -srcfolder "$stage" \
-  -format UDZO \
-  -ov \
-  "$dmg"
+create_attempt=1
+while (( create_attempt <= 4 )); do
+  attempt_dmg="$output_dir/.${dmg_name}.attempt-${create_attempt}.dmg"
+  rm -f -- "$attempt_dmg"
+  if hdiutil create \
+      -volname "Fluxion ${version}" \
+      -srcfolder "$stage" \
+      -format UDZO \
+      -ov \
+      "$attempt_dmg"; then
+    mv -f -- "$attempt_dmg" "$dmg"
+    attempt_dmg=""
+    break
+  fi
+  rm -f -- "$attempt_dmg"
+  if (( create_attempt == 4 )); then
+    printf 'Unable to create the Fluxion DMG after %d attempts.\n' "$create_attempt" >&2
+    exit 1
+  fi
+  printf 'hdiutil was temporarily unavailable; retrying DMG creation (%d/4).\n' \
+    "$((create_attempt + 1))" >&2
+  sleep "$((create_attempt * 2))"
+  ((create_attempt += 1))
+done
 
 (
   cd "$output_dir"

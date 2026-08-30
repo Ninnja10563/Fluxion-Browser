@@ -58,6 +58,12 @@ passes:
 4. Stream the published DMG back from GitHub and compare its SHA-256 with the
    attached checksum.
 
+DMG creation writes each attempt to a private filename and promotes only a
+completed image. The packager retries bounded `hdiutil` resource-contention
+failures because Finder and recently terminated Gecko helpers can briefly hold
+the source bundle on hosted macOS runners; it never force-detaches a volume or
+reuses a partial image.
+
 Preview releases are ad-hoc signed and not notarized. A stable release requires
 an Apple Developer ID, notarization, stapling, and an update channel owned by
 Fluxion. The bundled upstream updater stays disabled because it would replace

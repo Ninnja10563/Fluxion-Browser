@@ -37,6 +37,10 @@ const macSessionVerifier = fs.readFileSync(
   path.join(root, "scripts/verify-macos-session.sh"),
   "utf8",
 );
+const macPackager = fs.readFileSync(
+  path.join(root, "scripts/package-macos-dmg.sh"),
+  "utf8",
+);
 
 test("browser chrome avoids prohibited decorative effects", () => {
   const productCss = `${chrome}\n${palette}\n${settings}\n${library}`;
@@ -149,6 +153,14 @@ test("macOS package cannot inherit Firefox's asset-catalogue icon", () => {
   assert.match(macBuilder, /rm -f -- "\$resources\/Assets\.car"/);
   assert.match(macBuilder, /plutil -remove CFBundleIconName/);
   assert.match(macBuilder, /CFBundleIconFile -string fluxion\.icns/);
+});
+
+test("macOS packaging retries transient hdiutil resource contention safely", () => {
+  assert.match(macPackager, /while \(\( create_attempt <= 4 \)\)/);
+  assert.match(macPackager, /\.attempt-\$\{create_attempt\}\.dmg/);
+  assert.match(macPackager, /mv -f -- "\$attempt_dmg" "\$dmg"/);
+  assert.match(macPackager, /Unable to create the Fluxion DMG after/);
+  assert.doesNotMatch(macPackager, /hdiutil detach -force/);
 });
 
 test("macOS visual gate waits for settled chrome", () => {
