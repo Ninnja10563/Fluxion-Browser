@@ -2,7 +2,6 @@
 (function exposeUrlCore(scope) {
   "use strict";
 
-  const SCHEME = /^[a-z][a-z\d+.-]*:/i;
   const SAFE_SCHEME = /^(?:https?|ftp|file|about|view-source|moz-extension):/i;
   const DOMAIN = /^(?:localhost|(?:[\p{L}\d-]+\.)+[\p{L}]{2,})(?::\d+)?(?:[/?#]|$)/u;
 
@@ -10,16 +9,20 @@
     return String(raw ?? "").trim();
   }
 
-  function resolveNavigation(raw, searchBase = "https://duckduckgo.com/?q=") {
+  function classifyNavigation(raw) {
     const value = normaliseInput(raw);
-    if (!value) return "about:newtab";
-    if (DOMAIN.test(value)) return `https://${value}`;
-    if (SAFE_SCHEME.test(value)) return value;
-    if (SCHEME.test(value)) return `${searchBase}${encodeURIComponent(value)}`;
-    return `${searchBase}${encodeURIComponent(value)}`;
+    if (!value) return Object.freeze({ kind: "empty", value: "about:newtab" });
+    if (DOMAIN.test(value)) return Object.freeze({ kind: "address", value: `https://${value}` });
+    if (SAFE_SCHEME.test(value)) return Object.freeze({ kind: "address", value });
+    return Object.freeze({ kind: "search", value });
   }
 
-  const api = Object.freeze({ normaliseInput, resolveNavigation });
+  function resolveNavigation(raw) {
+    const route = classifyNavigation(raw);
+    return route.kind === "search" ? null : route.value;
+  }
+
+  const api = Object.freeze({ classifyNavigation, normaliseInput, resolveNavigation });
   scope.FluxionUrl = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis === "object" ? globalThis : this);

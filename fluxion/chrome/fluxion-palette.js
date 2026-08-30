@@ -532,17 +532,29 @@
       }
     }
     if (search) {
-      const destination = FluxionUrl.resolveNavigation(search);
-      const isSearch = destination.startsWith("https://duckduckgo.com/?q=");
-      items.push({
-        label: isSearch ? `Search the web for “${search}”` : `Open ${search}`,
-        detail: destination,
-        kind: isSearch ? "Search" : "Address",
-        boost: -40,
-        fallback: true,
-        keywords: [search],
-        run: () => openUrl(destination),
-      });
+      const route = FluxionUrl.classifyNavigation(search);
+      if (route.kind === "search") {
+        const engine = window.FluxionWebSearch.currentName();
+        items.push({
+          label: `Search ${engine} for “${search}”`,
+          detail: "Uses the current Gecko search engine",
+          kind: "Search",
+          boost: -40,
+          fallback: true,
+          keywords: [search],
+          run: () => window.FluxionWebSearch.open(route.value),
+        });
+      } else {
+        items.push({
+          label: `Open ${search}`,
+          detail: route.value,
+          kind: "Address",
+          boost: -40,
+          fallback: true,
+          keywords: [search],
+          run: () => openUrl(route.value),
+        });
+      }
     }
     return items;
   }
@@ -858,6 +870,9 @@
       close();
     }
   }, true);
+  on(window, "FluxionSearchEngineChanged", () => {
+    if (!layer.hidden && !["ask", "compare", "memory"].includes(mode)) render(false);
+  });
   on(window, "unload", () => {
     window.clearTimeout(placesTimer);
     while (cleanup.length) cleanup.pop()();
@@ -991,6 +1006,7 @@
                   "fluxion.closedTabs.health",
                   "native-list-and-keyboard-restore-preserved-workspace",
                 );
+                window.dispatchEvent(new window.CustomEvent("FluxionClosedTabsVisualReady"));
               } else {
                 Services.prefs.setStringPref(
                   "fluxion.closedTabs.visual.error",
@@ -1011,6 +1027,88 @@
       on(window, "FluxionPaletteCommandsVisualReady", runClosedTabsGate, { once: true });
     } else {
       window.setTimeout(runClosedTabsGate, 34000);
+    }
+  }
+  if (Services.env.get("FLUXION_VISUAL_SEARCH_ENGINE_TEST") === "1") {
+    const runSearchEngineGate = async () => {
+      const { SearchService } = ChromeUtils.importESModule(
+        "moz-src:///toolkit/components/search/SearchService.sys.mjs",
+      );
+      await SearchService.init();
+      const original = SearchService.defaultEngine;
+      const engines = await SearchService.getVisibleEngines();
+      const alternate = engines.find(engine => engine !== original && engine.getSubmission("fluxion", null)?.uri);
+      if (!alternate) {
+        Services.prefs.setStringPref(
+          "fluxion.webSearch.visual.error",
+          "No alternate visible Gecko search engine was available",
+        );
+        Services.prefs.savePrefFile(null);
+        return;
+      }
+      let openedTab = null;
+      const captureTab = event => { openedTab = event.target; };
+      try {
+        await SearchService.setDefault(alternate, SearchService.CHANGE_REASON.USER);
+        await window.FluxionWebSearch.refresh();
+        const query = "fluxion-engine-route-9137";
+        const submission = await window.FluxionWebSearch.resolve(query);
+        open("all");
+        input.value = query;
+        render(false);
+        const fallback = visibleItems[0];
+        const selectedDefault = fallback?.kind === "Search" &&
+          fallback.label.includes(alternate.name);
+        gBrowser.tabContainer.addEventListener("TabOpen", captureTab, { once: true });
+        if (selectedDefault) {
+          input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        }
+        const waitForOpen = async (attempt = 0) => {
+          if (!openedTab && attempt < 40) {
+            window.setTimeout(() => waitForOpen(attempt + 1).catch(Cu.reportError), 100);
+            return;
+          }
+          gBrowser.tabContainer.removeEventListener("TabOpen", captureTab);
+          const workspace = openedTab?.getAttribute("fluxion-workspace") === ui.currentWorkspace();
+          const engineResolved = submission.engineId === (alternate.id || alternate.name) &&
+            submission.engineName === alternate.name;
+          if (openedTab) gBrowser.removeTab(openedTab, { animate: false });
+          await SearchService.setDefault(original, SearchService.CHANGE_REASON.USER);
+          await window.FluxionWebSearch.refresh();
+          open("all");
+          input.value = query;
+          render(false);
+          const originalVisible = visibleItems[0]?.kind === "Search" &&
+            visibleItems[0].label.includes(original.name);
+          if (selectedDefault && openedTab && workspace && engineResolved && originalVisible) {
+            Services.prefs.setStringPref(
+              "fluxion.webSearch.health",
+              "gecko-default-engine-switched-opened-and-restored",
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.webSearch.visual.error",
+              `selected=${selectedDefault} opened=${Boolean(openedTab)} workspace=${workspace} ` +
+                `engine=${engineResolved} original=${originalVisible}`,
+            );
+          }
+          Services.prefs.savePrefFile(null);
+        };
+        await waitForOpen();
+      } catch (error) {
+        gBrowser.tabContainer.removeEventListener("TabOpen", captureTab);
+        await SearchService.setDefault(original, SearchService.CHANGE_REASON.USER).catch(Cu.reportError);
+        await window.FluxionWebSearch.refresh().catch(Cu.reportError);
+        Services.prefs.setStringPref("fluxion.webSearch.visual.error", String(error));
+        Services.prefs.savePrefFile(null);
+      }
+    };
+    if (Services.env.get("FLUXION_VISUAL_CLOSED_TABS_TEST") === "1") {
+      on(window, "FluxionClosedTabsVisualReady", () => runSearchEngineGate().catch(Cu.reportError), {
+        once: true,
+      });
+    } else {
+      window.setTimeout(() => runSearchEngineGate().catch(Cu.reportError), 36000);
     }
   }
   if (

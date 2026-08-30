@@ -8,6 +8,29 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.32 makes Gecko the single owner of web-search routing:
+
+- remove the command palette's hard-coded DuckDuckGo destination and obtain
+  every search submission from Gecko's current SearchService engine;
+- respect the separate private-window default where the user has enabled one;
+- support both GET and POST engines by forwarding Gecko's native submission
+  URL and post data instead of guessing a query-string format;
+- reject a configured engine submission unless its final URI uses HTTP or
+  HTTPS, preserving the privileged-chrome navigation boundary;
+- update the visible palette engine name immediately when Settings or an
+  extension changes the default engine;
+- distinguish explicit addresses and safe browser schemes from search text
+  before asking the engine, while continuing to treat script-bearing schemes
+  as inert search terms;
+- open results as real Gecko tabs in the active Fluxion workspace and retain
+  Gecko's triggering-engine history metadata;
+- require the packaged browser to switch to another installed engine, show it
+  as the selected palette destination, open a result by keyboard, verify its
+  workspace, restore the original engine, and show that engine again before a
+  DMG can publish.
+
+Fluxion keeps no separate search-engine preference or template.
+
 Version 0.31 makes closed-tab recovery a first-class Fluxion workflow:
 
 - add a live **Recently Closed Tabs** submenu to both the native Flow menu and

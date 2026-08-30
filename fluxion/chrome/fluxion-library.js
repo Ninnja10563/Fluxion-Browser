@@ -321,11 +321,14 @@
     refreshTimer = window.setTimeout(() => refreshAll().catch(Cu.reportError), 100);
   }
 
-  function openURL(url) {
+  async function openURL(url) {
     if (!url) return;
-    const tab = gBrowser.addTrustedTab(FluxionUrl.resolveNavigation(url));
+    const route = FluxionUrl.classifyNavigation(url);
+    if (route.kind === "search") return window.FluxionWebSearch.open(route.value);
+    const tab = gBrowser.addTrustedTab(route.value);
     tab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
     gBrowser.selectedTab = tab;
+    return tab;
   }
 
   function action(label, handler) {

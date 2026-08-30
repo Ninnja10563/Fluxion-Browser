@@ -17,6 +17,7 @@ const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "u
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const closedTabs = fs.readFileSync(path.join(root, "chrome/core/closed-tabs.js"), "utf8");
+const webSearch = fs.readFileSync(path.join(root, "chrome/fluxion-web-search.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
 const tabStatus = fs.readFileSync(path.join(root, "chrome/core/tab-status.js"), "utf8");
@@ -236,6 +237,21 @@ test("recently closed tabs use Gecko SessionStore in menus and keyboard recovery
   assert.doesNotMatch(palette, /SessionStore\.undoCloseTab/);
   assert.match(macVerifier, /FLUXION_VISUAL_CLOSED_TABS_TEST=1/);
   assert.match(macVerifier, /native-list-and-keyboard-restore-preserved-workspace/);
+});
+
+test("palette web search follows Gecko's live normal or private default engine", () => {
+  assert.match(webSearch, /SearchService\.defaultPrivateEngine/);
+  assert.match(webSearch, /SearchService\.defaultEngine/);
+  assert.match(webSearch, /engine\?\.getSubmission\(terms, null\)/);
+  assert.match(webSearch, /submission\.uri\.schemeIs\("https"\)/);
+  assert.match(webSearch, /postData: submission\.postData/);
+  assert.match(webSearch, /triggeringSearchEngine: submission\.engineName/);
+  assert.match(webSearch, /browser-search-engine-modified/);
+  assert.match(palette, /FluxionUrl\.classifyNavigation\(search\)/);
+  assert.match(palette, /window\.FluxionWebSearch\.open\(route\.value\)/);
+  assert.doesNotMatch(palette, /duckduckgo/i);
+  assert.match(macVerifier, /FLUXION_VISUAL_SEARCH_ENGINE_TEST=1/);
+  assert.match(macVerifier, /gecko-default-engine-switched-opened-and-restored/);
 });
 
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {

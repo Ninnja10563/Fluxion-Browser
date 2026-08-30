@@ -63,6 +63,8 @@ SigmaOS is deliberately excluded as a reference.
   exact browser actions must remain the fastest keyboard path.
 - When a strong result exists, weak subsequence matches are omitted instead of
   filling the palette merely because their letters happen to align.
+- The palette names the live Gecko search engine in its final fallback row;
+  provider choice is state, not Fluxion decoration or branding.
 - Recently Closed rows are plain native menu or palette entries, not a card
   carousel. They disappear when Gecko has no recoverable state.
 - Motion stays between 100ms and 160ms and disappears under reduced motion.

@@ -5,7 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.31.0";
+  const PRODUCT_VERSION = "0.32.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -245,6 +245,7 @@
       const engine = engines.find(item => (item.id || item.name) === searchEngine.value);
       if (!engine) return;
       await searchService.setDefault(engine, searchService.CHANGE_REASON.USER);
+      await window.FluxionWebSearch?.refresh();
       setNote(`Default search engine changed to ${engine.name}.`, "general");
     });
   }).catch(error => {

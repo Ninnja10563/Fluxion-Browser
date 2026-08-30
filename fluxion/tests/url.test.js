@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { normaliseInput, resolveNavigation } = require("../chrome/core/url.js");
+const { classifyNavigation, normaliseInput, resolveNavigation } = require("../chrome/core/url.js");
 
 test("normalises whitespace without rewriting the user's text", () => {
   assert.equal(normaliseInput("  example search  "), "example search");
@@ -19,14 +19,8 @@ test("preserves explicit safe and browser schemes", () => {
 });
 
 test("does not open script-bearing schemes from privileged chrome", () => {
-  assert.equal(
-    resolveNavigation("javascript:alert(document.domain)"),
-    "https://duckduckgo.com/?q=javascript%3Aalert(document.domain)"
-  );
-  assert.equal(
-    resolveNavigation("data:text/html,<script>alert(1)</script>"),
-    "https://duckduckgo.com/?q=data%3Atext%2Fhtml%2C%3Cscript%3Ealert(1)%3C%2Fscript%3E"
-  );
+  assert.equal(resolveNavigation("javascript:alert(document.domain)"), null);
+  assert.equal(resolveNavigation("data:text/html,<script>alert(1)</script>"), null);
 });
 
 test("adds HTTPS to domains and localhost", () => {
@@ -34,9 +28,21 @@ test("adds HTTPS to domains and localhost", () => {
   assert.equal(resolveNavigation("localhost:8080/test"), "https://localhost:8080/test");
 });
 
-test("uses encoded search terms for non-URLs", () => {
-  assert.equal(
-    resolveNavigation("gecko vertical tabs"),
-    "https://duckduckgo.com/?q=gecko%20vertical%20tabs"
-  );
+test("leaves non-address text for Gecko SearchService", () => {
+  assert.equal(resolveNavigation("gecko vertical tabs"), null);
+});
+
+test("classifies addresses separately from engine-owned search text", () => {
+  assert.deepEqual(classifyNavigation("example.com/docs"), {
+    kind: "address", value: "https://example.com/docs",
+  });
+  assert.deepEqual(classifyNavigation("about:preferences"), {
+    kind: "address", value: "about:preferences",
+  });
+  assert.deepEqual(classifyNavigation("javascript:alert(1)"), {
+    kind: "search", value: "javascript:alert(1)",
+  });
+  assert.deepEqual(classifyNavigation("local gecko browser"), {
+    kind: "search", value: "local gecko browser",
+  });
 });

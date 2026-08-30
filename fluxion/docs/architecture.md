@@ -153,6 +153,11 @@ Recently Closed views similarly project a bounded display model from
 `SessionStore.getClosedTabDataForWindow` and restore by the original index.
 Fluxion stores no duplicate session record; Gecko continues to own navigation,
 group, private-window, form, scroll, and crash-recovery state.
+Palette web searches are resolved at execution time through Gecko
+`SearchService`, including its private default, engine-provided URI, POST body,
+and change notifications. Fluxion classifies input but stores no provider
+template, so Settings, policy, locale, and WebExtension engine changes remain
+authoritative.
 The application menu's About command is captured at chrome scope and opens the
 versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle

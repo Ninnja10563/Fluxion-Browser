@@ -15,7 +15,8 @@ controls work and its failure paths have been tested.
 
 - Fluxion-owned history, bookmarks, downloads, permissions, and settings
   surfaces backed by Firefox services (settings, unified Library, native
-  bookmark-folder editing, and per-site permission management implemented)
+  bookmark-folder editing, per-site permission management, and SearchService-
+  owned palette routing implemented)
 - automated multi-launch session recovery and private-window isolation coverage
   for workspaces, pins, native groups, split views, Places, and Browser Memory
   (implemented), plus product-owned recently-closed menus and palette recovery

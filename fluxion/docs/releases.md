@@ -72,6 +72,10 @@ passes:
    to appear in Fluxion's native menu and first in palette ranking, restores it
    by pressing Return, and proves that its persisted workspace identity and
    closed-tab count round-trip exactly.
+   A web-search gate switches Gecko to another installed engine, resolves and
+   opens the selected palette fallback through that engine, verifies workspace
+   placement, restores the original default, and requires the settled palette
+   to name the restored engine.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

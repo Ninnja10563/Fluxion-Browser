@@ -40,6 +40,8 @@ The current preview is runnable and includes:
 - live command-palette access to Gecko find, bookmarking, save, print, zoom,
   fullscreen, WebExtensions, and Developer Tools actions, with unavailable
   commands omitted instead of rendered as dead controls;
+- command-palette web search through Gecko's live normal/private default
+  engine, including native GET or POST submissions and workspace placement;
 - per-window Recently Closed menus and searchable closed-tab palette results
   backed directly by Gecko SessionStore, including workspace-aware restoration;
 - optional Browser Memory search over non-private history, combining exact
