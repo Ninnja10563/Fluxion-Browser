@@ -18,6 +18,10 @@
   );
   const isPrivate = PrivateBrowsingUtils.isWindowPrivate(window);
   if ((mode === "private") !== isPrivate) return;
+  const leaderPref = `fluxion.recovery.${mode}.leader`;
+  if (Services.prefs.getBoolPref(leaderPref, false)) return;
+  Services.prefs.setBoolPref(leaderPref, true);
+  Services.prefs.savePrefFile(null);
 
   const wait = milliseconds => new Promise(resolve => window.setTimeout(resolve, milliseconds));
   function write(name, value) {
@@ -38,26 +42,44 @@
   function tabURL(tab) {
     return tab?.linkedBrowser?.currentURI?.spec || "";
   }
-  function snapshot() {
+  function snapshot(browserWindow = window) {
+    let sessionWorkspace = "";
+    try {
+      sessionWorkspace = SessionStore.getCustomWindowValue(
+        browserWindow,
+        browserWindow.FluxionWorkspaceTabs?.WINDOW_VALUE_KEY || "fluxion-active-workspace",
+      );
+    } catch (_) {}
     return {
-      currentWorkspace: window.FluxionUI.currentWorkspace(),
-      isPrivate,
-      workspaces: window.FluxionUI.workspaces(),
-      tabs: [...window.gBrowser.tabs].map(tab => {
+      currentWorkspace: browserWindow.FluxionUI.currentWorkspace(),
+      sessionWorkspace,
+      isPrivate: PrivateBrowsingUtils.isWindowPrivate(browserWindow),
+      workspaces: browserWindow.FluxionUI.workspaces(),
+      tabs: [...browserWindow.gBrowser.tabs].map(tab => {
         const split = tab.splitview?.tabs
           ?.map(member => tabURL(member)).sort().join("|") || "";
         return {
           url: tabURL(tab),
-          workspace: window.FluxionUI.tabWorkspace(tab),
+          workspace: browserWindow.FluxionUI.tabWorkspace(tab),
           pinned: tab.pinned,
           group: tab.group?.label || "",
           split,
-          splitOrientation: tab.splitview ? window.FluxionUI.splitOrientation(tab) : "",
-          active: window.FluxionUI.workspaceTabActive(tab),
-          selected: tab === window.gBrowser.selectedTab,
+          splitOrientation: tab.splitview ? browserWindow.FluxionUI.splitOrientation(tab) : "",
+          active: browserWindow.FluxionUI.workspaceTabActive(tab),
+          selected: tab === browserWindow.gBrowser.selectedTab,
         };
       }),
     };
+  }
+  function normalWindows() {
+    return [...Services.wm.getEnumerator("navigator:browser")]
+      .filter(browserWindow =>
+        !browserWindow.closed && browserWindow.FluxionUI &&
+        !PrivateBrowsingUtils.isWindowPrivate(browserWindow)
+      );
+  }
+  function normalSnapshots() {
+    return normalWindows().map(snapshot);
   }
   async function waitFor(check, timeout = 24000) {
     const deadline = Date.now() + timeout;
@@ -75,7 +97,7 @@
       wait(milliseconds),
     ]);
   }
-  async function flushTabs(tabs) {
+  async function flushTabs(tabs, browserWindow = window) {
     await Promise.all(tabs.map(tab => {
       try {
         return withDeadline(tab.linkedBrowser?.frameLoader?.requestTabStateFlush?.());
@@ -85,7 +107,7 @@
     }));
     // Reading the native state after the content flush forces SessionStore to
     // project current tab, group, split, pin, and custom-attribute data.
-    SessionStore.getWindowState(window);
+    SessionStore.getWindowState(browserWindow);
     await wait(400);
   }
 
@@ -113,17 +135,28 @@
     while (window.FluxionUI.workspaces().findIndex(workspace => workspace.id === research.id) > 2) {
       if (!window.FluxionUI.moveWorkspace(research.id, -1)) break;
     }
+    const windowsBefore = new Set(normalWindows());
+    window.OpenBrowserWindow();
+    const companionResult = await waitFor(() => {
+      const candidate = normalWindows().find(browserWindow => !windowsBefore.has(browserWindow));
+      return { ok: Boolean(candidate?.FluxionUI), candidate };
+    });
+    const companion = companionResult.candidate;
+    if (!companion) throw new Error("companion Fluxion window did not open");
     window.FluxionUI.switchWorkspace("build");
 
-    const makeTab = (url, workspace = "build") => {
-      const tab = window.gBrowser.addTrustedTab(url, { skipAnimation: true });
-      window.FluxionUI.setTabWorkspace(tab, workspace);
+    const makeTab = (browserWindow, url, workspace = "build") => {
+      const tab = browserWindow.gBrowser.addTrustedTab(url, { skipAnimation: true });
+      browserWindow.FluxionUI.setTabWorkspace(tab, workspace);
       return tab;
     };
-    const groupTabs = [makeTab(urls.groupA), makeTab(urls.groupB)];
-    const splitTabs = [makeTab(urls.splitA), makeTab(urls.splitB)];
-    const pinned = makeTab(urls.pinned);
-    const focusTabs = [makeTab(urls.focusIdle, "focus"), makeTab(urls.focusActive, "focus")];
+    const groupTabs = [makeTab(window, urls.groupA), makeTab(window, urls.groupB)];
+    const splitTabs = [makeTab(window, urls.splitA), makeTab(window, urls.splitB)];
+    const pinned = makeTab(window, urls.pinned);
+    const focusTabs = [
+      makeTab(window, urls.focusIdle, "focus"),
+      makeTab(window, urls.focusActive, "focus"),
+    ];
     const group = window.gBrowser.addTabGroup(groupTabs, {
       label: "Recovery Lab", color: "green", insertBefore: groupTabs[0],
     });
@@ -139,20 +172,33 @@
     window.FluxionUI.switchWorkspace("build");
     window.gBrowser.selectedTab = splitTabs[0];
     await wait(100);
+    const companionBuild = makeTab(companion, urls.companionBuild, "build");
+    const companionLife = makeTab(companion, urls.companionLife, "life");
+    companion.FluxionUI.switchWorkspace("build");
+    companion.gBrowser.selectedTab = companionBuild;
+    await wait(100);
+    companion.FluxionUI.switchWorkspace("life");
+    companion.gBrowser.selectedTab = companionLife;
+    await wait(100);
     write("fluxion.recovery.seed.progress", "native-layout-created");
 
     const keep = new Set([...groupTabs, ...splitTabs, pinned, ...focusTabs]);
     for (const tab of [...window.gBrowser.tabs]) {
       if (!keep.has(tab)) window.gBrowser.removeTab(tab, { animate: false });
     }
+    const companionKeep = new Set([companionBuild, companionLife]);
+    for (const tab of [...companion.gBrowser.tabs]) {
+      if (!companionKeep.has(tab)) companion.gBrowser.removeTab(tab, { animate: false });
+    }
     write("fluxion.recovery.seed.progress", "extra-tabs-removed");
     await wait(1800);
     write("fluxion.recovery.seed.progress", "flushing-sessionstore");
     await flushTabs([...groupTabs, ...splitTabs, pinned, ...focusTabs]);
+    await flushTabs([companionBuild, companionLife], companion);
     write("fluxion.recovery.seed.progress", "sessionstore-projected");
-    const validation = FluxionSessionRecovery.validateNormal(snapshot());
+    const validation = FluxionSessionRecovery.validateWindowSet(normalSnapshots());
     if (!validation.ok) throw new Error(`seed state invalid: ${validation.reasons.join("; ")}`);
-    write("fluxion.recovery.seed.health", "workspace-tabs-active-pages-groups-stacked-split-seeded");
+    write("fluxion.recovery.seed.health", "two-window-workspaces-tabs-groups-stacked-split-seeded");
     await quit();
   }
 
@@ -166,19 +212,36 @@
     ) {
       throw new Error("keyword-only Browser Memory did not survive startup without ML");
     }
-    let result = await waitFor(() => FluxionSessionRecovery.validateNormal(snapshot()));
+    let result = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
     if (!result.ok) throw new Error(`session restore invalid: ${result.reasons.join("; ")}`);
-    window.FluxionUI.switchWorkspace("focus");
+    const primary = normalWindows().find(browserWindow =>
+      [...browserWindow.gBrowser.tabs].some(tab => tabURL(tab) === FluxionSessionRecovery.URLS.groupA)
+    );
+    const companion = normalWindows().find(browserWindow =>
+      [...browserWindow.gBrowser.tabs].some(tab => tabURL(tab) === FluxionSessionRecovery.URLS.companionLife)
+    );
+    if (!primary || !companion || primary === companion) {
+      throw new Error("restored window identities were not distinct");
+    }
+    primary.FluxionUI.switchWorkspace("focus");
     await wait(100);
-    if (tabURL(window.gBrowser.selectedTab) !== FluxionSessionRecovery.URLS.focusActive) {
+    if (tabURL(primary.gBrowser.selectedTab) !== FluxionSessionRecovery.URLS.focusActive) {
       throw new Error("Focus did not resume its active page after restart");
     }
-    window.FluxionUI.switchWorkspace("build");
+    primary.FluxionUI.switchWorkspace("build");
     await wait(100);
-    result = FluxionSessionRecovery.validateNormal(snapshot());
+    result = FluxionSessionRecovery.validateWindowSet(normalSnapshots());
     if (!result.ok) throw new Error(`workspace resume invalid: ${result.reasons.join("; ")}`);
-    write("fluxion.recovery.restore.health", "workspace-tabs-active-pages-groups-stacked-split-restored");
-    await flushTabs([...window.gBrowser.tabs]);
+    if (
+      companion.FluxionUI.currentWorkspace() !== "life" ||
+      tabURL(companion.gBrowser.selectedTab) !== FluxionSessionRecovery.URLS.companionLife
+    ) {
+      throw new Error("operating the primary window changed the companion workspace");
+    }
+    write("fluxion.recovery.restore.health", "two-window-workspaces-tabs-groups-stacked-split-restored");
+    for (const browserWindow of normalWindows()) {
+      await flushTabs([...browserWindow.gBrowser.tabs], browserWindow);
+    }
     await quit();
   }
 
@@ -205,7 +268,12 @@
   }
 
   async function validatePrivateAbsence() {
-    const result = FluxionSessionRecovery.validatePrivateAbsence(snapshot());
+    await SessionStore.promiseAllWindowsRestored;
+    const restored = await waitFor(() =>
+      FluxionSessionRecovery.validateWindowSet(normalSnapshots(), { requirePrivateAbsence: true })
+    );
+    if (!restored.ok) throw new Error(`post-private window restore invalid: ${restored.reasons.join("; ")}`);
+    const result = FluxionSessionRecovery.validatePrivateAbsence(normalSnapshots());
     if (!result.ok) throw new Error(`post-private tab isolation invalid: ${result.reasons.join("; ")}`);
     const privateURL = FluxionSessionRecovery.URLS.privateOnly;
     const historyRecord = await PlacesUtils.history.fetch(privateURL);

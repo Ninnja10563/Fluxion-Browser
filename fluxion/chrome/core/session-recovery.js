@@ -10,6 +10,8 @@
     pinned: "https://example.com/?fluxion-session=pinned",
     focusIdle: "https://example.org/?fluxion-session=focus-idle",
     focusActive: "https://example.com/?fluxion-session=focus-active",
+    companionBuild: "https://example.org/?fluxion-session=companion-build",
+    companionLife: "https://example.com/?fluxion-session=companion-life",
     privateOnly: "https://example.com/?fluxion-private-only=1",
   });
   const EXPECTED_NORMAL_URLS = Object.freeze([
@@ -60,6 +62,7 @@
     const reasons = [];
     if (snapshot?.isPrivate) reasons.push("restored window is private");
     if (clean(snapshot?.currentWorkspace, 80) !== "build") reasons.push("active workspace was not restored");
+    if (clean(snapshot?.sessionWorkspace, 80) !== "build") reasons.push("window workspace SessionStore value was not restored");
     for (const url of EXPECTED_NORMAL_URLS) {
       if (!tabs.some(tab => tab.url === url)) reasons.push(`missing ${url}`);
     }
@@ -99,6 +102,59 @@
     return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
   }
 
+  function validateWindowSet(snapshots, { requirePrivateAbsence = false } = {}) {
+    const windows = Array.isArray(snapshots) ? snapshots : [];
+    const reasons = [];
+    if (windows.length !== 2) reasons.push(`expected 2 restored normal windows, found ${windows.length}`);
+    const primary = windows.find(snapshot =>
+      (snapshot?.tabs || []).some(tab => clean(tab?.url) === URLS.groupA)
+    );
+    const companion = windows.find(snapshot =>
+      (snapshot?.tabs || []).some(tab => clean(tab?.url) === URLS.companionLife)
+    );
+    if (!primary) {
+      reasons.push("primary recovery window was not restored");
+    } else {
+      reasons.push(...validateNormal(primary, { requirePrivateAbsence }).reasons.map(reason => `primary: ${reason}`));
+    }
+    if (!companion) {
+      reasons.push("companion recovery window was not restored");
+    } else {
+      const tabs = (companion.tabs || []).map(normaliseTab);
+      const workspaces = (companion.workspaces || []).map(workspace => ({
+        id: clean(workspace?.id, 80),
+        name: clean(workspace?.name, 80),
+        accent: clean(workspace?.accent, 24),
+        icon: clean(workspace?.icon, 24),
+      }));
+      if (companion.isPrivate) reasons.push("companion: restored window is private");
+      if (clean(companion.currentWorkspace, 80) !== "life") {
+        reasons.push("companion: active Life workspace was not restored");
+      }
+      if (clean(companion.sessionWorkspace, 80) !== "life") {
+        reasons.push("companion: window workspace SessionStore value was not restored");
+      }
+      const build = tabs.find(tab => tab.url === URLS.companionBuild);
+      const life = tabs.find(tab => tab.url === URLS.companionLife);
+      if (!build || build.workspace !== "build" || !build.active) {
+        reasons.push("companion: remembered Build page was not restored");
+      }
+      if (!life || life.workspace !== "life" || !life.active || !life.selected) {
+        reasons.push("companion: selected Life page was not restored");
+      }
+      if (JSON.stringify(workspaces) !== JSON.stringify(EXPECTED_WORKSPACE_LIST)) {
+        reasons.push("companion: workspace metadata was not synchronized");
+      }
+      if (requirePrivateAbsence && tabs.some(tab => tab.url === URLS.privateOnly)) {
+        reasons.push("companion: private tab leaked into the normal session");
+      }
+    }
+    if (primary && companion && primary === companion) {
+      reasons.push("primary and companion state collapsed into one window");
+    }
+    return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
+  }
+
   function validatePrivate(snapshot) {
     const reasons = [];
     if (!snapshot?.isPrivate) reasons.push("window is not private");
@@ -109,9 +165,10 @@
   }
 
   function validatePrivateAbsence(snapshot) {
+    const snapshots = Array.isArray(snapshot) ? snapshot : [snapshot];
     const reasons = [];
-    if (snapshot?.isPrivate) reasons.push("post-private verification window is private");
-    if ((snapshot?.tabs || []).map(normaliseTab).some(tab => tab.url === URLS.privateOnly)) {
+    if (snapshots.some(item => item?.isPrivate)) reasons.push("post-private verification window is private");
+    if (snapshots.flatMap(item => item?.tabs || []).map(normaliseTab).some(tab => tab.url === URLS.privateOnly)) {
       reasons.push("private tab leaked into the normal session");
     }
     return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
@@ -119,7 +176,7 @@
 
   const api = Object.freeze({
     EXPECTED_NORMAL_URLS, EXPECTED_WORKSPACES, EXPECTED_WORKSPACE_LIST, URLS,
-    clean, normaliseTab, validateNormal,
+    clean, normaliseTab, validateNormal, validateWindowSet,
     validatePrivate, validatePrivateAbsence,
   });
   scope.FluxionSessionRecovery = api;

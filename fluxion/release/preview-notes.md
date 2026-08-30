@@ -8,6 +8,30 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.38 makes multiple Fluxion windows restore as independent working
+contexts instead of sharing one profile-wide active workspace:
+
+- persist the active workspace in Gecko SessionStore's native per-window
+  `extData`, beside the window's actual tabs and selected page;
+- retain the previous profile preference only as a migration/default for new
+  normal windows, while a restored window always prefers its own valid value;
+- prevent private-window workspace switching from rewriting that normal-window
+  fallback;
+- repair stale values safely through the current workspace list without
+  creating a Fluxion window/session database;
+- seed a primary window in Build and a companion window in Life, with a
+  separate remembered Build page inside the companion;
+- cleanly quit and restore both windows, switch the primary through Focus and
+  Build, and fail unless the companion remains on its selected Life page;
+- repeat the two-window assertion after a real private-window launch, while
+  continuing to reject the private URL from SessionStore, Places, and Browser
+  Memory;
+- extend the packaged gate to reject a missing window, merged window state,
+  profile-fallback collapse, or incorrect per-window active-page ownership.
+
+No URL or navigation state is copied into Fluxion preferences. Gecko remains
+the single owner of window restoration and crash recovery.
+
 Version 0.37 makes embeddings independently optional instead of forcing users
 to choose between semantic models and Browser Memory itself:
 

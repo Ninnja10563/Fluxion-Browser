@@ -41,7 +41,7 @@
     const pending = pendingRestoreWorkspace;
     pendingRestoreWorkspace = null;
     if (pending && currentWorkspace === pending) {
-      switchWorkspace(pending, { reconcileRestore: false });
+      switchWorkspace(pending, { reconcileRestore: false, updateProfileFallback: false });
     }
   }).catch(Cu.reportError);
 
@@ -509,8 +509,18 @@
   let splitOrientations = FluxionSplitViews.parseOrientationMap(
     privateWindow ? "" : Services.prefs.getStringPref(PREF_SPLIT_ORIENTATIONS, ""),
   );
-  let currentWorkspace = Services.prefs.getStringPref(PREF_CURRENT, workspaces[0].id);
-  if (!workspaces.some(item => item.id === currentWorkspace)) currentWorkspace = workspaces[0].id;
+  let restoredWindowWorkspace = "";
+  try {
+    restoredWindowWorkspace = SessionStore.getCustomWindowValue(
+      window,
+      FluxionWorkspaceTabs.WINDOW_VALUE_KEY,
+    );
+  } catch (_) {}
+  let currentWorkspace = FluxionWorkspaceTabs.windowWorkspace(
+    workspaces,
+    restoredWindowWorkspace,
+    Services.prefs.getStringPref(PREF_CURRENT, workspaces[0].id),
+  );
 
   for (const attribute of [TAB_WORKSPACE, TAB_WORKSPACE_ACTIVE, TAB_SPLIT_ORIENTATION]) {
     try {
@@ -1207,7 +1217,14 @@
       rememberWorkspaceTab(previous);
     }
     currentWorkspace = id;
-    Services.prefs.setStringPref(PREF_CURRENT, id);
+    try {
+      SessionStore.setCustomWindowValue(window, FluxionWorkspaceTabs.WINDOW_VALUE_KEY, id);
+    } catch (error) {
+      Cu.reportError(error);
+    }
+    if (!privateWindow && options.updateProfileFallback !== false) {
+      Services.prefs.setStringPref(PREF_CURRENT, id);
+    }
 
     let workspaceTabs = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === id);
     for (const tab of workspaceTabs) {
@@ -1253,7 +1270,7 @@
         }
       }
       notifyWorkspaceChange();
-      switchWorkspace(currentWorkspace);
+      switchWorkspace(currentWorkspace, { updateProfileFallback: false });
     },
   };
   Services.prefs.addObserver(PREF_WORKSPACES, workspacePrefObserver);
@@ -2583,7 +2600,7 @@
     tabWorkspace(tab);
     workspaceTabActive(tab);
   }
-  switchWorkspace(currentWorkspace);
+  switchWorkspace(currentWorkspace, { updateProfileFallback: false });
   render();
   applyActiveSplitOrientation();
   updateWindowTitle();

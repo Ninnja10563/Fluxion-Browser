@@ -85,11 +85,11 @@ run_stage() {
 run_stage \
   'normal session seed' \
   FLUXION_SESSION_SEED_TEST \
-  'user_pref("fluxion.recovery.seed.health", "workspace-tabs-active-pages-groups-stacked-split-seeded")'
+  'user_pref("fluxion.recovery.seed.health", "two-window-workspaces-tabs-groups-stacked-split-seeded")'
 run_stage \
   'normal session restoration' \
   FLUXION_SESSION_RESTORE_TEST \
-  'user_pref("fluxion.recovery.restore.health", "workspace-tabs-active-pages-groups-stacked-split-restored")'
+  'user_pref("fluxion.recovery.restore.health", "two-window-workspaces-tabs-groups-stacked-split-restored")'
 run_stage \
   'private-window boundary' \
   FLUXION_PRIVATE_ISOLATION_TEST \
@@ -100,4 +100,4 @@ run_stage \
   FLUXION_PRIVATE_ABSENCE_TEST \
   'user_pref("fluxion.recovery.absence.health", "private-tabs-history-memory-excluded")'
 
-printf 'Verified: native tabs, per-workspace active pages, pins, groups, stacked split orientation, workspaces, and keyword-only Browser Memory startup state restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2
+printf 'Verified: two normal windows retained distinct SessionStore-owned workspaces and active pages with native tabs, pins, groups, stacked split orientation, workspace metadata, and keyword-only Browser Memory startup state restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2

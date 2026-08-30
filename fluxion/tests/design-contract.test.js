@@ -86,7 +86,7 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(sessionRecovery, /await SessionStore\.promiseAllWindowsRestored/);
   assert.match(sessionRecovery, /new Set\(\[\.\.\.groupTabs, \.\.\.splitTabs, pinned, \.\.\.focusTabs\]\)/);
   assert.match(sessionRecovery, /PlacesUtils\.history\.fetch/);
-  assert.match(sessionRecovery, /validatePrivateAbsence\(snapshot\(\)\)/);
+  assert.match(sessionRecovery, /validatePrivateAbsence\(normalSnapshots\(\)\)/);
   assert.match(sessionRecovery, /FluxionMemory\.search/);
   assert.match(sessionRecovery, /PrivateBrowsingUtils\.isWindowPrivate/);
   assert.match(sessionRecovery, /setEmbeddingProvider\("disabled"\)/);
@@ -95,7 +95,11 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(macSessionVerifier, /FLUXION_SESSION_RESTORE_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ISOLATION_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ABSENCE_TEST/);
-  assert.match(macSessionVerifier, /workspace-tabs-active-pages-groups-stacked-split-restored/);
+  assert.match(chrome, /SessionStore\.setCustomWindowValue\(window, FluxionWorkspaceTabs\.WINDOW_VALUE_KEY, id\)/);
+  assert.match(chrome, /SessionStore\.getCustomWindowValue/);
+  assert.match(workspaceTabs, /WINDOW_VALUE_KEY = "fluxion-active-workspace"/);
+  assert.match(sessionRecovery, /validateWindowSet\(normalSnapshots\(\)\)/);
+  assert.match(macSessionVerifier, /two-window-workspaces-tabs-groups-stacked-split-restored/);
   assert.match(macSessionVerifier, /private-tabs-history-memory-excluded/);
 });
 

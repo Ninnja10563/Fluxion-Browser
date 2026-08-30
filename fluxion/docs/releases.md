@@ -106,16 +106,19 @@ passes:
    local semantic mode. After the scale gate cleans up its 200 tabs, the app
    settles on Search & Memory and packaging waits for the embedding row to
    remain visible for inspection.
-   A separate four-launch gate then seeds and cleanly quits a normal session,
-   restores its per-workspace active pages plus workspace names/order/symbols/
-   accents, pin/group/split state, and keyword-only Browser Memory choice,
-   switches between both remembered pages, opens and quits a private session,
-   and restores normal mode again without enabling ML.
+   A separate four-launch gate then seeds two normal windows and cleanly quits
+   the process. It restores each window's distinct SessionStore-owned workspace
+   and active page plus shared workspace names/order/symbols/accents,
+   pin/group/split state, and keyword-only Browser Memory choice. The gate
+   switches workspaces in the primary window while requiring the companion to
+   remain in Life, opens and quits a private session, and restores both normal
+   windows again without enabling ML.
    The seed opens the enriched Browser Memory SQLite store, so each clean quit
    also proves its profile-before-change shutdown blocker awaited connection
    closure instead of relying on process termination.
-   Publication is blocked if any workspace metadata changes or the private URL
-   appears in restored tabs, Gecko Places, or Browser Memory.
+   Publication is blocked if the windows merge, either active workspace falls
+   back to the profile-wide default, any workspace metadata changes, or the
+   private URL appears in restored tabs, Gecko Places, or Browser Memory.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

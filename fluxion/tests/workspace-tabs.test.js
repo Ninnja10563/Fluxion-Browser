@@ -2,7 +2,7 @@
 
 const test = require("node:test");
 const assert = require("node:assert/strict");
-const { markerPlan, preferredTab } = require("../chrome/core/workspace-tabs.js");
+const { WINDOW_VALUE_KEY, markerPlan, preferredTab, windowWorkspace } = require("../chrome/core/workspace-tabs.js");
 
 const tab = (id, workspace, options = {}) => ({ id, workspace, ...options });
 
@@ -35,4 +35,13 @@ test("marker plans leave exactly one active page in the selected workspace", () 
     { tab: second, remembered: true },
   ]);
   assert.deepEqual(markerPlan([first], "focus", first), []);
+});
+
+test("restored windows own their active workspace independently", () => {
+  const workspaces = [{ id: "focus" }, { id: "build" }, { id: "life" }];
+  assert.equal(WINDOW_VALUE_KEY, "fluxion-active-workspace");
+  assert.equal(windowWorkspace(workspaces, "build", "life"), "build");
+  assert.equal(windowWorkspace(workspaces, "missing", "life"), "life");
+  assert.equal(windowWorkspace(workspaces, "missing", "missing"), "focus");
+  assert.equal(windowWorkspace([], "build", "life"), "");
 });

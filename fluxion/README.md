@@ -21,8 +21,9 @@ The current preview is runnable and includes:
 - per-workspace active-page memory: returning to a workspace resumes the exact
   native tab last used there, with Gecko recency as a safe first-visit fallback;
 - packaged multi-launch recovery for workspace membership, active pages,
-  pinned tabs, native groups, and split views, with private tabs excluded from
-  the restored session;
+  per-window active workspaces, pinned tabs, native groups, and split views,
+  including two normal windows restored to different workspaces while private
+  tabs remain excluded from the session;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration;
 - local, evidence-backed tab-group suggestions across related ungrouped pages,

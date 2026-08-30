@@ -19,11 +19,26 @@ function normalSnapshot(overrides = {}) {
   ];
   return {
     currentWorkspace: "build",
+    sessionWorkspace: "build",
     isPrivate: false,
     workspaces: Recovery.EXPECTED_WORKSPACE_LIST.map(workspace => ({ ...workspace })),
     tabs,
     ...overrides,
   };
+}
+
+function windowSet(overrides = {}) {
+  const companion = {
+    currentWorkspace: "life",
+    sessionWorkspace: "life",
+    isPrivate: false,
+    workspaces: Recovery.EXPECTED_WORKSPACE_LIST.map(workspace => ({ ...workspace })),
+    tabs: [
+      { url: Recovery.URLS.companionBuild, workspace: "build", active: true },
+      { url: Recovery.URLS.companionLife, workspace: "life", active: true, selected: true },
+    ],
+  };
+  return [normalSnapshot(), companion, ...(overrides.extra || [])];
 }
 
 test("normal recovery requires workspaces, pins, groups, and native split identity", () => {
@@ -66,6 +81,32 @@ test("normal recovery requires workspace names, symbols, accents, and order", ()
   assert.match(result.reasons.join("\n"), /workspace names, symbols, accents, or order/);
 });
 
+test("multi-window recovery keeps distinct SessionStore-owned workspaces", () => {
+  assert.deepEqual(Recovery.validateWindowSet(windowSet()), { ok: true, reasons: [] });
+  const collapsed = windowSet();
+  collapsed[1].currentWorkspace = "build";
+  collapsed[1].sessionWorkspace = "build";
+  collapsed[1].tabs.find(tab => tab.url === Recovery.URLS.companionLife).selected = false;
+  const result = Recovery.validateWindowSet(collapsed);
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join("\n"), /companion: active Life workspace/);
+  assert.match(result.reasons.join("\n"), /companion: window workspace SessionStore/);
+  assert.match(result.reasons.join("\n"), /selected Life page/);
+  const staleMetadata = windowSet();
+  staleMetadata[1].workspaces[2].name = "Stale Research";
+  assert.match(
+    Recovery.validateWindowSet(staleMetadata).reasons.join("\n"),
+    /companion: workspace metadata was not synchronized/,
+  );
+});
+
+test("multi-window recovery rejects merged or missing windows", () => {
+  const missing = Recovery.validateWindowSet([normalSnapshot()]);
+  assert.equal(missing.ok, false);
+  assert.match(missing.reasons.join("\n"), /expected 2 restored normal windows/);
+  assert.match(missing.reasons.join("\n"), /companion recovery window/);
+});
+
 test("private tabs are rejected from a post-private normal restoration", () => {
   const snapshot = normalSnapshot();
   snapshot.tabs.push({ url: Recovery.URLS.privateOnly, workspace: "build" });
@@ -78,6 +119,10 @@ test("private tabs are rejected from a post-private normal restoration", () => {
     isPrivate: false,
     tabs: [{ url: "about:blank" }],
   }), { ok: true, reasons: [] });
+  assert.equal(Recovery.validatePrivateAbsence([
+    { isPrivate: false, tabs: [{ url: "about:blank" }] },
+    { isPrivate: false, tabs: [{ url: Recovery.URLS.privateOnly }] },
+  ]).ok, false);
 });
 
 test("private mode requires empty private-state Browser Memory results", () => {

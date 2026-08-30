@@ -79,9 +79,13 @@ the custom values are restored by Gecko before Fluxion's delayed UI starts.
 Switching back prefers that native tab and falls back to Gecko's `lastAccessed`
 recency when a workspace has not yet been visited. Moving tabs or deleting a
 workspace clears stale markers rather than overwriting the destination's resume
-point. The current workspace and sidebar state use Firefox preferences. This
-keeps crash recovery atomic with the actual tab session and avoids a second
-database whose state could drift from Firefox.
+point. Each window's current workspace is a bounded custom SessionStore window
+value, so two restored windows can remain in different workspaces. The former
+profile preference is retained only as a migration/default for a genuinely new
+normal window; private windows never rewrite it. Sidebar state remains a
+profile preference. This keeps crash recovery atomic with the actual tab and
+window session and avoids a second database whose state could drift from
+Firefox.
 
 Gecko may finish applying its native selected-tab state after Fluxion chrome is
 already interactive. Fluxion remembers the latest workspace chosen during that
@@ -102,17 +106,20 @@ Settings controls, while the multi-launch gate independently proves the
 metadata returns after Gecko restores the profile.
 
 Packaged recovery validation uses Gecko's real shutdown and startup path rather
-than serialising Fluxion state in a test fixture. One app launch creates tabs in
-Focus and Build, records a distinct active page in each, and adds a pinned tab,
-a native group, and a native split pair;
-content state is flushed through each frame loader before Gecko performs an
-attempted clean quit. A second app launch must recover all of those structures
-from the same profile. The gate then opens a real private window, confirms that
-Browser Memory returns its private state and cannot be enabled, quits, and
-launches normal mode once more. That final launch must retain the normal session
-while the private URL is absent from tabs, Places history, and Browser Memory.
-This exercises the same SessionStore and private-origin boundaries users rely
-on; Fluxion does not maintain a shadow session database.
+than serialising Fluxion state in a test fixture. One app launch creates two
+normal windows. The primary window records distinct active pages in Focus and
+Build and adds a pinned tab, a native group, and a native split pair. The
+companion records its own Build page but remains visibly selected in Life.
+Content state is flushed through each frame loader and both native window
+records before Gecko performs an attempted clean quit. A second app launch must
+recover both windows separately, including their Build and Life SessionStore
+window values; switching the primary must not change the companion. The gate
+then opens a real private window, confirms that Browser Memory returns its
+private state and cannot be enabled, quits, and launches normal mode once more.
+That final launch must retain both normal windows while the private URL is
+absent from tabs, Places history, and Browser Memory. This exercises the same
+SessionStore and private-origin boundaries users rely on; Fluxion does not
+maintain a shadow session database.
 
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,
