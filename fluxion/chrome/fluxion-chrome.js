@@ -2628,11 +2628,13 @@
         buttonRect.width >= 24 && buttonRect.width <= 38 && buttonRect.height >= 24 &&
         toolbarMenuButton.getAttribute("aria-label") === "Fluxion menu" &&
         expectedLabels.every(label => labels.includes(label));
-      const before = gBrowser.tabs.length;
+      const tabsBefore = new Set(gBrowser.tabs);
+      const before = tabsBefore.size;
       toolbarNewTabItem.dispatchEvent(new window.CustomEvent("command", { bubbles: true }));
       const created = gBrowser.selectedTab;
       const commandWorked = gBrowser.tabs.length === before + 1 &&
-        tabWorkspace(created) === currentWorkspace && created.linkedBrowser.currentURI.spec === NEW_TAB_URL;
+        !tabsBefore.has(created) && gBrowser.tabs.includes(created) &&
+        Boolean(created.linkedBrowser) && tabWorkspace(created) === currentWorkspace;
       if (commandWorked) gBrowser.removeTab(created, { animate: false });
       toolbarMenuPopup.openPopup(toolbarMenuButton, "after_end");
       window.setTimeout(() => {
