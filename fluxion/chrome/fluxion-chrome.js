@@ -32,12 +32,15 @@
   let pointerCloseHold = null;
   let renderDeferredForClose = false;
   let focusTabAfterRender = null;
+  let focusGroupAfterRender = null;
   let focusWorkspaceAfterRender = null;
   const closingTabs = new Set();
+  const groupElements = new Map();
   const tabElements = new Map();
   const workspaceElements = new Map();
   let sessionRestoreSettled = false;
   let pendingRestoreWorkspace = null;
+  let groupRenderSequence = 0;
 
   Promise.resolve(SessionStore.promiseAllWindowsRestored).then(() => {
     sessionRestoreSettled = true;
@@ -922,9 +925,10 @@
   const openLabel = create("div", "fluxion-section-label");
   openLabel.textContent = "Flow";
   const tabsList = create("div", "fluxion-tabs");
-  tabsList.setAttribute("role", "tablist");
+  tabsList.setAttribute("role", "tree");
   tabsList.setAttribute("aria-label", "Open tabs in current workspace");
   tabsList.setAttribute("aria-orientation", "vertical");
+  tabsList.setAttribute("aria-multiselectable", "true");
 
   const footer = create("div", "fluxion-footer");
   const newTabButton = create("button", "fluxion-new-tab");
@@ -1570,6 +1574,49 @@
       .filter(element => !element.closest(".fluxion-group-tabs[hidden]"));
   }
 
+  function renderedTreeItems() {
+    return [...tabsList.querySelectorAll(".fluxion-group-heading, .fluxion-tab")]
+      .filter(element => !element.closest(".fluxion-group-tabs[hidden]"));
+  }
+
+  function renderedPinnedTabElements() {
+    return [...pinnedTabs.querySelectorAll(".fluxion-tab")];
+  }
+
+  function rovingItemsFor(element) {
+    return element?.closest(".fluxion-pinned-tabs")
+      ? renderedPinnedTabElements()
+      : renderedTreeItems();
+  }
+
+  function focusFlowItem(element) {
+    if (!element?.isConnected) return false;
+    for (const candidate of rovingItemsFor(element)) candidate.tabIndex = -1;
+    element.tabIndex = 0;
+    element.focus({ preventScroll: true });
+    element.scrollIntoView({ block: "nearest" });
+    return true;
+  }
+
+  function activateFlowNavigationTarget(element) {
+    const tab = element?._fluxionTab;
+    if (!tab) return focusFlowItem(element);
+    focusTabAfterRender = tab;
+    gBrowser.selectedTab = tab;
+    scheduleRender();
+    return true;
+  }
+
+  function moveFlowFocus(current, key, items = renderedTreeItems(), orientation = "vertical") {
+    const targetIndex = FluxionFlowNavigation.rovingIndex(
+      items.length,
+      items.indexOf(current),
+      key,
+      orientation,
+    );
+    return activateFlowNavigationTarget(items[targetIndex]);
+  }
+
   function clearTabDropFeedback() {
     if (dragTargetElement) {
       dragTargetElement.removeAttribute("data-drop-intent");
@@ -1828,7 +1875,7 @@
     });
   }
 
-  function createTabElement(tab) {
+  function createTabElement(tab, { level = 1, role = "treeitem" } = {}) {
     const item = create("div", "fluxion-tab");
     const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
     const status = describeTab(tab, sleeping);
@@ -1837,8 +1884,14 @@
     item.tabIndex = tab === gBrowser.selectedTab ? 0 : -1;
     item.draggable = true;
     item._fluxionTab = tab;
-    item.setAttribute("role", "tab");
-    item.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown Home End Delete M");
+    item.setAttribute("role", role);
+    if (role === "treeitem") item.setAttribute("aria-level", String(level));
+    item.setAttribute(
+      "aria-keyshortcuts",
+      role === "tab"
+        ? "ArrowLeft ArrowRight Home End Delete M"
+        : "ArrowUp ArrowDown Home End ArrowLeft Delete M",
+    );
     item.dataset.active = String(tab === gBrowser.selectedTab);
     item.dataset.status = status.indicators.map(indicator => indicator.kind).join(" ");
     item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab || tab.multiselected));
@@ -1946,19 +1999,24 @@
       if (event.button === 1) closeWithStability(tab, item);
     });
     item.addEventListener("keydown", event => {
-      if (FluxionFlowNavigation.handlesRovingKey(event.key)) {
+      const pinned = Boolean(item.closest(".fluxion-pinned-tabs"));
+      const orientation = pinned ? "horizontal" : "vertical";
+      if (!pinned && event.key === "ArrowLeft") {
+        const heading = item.closest(".fluxion-group")
+          ?.querySelector(":scope > .fluxion-group-heading");
+        if (!heading) return;
         event.preventDefault();
         event.stopPropagation();
-        const rendered = renderedTabElements();
-        const targetIndex = FluxionFlowNavigation.rovingIndex(
-          rendered.length, rendered.indexOf(item), event.key,
+        focusFlowItem(heading);
+      } else if (FluxionFlowNavigation.handlesRovingKey(event.key, orientation)) {
+        event.preventDefault();
+        event.stopPropagation();
+        moveFlowFocus(
+          item,
+          event.key,
+          pinned ? renderedPinnedTabElements() : renderedTreeItems(),
+          orientation,
         );
-        const targetTab = rendered[targetIndex]?._fluxionTab;
-        if (targetTab) {
-          focusTabAfterRender = targetTab;
-          gBrowser.selectedTab = targetTab;
-          scheduleRender();
-        }
       } else if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
         focusTabAfterRender = tab;
@@ -2010,7 +2068,7 @@
     return item;
   }
 
-  function createSplitElement(splitView, tabs) {
+  function createSplitElement(splitView, tabs, { level = 1 } = {}) {
     const item = create("div", "fluxion-split");
     const orientation = FluxionSplitViews.orientationOf(splitView);
     item.setAttribute("role", "group");
@@ -2020,16 +2078,16 @@
     );
     item.dataset.orientation = orientation;
     item.dataset.active = String(Boolean(splitView?.hasActiveTab));
-    for (const tab of tabs) item.appendChild(createTabElement(tab));
+    for (const tab of tabs) item.appendChild(createTabElement(tab, { level }));
     return item;
   }
 
-  function appendSplitRows(container, tabs) {
+  function appendSplitRows(container, tabs, { level = 1 } = {}) {
     for (const row of FluxionSplitViews.projectSplitRows(tabs)) {
       container.appendChild(
         row.kind === "split"
-          ? createSplitElement(row.splitView, row.tabs)
-          : createTabElement(row.tab),
+          ? createSplitElement(row.splitView, row.tabs, { level })
+          : createTabElement(row.tab, { level }),
       );
     }
   }
@@ -2080,6 +2138,7 @@
       Boolean(group.collapsed),
     );
     const item = create("div", "fluxion-group");
+    item.setAttribute("role", "none");
     item.classList.toggle("is-collapsed", Boolean(group.collapsed));
     item.classList.toggle(
       "has-visible-active",
@@ -2089,6 +2148,14 @@
 
     const heading = create("button", "fluxion-group-heading");
     heading.type = "button";
+    heading.tabIndex = -1;
+    heading._fluxionGroup = group;
+    heading.setAttribute("role", "treeitem");
+    heading.setAttribute("aria-level", "1");
+    heading.setAttribute(
+      "aria-keyshortcuts",
+      "ArrowUp ArrowDown Home End ArrowLeft ArrowRight Enter Space",
+    );
     heading.classList.toggle("has-active", tabs.includes(gBrowser.selectedTab));
     heading.setAttribute("aria-expanded", String(!group.collapsed));
     heading.setAttribute(
@@ -2115,7 +2182,32 @@
       : `${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}`;
     heading.append(disclosure, mark, label, groupCount);
     heading.addEventListener("click", () => {
+      focusGroupAfterRender = group;
       group.collapsed = !group.collapsed;
+      scheduleRender();
+    });
+    heading.addEventListener("keydown", event => {
+      if (FluxionFlowNavigation.handlesRovingKey(event.key)) {
+        event.preventDefault();
+        event.stopPropagation();
+        moveFlowFocus(heading, event.key);
+        return;
+      }
+      const action = FluxionFlowNavigation.groupKeyAction(
+        event.key,
+        Boolean(group.collapsed),
+      );
+      if (!action) return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (action === "first-child") {
+        const firstChild = [...item.querySelectorAll(".fluxion-group-tabs .fluxion-tab")]
+          .find(element => !element.closest(".fluxion-group-tabs[hidden]"));
+        activateFlowNavigationTarget(firstChild);
+        return;
+      }
+      focusGroupAfterRender = group;
+      group.collapsed = action === "toggle" ? !group.collapsed : action === "collapse";
       scheduleRender();
     });
     heading.addEventListener("contextmenu", event => {
@@ -2139,9 +2231,14 @@
     });
 
     const groupTabs = create("div", "fluxion-group-tabs");
+    groupTabs.id = `fluxion-group-tabs-${++groupRenderSequence}`;
+    groupTabs.setAttribute("role", "group");
+    heading.setAttribute("aria-controls", groupTabs.id);
+    heading.setAttribute("aria-owns", groupTabs.id);
     groupTabs.hidden = projection.visibleTabs.length === 0;
-    appendSplitRows(groupTabs, projection.visibleTabs);
+    appendSplitRows(groupTabs, projection.visibleTabs, { level: 2 });
     item.append(heading, groupTabs);
+    groupElements.set(group, heading);
     return item;
   }
 
@@ -2210,15 +2307,19 @@
     }
     const focusedTabBeforeRender = document.activeElement
       ?.closest?.(".fluxion-tab")?._fluxionTab || null;
+    const focusedGroupBeforeRender = document.activeElement
+      ?.closest?.(".fluxion-group-heading")?._fluxionGroup || null;
     renderQueued = false;
     renderWorkspaces();
+    groupElements.clear();
     tabElements.clear();
+    groupRenderSequence = 0;
     pinnedTabs.replaceChildren();
     tabsList.replaceChildren();
     const visible = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === currentWorkspace);
     const visibleSet = new Set(visible);
     for (const tab of visible.filter(tab => tab.pinned)) {
-      pinnedTabs.appendChild(createTabElement(tab));
+      pinnedTabs.appendChild(createTabElement(tab, { role: "tab" }));
     }
     const rows = FluxionTabGroups.projectTabRows(
       visible.filter(tab => !tab.pinned),
@@ -2250,21 +2351,33 @@
     pinnedLabel.hidden = pinnedTabs.childElementCount === 0;
     pinnedTabs.hidden = pinnedTabs.childElementCount === 0;
     count.textContent = String(visible.length);
-    const rendered = renderedTabElements();
-    rendered.forEach((element, index) => {
+    const pinnedRendered = renderedPinnedTabElements();
+    pinnedRendered.forEach((element, index) => {
       element.setAttribute("aria-posinset", String(index + 1));
-      element.setAttribute("aria-setsize", String(rendered.length));
+      element.setAttribute("aria-setsize", String(pinnedRendered.length));
     });
+    if (pinnedRendered.length && !pinnedRendered.some(element => element.tabIndex === 0)) {
+      pinnedRendered[0].tabIndex = 0;
+    }
+    const treeItems = renderedTreeItems();
+    if (treeItems.length && !treeItems.some(element => element.tabIndex === 0)) {
+      treeItems[0].tabIndex = 0;
+    }
     const requestedTabFocus = focusTabAfterRender;
+    const requestedGroupFocus = focusGroupAfterRender;
     focusTabAfterRender = null;
+    focusGroupAfterRender = null;
     const tabToRefocus = requestedTabFocus ||
-      (!focusWorkspaceAfterRender ? focusedTabBeforeRender : null);
+      (!requestedGroupFocus && !focusWorkspaceAfterRender ? focusedTabBeforeRender : null);
+    const groupToRefocus = requestedGroupFocus ||
+      (!requestedTabFocus && !focusWorkspaceAfterRender ? focusedGroupBeforeRender : null);
     if (tabToRefocus) {
       const element = tabElements.get(tabToRefocus);
       if (element && !element.closest(".fluxion-group-tabs[hidden]")) {
-        element.focus({ preventScroll: true });
-        element.scrollIntoView({ block: "nearest" });
+        focusFlowItem(element);
       }
+    } else if (groupToRefocus) {
+      focusFlowItem(groupElements.get(groupToRefocus));
     } else if (focusWorkspaceAfterRender) {
       const element = workspaceElements.get(focusWorkspaceAfterRender);
       focusWorkspaceAfterRender = null;
@@ -3160,15 +3273,19 @@
           groupItem?.classList.contains("has-visible-active") &&
           groupItem.querySelectorAll(".fluxion-tab").length === 1 &&
           activeRow?.isConnected && activeRow.dataset.active === "true" &&
+          activeRow?.getAttribute("role") === "treeitem" &&
+          activeRow?.getAttribute("aria-level") === "2" &&
+          groupItem.querySelector(".fluxion-group-heading")?.getAttribute("role") === "treeitem" &&
+          groupItem.querySelector(".fluxion-group-tabs")?.getAttribute("role") === "group" &&
           groupItem.querySelector(".fluxion-group-count")?.textContent === "+2"
         );
-        const rowsBeforeMove = renderedTabElements();
+        const rowsBeforeMove = renderedTreeItems();
         const activeIndex = rowsBeforeMove.indexOf(activeRow);
         const expectedNextRow = rowsBeforeMove[
           FluxionFlowNavigation.rovingIndex(rowsBeforeMove.length, activeIndex, "ArrowDown")
         ];
         const expectedNextTab = expectedNextRow?._fluxionTab;
-        activeRow?.focus();
+        focusFlowItem(activeRow);
         activeRow?.dispatchEvent(new window.KeyboardEvent("keydown", {
           key: "ArrowDown",
           bubbles: true,
@@ -3179,23 +3296,16 @@
           );
           const keyboardSelectedTab = gBrowser.selectedTab;
           const keyboardFocusedTab = document.activeElement?._fluxionTab;
+          const inactiveHeading = inactiveItem?.querySelector(".fluxion-group-heading");
           const keyboardContinuous = Boolean(
             expectedNextTab &&
             !fixtureTabs.includes(expectedNextTab) &&
             keyboardSelectedTab === expectedNextTab &&
             keyboardFocusedTab === expectedNextTab &&
-            inactiveItem?.querySelectorAll(".fluxion-tab").length === 0
+            inactiveItem?.querySelectorAll(".fluxion-tab").length === 0 &&
+            renderedTreeItems().filter(element => element.tabIndex === 0).length === 1
           );
-          if (initiallyContinuous && keyboardContinuous) {
-            Services.prefs.setStringPref(
-              "fluxion.groups.collapsed.health",
-              "active-page-visible-and-keyboard-continuous",
-            );
-            if (Services.prefs.prefHasUserValue("fluxion.groups.collapsed.visual.error")) {
-              Services.prefs.clearUserPref("fluxion.groups.collapsed.visual.error");
-            }
-            finish();
-          } else {
+          if (!initiallyContinuous || !keyboardContinuous || !inactiveHeading) {
             finish(
               `initial=${initiallyContinuous} keyboard=${keyboardContinuous} ` +
                 `collapsed=${Boolean(collapsedGroup.collapsed)} ` +
@@ -3204,7 +3314,57 @@
                 `selected=${keyboardSelectedTab?.getAttribute("label") || "none"} ` +
                 `focused=${keyboardFocusedTab?.getAttribute("label") || "none"}`,
             );
+            return;
           }
+          focusFlowItem(inactiveHeading);
+          inactiveHeading.dispatchEvent(new window.KeyboardEvent("keydown", {
+            key: "ArrowRight",
+            bubbles: true,
+          }));
+          window.requestAnimationFrame(() => {
+            const expandedItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+              candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
+            );
+            const expandedHeading = expandedItem?.querySelector(".fluxion-group-heading");
+            const expanded = Boolean(
+              !collapsedGroup.collapsed &&
+              expandedItem?.querySelectorAll(".fluxion-tab").length === 3 &&
+              document.activeElement === expandedHeading &&
+              renderedTreeItems().filter(element => element.tabIndex === 0).length === 1
+            );
+            expandedHeading?.dispatchEvent(new window.KeyboardEvent("keydown", {
+              key: "ArrowLeft",
+              bubbles: true,
+            }));
+            window.requestAnimationFrame(() => {
+              const collapsedItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+                candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
+              );
+              const collapsedHeading = collapsedItem?.querySelector(".fluxion-group-heading");
+              const collapsedByKeyboard = Boolean(
+                collapsedGroup.collapsed &&
+                collapsedItem?.querySelectorAll(".fluxion-tab").length === 0 &&
+                document.activeElement === collapsedHeading &&
+                collapsedHeading?.tabIndex === 0 &&
+                renderedTreeItems().filter(element => element.tabIndex === 0).length === 1
+              );
+              if (expanded && collapsedByKeyboard) {
+                Services.prefs.setStringPref(
+                  "fluxion.groups.collapsed.health",
+                  "active-page-visible-and-group-heading-roving",
+                );
+                if (Services.prefs.prefHasUserValue("fluxion.groups.collapsed.visual.error")) {
+                  Services.prefs.clearUserPref("fluxion.groups.collapsed.visual.error");
+                }
+                finish();
+              } else {
+                finish(
+                  `initial=${initiallyContinuous} keyboard=${keyboardContinuous} ` +
+                    `expanded=${expanded} collapsedByKeyboard=${collapsedByKeyboard}`,
+                );
+              }
+            });
+          });
         }, 80);
       });
     };

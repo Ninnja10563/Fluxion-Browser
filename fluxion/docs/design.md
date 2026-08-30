@@ -17,6 +17,9 @@ another product's layout:
   macOS apps benefit from one clearly scoped, consistently placed search entry.
 - [Safari pinned sites and Tab Groups](https://support.apple.com/guide/safari/pin-frequently-visited-websites-ibrw0495694f/mac):
   persistent sites should remain compact and survive relaunches.
+- [WAI-ARIA tree keyboard guidance](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/):
+  one composite Tab stop and spatial arrow navigation make nested group labels
+  and pages predictable without conflating focus with selection.
 
 SigmaOS is deliberately excluded as a reference.
 
@@ -42,7 +45,11 @@ SigmaOS is deliberately excluded as a reference.
 - Ordinary tabs are flat 32px rows. A selected tab uses one quiet surface and a
   2px workspace-coloured rule; it does not become a floating card.
 - Pinned tabs are icon-only and spatially stable. Their titles remain available
-  through native tooltips.
+  through native tooltips. Left/Right moves within their horizontal row.
+- Ordinary pages and native group headings form one vertical keyboard tree.
+  Up/Down follows visible order; Right expands or enters a group; Left returns
+  to a parent or collapses it. Focusing a heading never changes the rendered
+  webpage.
 - Page activity is expressed with small geometric marks beside the title or on
   the favicon corner in compact Flow. Loading may move; capture, picture-in-
   picture, attention, sleep, crash, and audio state remain still and legible in

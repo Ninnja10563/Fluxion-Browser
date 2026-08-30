@@ -16,10 +16,11 @@ The current preview is runnable and includes:
   picture-in-picture, camera/microphone/screen-sharing, crash, sleep, and audio
   indicators, working media controls, reordering, pinning, duplication, and
   native tab session restoration;
-- roving keyboard focus for tabs and workspaces, arrow/Home/End navigation,
-  stable focus after selection or close, pointer-close rows that hold their
-  position against accidental repeat clicks and then compress on movement,
-  and a packaged 200-tab render gate;
+- one-stop roving keyboard focus for workspaces, pinned apps, ordinary tabs,
+  and native group headings; tree-style Up/Down/Home/End plus
+  expand/collapse/parent-child arrows, stable focus after selection or close,
+  pointer-close rows that hold their position against accidental repeat clicks
+  and then compress on movement, and a packaged 200-tab render gate;
 - per-workspace active-page memory: returning to a workspace resumes the exact
   native tab last used there, with Gecko recency as a safe first-visit fallback;
 - packaged multi-launch recovery for workspace membership, active pages,

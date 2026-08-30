@@ -21,7 +21,15 @@
       .includes(String(key));
   }
 
-  const api = Object.freeze({ handlesRovingKey, rovingIndex });
+  function groupKeyAction(key, collapsed) {
+    const value = String(key);
+    if (value === "Enter" || value === " ") return "toggle";
+    if (value === "ArrowRight") return collapsed ? "expand" : "first-child";
+    if (value === "ArrowLeft") return collapsed ? null : "collapse";
+    return null;
+  }
+
+  const api = Object.freeze({ groupKeyAction, handlesRovingKey, rovingIndex });
   scope.FluxionFlowNavigation = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis === "object" ? globalThis : this);

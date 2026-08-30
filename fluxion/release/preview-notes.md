@@ -8,6 +8,31 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.41 makes native group headings first-class keyboard destinations in
+Flow instead of mouse-only labels:
+
+- expose ordinary workspace tabs as one vertical accessibility tree, with
+  native group headings at level one and their visible pages at level two;
+- retain exactly one Tab stop inside each Flow composite, then use Up/Down,
+  Home, and End to move through the visible spatial order;
+- keep focus and page selection distinct on group headings, while moving to a
+  page continues to select the corresponding native Gecko tab;
+- use Right Arrow to expand a collapsed heading or enter the first child of an
+  expanded group, and Left Arrow to collapse a heading or return from a child
+  to its parent;
+- support Enter and Space as concise expand/collapse actions and keep the
+  focused native group identity stable across Flow's DOM rebuild;
+- give pinned application tabs their own horizontal roving model with
+  Left/Right rather than pretending their compact icon row is vertical;
+- preserve one visible focus indicator without adding permanent buttons,
+  colourful containers, or extra tab stops;
+- extend the packaged macOS gate to collapse a real active group, leave it by
+  Arrow Down, focus its inactive heading, expand it with Right Arrow, collapse
+  it with Left Arrow, and require one stable roving target after every render.
+
+Gecko remains the sole owner of group membership, collapse state, tab
+selection, navigation, and SessionStore recovery.
+
 Version 0.40 makes collapsed native groups preserve spatial and keyboard
 continuity in Flow:
 

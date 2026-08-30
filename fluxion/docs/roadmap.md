@@ -30,7 +30,8 @@ controls work and its failure paths have been tested.
 
 - named/reorderable workspaces and Gecko-native tab groups (implemented,
   including live Settings management, safe cross-window tab migration, and a
-  collapsed-group projection that keeps the active page keyboard-reachable)
+  collapsed-group projection plus a focus-stable keyboard tree for headings
+  and child pages)
 - fuzzy command palette and high-volume tab search (initial command, tab,
   workspace, history, and bookmark search implemented)
 - Gecko-native side-by-side and stacked split orientations, Peek Pages, and

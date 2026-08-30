@@ -60,7 +60,10 @@ passes:
    Gecko selection and DOM focus to agree after rerender, and requires the
    inactive group to return to one heading row. This compact gate completes in
    the startup window before pointer-close and workspace fixtures begin changing
-   selection or intentionally holding Flow geometry.
+   selection or intentionally holding Flow geometry. It then focuses that
+   heading, expands it with Right Arrow, collapses it with Left Arrow, and
+   requires the heading to remain the only roving Tab stop after each native
+   state change.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any

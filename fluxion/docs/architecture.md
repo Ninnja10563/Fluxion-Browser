@@ -541,20 +541,31 @@ explanation of the rendered page without turning Fluxion into a competing owner
 of groups or selection.
 
 Before replacing Flow's row DOM, the renderer captures only a currently
-focused native-tab identity. It restores that identity after the rebuild unless
-an explicit workspace-focus request takes precedence. Consecutive native group
-events therefore cannot detach keyboard focus, while focus in the address bar,
-page, palette, or another surface is never pulled into Flow.
+focused native-tab or native-group identity. It restores that identity after
+the rebuild unless an explicit workspace-focus request takes precedence.
+Consecutive native group events therefore cannot detach keyboard focus, while
+focus in the address bar, page, palette, or another surface is never pulled
+into Flow.
+
+The ordinary-page region is exposed as a vertical accessibility tree. Native
+group headings are level-one expandable tree items; their projected pages are
+level-two tree items owned through an explicit group relationship. Up/Down,
+Home, and End traverse only visible headings and pages. Right opens a closed
+heading or enters its first child, while Left closes an open heading or returns
+from a child to its parent. Moving onto a heading changes DOM focus only;
+moving onto a page also selects the exact Gecko tab. Enter and Space toggle the
+focused heading without creating a Fluxion collapse preference.
 
 ## Flow focus and scale boundary
 
-Flow uses one roving tab stop per tablist instead of placing every open tab in
-the browser-wide Tab sequence. Up/Down, Home, and End move through visible tabs;
-Left/Right, Home, and End move through workspaces. Selection remains native in
-`gBrowser`, while a short-lived native-tab reference restores DOM focus after
-Flow's coalesced animation-frame render. Keyboard close chooses the next visible
-tab outside the complete closing selection, preventing both focus loss and
-repeated accidental close targeting.
+Flow uses one roving tab stop per composite instead of placing every open tab
+or group heading in the browser-wide Tab sequence. Up/Down, Home, and End move
+through the ordinary-page tree; Left/Right moves through the pinned-app row and
+workspace strip. Selection remains native in `gBrowser`, while short-lived
+native tab/group references restore DOM focus after Flow's coalesced
+animation-frame render. Keyboard close chooses the next visible page outside
+the complete closing selection, preventing both focus loss and repeated
+accidental close targeting.
 
 Nested mouse controls do not add hundreds of hidden Tab stops. The tab row
 exposes sleeping and audio state through its accessible name, Delete/Backspace

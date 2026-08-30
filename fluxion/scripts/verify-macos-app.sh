@@ -99,7 +99,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.about.route.health", "settings-about-route-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.visual.health", "versioned-about-fluxion-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.groups.collapsed.health", "active-page-visible-and-keyboard-continuous")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.groups.collapsed.health", "active-page-visible-and-group-heading-roving")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-side-by-side-and-stacked-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.status.health", "native-gecko-tab-states-projected-and-controllable")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.drop.health", "native-drag-reorder-and-two-orientation-split")' "$profile/prefs.js" && \

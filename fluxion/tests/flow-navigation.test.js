@@ -28,3 +28,13 @@ test("handled keys are orientation-specific", () => {
   assert.equal(Navigation.handlesRovingKey("ArrowRight", "horizontal"), true);
   assert.equal(Navigation.handlesRovingKey("Enter", "horizontal"), false);
 });
+
+test("group headings follow familiar tree expansion keys", () => {
+  assert.equal(Navigation.groupKeyAction("ArrowRight", true), "expand");
+  assert.equal(Navigation.groupKeyAction("ArrowRight", false), "first-child");
+  assert.equal(Navigation.groupKeyAction("ArrowLeft", false), "collapse");
+  assert.equal(Navigation.groupKeyAction("ArrowLeft", true), null);
+  assert.equal(Navigation.groupKeyAction("Enter", true), "toggle");
+  assert.equal(Navigation.groupKeyAction(" ", false), "toggle");
+  assert.equal(Navigation.groupKeyAction("ArrowDown", false), null);
+});

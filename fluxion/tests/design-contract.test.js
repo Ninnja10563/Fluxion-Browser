@@ -225,11 +225,16 @@ test("Flow pointer closing holds the vacated row until intentional movement", ()
   assert.match(macVerifier, /pointer-close-held-one-row-until-movement/);
 });
 
-test("collapsed native groups keep the selected page in Flow's keyboard order", () => {
+test("native groups and tabs form one focus-stable Flow tree", () => {
   assert.match(chrome, /FluxionTabGroups\.collapsedGroupProjection/);
   assert.match(chrome, /has-visible-active/);
   assert.match(chrome, /`\+\$\{projection\.hiddenCount\}`/);
-  assert.match(chrome, /active-page-visible-and-keyboard-continuous/);
+  assert.match(chrome, /tabsList\.setAttribute\("role", "tree"\)/);
+  assert.match(chrome, /heading\.setAttribute\("role", "treeitem"\)/);
+  assert.match(chrome, /groupTabs\.setAttribute\("role", "group"\)/);
+  assert.match(chrome, /FluxionFlowNavigation\.groupKeyAction/);
+  assert.match(chrome, /focusGroupAfterRender/);
+  assert.match(chrome, /active-page-visible-and-group-heading-roving/);
   assert.match(chrome, /focusedTabBeforeRender/);
   assert.match(chrome, /requestedTabFocus \|\|/);
   assert.match(macVerifier, /fluxion\.groups\.collapsed\.health/);
