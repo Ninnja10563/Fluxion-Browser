@@ -613,6 +613,7 @@
     ) {
       Services.prefs.setStringPref("fluxion.memory.grounding.health", "grounded-evidence-visible");
       Services.prefs.savePrefFile(null);
+      window.dispatchEvent(new window.CustomEvent("FluxionGroundingVisualReady"));
     }
   }
 
@@ -859,29 +860,41 @@
       runAsk().catch(Cu.reportError);
     }, 9400);
   }
-  if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {
-    window.setTimeout(() => {
-      const suggestion = organisationSuggestion();
-      const item = commandItems().find(candidate => candidate.label === "Suggest tab group");
-      if (!suggestion || suggestion.records.length < 3 || !item || !/React/.test(item.detail)) {
-        Services.prefs.setStringPref(
-          "fluxion.organisation.visual.error",
-          "A local evidence-backed tab-group proposal was not available",
-        );
-        Services.prefs.savePrefFile(null);
+  function runOrganisationVisualGate(attempt = 0) {
+    const suggestion = organisationSuggestion();
+    const item = commandItems().find(candidate => candidate.label === "Suggest tab group");
+    if (!suggestion || suggestion.records.length < 3 || !item || !/React/.test(item.detail)) {
+      if (attempt < 24) {
+        window.setTimeout(() => runOrganisationVisualGate(attempt + 1), 250);
         return;
       }
-      open("all");
-      input.value = "suggest tab group";
-      render(false);
-      if (visibleItems.some(candidate => candidate.label === "Suggest tab group")) {
-        Services.prefs.setStringPref(
-          "fluxion.organisation.health",
-          "local-proposal-visible-and-confirmation-required",
-        );
-        Services.prefs.savePrefFile(null);
-      }
-    }, 3200);
+      const fixtures = [...gBrowser.tabs]
+        .filter(tab => /fluxion-organise=/.test(tab.linkedBrowser?.currentURI?.spec || ""))
+        .map(tab => `${tab.label}:${tab.linkedBrowser.currentURI.spec}`);
+      Services.prefs.setStringPref(
+        "fluxion.organisation.visual.error",
+        `A local evidence-backed tab-group proposal was not available (${fixtures.join(" | ")})`,
+      );
+      Services.prefs.savePrefFile(null);
+      return;
+    }
+    open("all");
+    input.value = "suggest tab group";
+    render(false);
+    if (visibleItems.some(candidate => candidate.label === "Suggest tab group")) {
+      Services.prefs.setStringPref(
+        "fluxion.organisation.health",
+        "local-proposal-visible-and-confirmation-required",
+      );
+      Services.prefs.savePrefFile(null);
+    }
+  }
+  if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {
+    if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1") {
+      on(window, "FluxionGroundingVisualReady", () => runOrganisationVisualGate(), { once: true });
+    } else {
+      window.setTimeout(() => runOrganisationVisualGate(), 3200);
+    }
   }
   Services.prefs.setStringPref("fluxion.palette.health", "command-palette-loaded");
   Services.prefs.savePrefFile(null);
