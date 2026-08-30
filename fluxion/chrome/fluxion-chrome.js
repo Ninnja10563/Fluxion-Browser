@@ -686,12 +686,31 @@
   const toolbarAddonsItem = nativeCommand("Extensions & Themes", "Tools:Addons", {
     acceltext: toolbarAccel("⇧⌘A", "Ctrl+Shift+A"),
   });
+  function developerToolsController() {
+    const { require } = ChromeUtils.importESModule(
+      "resource://devtools/shared/loader/Loader.sys.mjs",
+    );
+    const { gDevToolsBrowser } = require("devtools/client/framework/devtools-browser");
+    if (typeof gDevToolsBrowser?.toggleToolboxCommand !== "function") {
+      throw new Error("Gecko Developer Tools controller is unavailable");
+    }
+    return gDevToolsBrowser;
+  }
   const toolbarDeveloperItem = nativeAction("Developer Tools", () => {
-    document.getElementById("menu_devToolbox")?.doCommand();
+    try {
+      developerToolsController().toggleToolboxCommand(gBrowser, ChromeUtils.now());
+    } catch (error) {
+      console.error(`Exception while opening Developer Tools: ${error}\n${error.stack}`);
+    }
   }, { acceltext: toolbarAccel("⌥⌘I", "F12") });
   on(toolbarToolsPopup, "popupshowing", event => {
     if (event.target === toolbarToolsPopup) {
-      toolbarDeveloperItem.toggleAttribute("disabled", !document.getElementById("menu_devToolbox"));
+      try {
+        developerToolsController();
+        toolbarDeveloperItem.removeAttribute("disabled");
+      } catch {
+        toolbarDeveloperItem.setAttribute("disabled", "true");
+      }
     }
   });
   toolbarToolsPopup.append(
@@ -2726,9 +2745,13 @@
         toolbarPageCommands.get(name)?.getAttribute("command") === command &&
         Boolean(document.getElementById(command))
       );
-      const toolsWired = toolbarAddonsItem.getAttribute("command") === "Tools:Addons" &&
-        Boolean(document.getElementById("Tools:Addons")) &&
-        Boolean(document.getElementById("menu_devToolbox")) &&
+      const addonsWired = toolbarAddonsItem.getAttribute("command") === "Tools:Addons" &&
+        Boolean(document.getElementById("Tools:Addons"));
+      let devToolsWired = false;
+      try {
+        devToolsWired = typeof developerToolsController().toggleToolboxCommand === "function";
+      } catch {}
+      const toolsWired = addonsWired && devToolsWired &&
         toolbarDeveloperItem.getAttribute("label") === "Developer Tools";
       const before = window.ZoomManager.zoom;
       toolbarPageCommands.get("zoomIn").doCommand();
@@ -2745,7 +2768,8 @@
           } else {
             Services.prefs.setStringPref(
               "fluxion.pageMenu.visual.error",
-              `commands=${commandsWired} tools=${toolsWired} enlarged=${enlarged} reset=${reset} ` +
+              `commands=${commandsWired} addons=${addonsWired} devtools=${devToolsWired} ` +
+                `tools=${toolsWired} enlarged=${enlarged} reset=${reset} ` +
                 `zoom=${before},${window.ZoomManager.zoom}`,
             );
           }

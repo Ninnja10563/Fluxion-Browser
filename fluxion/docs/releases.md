@@ -60,8 +60,9 @@ passes:
    useful geometry for the settled inspection screenshot. The automated capture
    does not force AppKit into modal native-menu tracking.
    A page-tools gate then resolves every Find, Save, Print, Zoom, Full Screen,
-   Add-ons, and Developer Tools command against the packaged Gecko chrome. It
-   drives Zoom In and Actual Size through the actual menuitems and refuses the
+   Add-ons command and lazy Gecko Developer Tools controller against the
+   packaged browser chrome. It drives Zoom In and Actual Size through the
+   actual menuitems and refuses the
    build unless the live selected browser returns to 100 percent.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the

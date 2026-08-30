@@ -143,8 +143,9 @@ Page and Tools menuitems reference Gecko command nodes such as `cmd_find`,
 `Browser:SavePage`, `cmd_print`, the `cmd_fullZoom*` family,
 `View:FullScreen`, and `Tools:Addons`. XUL therefore propagates command state
 and calls the same implementations as keyboard shortcuts and the platform menu.
-The Developer Tools item forwards to the dynamically registered
-`menu_devToolbox` command; Fluxion neither embeds nor recreates DevTools.
+The Developer Tools item lazily resolves Gecko's `gDevToolsBrowser` controller
+and calls the same `toggleToolboxCommand` entry point as Firefox's dynamically
+registered toolbox command; Fluxion neither embeds nor recreates DevTools.
 The application menu's About command is captured at chrome scope and opens the
 versioned `about:preferences#about` Fluxion surface; Settings continues through
 the same stable Gecko preferences route into Fluxion's live overlay. No bundle

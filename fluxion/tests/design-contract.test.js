@@ -194,7 +194,9 @@ test("Fluxion page tools delegate to Gecko commands and round-trip native zoom",
   ]) {
     assert.match(chrome, new RegExp(command.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
-  assert.match(chrome, /document\.getElementById\("menu_devToolbox"\)\?\.doCommand/);
+  assert.match(chrome, /resource:\/\/devtools\/shared\/loader\/Loader\.sys\.mjs/);
+  assert.match(chrome, /require\("devtools\/client\/framework\/devtools-browser"\)/);
+  assert.match(chrome, /toggleToolboxCommand\(gBrowser, ChromeUtils\.now\(\)\)/);
   assert.match(chrome, /about:preferences#privacy/);
   assert.match(chrome, /toolbarPageCommands\.get\("zoomIn"\)\.doCommand/);
   assert.match(chrome, /toolbarPageCommands\.get\("zoomReset"\)\.doCommand/);
