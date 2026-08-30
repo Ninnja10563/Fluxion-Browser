@@ -20,6 +20,8 @@ continuity in Flow:
 - retain Flow's one-stop roving keyboard model across the projected row, so
   Arrow Up/Down can leave a collapsed group for the adjacent visible page and
   restore DOM focus after the coalesced render;
+- preserve that native-tab focus identity across follow-up group events and
+  rebuilds, without stealing focus from the address field or another surface;
 - expose the group name, native member count, collapse state, and active-page
   exception through accessible labels;
 - add pure projection coverage for expanded, collapsed-active,

@@ -539,6 +539,12 @@ the same projection replaces the retained row without changing native collapse
 state. This preserves a visible explanation of the rendered page without
 turning Fluxion into a competing owner of groups or selection.
 
+Before replacing Flow's row DOM, the renderer captures only a currently
+focused native-tab identity. It restores that identity after the rebuild unless
+an explicit workspace-focus request takes precedence. Consecutive native group
+events therefore cannot detach keyboard focus, while focus in the address bar,
+page, palette, or another surface is never pulled into Flow.
+
 ## Flow focus and scale boundary
 
 Flow uses one roving tab stop per tablist instead of placing every open tab in

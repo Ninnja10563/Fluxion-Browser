@@ -2208,6 +2208,8 @@
       updateWindowTitle();
       return;
     }
+    const focusedTabBeforeRender = document.activeElement
+      ?.closest?.(".fluxion-tab")?._fluxionTab || null;
     renderQueued = false;
     renderWorkspaces();
     tabElements.clear();
@@ -2253,9 +2255,12 @@
       element.setAttribute("aria-posinset", String(index + 1));
       element.setAttribute("aria-setsize", String(rendered.length));
     });
-    if (focusTabAfterRender) {
-      const element = tabElements.get(focusTabAfterRender);
-      focusTabAfterRender = null;
+    const requestedTabFocus = focusTabAfterRender;
+    focusTabAfterRender = null;
+    const tabToRefocus = requestedTabFocus ||
+      (!focusWorkspaceAfterRender ? focusedTabBeforeRender : null);
+    if (tabToRefocus) {
+      const element = tabElements.get(tabToRefocus);
       if (element && !element.closest(".fluxion-group-tabs[hidden]")) {
         element.focus({ preventScroll: true });
         element.scrollIntoView({ block: "nearest" });
@@ -3168,7 +3173,7 @@
           key: "ArrowDown",
           bubbles: true,
         }));
-        window.requestAnimationFrame(() => {
+        window.setTimeout(() => {
           const inactiveItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
             candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
           );
@@ -3210,7 +3215,7 @@
                 `focused=${keyboardFocusedTab?.getAttribute("label") || "none"}`,
             );
           }
-        });
+        }, 80);
       });
     }, 100);
   }

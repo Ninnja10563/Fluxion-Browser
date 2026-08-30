@@ -230,6 +230,8 @@ test("collapsed native groups keep the selected page in Flow's keyboard order", 
   assert.match(chrome, /has-visible-active/);
   assert.match(chrome, /`\+\$\{projection\.hiddenCount\}`/);
   assert.match(chrome, /active-page-visible-and-keyboard-continuous/);
+  assert.match(chrome, /focusedTabBeforeRender/);
+  assert.match(chrome, /requestedTabFocus \|\|/);
   assert.match(macVerifier, /fluxion\.groups\.collapsed\.health/);
 });
 
