@@ -25,6 +25,7 @@
   style.id = "fluxion-library-style";
   style.textContent = `
     #fluxion-library[hidden] { display: none !important; }
+    :root[data-fluxion-library-visible] #identity-icon-box { display: none !important; }
     #fluxion-library {
       min-width: 0; flex: 1; display: flex; flex-direction: column;
       color: var(--fluxion-ink); background: var(--fluxion-bg-raised); font: menu; font-size: 13px;
@@ -385,6 +386,7 @@
   if (Services.env.get("FLUXION_VISUAL_LIBRARY_TEST") === "1") {
     window.setTimeout(async () => {
       try {
+        window.FluxionPalette?.close();
         const url = "https://example.edu/fluxion-library";
         await PlacesUtils.history.insert({
           url, title: "Fluxion Library Reference",

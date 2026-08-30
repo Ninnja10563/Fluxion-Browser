@@ -746,7 +746,7 @@
     layer.remove();
     style.remove();
   }, { once: true });
-  window.FluxionPalette = Object.freeze({ open });
+  window.FluxionPalette = Object.freeze({ close, open });
   if (
     Services.env.get("FLUXION_VISUAL_MEMORY_TEST") === "1" &&
     Services.env.get("FLUXION_VISUAL_SETTINGS_TEST") !== "1"
