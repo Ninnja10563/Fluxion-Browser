@@ -56,9 +56,9 @@ passes:
    A toolbar-menu gate then requires Firefox PanelUI to be absent from the
    visible toolbar, checks the mounted Fluxion control and its full concise
    command set, executes New Tab through the actual menu listener, verifies the
-   workspace-aware Gecko tab, opens and dismisses the native menu, and requires
-   Back plus the URL field to retain useful geometry for the inspection
-   screenshot.
+   workspace-aware Gecko tab, and requires Back plus the URL field to retain
+   useful geometry for the settled inspection screenshot. The automated capture
+   does not force AppKit into modal native-menu tracking.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

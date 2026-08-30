@@ -97,7 +97,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.status.health", "native-gecko-tab-states-projected-and-controllable")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.drop.health", "native-drag-reorder-and-two-orientation-split")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.focus.health", "focus-rail-overlay-revealed-without-content-reflow")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.toolbarMenu.health", "product-menu-opened-and-native-command-executed")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.toolbarMenu.health", "product-menu-mounted-and-native-command-executed")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.organisation.health", "local-proposal-visible-and-confirmation-required")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.scale.health", "200-tabs-rendered-with-roving-keyboard-focus")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then

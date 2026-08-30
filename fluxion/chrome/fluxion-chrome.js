@@ -2628,6 +2628,7 @@
         "Search Tabs…", "Library", "Fluxion Settings…", "About Fluxion",
       ];
       const mounted = toolbarMenuButton.parentNode === toolbarTarget &&
+        toolbarMenuPopup.parentNode === toolbarMenuButton && toolbarMenuPopup.localName === "menupopup" &&
         buttonRect.width >= 24 && buttonRect.width <= 38 && buttonRect.height >= 24 &&
         toolbarMenuButton.getAttribute("aria-label") === "Fluxion menu" &&
         toolbarMenuButton.getAttribute("image") === toolbarMenuIcon &&
@@ -2642,28 +2643,22 @@
         !tabsBefore.has(created) && gBrowser.tabs.includes(created) &&
         Boolean(created.linkedBrowser) && tabWorkspace(created) === currentWorkspace;
       if (commandWorked) gBrowser.removeTab(created, { animate: false });
-      toolbarMenuPopup.openPopup(toolbarMenuButton, "after_end");
-      window.setTimeout(() => {
-        const opened = ["open", "showing"].includes(toolbarMenuPopup.state);
-        toolbarMenuPopup.hidePopup();
-        if (inheritedHidden && mounted && navigationVisible && commandWorked && opened) {
-          Services.prefs.setStringPref(
-            "fluxion.toolbarMenu.health",
-            "product-menu-opened-and-native-command-executed",
-          );
-        } else {
-          Services.prefs.setStringPref(
-            "fluxion.toolbarMenu.visual.error",
-            `hidden=${inheritedHidden} mounted=${mounted} navigation=${navigationVisible} command=${commandWorked} ` +
-              `opened=${opened} state=${toolbarMenuPopup.state} ` +
-              `button=${Math.round(buttonRect.width)}x${Math.round(buttonRect.height)} ` +
-              `urlbar=${Math.round(urlbarRect?.width || 0)}x${Math.round(urlbarRect?.height || 0)} ` +
-              `back=${Math.round(backRect?.width || 0)}x${Math.round(backRect?.height || 0)} ` +
-              `labels=${labels.join("|")}`,
-          );
-        }
-        Services.prefs.savePrefFile(null);
-      }, 180);
+      if (inheritedHidden && mounted && navigationVisible && commandWorked) {
+        Services.prefs.setStringPref(
+          "fluxion.toolbarMenu.health",
+          "product-menu-mounted-and-native-command-executed",
+        );
+      } else {
+        Services.prefs.setStringPref(
+          "fluxion.toolbarMenu.visual.error",
+          `hidden=${inheritedHidden} mounted=${mounted} navigation=${navigationVisible} command=${commandWorked} ` +
+            `button=${Math.round(buttonRect.width)}x${Math.round(buttonRect.height)} ` +
+            `urlbar=${Math.round(urlbarRect?.width || 0)}x${Math.round(urlbarRect?.height || 0)} ` +
+            `back=${Math.round(backRect?.width || 0)}x${Math.round(backRect?.height || 0)} ` +
+            `labels=${labels.join("|")}`,
+        );
+      }
+      Services.prefs.savePrefFile(null);
     }, 25500);
   }
   Services.prefs.setStringPref("fluxion.chrome.health", "flow-sidebar-loaded");

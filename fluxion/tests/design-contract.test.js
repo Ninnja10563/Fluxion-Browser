@@ -182,9 +182,9 @@ test("the trailing toolbar uses a working Fluxion menu instead of Firefox PanelU
     assert.match(chrome, new RegExp(label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
   assert.match(chrome, /toolbarNewTabItem\.dispatchEvent/);
-  assert.match(chrome, /toolbarMenuPopup\.openPopup/);
+  assert.match(chrome, /toolbarMenuPopup\.parentNode === toolbarMenuButton/);
   assert.match(macVerifier, /FLUXION_VISUAL_TOOLBAR_MENU_TEST=1/);
-  assert.match(macVerifier, /product-menu-opened-and-native-command-executed/);
+  assert.match(macVerifier, /product-menu-mounted-and-native-command-executed/);
 });
 
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {

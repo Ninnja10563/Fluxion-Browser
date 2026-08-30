@@ -22,8 +22,8 @@ Version 0.28 gives the visible toolbar a distinct Fluxion application menu:
 - mirror these actions in the existing macOS menu bar, so the toolbar is not
   their only entry point;
 - require the packaged application to hide the inherited control, execute a
-  real new-tab command through the menu, open and dismiss the native popup, and
-  preserve visible Back and URL controls before publication.
+  real new-tab command through the connected native menu, and preserve visible
+  Back and URL controls before publication.
 
 The change does not replace Gecko's security-aware address field or page-action
 implementations.
