@@ -3026,7 +3026,7 @@
           }, 160);
         }, 180);
       }, 80);
-    }, 3400);
+    }, 500);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUP_TEST") === "1") {
     const groupTabs = [...gBrowser.tabs]
