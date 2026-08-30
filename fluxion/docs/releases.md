@@ -82,9 +82,10 @@ passes:
    chrome color scheme to update before capture.
    A browsing-data gate then opens Fluxion's direct command surface through the
    same privileged controller used by Settings and refuses publication unless
-   Gecko's native sanitizer dialog is mounted in the packaged browser. The
-   inspection screenshot therefore proves the real selectable privacy workflow
-   rather than a custom confirmation around partial service calls.
+   Gecko's native sanitizer dialog exposes a time range, at least five data
+   categories, and working Cancel/Clear actions in the packaged browser. It
+   then activates Gecko's real Cancel button, verifies the cancellation result,
+   and captures the settled browser instead of an unreadable modal backdrop.
    A background-work gate defers an extracted page in Fluxion's real indexing
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks

@@ -24,7 +24,10 @@ skin:
   without turning theme state into permanent toolbar clutter;
 - require the packaged macOS app to enable Dark, update the live Settings
   selection and computed chrome color scheme, then open Gecko's native privacy
-  dialog in that appearance before a DMG can publish.
+  dialog in that appearance before a DMG can publish;
+- inspect the dialog's real time-range selector, data categories, and native
+  actions, then cancel it without deleting fixture data so the release
+  screenshot can evaluate the settled Dark browser rather than a dimmed modal.
 
 The visual system remains grayscale-first: no gradients, wallpaper, colourway,
 or decorative theme layer was added.

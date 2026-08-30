@@ -106,6 +106,8 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.theme.visual.health", "dark-theme-enabled-in-live-gecko-chrome")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.dataClearing.health", "native-gecko-sanitizer-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.dataClearing.dialog.health", "gecko-browsing-data-dialog-opened")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.dataClearing.surface.health", "time-range-categories-and-actions-visible")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.dataClearing.cancel.health", "native-dialog-cancelled-without-clearing")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.organisation.health", "local-proposal-visible-and-confirmation-required")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.scale.health", "200-tabs-rendered-with-roving-keyboard-focus")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then

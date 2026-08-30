@@ -1161,6 +1161,50 @@
       }
       setActive(index);
       input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      const verifyDialog = (attempt = 0) => {
+        const frameWindow = window.gDialogBox?.dialog?.frameContentWindow;
+        const dialogDocument = frameWindow?.document;
+        const dialog = dialogDocument?.querySelector("dialog");
+        const categoryGroup = dialogDocument?.getElementById("clearPrivateDataGroupbox");
+        const categories = categoryGroup?.querySelectorAll("checkbox");
+        const duration = dialogDocument?.getElementById("sanitizeDurationChoice");
+        const cancel = dialog?.getButton("cancel");
+        const accept = dialog?.getButton("accept");
+        if (!window.gDialogBox?.isOpen || !dialog || !duration || categories?.length < 5 || !cancel || !accept) {
+          if (attempt < 50) {
+            window.setTimeout(() => verifyDialog(attempt + 1), 100);
+            return;
+          }
+          Services.prefs.setStringPref(
+            "fluxion.dataClearing.visual.error",
+            `Native dialog did not settle (open=${window.gDialogBox?.isOpen} categories=${categories?.length || 0})`,
+          );
+          Services.prefs.savePrefFile(null);
+          return;
+        }
+        Services.prefs.setStringPref(
+          "fluxion.dataClearing.surface.health",
+          "time-range-categories-and-actions-visible",
+        );
+        Services.prefs.savePrefFile(null);
+        on(window, "FluxionDataClearingDialogClosed", event => {
+          if (event.detail?.result !== "cancel") {
+            Services.prefs.setStringPref(
+              "fluxion.dataClearing.visual.error",
+              `Native dialog closed with ${event.detail?.result || "no result"}`,
+            );
+          } else {
+            Services.prefs.setStringPref(
+              "fluxion.dataClearing.cancel.health",
+              "native-dialog-cancelled-without-clearing",
+            );
+            window.dispatchEvent(new window.CustomEvent("FluxionDataClearingVisualReady"));
+          }
+          Services.prefs.savePrefFile(null);
+        }, { once: true });
+        cancel.click();
+      };
+      window.setTimeout(() => verifyDialog(), 100);
     };
     if (Services.env.get("FLUXION_VISUAL_THEME_TEST") === "1") {
       on(window, "FluxionThemeVisualReady", runClearDataGate, { once: true });

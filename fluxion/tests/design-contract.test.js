@@ -267,6 +267,10 @@ test("browsing-data clearing stays in Gecko's coordinated sanitizer", () => {
   assert.match(palette, /window\.FluxionDataClearing\.open\(\)/);
   assert.match(palette, /FLUXION_VISUAL_CLEAR_DATA_TEST/);
   assert.match(palette, /item\.label === "Clear browsing data…"/);
+  assert.match(palette, /getElementById\("sanitizeDurationChoice"\)/);
+  assert.match(palette, /getButton\("cancel"\)/);
+  assert.match(macVerifier, /time-range-categories-and-actions-visible/);
+  assert.match(macVerifier, /native-dialog-cancelled-without-clearing/);
   assert.doesNotMatch(dataClearing, /PlacesUtils\.history\.clear|cookies\.removeAll|cache2\.clear/);
   assert.match(macVerifier, /FLUXION_VISUAL_CLEAR_DATA_TEST=1/);
   assert.match(macVerifier, /gecko-browsing-data-dialog-opened/);
