@@ -152,6 +152,8 @@ test("Flow uses roving focus and the packaged app proves 200-tab keyboard stabil
   assert.match(chrome, /new Set\(visible\)/);
   assert.match(chrome, /gBrowser\.selectedTab = scaleTabs\[0\]/);
   assert.match(chrome, /gBrowser\.selectedTab === scaleTabs\[1\]/);
+  assert.match(chrome, /FluxionWorkspaceCaptureReady/);
+  assert.match(settings, /new window\.CustomEvent\("FluxionWorkspaceCaptureReady"\)/);
   assert.match(chrome, /cleanScaleFixture/);
   assert.match(palette, /button\.tabIndex = -1/);
   assert.match(palette, /event\.key === "Tab"/);

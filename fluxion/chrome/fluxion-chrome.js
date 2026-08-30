@@ -2906,7 +2906,7 @@
     }, 2600);
   }
   if (Services.env.get("FLUXION_VISUAL_SCALE_TEST") === "1") {
-    window.setTimeout(() => {
+    const runScaleVisualGate = () => {
       const originalSelected = gBrowser.selectedTab;
       const creationStarted = window.performance.now();
       const scaleTabs = Array.from({ length: 200 }, (_, index) => {
@@ -2948,15 +2948,18 @@
         selectedElement.dispatchEvent(new window.KeyboardEvent("keydown", {
           key: "ArrowDown", bubbles: true,
         }));
+        const selectionMoved = selectedBefore === scaleTabs[0] &&
+          gBrowser.selectedTab === scaleTabs[1];
         window.requestAnimationFrame(() => {
-          const focusStable = document.activeElement?._fluxionTab === gBrowser.selectedTab;
-          const selectionMoved = selectedBefore === scaleTabs[0] &&
-            gBrowser.selectedTab === scaleTabs[1];
+          const focusStable = document.activeElement?._fluxionTab === scaleTabs[1];
           if (focusStable && selectionMoved) {
             Services.prefs.setStringPref(
               "fluxion.scale.health",
               "200-tabs-rendered-with-roving-keyboard-focus",
             );
+            if (Services.prefs.prefHasUserValue("fluxion.scale.visual.error")) {
+              Services.prefs.clearUserPref("fluxion.scale.visual.error");
+            }
           } else {
             Services.prefs.setStringPref(
               "fluxion.scale.visual.error",
@@ -2967,7 +2970,14 @@
           cleanScaleFixture();
         });
       });
-    }, 3600);
+    };
+    if (Services.env.get("FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST") === "1") {
+      on(window, "FluxionWorkspaceCaptureReady", () => {
+        window.setTimeout(runScaleVisualGate, 250);
+      }, { once: true });
+    } else {
+      window.setTimeout(runScaleVisualGate, 3600);
+    }
   }
   if (Services.env.get("FLUXION_VISUAL_FOCUS_TEST") === "1") {
     const sidebarStateBeforeFocusGate = flow.dataset.state;

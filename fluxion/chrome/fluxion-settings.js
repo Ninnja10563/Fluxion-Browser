@@ -928,6 +928,7 @@
             "settled-workspaces-surface-visible",
           );
           Services.prefs.savePrefFile(null);
+          window.dispatchEvent(new window.CustomEvent("FluxionWorkspaceCaptureReady"));
           return;
         }
         if (attempt >= 60) {
