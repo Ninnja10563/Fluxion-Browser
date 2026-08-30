@@ -1,6 +1,7 @@
 import { Sqlite } from "resource://gre/modules/Sqlite.sys.mjs";
 import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
 import { EmbeddingsGenerator } from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
+import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
 
 const FILE_NAME = "fluxion_memory.sqlite";
 const SCHEMA_VERSION = 1;
