@@ -51,8 +51,11 @@ passes:
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any
-   horizontal shift or resize blocks publication; the revealed overlay remains
-   visible in the inspection screenshot.
+   horizontal shift or resize blocks publication; the gate then restores the
+   prior Flow mode so the inspection screenshot represents settled browsing.
+   A workspace-resume gate records different active native tabs in Focus and
+   Build, switches away and back, and refuses publication unless each workspace
+   returns to its own page with exactly one SessionStore ownership marker.
    A toolbar-menu gate then requires Firefox PanelUI to be absent from the
    visible toolbar, checks the mounted Fluxion control and its full concise
    command set, executes New Tab through the actual menu listener, verifies the
@@ -93,9 +96,10 @@ passes:
    same page and its evidence to appear after the scheduler resumes. This blocks
    publication if Browser Memory bypasses its bounded serial queue.
    A separate four-launch gate then seeds and cleanly quits a normal session,
-   restores its workspace/pin/group/split state, opens and quits a private
-   session, and restores normal mode again. Publication is blocked if the
-   private URL appears in restored tabs, Gecko Places, or Browser Memory.
+   restores its per-workspace active pages plus workspace/pin/group/split state,
+   switches between both remembered pages, opens and quits a private session,
+   and restores normal mode again. Publication is blocked if the private URL
+   appears in restored tabs, Gecko Places, or Browser Memory.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

@@ -72,13 +72,19 @@ focus to the rail. Reduced-motion settings remove both rail and surface
 transitions.
 
 Workspace membership is stored as a persisted SessionStore tab attribute.
-The current workspace and sidebar state use Firefox preferences. This keeps
-crash recovery atomic with the actual tab session and avoids a second database
-whose state could drift from Firefox.
+Each workspace's last active page is another bounded SessionStore tab marker;
+selecting a page atomically clears any duplicate marker in that workspace.
+Switching back prefers that native tab and falls back to Gecko's `lastAccessed`
+recency when a workspace has not yet been visited. Moving tabs or deleting a
+workspace clears stale markers rather than overwriting the destination's resume
+point. The current workspace and sidebar state use Firefox preferences. This
+keeps crash recovery atomic with the actual tab session and avoids a second
+database whose state could drift from Firefox.
 
 Packaged recovery validation uses Gecko's real shutdown and startup path rather
 than serialising Fluxion state in a test fixture. One app launch creates tabs in
-the Build workspace, a pinned tab, a native group, and a native split pair;
+Focus and Build, records a distinct active page in each, and adds a pinned tab,
+a native group, and a native split pair;
 content state is flushed through each frame loader before Gecko performs an
 attempted clean quit. A second app launch must recover all of those structures
 from the same profile. The gate then opens a real private window, confirms that

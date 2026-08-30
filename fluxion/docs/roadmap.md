@@ -8,7 +8,7 @@ controls work and its failure paths have been tested.
 - Gecko runtime launch and isolated profile
 - real navigation and native browser services
 - Flow vertical tabs and tab actions
-- workspace switching and persistence
+- workspace switching, persistence, and per-workspace active-page restoration
 - sidebar states, keyboard operation, and custom new tab
 
 ## Phase 2 — browser fundamentals hardening

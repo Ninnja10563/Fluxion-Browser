@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionSplitViews, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces */
+/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionSplitViews, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -16,6 +16,7 @@
   const PREF_SIDEBAR = "fluxion.sidebar.state";
   const PREF_SPLIT_ORIENTATIONS = "fluxion.split.orientations";
   const TAB_WORKSPACE = "fluxion-workspace";
+  const TAB_WORKSPACE_ACTIVE = "fluxion-workspace-active";
   const TAB_SPLIT_ORIENTATION = "fluxion-split-orientation";
   const NEW_TAB_URL = Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab");
   const ABOUT_URL = Services.prefs.getStringPref("fluxion.about.url", "about:support");
@@ -500,7 +501,7 @@
   let currentWorkspace = Services.prefs.getStringPref(PREF_CURRENT, workspaces[0].id);
   if (!workspaces.some(item => item.id === currentWorkspace)) currentWorkspace = workspaces[0].id;
 
-  for (const attribute of [TAB_WORKSPACE, TAB_SPLIT_ORIENTATION]) {
+  for (const attribute of [TAB_WORKSPACE, TAB_WORKSPACE_ACTIVE, TAB_SPLIT_ORIENTATION]) {
     try {
       SessionStore.persistTabAttribute(attribute);
     } catch (_) {
@@ -909,6 +910,29 @@
     return id;
   }
 
+  function rememberWorkspaceTab(tab) {
+    if (!tab?.parentNode) return false;
+    const workspace = tabWorkspace(tab);
+    const plan = FluxionWorkspaceTabs.markerPlan(
+      [...gBrowser.tabs],
+      workspace,
+      tab,
+      { workspaceOf: tabWorkspace },
+    );
+    for (const entry of plan) {
+      if (entry.remembered) entry.tab.setAttribute(TAB_WORKSPACE_ACTIVE, "true");
+      else entry.tab.removeAttribute(TAB_WORKSPACE_ACTIVE);
+    }
+    return plan.length > 0;
+  }
+
+  function preferredWorkspaceTab(workspace, tabs = [...gBrowser.tabs]) {
+    return FluxionWorkspaceTabs.preferredTab(tabs, workspace, {
+      workspaceOf: tabWorkspace,
+      isRemembered: tab => tab.getAttribute(TAB_WORKSPACE_ACTIVE) === "true",
+    });
+  }
+
   function tabLabel(tab) {
     if (tab.linkedBrowser?.currentURI?.spec === ABOUT_URL) return "About Fluxion";
     const librarySection = tab.getAttribute("fluxion-library-section");
@@ -969,7 +993,10 @@
 
   function moveGroupToWorkspace(group, id) {
     if (!group?.isConnected || !workspaces.some(item => item.id === id)) return;
-    for (const tab of group.tabs) tab.setAttribute(TAB_WORKSPACE, id);
+    for (const tab of group.tabs) {
+      tab.removeAttribute(TAB_WORKSPACE_ACTIVE);
+      tab.setAttribute(TAB_WORKSPACE, id);
+    }
     if (id !== currentWorkspace && group.tabs.includes(gBrowser.selectedTab)) {
       const replacement = [...gBrowser.tabs].find(
         tab => !group.tabs.includes(tab) && tabWorkspace(tab) === currentWorkspace,
@@ -1061,7 +1088,10 @@
         : `Delete “${workspace.name}”?`,
     );
     if (!confirmed) return;
-    for (const tab of ownedTabs) tab.setAttribute(TAB_WORKSPACE, result.fallbackId);
+    for (const tab of ownedTabs) {
+      tab.removeAttribute(TAB_WORKSPACE_ACTIVE);
+      tab.setAttribute(TAB_WORKSPACE, result.fallbackId);
+    }
     if (currentWorkspace === id) currentWorkspace = result.fallbackId;
     saveWorkspaces(result.items);
     switchWorkspace(currentWorkspace);
@@ -1069,6 +1099,10 @@
 
   function switchWorkspace(id) {
     if (!workspaces.some(item => item.id === id)) return;
+    const previous = gBrowser.selectedTab;
+    if (previous?.parentNode && tabWorkspace(previous) === currentWorkspace) {
+      rememberWorkspaceTab(previous);
+    }
     currentWorkspace = id;
     Services.prefs.setStringPref(PREF_CURRENT, id);
 
@@ -1083,8 +1117,9 @@
     }
 
     if (tabWorkspace(gBrowser.selectedTab) !== id) {
-      gBrowser.selectedTab = workspaceTabs[0];
+      gBrowser.selectedTab = preferredWorkspaceTab(id, workspaceTabs) || workspaceTabs[0];
     }
+    rememberWorkspaceTab(gBrowser.selectedTab);
     for (const tab of gBrowser.tabs) {
       if (tabWorkspace(tab) !== id && !tab.hidden && tab !== gBrowser.selectedTab) {
         gBrowser.hideTab(tab);
@@ -1105,7 +1140,10 @@
   function moveTabsToWorkspace(tabs, id) {
     if (!tabs.length || !workspaces.some(item => item.id === id)) return;
     const movingTabs = [...new Set(tabs.flatMap(tab => tab?.splitview?.tabs || [tab]).filter(Boolean))];
-    for (const movingTab of movingTabs) movingTab.setAttribute(TAB_WORKSPACE, id);
+    for (const movingTab of movingTabs) {
+      movingTab.removeAttribute(TAB_WORKSPACE_ACTIVE);
+      movingTab.setAttribute(TAB_WORKSPACE, id);
+    }
     gBrowser.clearMultiSelectedTabs();
     if (id !== currentWorkspace && movingTabs.includes(gBrowser.selectedTab)) {
       const replacement = [...gBrowser.tabs].find(
@@ -2369,6 +2407,10 @@
   ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }
+  on(gBrowser.tabContainer, "TabSelect", () => {
+    const tab = gBrowser.selectedTab;
+    if (tab?.parentNode && tabWorkspace(tab) === currentWorkspace) rememberWorkspaceTab(tab);
+  });
   for (const eventName of [
     "TabSelect", "SplitViewCreated", "SplitViewTabChange", "TabSplitViewActivate",
   ]) {
@@ -2455,6 +2497,70 @@
     toggleSplitOrientation,
     workspaces: () => workspaces.map(workspace => ({ ...workspace })),
   });
+  if (Services.env.get("FLUXION_VISUAL_WORKSPACE_RESUME_TEST") === "1") {
+    window.setTimeout(async () => {
+      const fixtures = [];
+      const originalWorkspace = currentWorkspace;
+      const originalTab = gBrowser.selectedTab;
+      const nextFrame = () => new Promise(resolve => window.requestAnimationFrame(resolve));
+      try {
+        if (!workspaces.some(item => item.id === "focus") ||
+            !workspaces.some(item => item.id === "build")) {
+          throw new Error("The packaged workspace fixture requires Focus and Build");
+        }
+        const makeTab = (workspace, name) => {
+          const tab = gBrowser.addTrustedTab(`about:blank?fluxion-workspace-resume=${workspace}-${name}`, {
+            skipAnimation: true,
+          });
+          tab.setAttribute(TAB_WORKSPACE, workspace);
+          fixtures.push(tab);
+          return tab;
+        };
+        const focusFirst = makeTab("focus", "first");
+        const focusActive = makeTab("focus", "active");
+        const buildFirst = makeTab("build", "first");
+        const buildActive = makeTab("build", "active");
+        switchWorkspace("focus");
+        gBrowser.selectedTab = focusActive;
+        await nextFrame();
+        switchWorkspace("build");
+        gBrowser.selectedTab = buildActive;
+        await nextFrame();
+        switchWorkspace("focus");
+        await nextFrame();
+        const focusRestored = gBrowser.selectedTab === focusActive;
+        switchWorkspace("build");
+        await nextFrame();
+        const buildRestored = gBrowser.selectedTab === buildActive;
+        const unique = ["focus", "build"].every(workspace =>
+          [...gBrowser.tabs].filter(tab =>
+            tabWorkspace(tab) === workspace && tab.hasAttribute(TAB_WORKSPACE_ACTIVE)
+          ).length === 1
+        );
+        if (focusRestored && buildRestored && unique &&
+            !focusFirst.hasAttribute(TAB_WORKSPACE_ACTIVE) &&
+            !buildFirst.hasAttribute(TAB_WORKSPACE_ACTIVE)) {
+          Services.prefs.setStringPref(
+            "fluxion.workspaceResume.health",
+            "two-workspace-active-pages-round-tripped",
+          );
+        } else {
+          Services.prefs.setStringPref(
+            "fluxion.workspaceResume.visual.error",
+            `focus=${focusRestored} build=${buildRestored} unique=${unique}`,
+          );
+        }
+      } catch (error) {
+        Services.prefs.setStringPref("fluxion.workspaceResume.visual.error", String(error));
+        Cu.reportError(error);
+      } finally {
+        switchWorkspace(originalWorkspace);
+        if (originalTab?.parentNode) gBrowser.selectedTab = originalTab;
+        if (fixtures.length) gBrowser.removeTabs(fixtures.filter(tab => tab.parentNode), { animate: false });
+        Services.prefs.savePrefFile(null);
+      }
+    }, 1500);
+  }
   if (Services.env.get("FLUXION_VISUAL_STATUS_TEST") === "1") {
     window.setTimeout(() => {
       const video = gBrowser.addTrustedTab("about:blank?fluxion-status=video", { skipAnimation: true });

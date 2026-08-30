@@ -18,8 +18,11 @@ The current preview is runnable and includes:
   native tab session restoration;
 - roving keyboard focus for tabs and workspaces, arrow/Home/End navigation,
   stable focus after selection or close, and a packaged 200-tab render gate;
-- packaged multi-launch recovery for workspace membership, pinned tabs, native
-  groups, and split views, with private tabs excluded from the restored session;
+- per-workspace active-page memory: returning to a workspace resumes the exact
+  native tab last used there, with Gecko recency as a safe first-visit fallback;
+- packaged multi-launch recovery for workspace membership, active pages,
+  pinned tabs, native groups, and split views, with private tabs excluded from
+  the restored session;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration;
 - local, evidence-backed tab-group suggestions across related ungrouped pages,

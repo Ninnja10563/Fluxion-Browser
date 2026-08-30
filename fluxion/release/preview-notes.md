@@ -8,6 +8,28 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.35 makes workspace switching resume where the user actually left off:
+
+- remember one active native tab per workspace instead of selecting the first
+  tab whenever the user returns;
+- persist that ownership as a bounded SessionStore tab attribute beside the
+  existing workspace membership, keeping page history, scroll position, forms,
+  groups, pins, and crash recovery under Gecko rather than a shadow database;
+- repair duplicate or stale active markers on selection and clear ownership
+  when tabs move between workspaces or a workspace is deleted;
+- use Gecko's own `lastAccessed` recency as the deterministic fallback for a
+  workspace that has no remembered page yet;
+- verify two independent workspace resume points through the packaged browser's
+  real switching path before creating a DMG;
+- expand the four-launch recovery gate to seed active pages in Focus and Build,
+  quit, restore, switch to each workspace, and require the correct live page to
+  return before testing the private-window boundary;
+- restore the sidebar state after Focus-mode verification so release captures
+  represent settled everyday browsing rather than a deliberately revealed test
+  overlay.
+
+No URL, navigation entry, or page state is copied into Fluxion preferences.
+
 Version 0.34 makes appearance a live browser capability rather than a static
 skin:
 

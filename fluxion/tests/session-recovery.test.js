@@ -8,9 +8,14 @@ function normalSnapshot(overrides = {}) {
   const tabs = [
     { url: Recovery.URLS.groupA, workspace: "build", group: "Recovery Lab" },
     { url: Recovery.URLS.groupB, workspace: "build", group: "Recovery Lab" },
-    { url: Recovery.URLS.splitA, workspace: "build", split: "pair-a", splitOrientation: "stacked" },
+    {
+      url: Recovery.URLS.splitA, workspace: "build", split: "pair-a",
+      splitOrientation: "stacked", active: true, selected: true,
+    },
     { url: Recovery.URLS.splitB, workspace: "build", split: "pair-a", splitOrientation: "stacked" },
     { url: Recovery.URLS.pinned, workspace: "build", pinned: true },
+    { url: Recovery.URLS.focusIdle, workspace: "focus" },
+    { url: Recovery.URLS.focusActive, workspace: "focus", active: true },
   ];
   return { currentWorkspace: "build", isPrivate: false, tabs, ...overrides };
 }
@@ -33,6 +38,17 @@ test("normal recovery requires the persisted stacked split orientation", () => {
   const result = Recovery.validateNormal(broken);
   assert.equal(result.ok, false);
   assert.match(result.reasons.join("\n"), /stacked split orientation/);
+});
+
+test("normal recovery requires one remembered active page per workspace", () => {
+  const broken = normalSnapshot();
+  broken.tabs.find(tab => tab.url === Recovery.URLS.focusActive).active = false;
+  broken.tabs.find(tab => tab.url === Recovery.URLS.focusIdle).active = true;
+  broken.tabs.find(tab => tab.url === Recovery.URLS.splitA).selected = false;
+  const result = Recovery.validateNormal(broken);
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join("\n"), /focus active page/);
+  assert.match(result.reasons.join("\n"), /active Build page was not selected/);
 });
 
 test("private tabs are rejected from a post-private normal restoration", () => {

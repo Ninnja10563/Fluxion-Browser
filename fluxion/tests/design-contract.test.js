@@ -16,6 +16,7 @@ const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js")
 const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
+const workspaceTabs = fs.readFileSync(path.join(root, "chrome/core/workspace-tabs.js"), "utf8");
 const closedTabs = fs.readFileSync(path.join(root, "chrome/core/closed-tabs.js"), "utf8");
 const webSearch = fs.readFileSync(path.join(root, "chrome/fluxion-web-search.js"), "utf8");
 const dataClearing = fs.readFileSync(path.join(root, "chrome/fluxion-data-clearing.js"), "utf8");
@@ -82,7 +83,7 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(sessionRecovery, /requestTabStateFlush/);
   assert.match(sessionRecovery, /Promise\.race/);
   assert.match(sessionRecovery, /SessionStore\.getWindowState/);
-  assert.match(sessionRecovery, /new Set\(\[\.\.\.groupTabs, \.\.\.splitTabs, pinned\]\)/);
+  assert.match(sessionRecovery, /new Set\(\[\.\.\.groupTabs, \.\.\.splitTabs, pinned, \.\.\.focusTabs\]\)/);
   assert.match(sessionRecovery, /PlacesUtils\.history\.fetch/);
   assert.match(sessionRecovery, /validatePrivateAbsence\(snapshot\(\)\)/);
   assert.match(sessionRecovery, /FluxionMemory\.search/);
@@ -91,8 +92,20 @@ test("packaged recovery gate crosses real normal and private app launches", () =
   assert.match(macSessionVerifier, /FLUXION_SESSION_RESTORE_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ISOLATION_TEST/);
   assert.match(macSessionVerifier, /FLUXION_PRIVATE_ABSENCE_TEST/);
-  assert.match(macSessionVerifier, /workspace-tabs-groups-stacked-split-restored/);
+  assert.match(macSessionVerifier, /workspace-tabs-active-pages-groups-stacked-split-restored/);
   assert.match(macSessionVerifier, /private-tabs-history-memory-excluded/);
+});
+
+test("workspaces resume their last active native page without shadow sessions", () => {
+  assert.match(runtimeConfig, /chrome\/core\/workspace-tabs\.js/);
+  assert.match(workspaceTabs, /preferredTab/);
+  assert.match(workspaceTabs, /markerPlan/);
+  assert.match(chrome, /SessionStore\.persistTabAttribute\(attribute\)/);
+  assert.match(chrome, /TAB_WORKSPACE_ACTIVE = "fluxion-workspace-active"/);
+  assert.match(chrome, /rememberWorkspaceTab\(previous\)/);
+  assert.match(chrome, /preferredWorkspaceTab\(id, workspaceTabs\)/);
+  assert.match(macVerifier, /FLUXION_VISUAL_WORKSPACE_RESUME_TEST=1/);
+  assert.match(macVerifier, /two-workspace-active-pages-round-tripped/);
 });
 
 test("tab organisation stays local, evidence-backed, and confirmation-only", () => {
@@ -339,6 +352,7 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.memory\.scheduler\.health/);
   assert.match(macVerifier, /fluxion\.settings\.visual\.health/);
   assert.match(macVerifier, /FLUXION_VISUAL_MEMORY_TEST=1/);
+  assert.match(macVerifier, /FLUXION_VISUAL_WORKSPACE_RESUME_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_STATUS_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_DROP_TEST=1/);
@@ -529,7 +543,7 @@ test("split view delegates content panes to Gecko and remains controllable from 
   assert.match(chrome, /gBrowser\.addTabSplitView/);
   assert.match(chrome, /splitView\.unsplitTabs/);
   assert.match(chrome, /splitView\.reverseTabs/);
-  assert.match(chrome, /\[TAB_WORKSPACE, TAB_SPLIT_ORIENTATION\]/);
+  assert.match(chrome, /\[TAB_WORKSPACE, TAB_WORKSPACE_ACTIVE, TAB_SPLIT_ORIENTATION\]/);
   assert.match(chrome, /SessionStore\.persistTabAttribute\(attribute\)/);
   assert.match(chrome, /PREF_SPLIT_ORIENTATIONS/);
   assert.match(chrome, /splitView\.splitViewId/);

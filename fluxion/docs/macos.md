@@ -113,9 +113,10 @@ directly with:
 ```
 
 Release builds also run a four-launch recovery check against one temporary
-profile. It seeds and restores normal tabs, a pinned tab, a tab group, a split
-view, and workspace membership, then proves a private tab is absent from the
-restored session, Places history, and Browser Memory:
+profile. It seeds and restores normal tabs, each workspace's active page, a
+pinned tab, a tab group, a split view, and workspace membership, then proves a
+private tab is absent from the restored session, Places history, and Browser
+Memory:
 
 ```sh
 ./scripts/verify-macos-session.sh ../.runtime/Fluxion.app

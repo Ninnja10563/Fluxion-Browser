@@ -8,11 +8,23 @@
     splitA: "https://example.com/?fluxion-session=split-a",
     splitB: "https://example.org/?fluxion-session=split-b",
     pinned: "https://example.com/?fluxion-session=pinned",
+    focusIdle: "https://example.org/?fluxion-session=focus-idle",
+    focusActive: "https://example.com/?fluxion-session=focus-active",
     privateOnly: "https://example.com/?fluxion-private-only=1",
   });
   const EXPECTED_NORMAL_URLS = Object.freeze([
     URLS.groupA, URLS.groupB, URLS.splitA, URLS.splitB, URLS.pinned,
+    URLS.focusIdle, URLS.focusActive,
   ]);
+  const EXPECTED_WORKSPACES = Object.freeze({
+    [URLS.groupA]: "build",
+    [URLS.groupB]: "build",
+    [URLS.splitA]: "build",
+    [URLS.splitB]: "build",
+    [URLS.pinned]: "build",
+    [URLS.focusIdle]: "focus",
+    [URLS.focusActive]: "focus",
+  });
 
   function clean(value, limit = 4096) {
     return String(value ?? "").trim().slice(0, limit);
@@ -26,6 +38,8 @@
       group: clean(tab?.group, 120),
       split: clean(tab?.split, 4096),
       splitOrientation: clean(tab?.splitOrientation, 24),
+      active: Boolean(tab?.active),
+      selected: Boolean(tab?.selected),
     });
   }
 
@@ -50,8 +64,19 @@
     if (split.some(tab => tab?.splitOrientation !== "stacked")) {
       reasons.push("stacked split orientation was not restored");
     }
-    if (tabs.filter(tab => EXPECTED_NORMAL_URLS.includes(tab.url)).some(tab => tab.workspace !== "build")) {
+    if (tabs.filter(tab => EXPECTED_NORMAL_URLS.includes(tab.url)).some(
+      tab => tab.workspace !== EXPECTED_WORKSPACES[tab.url]
+    )) {
       reasons.push("tab workspace membership was not restored");
+    }
+    for (const [workspace, expectedURL] of [["focus", URLS.focusActive], ["build", URLS.splitA]]) {
+      const active = tabs.filter(tab => tab.workspace === workspace && tab.active);
+      if (active.length !== 1 || active[0].url !== expectedURL) {
+        reasons.push(`${workspace} active page was not restored`);
+      }
+    }
+    if (!tabs.some(tab => tab.url === URLS.splitA && tab.selected)) {
+      reasons.push("active Build page was not selected");
     }
     if (requirePrivateAbsence && tabs.some(tab => tab.url === URLS.privateOnly)) {
       reasons.push("private tab leaked into the normal session");
@@ -78,7 +103,7 @@
   }
 
   const api = Object.freeze({
-    EXPECTED_NORMAL_URLS, URLS, clean, normaliseTab, validateNormal,
+    EXPECTED_NORMAL_URLS, EXPECTED_WORKSPACES, URLS, clean, normaliseTab, validateNormal,
     validatePrivate, validatePrivateAbsence,
   });
   scope.FluxionSessionRecovery = api;

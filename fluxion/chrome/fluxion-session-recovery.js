@@ -52,6 +52,8 @@
           group: tab.group?.label || "",
           split,
           splitOrientation: tab.splitview ? window.FluxionUI.splitOrientation(tab) : "",
+          active: tab.getAttribute("fluxion-workspace-active") === "true",
+          selected: tab === window.gBrowser.selectedTab,
         };
       }),
     };
@@ -94,14 +96,15 @@
     Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", true);
     window.FluxionUI.switchWorkspace("build");
 
-    const makeTab = url => {
+    const makeTab = (url, workspace = "build") => {
       const tab = window.gBrowser.addTrustedTab(url, { skipAnimation: true });
-      tab.setAttribute("fluxion-workspace", "build");
+      tab.setAttribute("fluxion-workspace", workspace);
       return tab;
     };
     const groupTabs = [makeTab(urls.groupA), makeTab(urls.groupB)];
     const splitTabs = [makeTab(urls.splitA), makeTab(urls.splitB)];
     const pinned = makeTab(urls.pinned);
+    const focusTabs = [makeTab(urls.focusIdle, "focus"), makeTab(urls.focusActive, "focus")];
     const group = window.gBrowser.addTabGroup(groupTabs, {
       label: "Recovery Lab", color: "green", insertBefore: groupTabs[0],
     });
@@ -111,28 +114,42 @@
     });
     if (!split || split.tabs.length !== 2) throw new Error("native recovery split was not created");
     window.gBrowser.pinTab(pinned);
+    window.FluxionUI.switchWorkspace("focus");
+    window.gBrowser.selectedTab = focusTabs[1];
+    await wait(100);
+    window.FluxionUI.switchWorkspace("build");
     window.gBrowser.selectedTab = splitTabs[0];
+    await wait(100);
     write("fluxion.recovery.seed.progress", "native-layout-created");
 
-    const keep = new Set([...groupTabs, ...splitTabs, pinned]);
+    const keep = new Set([...groupTabs, ...splitTabs, pinned, ...focusTabs]);
     for (const tab of [...window.gBrowser.tabs]) {
       if (!keep.has(tab)) window.gBrowser.removeTab(tab, { animate: false });
     }
     write("fluxion.recovery.seed.progress", "extra-tabs-removed");
     await wait(1800);
     write("fluxion.recovery.seed.progress", "flushing-sessionstore");
-    await flushTabs([...groupTabs, ...splitTabs, pinned]);
+    await flushTabs([...groupTabs, ...splitTabs, pinned, ...focusTabs]);
     write("fluxion.recovery.seed.progress", "sessionstore-projected");
     const validation = FluxionSessionRecovery.validateNormal(snapshot());
     if (!validation.ok) throw new Error(`seed state invalid: ${validation.reasons.join("; ")}`);
-    write("fluxion.recovery.seed.health", "workspace-tabs-groups-stacked-split-seeded");
+    write("fluxion.recovery.seed.health", "workspace-tabs-active-pages-groups-stacked-split-seeded");
     await quit();
   }
 
   async function validateRestoredSession() {
-    const result = await waitFor(() => FluxionSessionRecovery.validateNormal(snapshot()));
+    let result = await waitFor(() => FluxionSessionRecovery.validateNormal(snapshot()));
     if (!result.ok) throw new Error(`session restore invalid: ${result.reasons.join("; ")}`);
-    write("fluxion.recovery.restore.health", "workspace-tabs-groups-stacked-split-restored");
+    window.FluxionUI.switchWorkspace("focus");
+    await wait(100);
+    if (tabURL(window.gBrowser.selectedTab) !== FluxionSessionRecovery.URLS.focusActive) {
+      throw new Error("Focus did not resume its active page after restart");
+    }
+    window.FluxionUI.switchWorkspace("build");
+    await wait(100);
+    result = FluxionSessionRecovery.validateNormal(snapshot());
+    if (!result.ok) throw new Error(`workspace resume invalid: ${result.reasons.join("; ")}`);
+    write("fluxion.recovery.restore.health", "workspace-tabs-active-pages-groups-stacked-split-restored");
     await flushTabs([...window.gBrowser.tabs]);
     await quit();
   }
