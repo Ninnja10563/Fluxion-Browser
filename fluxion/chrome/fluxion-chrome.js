@@ -1719,12 +1719,7 @@
     });
   }
   on(gBrowser.tabContainer, "SplitViewRemoved", () => {
-    window.requestAnimationFrame(() => {
-      for (const tab of gBrowser.tabs) {
-        if (!tab.splitview) tab.removeAttribute(TAB_SPLIT_ORIENTATION);
-      }
-      applyActiveSplitOrientation();
-    });
+    window.requestAnimationFrame(() => applyActiveSplitOrientation());
   });
   on(gBrowser.tabpanels, "command", event => {
     if (event.target?.classList?.contains("split-view-splitter")) {
