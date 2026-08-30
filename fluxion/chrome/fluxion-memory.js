@@ -1,4 +1,4 @@
-/* global Services, ChromeUtils, Ci, Cu, FluxionMemoryPolicy, FluxionMemoryRanking */
+/* global Services, ChromeUtils, Ci, Cu, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking */
 (function initialiseFluxionMemory(window) {
   "use strict";
 
@@ -12,8 +12,13 @@
   const { PrivateBrowsingUtils } = ChromeUtils.importESModule(
     "resource://gre/modules/PrivateBrowsingUtils.sys.mjs"
   );
+  const { FluxionMemoryStore } = ChromeUtils.importESModule(
+    "resource://fluxion/modules/FluxionMemoryStore.sys.mjs"
+  );
   let manager = null;
   let exclusionSweep = null;
+  const indexedAt = new Map();
+  const pendingTimers = new WeakMap();
 
   function enabled() {
     return Services.prefs.getBoolPref(PREF_ENABLED, false);
@@ -124,6 +129,7 @@
     }
 
     let semantic = [];
+    let enrichedKeyword = [];
     let state = "building";
     try {
       const semanticManager = getManager();
@@ -143,6 +149,14 @@
       state = "lexical";
     }
 
+    try {
+      const enriched = await FluxionMemoryStore.search(query, 18);
+      enrichedKeyword = enriched.lexical.filter(row => isAllowedResult(row.url));
+      semantic.push(...enriched.semantic.filter(row => isAllowedResult(row.url)));
+    } catch (error) {
+      Cu.reportError(error);
+    }
+
     const openTabsByUrl = new Map();
     for (const tab of window.gBrowser.tabs) {
       const url = tab.linkedBrowser?.currentURI?.spec;
@@ -155,7 +169,7 @@
     return {
       results: FluxionMemoryRanking.mergeMemoryResults(
         query,
-        keyword.map(annotate),
+        [...keyword, ...enrichedKeyword].map(annotate),
         semantic.map(annotate),
         { currentWorkspace, limit: 12 },
       ),
@@ -189,6 +203,7 @@
         await connection.execute("DELETE FROM vec_history_mapping");
       });
     }
+    await FluxionMemoryStore.clear();
     Services.prefs.savePrefFile(null);
   }
 
@@ -199,6 +214,7 @@
     Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
     Services.prefs.savePrefFile(null);
     await applyExclusions();
+    await FluxionMemoryStore.deleteBlocked(next);
     return true;
   }
 
@@ -207,12 +223,56 @@
     Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
     Services.prefs.savePrefFile(null);
     await applyExclusions();
+    await FluxionMemoryStore.deleteBlocked(next);
     return next;
   }
+
+  async function indexBrowser(browser) {
+    if (!enabled() || PrivateBrowsingUtils.isWindowPrivate(window) || !browser) return;
+    const url = browser.currentURI?.spec || "";
+    if (Date.now() - (indexedAt.get(url) || 0) < 30000) return;
+    if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
+    const actor = browser.browsingContext?.currentWindowGlobal?.getActor("FluxionMemoryPage");
+    const extracted = await actor?.sendQuery("FluxionMemory:Extract");
+    const page = FluxionMemoryContent.normalisePage(extracted);
+    if (!FluxionMemoryPolicy.canIndexPage(page, excludedDomains())) return;
+    const embeddingText = FluxionMemoryContent.embeddingText(page);
+    if (embeddingText.length < 80) return;
+    const tab = window.gBrowser.getTabForBrowser(browser);
+    await FluxionMemoryStore.upsert({
+      ...page,
+      embeddingText,
+      workspace: tab ? window.FluxionUI.tabWorkspace(tab) : "",
+      tabGroup: tab?.group?.label || "",
+      lastVisit: Date.now(),
+      indexedAt: Date.now(),
+    });
+    indexedAt.set(page.url, Date.now());
+    Services.prefs.setStringPref("fluxion.memory.content.health", "content-indexed");
+  }
+
+  function scheduleIndex(browser) {
+    const previous = pendingTimers.get(browser);
+    if (previous) window.clearTimeout(previous);
+    pendingTimers.set(browser, window.setTimeout(() => {
+      pendingTimers.delete(browser);
+      indexBrowser(browser).catch(Cu.reportError);
+    }, 1800));
+  }
+
+  const progressListener = {
+    onStateChange(browser, webProgress, request, flags) {
+      const stopped = flags & Ci.nsIWebProgressListener.STATE_STOP;
+      const network = flags & Ci.nsIWebProgressListener.STATE_IS_NETWORK;
+      if (stopped && network && webProgress?.isTopLevel) scheduleIndex(browser);
+    },
+  };
+  window.gBrowser.addTabsProgressListener(progressListener);
 
   const observer = () => { applyExclusions(); };
   Services.obs.addObserver(observer, "places-semantichistorymanager-update-complete");
   window.addEventListener("unload", () => {
+    window.gBrowser.removeTabsProgressListener(progressListener);
     Services.obs.removeObserver(observer, "places-semantichistorymanager-update-complete");
   }, { once: true });
 
@@ -224,6 +284,7 @@
     excludedDomains,
     setExcludedDomains,
     search,
+    indexBrowser,
   });
   if (enabled() && !PrivateBrowsingUtils.isWindowPrivate(window)) {
     enable().catch(Cu.reportError);
@@ -237,6 +298,23 @@
       );
       Services.prefs.savePrefFile(null);
     }).catch(Cu.reportError);
+  }
+  if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
+    const testBrowser = window.gBrowser.selectedBrowser;
+    enable().then(() => new Promise(resolve => window.setTimeout(resolve, 2200)))
+      .then(() => indexBrowser(testBrowser))
+      .then(() => FluxionMemoryStore.search("illustrative examples", 6))
+      .then(results => {
+        const found = [...results.lexical, ...results.semantic]
+          .some(row => row.url === "https://example.com/");
+        if (found) {
+          Services.prefs.setStringPref(
+            "fluxion.memory.enrichment.health",
+            "content-indexed-and-retrieved",
+          );
+          Services.prefs.savePrefFile(null);
+        }
+      }).catch(Cu.reportError);
   }
   Services.prefs.setStringPref("fluxion.memory.health", "local-memory-controls-loaded");
   Services.prefs.savePrefFile(null);

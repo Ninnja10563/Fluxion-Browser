@@ -143,6 +143,18 @@ test("Browser Memory exposes functional privacy controls", () => {
   assert.match(memory, /excludedDomains/);
 });
 
+test("enriched Browser Memory crosses the content boundary through a narrow Gecko actor", () => {
+  const config = runtimeConfig;
+  const child = fs.readFileSync(path.join(root, "actors/FluxionMemoryPageChild.sys.mjs"), "utf8");
+  assert.match(config, /registerWindowActor\("FluxionMemoryPage"/);
+  assert.match(config, /safeForUntrustedWebProcess: true/);
+  assert.match(child, /input\[type="password"\]/);
+  assert.match(child, /script, style, noscript, nav, footer, form/);
+  assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
+  assert.match(memory, /FluxionMemoryPolicy\.canIndexPage/);
+  assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
+});
+
 test("split view delegates content panes to Gecko and remains controllable from Flow", () => {
   assert.match(chrome, /gBrowser\.addTabSplitView/);
   assert.match(chrome, /splitView\.unsplitTabs/);

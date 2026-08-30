@@ -192,6 +192,10 @@ private-window history is never eligible. The palette also provides controls
 to exclude the current domain or delete the semantic database and turn the
 feature off. Machines that do not meet Gecko's local-model requirements retain
 exact and fuzzy local-history search without downloading or running a model.
+When enabled, Fluxion also indexes a bounded extract of ordinary article/main
+content locally, making remembered ideas discoverable even when their words do
+not appear in the page title. Private pages, password forms, sensitive routes,
+and excluded domains never enter this enriched store.
 
 ## License
 

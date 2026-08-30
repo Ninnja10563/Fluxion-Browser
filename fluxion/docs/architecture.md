@@ -146,10 +146,13 @@ same product layer with platform packaging and title-bar adapters.
 ## Local Browser Memory boundary
 
 Browser Memory is opt-in and uses Gecko's packaged
-`PlacesSemanticHistoryManager`, `EmbeddingsGenerator`, SQLite `vec0` extension,
-and a separate `places_semantic.sqlite` database. Its current embedding text is
-the title and description already held by Places; Fluxion does not inject page
-content into a privileged document or send history to a network AI provider.
+`PlacesSemanticHistoryManager`, `EmbeddingsGenerator`, and SQLite `vec0`
+extension. Gecko's title index remains in `places_semantic.sqlite`; Fluxion's
+bounded page evidence lives separately in `fluxion_memory.sqlite`. A narrow
+`JSWindowActor` extracts the title, description, headings, and useful
+article/main text in the content process. It never reads form values and only
+returns a bounded plain-data record to privileged browser code. No history or
+page evidence is sent to a network AI provider.
 Gecko generates and queries embeddings on-device in deferred chunks, monitors
 chunk latency, and disables the model path when hardware requirements are not
 met. Fluxion merges those results with exact/fuzzy Places evidence, recency,
@@ -157,20 +160,19 @@ visit frequency, and active-workspace relevance. Exact evidence has an explicit
 ranking advantage over a weaker semantic neighbour.
 
 Firefox excludes private-window visits before they enter Places, and Fluxion
-also refuses Browser Memory operations from private windows. Auth, mail,
-payment, billing, and other obviously sensitive URLs are filtered. User domain
+also refuses Browser Memory operations from private windows. Pages containing
+password fields are rejected before storage. Auth, mail, payment, billing, and
+other obviously sensitive URLs are filtered. User domain
 exclusions are stored as a local preference; excluded vector rows are replaced
 with a content-free sentinel and filtered at query time, preventing the native
 indexer from immediately recreating page-derived vectors while retaining the
 ordinary history record. Clearing Browser Memory disables its feature gates,
 deletes vector rows and mappings, and schedules the semantic database files for
-removal at the next startup. It does not silently delete ordinary history.
-
-A later enrichment stage may add extracted headings and useful body text
-through a narrow content-process actor, but it will require independent tests
-for private contexts, password forms, exclusions, size limits, and deletion
-before it is enabled. Optional generative `AIProvider` and `EmbeddingProvider`
-interfaces remain separate future work.
+removal at the next startup. The same actions delete matching records and
+vectors from Fluxion's enriched store. They do not silently delete ordinary
+history. Content normalization, private/password policy, domain exclusions,
+size limits, and deletion paths are independently tested. Optional generative
+`AIProvider` and `EmbeddingProvider` interfaces remain separate future work.
 
 ## Privileged settings surface
 

@@ -18,6 +18,7 @@ node --check chrome/core/search.js
 node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
+node --check chrome/core/memory-content.js
 node --check chrome/core/memory-ranking.js
 node --check chrome/core/peek.js
 node --check chrome/core/settings.js
@@ -32,6 +33,9 @@ node --check chrome/fluxion-peek.js
 node --check chrome/fluxion-settings.js
 node --check chrome/fluxion-tab-sleeping.js
 node --check chrome/fluxion-palette.js
+node --check actors/FluxionMemoryPageChild.sys.mjs
+node --check actors/FluxionMemoryPageParent.sys.mjs
+node --check modules/FluxionMemoryStore.sys.mjs
 node --test tests/*.test.js
 
 if [[ "$(uname -s)" == "Darwin" ]]; then

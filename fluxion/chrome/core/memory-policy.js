@@ -77,7 +77,14 @@
     }
   }
 
+  function canIndexPage(page, domains = []) {
+    if (!page || page.isPrivate || page.hasPasswordField) return false;
+    const url = String(page.url || "");
+    return !isSensitiveUrl(url) && !isExcludedUrl(url, domains);
+  }
+
   const api = Object.freeze({
+    canIndexPage,
     isExcludedUrl,
     isSensitiveUrl,
     normaliseDomain,

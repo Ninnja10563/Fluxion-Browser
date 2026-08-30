@@ -8,6 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.12 enriches local Browser Memory with page evidence:
+
+- extract bounded titles, descriptions, headings, and useful article/main text
+  through a process-isolated Gecko window actor;
+- generate embeddings on-device with Gecko's packaged model and store them in
+  Fluxion's own local SQLite `vec0` database;
+- combine content keyword matches and semantic similarity with the existing
+  exact Places, recency, frequency, and workspace ranking signals;
+- reject private windows, password forms, sensitive routes, non-web pages, and
+  user-excluded domains before content reaches storage;
+- delete enriched records and vectors when Browser Memory is cleared or a
+  domain is excluded, without deleting ordinary browsing history.
+
+Ordinary browsing remains fully functional with Browser Memory disabled.
+
 Version 0.11 makes Fluxion's keyboard model user-editable:
 
 - change the command palette, tab search, Flow sidebar, next-workspace, and
