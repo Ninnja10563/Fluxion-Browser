@@ -535,9 +535,10 @@ not persist it.
 That retained active row remains in Flow's ordinary roving focus collection.
 When keyboard navigation selects an adjacent ungrouped page, the group becomes
 heading-only on the following frame. If Gecko later selects another member,
-the same projection replaces the retained row without changing native collapse
-state. This preserves a visible explanation of the rendered page without
-turning Fluxion into a competing owner of groups or selection.
+the next projection follows Gecko's resulting selection and collapse state;
+Fluxion does not force the group to remain collapsed. This preserves a visible
+explanation of the rendered page without turning Fluxion into a competing owner
+of groups or selection.
 
 Before replacing Flow's row DOM, the renderer captures only a currently
 focused native-tab identity. It restores that identity after the rebuild unless

@@ -3204,43 +3204,25 @@
             keyboardFocusedTab === expectedNextTab &&
             inactiveItem?.querySelectorAll(".fluxion-tab").length === 0
           );
-          tabElements.get(keyboardFocusedTab)?.blur();
-          gBrowser.selectedTab = fixtureTabs[2];
-          scheduleRender();
-          window.setTimeout(() => {
-            render();
-            const replacementItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
-              candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
+          if (initiallyContinuous && keyboardContinuous) {
+            Services.prefs.setStringPref(
+              "fluxion.groups.collapsed.health",
+              "active-page-visible-and-keyboard-continuous",
             );
-            const replacementVisible = Boolean(
-              replacementItem?.querySelectorAll(".fluxion-tab").length === 1 &&
-              tabElements.get(fixtureTabs[2])?.isConnected &&
-              replacementItem?.querySelector(".fluxion-group-count")?.textContent === "+2"
-            );
-            if (initiallyContinuous && keyboardContinuous && replacementVisible) {
-              Services.prefs.setStringPref(
-                "fluxion.groups.collapsed.health",
-                "active-page-visible-and-keyboard-continuous",
-              );
-              if (Services.prefs.prefHasUserValue("fluxion.groups.collapsed.visual.error")) {
-                Services.prefs.clearUserPref("fluxion.groups.collapsed.visual.error");
-              }
-              finish();
-            } else {
-              finish(
-                `initial=${initiallyContinuous} keyboard=${keyboardContinuous} ` +
-                  `replacement=${replacementVisible} collapsed=${Boolean(collapsedGroup.collapsed)} ` +
-                  `activeIndex=${activeIndex} rows=${rowsBeforeMove.length} ` +
-                  `expected=${expectedNextTab?.getAttribute("label") || "none"} ` +
-                  `selected=${keyboardSelectedTab?.getAttribute("label") || "none"} ` +
-                  `focused=${keyboardFocusedTab?.getAttribute("label") || "none"} ` +
-                  `replacementRows=${replacementItem?.querySelectorAll(".fluxion-tab").length ?? -1} ` +
-                  `replacementConnected=${Boolean(tabElements.get(fixtureTabs[2])?.isConnected)} ` +
-                  `replacementCount=${replacementItem?.querySelector(".fluxion-group-count")?.textContent || "none"} ` +
-                  `replacementSelected=${gBrowser.selectedTab === fixtureTabs[2]}`,
-              );
+            if (Services.prefs.prefHasUserValue("fluxion.groups.collapsed.visual.error")) {
+              Services.prefs.clearUserPref("fluxion.groups.collapsed.visual.error");
             }
-          }, 80);
+            finish();
+          } else {
+            finish(
+              `initial=${initiallyContinuous} keyboard=${keyboardContinuous} ` +
+                `collapsed=${Boolean(collapsedGroup.collapsed)} ` +
+                `activeIndex=${activeIndex} rows=${rowsBeforeMove.length} ` +
+                `expected=${expectedNextTab?.getAttribute("label") || "none"} ` +
+                `selected=${keyboardSelectedTab?.getAttribute("label") || "none"} ` +
+                `focused=${keyboardFocusedTab?.getAttribute("label") || "none"}`,
+            );
+          }
         }, 80);
       });
     };

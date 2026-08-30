@@ -57,11 +57,11 @@ passes:
    one following page, collapses the group around its selected member, and
    rejects the build unless Flow retains exactly that active row with an honest
    `+2` hidden count. It drives Arrow Down into the next visible page, requires
-   Gecko selection and DOM focus to agree after rerender, then selects another
-   hidden member and requires that page to replace the retained row without
-   expanding the group. The gate begins only after the pointer-close and
-   workspace-resume fixtures release Flow, so an intentional close-layout hold
-   cannot turn group projection into a timing-dependent result.
+   Gecko selection and DOM focus to agree after rerender, and requires the
+   inactive group to return to one heading row. The gate begins only after the
+   pointer-close and workspace-resume fixtures release Flow, so an intentional
+   close-layout hold cannot turn group projection into a timing-dependent
+   result.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any

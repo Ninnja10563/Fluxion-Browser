@@ -237,8 +237,8 @@ adjacent workspace after confirmation.
 
 Collapsing a native tab group keeps its currently selected page visible as one
 compact row and labels the remaining hidden members as `+N`. Arrow navigation
-continues through that row into neighbouring pages; selecting another member
-replaces it without expanding the group.
+continues through that row into neighbouring pages. Gecko remains authoritative
+if another action changes selection or expands the group.
 
 To browse two pages together, right-click a tab and choose **Open in Split View
 With**, or use **Open split side by side** / **Open stacked split** in the

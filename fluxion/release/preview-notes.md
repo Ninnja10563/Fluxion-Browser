@@ -15,8 +15,8 @@ continuity in Flow:
   group instead of hiding the page the user is currently viewing;
 - show a compact `+N` count for the remaining hidden pages, while an inactive
   collapsed group stays at one concise heading row;
-- replace the active row in place when another member becomes selected,
-  without expanding the group or copying Gecko's group state;
+- recompute the retained row from Gecko's current selection whenever Gecko
+  continues to report the group as collapsed, without copying group state;
 - retain Flow's one-stop roving keyboard model across the projected row, so
   Arrow Up/Down can leave a collapsed group for the adjacent visible page and
   restore DOM focus after the coalesced render;
@@ -25,11 +25,11 @@ continuity in Flow:
 - expose the group name, native member count, collapse state, and active-page
   exception through accessible labels;
 - add pure projection coverage for expanded, collapsed-active,
-  collapsed-inactive, replacement, and malformed states;
+  collapsed-inactive, changed-selection, and malformed states;
 - add a packaged macOS gate that creates a real three-page Gecko group,
   collapses it, requires exactly one active row and a `+2` count, drives Arrow
-  Down into the next visible page, and selects another member to prove
-  the visible row is replaced correctly.
+  Down into the next visible page, and verifies the group returns to one
+  concise heading row.
 
 Gecko remains the sole owner of tab membership, selection, group collapse,
 ordering, navigation, and SessionStore recovery.
