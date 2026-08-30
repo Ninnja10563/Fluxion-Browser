@@ -454,6 +454,13 @@
   }
 
   function tabLabel(tab) {
+    const librarySection = tab.getAttribute("fluxion-library-section");
+    if (librarySection) {
+      const labels = {
+        history: "History", bookmarks: "Bookmarks", folders: "Folders", downloads: "Downloads",
+      };
+      return `Library · ${labels[librarySection] || "History"}`;
+    }
     return tab.label || tab.getAttribute("label") || "New tab";
   }
 
