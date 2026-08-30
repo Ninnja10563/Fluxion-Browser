@@ -10,7 +10,8 @@ test("grounded answers cite only supplied browser records", () => {
     url: "https://lancedb.github.io/docs",
     title: "LanceDB Documentation",
     content: "LanceDB is an open-source database for local vector search and multimodal data.",
-    workspace: "Development",
+    workspace: "build",
+    workspaceName: "Development",
     lastVisit: now - 86400000,
   }], { now });
   assert.equal(answer.state, "grounded");

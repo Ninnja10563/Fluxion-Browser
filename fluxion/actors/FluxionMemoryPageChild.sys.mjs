@@ -13,6 +13,8 @@ export class FluxionMemoryPageChild extends JSWindowActorChild {
     const source = document.querySelector("article, main") || document.body;
     const clone = source?.cloneNode(true);
     clone?.querySelectorAll("script, style, noscript, nav, footer, form, input, textarea, select, button").forEach(node => node.remove());
+    clone?.querySelectorAll("h1, h2, h3, h4, h5, h6, p, li, dt, dd, blockquote, pre, section, article, div, br")
+      .forEach(node => node.append(document.createTextNode(" ")));
 
     return {
       url: document.documentURI,

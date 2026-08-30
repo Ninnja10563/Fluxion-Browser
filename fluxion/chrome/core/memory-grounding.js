@@ -44,7 +44,9 @@
       else if (tokens.length && tokens.every(token => text.includes(token))) matches.push(`${name[0].toUpperCase()}${name.slice(1)} words match`);
     }
     if (!matches.length && Number.isFinite(Number(row.distance))) matches.push("Similar page meaning");
-    if (row.workspace) matches.push(`Workspace: ${clean(row.workspace, 40)}`);
+    if (row.workspaceName || row.workspace) {
+      matches.push(`Workspace: ${clean(row.workspaceName || row.workspace, 40)}`);
+    }
     if (row.group) matches.push(`Group: ${clean(row.group, 50)}`);
     return matches.slice(0, 3);
   }

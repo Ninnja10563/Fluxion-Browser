@@ -510,7 +510,7 @@
       return {
       label: row.title || row.url,
       detail: evidence
-        ? `${evidence.domain} · ${evidence.visitLabel}${evidence.workspace ? ` · ${evidence.workspace}` : ""}`
+        ? `${evidence.domain} · ${evidence.visitLabel}${evidence.workspaceName ? ` · ${evidence.workspaceName}` : ""}`
         : row.url,
       evidence: evidence?.excerpt || "",
       kind: evidence?.reasons?.[0] || "Memory",

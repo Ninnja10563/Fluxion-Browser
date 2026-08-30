@@ -162,13 +162,19 @@
     }
 
     const openTabsByUrl = new Map();
+    const workspaceNames = new Map(window.FluxionUI.workspaces().map(item => [item.id, item.name]));
     for (const tab of window.gBrowser.tabs) {
       const url = tab.linkedBrowser?.currentURI?.spec;
       if (url) openTabsByUrl.set(url, tab);
     }
     const annotate = row => {
       const tab = openTabsByUrl.get(row.url);
-      return tab ? { ...row, workspace: window.FluxionUI.tabWorkspace(tab) } : row;
+      const workspace = tab ? window.FluxionUI.tabWorkspace(tab) : row.workspace;
+      return {
+        ...row,
+        workspace,
+        workspaceName: workspaceNames.get(workspace) || workspace || "",
+      };
     };
     const results = FluxionMemoryRanking.mergeMemoryResults(
         query,

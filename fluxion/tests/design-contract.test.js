@@ -154,6 +154,7 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.match(config, /safeForUntrustedWebProcess: true/);
   assert.match(child, /input\[type="password"\]/);
   assert.match(child, /script, style, noscript, nav, footer, form/);
+  assert.match(child, /node\.append\(document\.createTextNode\(" "\)\)/);
   assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
   assert.match(memory, /FluxionMemoryPolicy\.canIndexPage/);
   assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
