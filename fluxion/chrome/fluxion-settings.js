@@ -906,13 +906,15 @@
         renderWorkspaces();
         const status = notes.get("workspaces");
         if (status) status.textContent = "";
-        const routed = gBrowser.selectedBrowser?.currentURI?.spec === "about:preferences#workspaces" &&
-          !root.hidden && !workspacePanel.hidden && workspaceList.getBoundingClientRect().height > 100;
-        stableFrames = routed ? stableFrames + 1 : 0;
+        const workspacesActive = sections.get("workspaces")?.button.getAttribute("aria-current") === "true";
+        const settled = gBrowser.selectedTab === settingsTab && !root.hidden &&
+          activeSection === "workspaces" && workspacesActive && !workspacePanel.hidden &&
+          workspaceList.getBoundingClientRect().height > 100;
+        stableFrames = settled ? stableFrames + 1 : 0;
         if (stableFrames >= 10) {
           Services.prefs.setStringPref(
             "fluxion.workspaceSettings.capture.health",
-            "settled-workspaces-route-visible",
+            "settled-workspaces-surface-visible",
           );
           Services.prefs.savePrefFile(null);
           return;

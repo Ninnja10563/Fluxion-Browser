@@ -129,7 +129,7 @@ test("Workspace settings mutate the shared controller and prove safe native-tab 
   assert.match(chrome, /Services\.prefs\.addObserver\(PREF_WORKSPACES/);
   assert.match(macVerifier, /FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST=1/);
   assert.match(macVerifier, /live-controls-persisted-and-tabs-migrated/);
-  assert.match(macVerifier, /settled-workspaces-route-visible/);
+  assert.match(macVerifier, /settled-workspaces-surface-visible/);
 });
 
 test("tab organisation stays local, evidence-backed, and confirmation-only", () => {
