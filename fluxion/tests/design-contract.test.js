@@ -18,6 +18,7 @@ const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const organisation = fs.readFileSync(path.join(root, "chrome/core/tab-organisation.js"), "utf8");
 const flowNavigation = fs.readFileSync(path.join(root, "chrome/core/flow-navigation.js"), "utf8");
+const indexScheduler = fs.readFileSync(path.join(root, "chrome/core/index-scheduler.js"), "utf8");
 const newTab = fs.readFileSync(path.join(root, "newtab/index.html"), "utf8");
 const runtimeConfig = fs.readFileSync(
   path.join(root, "runtime/fluxion.cfg"),
@@ -137,6 +138,7 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /fluxion\.splitview\.health/);
   assert.match(macVerifier, /fluxion\.memory\.health/);
   assert.match(macVerifier, /fluxion\.memory\.engine\.health/);
+  assert.match(macVerifier, /fluxion\.memory\.scheduler\.health/);
   assert.match(macVerifier, /fluxion\.settings\.visual\.health/);
   assert.match(macVerifier, /FLUXION_VISUAL_MEMORY_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SPLIT_TEST=1/);
@@ -263,9 +265,27 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
   assert.match(memory, /FluxionMemoryPolicy\.canIndexPage/);
   assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
-  assert.match(store, /setTimeout\(\(\) => \{[\s\S]*embedAndStore\(page\.url, page\.embeddingText\)\.catch/);
+  assert.match(store, /async embed\(url, text\)/);
+  assert.doesNotMatch(store, /setTimeout\(\(\) => \{[\s\S]*embedAndStore/);
   assert.match(store, /withTimeout\(engine\.embed\(query\), 1500\)/);
   assert.match(store, /SELECT count\(\*\) AS count FROM page_vectors/);
+});
+
+test("Browser Memory indexing yields to browsing and remains bounded", () => {
+  assert.match(runtimeConfig, /chrome\/core\/index-scheduler\.js/);
+  assert.match(memory, /new FluxionIndexScheduler\.IndexScheduler/);
+  assert.match(memory, /quietMs: 4000/);
+  assert.match(memory, /maxQueue: 64/);
+  assert.match(memory, /nsIUserIdleService/);
+  assert.match(memory, /navigator\.getBattery\(\)/);
+  assert.match(memory, /memory-pressure/);
+  assert.match(memory, /activePageIsDemanding/);
+  assert.match(memory, /await FluxionMemoryStore\.embed/);
+  assert.match(indexScheduler, /this\.queue = new Map\(\)/);
+  assert.match(indexScheduler, /while \(this\.queue\.size > this\.maxQueue\)/);
+  assert.match(indexScheduler, /resume\(reason = ""\)/);
+  assert.match(indexScheduler, /await this\.run\(value, key\)/);
+  assert.match(macVerifier, /bounded-serial-queue-paused-and-resumed/);
 });
 
 test("Browser Memory answers expose source evidence and never invent empty results", () => {

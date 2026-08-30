@@ -8,6 +8,24 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.23 makes local Browser Memory indexing subordinate to browsing:
+
+- replace detached concurrent embedding timers with one bounded serial queue;
+- deduplicate repeat page loads and cap pending work at 64 pages;
+- wait for a four-second quiet period and Gecko's system-idle signal before
+  extracting content or starting a local embedding;
+- pause indexing on low unplugged battery, active audio, picture-in-picture,
+  camera/screen sharing, and Gecko memory-pressure notifications;
+- preserve queued pages across policy pauses, wake when conditions recover, and
+  clear pending work when Browser Memory is disabled or deleted;
+- dispatch the queue through low-priority window idle callbacks where Gecko
+  exposes them, while retaining a safe timer fallback;
+- gate the packaged app by pausing a real page, proving no early database write,
+  then requiring that exact evidence after the scheduler resumes.
+
+Ordinary navigation never waits for Browser Memory, and the feature remains
+local, optional, and unavailable in private windows.
+
 Version 0.22 hardens keyboard navigation and many-tab responsiveness:
 
 - replace hundreds of tab-row stops with one roving focus target per tablist;

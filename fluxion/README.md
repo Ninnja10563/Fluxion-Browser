@@ -35,6 +35,9 @@ The current preview is runnable and includes:
 - optional Browser Memory search over non-private history, combining exact
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;
+- a bounded, deduplicating Browser Memory queue that runs one page at a time
+  and yields during user activity, low battery, active media/sharing, or memory
+  pressure;
 - optional Ollama and OpenAI-compatible providers for grounded current-page
   questions and explicit selected-tab comparison, with AI disabled by default
   and ordinary browsing independent;
@@ -210,7 +213,11 @@ exact and fuzzy local-history search without downloading or running a model.
 When enabled, Fluxion also indexes a bounded extract of ordinary article/main
 content locally, making remembered ideas discoverable even when their words do
 not appear in the page title. Private pages, password forms, sensitive routes,
-and excluded domains never enter this enriched store.
+and excluded domains never enter this enriched store. Page extraction and
+embedding run serially through a capped local queue after a quiet period. The
+queue pauses while the user is active, the Mac is low on battery, the current
+page is playing or sharing media, or Gecko reports memory pressure; pending
+pages remain queued and resume when conditions recover.
 
 Each recall now begins with a concise best match grounded in the returned
 history record. Source rows show the matching local excerpt, why it matched,

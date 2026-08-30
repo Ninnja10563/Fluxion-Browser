@@ -1,4 +1,4 @@
-/* global Services, ChromeUtils, Ci, Cu, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking, FluxionMemoryGrounding */
+/* global Services, ChromeUtils, Cc, Ci, Cu, FluxionIndexScheduler, FluxionMemoryPolicy, FluxionMemoryContent, FluxionMemoryRanking, FluxionMemoryGrounding */
 (function initialiseFluxionMemory(window) {
   "use strict";
 
@@ -17,11 +17,73 @@
   );
   let manager = null;
   let exclusionSweep = null;
+  let indexScheduler = null;
+  let batteryManager = null;
+  const batteryState = { supported: false, charging: true, level: 1 };
   const indexedAt = new Map();
-  const pendingTimers = new WeakMap();
+  const activityEvents = ["keydown", "pointerdown", "touchstart", "wheel"];
+  let idleService = null;
+  try {
+    idleService = Cc["@mozilla.org/widget/useridleservice;1"]
+      .getService(Ci.nsIUserIdleService);
+  } catch (_) {}
 
   function enabled() {
     return Services.prefs.getBoolPref(PREF_ENABLED, false);
+  }
+
+  function setLowPriorityTimer(callback, delay) {
+    const token = { timeout: 0, idle: 0 };
+    token.timeout = window.setTimeout(() => {
+      token.timeout = 0;
+      if (typeof window.requestIdleCallback === "function") {
+        token.idle = window.requestIdleCallback(callback, { timeout: 5000 });
+      } else {
+        token.timeout = window.setTimeout(callback, 0);
+      }
+    }, delay);
+    return token;
+  }
+
+  function clearLowPriorityTimer(token) {
+    if (token?.timeout) window.clearTimeout(token.timeout);
+    if (token?.idle && typeof window.cancelIdleCallback === "function") {
+      window.cancelIdleCallback(token.idle);
+    }
+  }
+
+  function activePageIsDemanding() {
+    const tab = window.gBrowser.selectedTab;
+    const browser = tab?.linkedBrowser;
+    return Boolean(
+      tab?.hasAttribute("busy") || tab?.soundPlaying || tab?.pictureinpicture ||
+      tab?.sharingState || browser?.getAttribute("sharing")
+    );
+  }
+
+  function indexingGate() {
+    if (!enabled() || PrivateBrowsingUtils.isWindowPrivate(window)) {
+      return { ok: false, reason: "disabled-or-private", retryIn: 30000 };
+    }
+    if (batteryState.supported && !batteryState.charging && batteryState.level <= 0.2) {
+      return { ok: false, reason: "low-battery", retryIn: 60000 };
+    }
+    if (activePageIsDemanding()) {
+      return { ok: false, reason: "active-media-or-sharing", retryIn: 15000 };
+    }
+    const idleTime = Number(idleService?.idleTime || 0);
+    if (idleService && idleTime < 3000) {
+      return { ok: false, reason: "user-active", retryIn: Math.max(500, 3000 - idleTime) };
+    }
+    return { ok: true };
+  }
+
+  function updateBatteryState() {
+    if (!batteryManager) return;
+    batteryState.supported = true;
+    batteryState.charging = Boolean(batteryManager.charging);
+    batteryState.level = Number.isFinite(batteryManager.level) ? batteryManager.level : 1;
+    indexScheduler?.wake();
   }
 
   function excludedDomains() {
@@ -200,6 +262,7 @@
     const connection = await semanticManager.getConnection();
     semanticManager.onPagesRankChanged();
     applyExclusions();
+    indexScheduler?.wake();
     return connection ? "semantic" : "lexical";
   }
 
@@ -209,6 +272,7 @@
     Services.prefs.setBoolPref("places.semanticHistory.featureGate", false);
     Services.prefs.setBoolPref("browser.ml.enable", false);
     Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", true);
+    indexScheduler?.clear();
     if (connection) {
       await connection.executeTransaction(async () => {
         await connection.execute("DELETE FROM vec_history");
@@ -263,6 +327,9 @@
       lastVisit: Date.now(),
       indexedAt: Date.now(),
     });
+    if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") !== "1" && enabled()) {
+      await FluxionMemoryStore.embed(page.url, embeddingText);
+    }
     if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
       Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "evidence-stored");
       Services.prefs.savePrefFile(null);
@@ -272,13 +339,22 @@
     return page.url;
   }
 
+  indexScheduler = new FluxionIndexScheduler.IndexScheduler({
+    run: browser => indexBrowser(browser).catch(error => {
+      Cu.reportError(error);
+      return null;
+    }),
+    canRun: indexingGate,
+    setTimer: setLowPriorityTimer,
+    clearTimer: clearLowPriorityTimer,
+    quietMs: 4000,
+    retryMs: 5000,
+    maxQueue: 64,
+  });
+
   function scheduleIndex(browser) {
-    const previous = pendingTimers.get(browser);
-    if (previous) window.clearTimeout(previous);
-    pendingTimers.set(browser, window.setTimeout(() => {
-      pendingTimers.delete(browser);
-      indexBrowser(browser).catch(Cu.reportError);
-    }, 1800));
+    if (!enabled() || !browser || PrivateBrowsingUtils.isWindowPrivate(window)) return false;
+    return indexScheduler.enqueue(browser, browser);
   }
 
   const progressListener = {
@@ -291,10 +367,31 @@
   window.gBrowser.addTabsProgressListener(progressListener);
 
   const observer = () => { applyExclusions(); };
+  const activityObserver = () => indexScheduler.notifyActivity();
+  const memoryPressureObserver = () => indexScheduler.defer("memory-pressure", 30000);
   Services.obs.addObserver(observer, "places-semantichistorymanager-update-complete");
+  Services.obs.addObserver(memoryPressureObserver, "memory-pressure");
+  for (const eventName of activityEvents) {
+    window.addEventListener(eventName, activityObserver, { capture: true, passive: true });
+  }
+  if (typeof window.navigator.getBattery === "function") {
+    window.navigator.getBattery().then(manager => {
+      batteryManager = manager;
+      updateBatteryState();
+      batteryManager.addEventListener("chargingchange", updateBatteryState);
+      batteryManager.addEventListener("levelchange", updateBatteryState);
+    }).catch(Cu.reportError);
+  }
   window.addEventListener("unload", () => {
     window.gBrowser.removeTabsProgressListener(progressListener);
     Services.obs.removeObserver(observer, "places-semantichistorymanager-update-complete");
+    Services.obs.removeObserver(memoryPressureObserver, "memory-pressure");
+    for (const eventName of activityEvents) {
+      window.removeEventListener(eventName, activityObserver, { capture: true });
+    }
+    batteryManager?.removeEventListener("chargingchange", updateBatteryState);
+    batteryManager?.removeEventListener("levelchange", updateBatteryState);
+    indexScheduler.destroy();
   }, { once: true });
 
   window.FluxionMemory = Object.freeze({
@@ -306,6 +403,7 @@
     setExcludedDomains,
     search,
     indexBrowser,
+    indexingStatus: () => indexScheduler.status(),
   });
   if (enabled() && !PrivateBrowsingUtils.isWindowPrivate(window)) {
     enable().catch(Cu.reportError);
@@ -322,16 +420,37 @@
   }
   if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
     const testURL = "https://example.com/?fluxion-memory-test=1";
+    indexScheduler.defer("packaged-runtime-test", 30000);
     const testTab = window.gBrowser.addTrustedTab(testURL, { skipAnimation: true });
     testTab.setAttribute("fluxion-workspace", window.FluxionUI.currentWorkspace());
     enable().then(() => new Promise(resolve => window.setTimeout(resolve, 3000)))
-      .then(() => {
+      .then(async () => {
         if (testTab.closing || testTab.linkedBrowser?.currentURI?.spec !== testURL) {
           throw new Error("enrichment gate could not load its dedicated HTTPS tab");
         }
         Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "page-found");
         Services.prefs.savePrefFile(null);
-        return indexBrowser(testTab.linkedBrowser);
+        if (!scheduleIndex(testTab.linkedBrowser)) {
+          throw new Error("enrichment gate could not enqueue its page");
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 500));
+        if (await FluxionMemoryStore.get(testURL)) {
+          throw new Error("low-priority queue ignored its explicit deferral");
+        }
+        Services.prefs.setStringPref(
+          "fluxion.memory.scheduler.stage",
+          "queued-work-remained-paused",
+        );
+        Services.prefs.savePrefFile(null);
+        if (!indexScheduler.resume("packaged-runtime-test")) {
+          throw new Error("low-priority queue could not release its test hold");
+        }
+        for (let attempt = 0; attempt < 48; attempt += 1) {
+          const record = await FluxionMemoryStore.get(testURL);
+          if (record) return testURL;
+          await new Promise(resolve => window.setTimeout(resolve, 250));
+        }
+        throw new Error("low-priority queue did not resume within its bound");
       })
       .then(indexedURL => FluxionMemoryStore.get(indexedURL))
       .then(record => {
@@ -341,6 +460,10 @@
           evidence.includes("example");
         if (found) {
           Services.prefs.setStringPref(
+            "fluxion.memory.scheduler.health",
+            "bounded-serial-queue-paused-and-resumed",
+          );
+          Services.prefs.setStringPref(
             "fluxion.memory.enrichment.health",
             "content-indexed-and-retrieved",
           );
@@ -349,6 +472,7 @@
           throw new Error("enrichment gate could not read extracted page evidence");
         }
       }).catch(error => {
+        indexScheduler.resume("packaged-runtime-test");
         Services.prefs.setStringPref("fluxion.memory.enrichment.error", String(error));
         Services.prefs.savePrefFile(null);
         Cu.reportError(error);

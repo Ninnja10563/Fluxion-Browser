@@ -18,6 +18,7 @@ node --check < runtime/fluxion.cfg
 node --check chrome/core/url.js
 node --check chrome/core/search.js
 node --check chrome/core/flow-navigation.js
+node --check chrome/core/index-scheduler.js
 node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js
 node --check chrome/core/permissions.js

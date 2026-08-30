@@ -68,6 +68,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.memory.health", "local-memory-controls-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.engine.health", "\(local-vector-store-opened\|lexical-fallback-available\)")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.enrichment.health", "content-indexed-and-retrieved")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.memory.scheduler.health", "bounded-serial-queue-paused-and-resumed")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.grounding.health", "grounded-evidence-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.settings.health", "live-preferences-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.settings.visual.health", "settings-surface-visible")' "$profile/prefs.js" && \
@@ -96,7 +97,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.organisation.health", "local-proposal-visible-and-confirmation-required")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.scale.health", "200-tabs-rendered-with-roving-keyboard-focus")' "$profile/prefs.js" && \
       [[ -s "$ai_request" ]] && grep -q '"page_count": 2' "$ai_request"; then
-    printf 'Verified: Fluxion chrome, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
+    printf 'Verified: Fluxion chrome, native Flow application menu, versioned About surface, Library history/bookmark folders/downloads, live settings and editable site permissions, grounded current-page questions and selected-page comparison, local confirmation-only tab-group suggestions, 200-tab roving keyboard focus, Peek Pages, native multi-select, tab sleeping, bounded low-priority Browser Memory indexing, Browser Memory evidence, tab groups, and native split view loaded.\n' >&2
     if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
       # prefs.js is flushed as soon as Fluxion chrome initialises. Give Gecko a
       # few more frames to replace macOS's startup placeholder, then foreground
@@ -132,6 +133,7 @@ if [[ -f "$profile/prefs.js" ]]; then
   printf 'Observed Fluxion health markers:\n' >&2
   grep 'user_pref("fluxion\..*\.health"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.enrichment\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.memory\.scheduler\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.settings\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.ai\.visual\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.ai\.visual\.stage"' "$profile/prefs.js" >&2 || true

@@ -33,6 +33,10 @@ passes:
    Flow render, requires a single roving tab stop, drives ArrowDown, verifies
    selected-tab and DOM focus identity after rerender, and removes the fixture
    before capture.
+   A background-work gate defers an extracted page in Fluxion's real indexing
+   scheduler, proves it is absent while the queue is paused, then requires the
+   same page and its evidence to appear after the scheduler resumes. This blocks
+   publication if Browser Memory bypasses its bounded serial queue.
    A separate four-launch gate then seeds and cleanly quits a normal session,
    restores its workspace/pin/group/split state, opens and quits a private
    session, and restores normal mode again. Publication is blocked if the

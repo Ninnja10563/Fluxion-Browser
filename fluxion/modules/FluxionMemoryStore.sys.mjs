@@ -89,13 +89,10 @@ export const FluxionMemoryStore = Object.freeze({
         headings=excluded.headings, content=excluded.content, workspace=excluded.workspace,
         tab_group=excluded.tab_group, last_visit=excluded.last_visit,
         visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, parameters);
-    // Embedding is intentionally detached: an unavailable model must never
-    // delay navigation, durable evidence storage, or lexical recall.
-    if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") !== "1") {
-      setTimeout(() => {
-        embedAndStore(page.url, page.embeddingText).catch(Cu.reportError);
-      }, 8000);
-    }
+  },
+
+  async embed(url, text) {
+    await embedAndStore(url, text);
   },
 
   async search(query, limit = 12, includeSemantic = true) {

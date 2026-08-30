@@ -189,14 +189,25 @@ bounded page evidence lives separately in `fluxion_memory.sqlite`. A narrow
 article/main text in the content process. It never reads form values and only
 returns a bounded plain-data record to privileged browser code. No history or
 page evidence is sent to a network AI provider.
-Gecko generates and queries embeddings on-device in deferred chunks, monitors
-chunk latency, and disables the model path when hardware requirements are not
-met. Fluxion commits bounded lexical evidence before starting best-effort
-embedding work and applies a short timeout to semantic queries, so model startup
-can never block navigation, indexing, or lexical recall. Fluxion merges semantic
+Gecko generates and queries embeddings on-device and disables the model path
+when hardware requirements are not met. Fluxion commits bounded lexical
+evidence before starting embedding work and applies a short timeout to semantic
+queries, so model startup can never block navigation or lexical recall. Fluxion
+merges semantic
 results with exact/fuzzy Places evidence, recency,
 visit frequency, and active-workspace relevance. Exact evidence has an explicit
 ranking advantage over a weaker semantic neighbour.
+
+Page indexing crosses a separate scheduling boundary before extraction or
+embedding begins. A deduplicating queue holds at most 64 page browsers and runs
+one job at a time after four seconds without user input. It consults Gecko's
+system idle service and pauses for low unplugged battery, active audio,
+picture-in-picture or capture, and `memory-pressure` notifications. Idle work is
+dispatched through the browser window's idle callback when available. Policy
+pauses preserve queued work and wake on renewed power or feature enablement;
+disabling or clearing Browser Memory drops the pending queue. This keeps local
+model work subordinate to the foreground browsing experience rather than
+creating detached concurrent embeddings.
 
 Recall answers are deterministic projections of the ranked records, not model
 output. The answer names only the top record and retains its source URL. Every

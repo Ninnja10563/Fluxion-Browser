@@ -52,7 +52,8 @@ controls work and its failure paths have been tested.
 - reduced-motion and accessibility audits (Flow and palette keyboard/focus
   semantics hardened; broader platform audit remains)
 - performance, battery, memory, and hundreds-of-tabs profiling (packaged
-  200-tab Flow render gate implemented; broader resource profiling remains)
+  200-tab Flow render gate and bounded activity/battery/media/memory-aware
+  Browser Memory scheduler implemented; broader resource profiling remains)
 - macOS notarization, Windows signing, Linux packages, and update service
 - signed and notarized Apple Silicon DMGs attached to GitHub Releases for each
   stable, release-worthy milestone; early milestone DMGs remain clearly marked
