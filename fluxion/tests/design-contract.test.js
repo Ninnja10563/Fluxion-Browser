@@ -237,6 +237,7 @@ test("recently closed tabs use Gecko SessionStore in menus and keyboard recovery
   assert.match(chrome, /fluxion-toolbar-recently-closed-popup/);
   assert.match(palette, /kind: "Closed Tab"/);
   assert.match(palette, /ui\.closedTabs\(\)/);
+  assert.match(palette, /fixtureConsumed = !ui\.closedTabs\(\)\.some/);
   assert.doesNotMatch(palette, /SessionStore\.undoCloseTab/);
   assert.match(macVerifier, /FLUXION_VISUAL_CLOSED_TABS_TEST=1/);
   assert.match(macVerifier, /native-list-and-keyboard-restore-preserved-workspace/);

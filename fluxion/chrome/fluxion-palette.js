@@ -978,7 +978,6 @@
   }
   if (Services.env.get("FLUXION_VISUAL_CLOSED_TABS_TEST") === "1") {
     const runClosedTabsGate = () => {
-      const beforeCount = ui.closedTabCount();
       const workspace = ui.currentWorkspace();
       const fixtureURL = "https://example.net/?fluxion-closed-tabs=1";
       const fixture = gBrowser.addTrustedTab(fixtureURL, { skipAnimation: true });
@@ -1017,7 +1016,7 @@
               return;
             }
             const workspaceRestored = restored?.getAttribute("fluxion-workspace") === workspace;
-            const countRestored = ui.closedTabCount() === beforeCount;
+            const fixtureConsumed = !ui.closedTabs().some(item => item.url === fixtureURL);
             const nativeListed = nativeItem?.getAttribute("label") === "Recoverable Reference";
             if (restored) gBrowser.removeTab(restored, { animate: false });
             window.setTimeout(() => {
@@ -1030,7 +1029,7 @@
               );
               if (
                 row && nativeListed && selectedDefault && restored &&
-                workspaceRestored && countRestored && recoveryVisible && recoveryFocused
+                workspaceRestored && fixtureConsumed && recoveryVisible && recoveryFocused
               ) {
                 Services.prefs.setStringPref(
                   "fluxion.closedTabs.health",
@@ -1042,7 +1041,7 @@
                   "fluxion.closedTabs.visual.error",
                   `row=${Boolean(row)} native=${nativeListed} selected=${selectedDefault} ` +
                     `restored=${Boolean(restored)} workspace=${workspaceRestored} ` +
-                    `count=${countRestored} visible=${recoveryVisible} focused=${recoveryFocused}`,
+                    `consumed=${fixtureConsumed} visible=${recoveryVisible} focused=${recoveryFocused}`,
                 );
               }
               Services.prefs.savePrefFile(null);
