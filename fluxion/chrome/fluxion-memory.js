@@ -300,9 +300,16 @@
     }).catch(Cu.reportError);
   }
   if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
-    const testBrowser = window.gBrowser.selectedBrowser;
     enable().then(() => new Promise(resolve => window.setTimeout(resolve, 2200)))
-      .then(() => indexBrowser(testBrowser))
+      .then(() => {
+        const testTab = [...window.gBrowser.tabs].find(tab =>
+          tab.linkedBrowser?.currentURI?.spec === "https://example.com/"
+        );
+        if (!testTab) throw new Error("enrichment gate could not find the loaded HTTPS tab");
+        Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "page-found");
+        Services.prefs.savePrefFile(null);
+        return indexBrowser(testTab.linkedBrowser);
+      })
       .then(() => FluxionMemoryStore.search("illustrative examples", 6))
       .then(results => {
         const found = [...results.lexical, ...results.semantic]
@@ -314,7 +321,11 @@
           );
           Services.prefs.savePrefFile(null);
         }
-      }).catch(Cu.reportError);
+      }).catch(error => {
+        Services.prefs.setStringPref("fluxion.memory.enrichment.error", String(error));
+        Services.prefs.savePrefFile(null);
+        Cu.reportError(error);
+      });
   }
   Services.prefs.setStringPref("fluxion.memory.health", "local-memory-controls-loaded");
   Services.prefs.savePrefFile(null);
