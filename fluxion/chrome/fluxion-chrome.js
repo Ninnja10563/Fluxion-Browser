@@ -2893,6 +2893,7 @@
   }
   if (Services.env.get("FLUXION_VISUAL_SCALE_TEST") === "1") {
     window.setTimeout(() => {
+      const originalSelected = gBrowser.selectedTab;
       const creationStarted = window.performance.now();
       const scaleTabs = Array.from({ length: 200 }, (_, index) => {
         const tab = gBrowser.addTrustedTab(`about:blank?fluxion-scale=${index}`, {
@@ -2902,6 +2903,13 @@
         tab.setAttribute("label", `Scale tab ${index + 1}`);
         return tab;
       });
+      const cleanScaleFixture = () => {
+        if (originalSelected?.parentNode) gBrowser.selectedTab = originalSelected;
+        const remaining = scaleTabs.filter(tab => tab.parentNode);
+        if (remaining.length) gBrowser.removeTabs(remaining, { animate: false });
+        scheduleRender();
+      };
+      gBrowser.selectedTab = scaleTabs[0];
       const creationElapsed = window.performance.now() - creationStarted;
       const renderStarted = window.performance.now();
       window.requestAnimationFrame(() => {
@@ -2919,6 +2927,7 @@
             `create=${creationElapsed.toFixed(1)} render=${renderElapsed.toFixed(1)} rows=${rendered.length} tabstops=${tabStops.length}`,
           );
           Services.prefs.savePrefFile(null);
+          cleanScaleFixture();
           return;
         }
         selectedElement.focus();
@@ -2927,7 +2936,8 @@
         }));
         window.requestAnimationFrame(() => {
           const focusStable = document.activeElement?._fluxionTab === gBrowser.selectedTab;
-          const selectionMoved = gBrowser.selectedTab !== selectedBefore;
+          const selectionMoved = selectedBefore === scaleTabs[0] &&
+            gBrowser.selectedTab === scaleTabs[1];
           if (focusStable && selectionMoved) {
             Services.prefs.setStringPref(
               "fluxion.scale.health",
@@ -2940,8 +2950,7 @@
             );
           }
           Services.prefs.savePrefFile(null);
-          gBrowser.removeTabs(scaleTabs, { animate: false });
-          scheduleRender();
+          cleanScaleFixture();
         });
       });
     }, 3600);
