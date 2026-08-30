@@ -27,7 +27,12 @@ skin:
   dialog in that appearance before a DMG can publish;
 - inspect the dialog's real time-range selector, data categories, and native
   actions, then cancel it without deleting fixture data so the release
-  screenshot can evaluate the settled Dark browser rather than a dimmed modal.
+  screenshot can evaluate the settled Dark browser rather than a dimmed modal;
+- anchor Fluxion Settings and Library after Flow's real Expanded, Compact, or
+  Focus layout width, keeping their navigation rails and first text column from
+  being hidden beneath the tab sidebar;
+- reject the packaged app unless both custom surfaces have non-overlapping Flow,
+  navigation, and content rectangles.
 
 The visual system remains grayscale-first: no gradients, wallpaper, colourway,
 or decorative theme layer was added.

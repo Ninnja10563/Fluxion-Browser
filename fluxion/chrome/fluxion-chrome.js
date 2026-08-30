@@ -129,7 +129,12 @@
     #appMenu-new-ai-window-button,
     #appMenu-chats-history-button,
     #appMenu-update-banner { display: none !important; }
-    #browser { background: var(--fluxion-bg); }
+    #browser {
+      position: relative; background: var(--fluxion-bg);
+      --fluxion-flow-layout-width: 232px;
+    }
+    #browser:has(#fluxion-flow[data-state="compact"]) { --fluxion-flow-layout-width: 44px; }
+    #browser:has(#fluxion-flow[data-state="focus"]) { --fluxion-flow-layout-width: 3px; }
     #tabbrowser-tabpanels[splitview] .split-view-panel.deck-selected > .browserContainer {
       outline: 1px solid color-mix(in srgb, var(--fluxion-accent) 70%, transparent) !important;
     }

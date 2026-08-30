@@ -79,7 +79,9 @@ passes:
    An appearance gate then enables Gecko's installed Dark theme through the
    same controller used by Settings and palette commands, opens the real
    Appearance section, and requires its selection plus the computed browser-
-   chrome color scheme to update before capture.
+   chrome color scheme to update before capture. Its geometry assertion also
+   requires the Settings rail and content to begin after Flow. The Library gate
+   applies the same non-overlap assertion to its own navigation and records.
    A browsing-data gate then opens Fluxion's direct command surface through the
    same privileged controller used by Settings and refuses publication unless
    Gecko's native sanitizer dialog exposes a time range, at least five data

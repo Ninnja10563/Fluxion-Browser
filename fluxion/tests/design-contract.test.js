@@ -285,12 +285,19 @@ test("Appearance switches live Gecko themes and stays searchable from the palett
   assert.match(theme, /applyChain\.catch\(\(\) => \{\}\)\.then/);
   assert.match(settings, /id = "fluxion-theme-choice"/);
   assert.match(settings, /FluxionTheme\.set\(value\)/);
+  assert.match(chrome, /--fluxion-flow-layout-width: 232px/);
+  assert.match(chrome, /--fluxion-flow-layout-width: 44px/);
+  assert.match(chrome, /--fluxion-flow-layout-width: 3px/);
+  assert.match(settings, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);
+  assert.match(library, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);
   assert.match(palette, /Appearance settings/);
   assert.match(palette, /Search & Memory settings/);
   assert.match(palette, /Use Dark Appearance/);
   assert.match(palette, /window\.FluxionTheme\.set\(choice\)/);
   assert.match(macVerifier, /FLUXION_VISUAL_THEME_TEST=1/);
   assert.match(macVerifier, /dark-theme-enabled-in-live-gecko-chrome/);
+  assert.match(macVerifier, /settings-nav-and-content-clear-flow/);
+  assert.match(macVerifier, /library-nav-and-content-clear-flow/);
 });
 
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {

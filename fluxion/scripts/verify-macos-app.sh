@@ -85,6 +85,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.ai.compare.visual.health", "selected-pages-compared")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.library.health", "places-downloads-library-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.library.visual.health", "history-bookmarks-downloads-rendered")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.library.geometry.visual.health", "library-nav-and-content-clear-flow")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.library.folders.visual.health", "folder-created-and-bookmark-moved")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.permissions.health", "native-permission-manager-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.permissions.visual.health", "real-permissions-enumerated-and-reset")' "$profile/prefs.js" && \
@@ -104,6 +105,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.webSearch.health", "gecko-default-engine-switched-opened-and-restored")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.theme.health", "gecko-built-in-theme-controller-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.theme.visual.health", "dark-theme-enabled-in-live-gecko-chrome")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.settings.geometry.visual.health", "settings-nav-and-content-clear-flow")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.dataClearing.health", "native-gecko-sanitizer-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.dataClearing.dialog.health", "gecko-browsing-data-dialog-opened")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.dataClearing.surface.health", "time-range-categories-and-actions-visible")' "$profile/prefs.js" && \

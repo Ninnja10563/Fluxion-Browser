@@ -41,7 +41,8 @@
     #fluxion-library[hidden] { display: none !important; }
     :root[data-fluxion-library-visible] #identity-icon-box { display: none !important; }
     #fluxion-library {
-      min-width: 0; flex: 1; display: flex; flex-direction: column;
+      position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
+      inset-inline-end: 0; z-index: 3; min-width: 0; display: flex; flex-direction: column;
       color: var(--fluxion-ink); background: var(--fluxion-bg-raised); font: menu; font-size: 13px;
     }
     .fluxion-library-header {
@@ -664,10 +665,20 @@
         await downloadList.add(download);
         open("downloads");
         await refreshAll();
+        const flowRect = document.getElementById("fluxion-flow")?.getBoundingClientRect();
+        const rootRect = root.getBoundingClientRect();
+        const navRect = nav.getBoundingClientRect();
+        const contentRect = content.getBoundingClientRect();
         if (data.history.some(item => item.url === url) &&
             data.bookmarks.some(item => item.url === url) &&
-            data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf")) {
+            data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf") &&
+            rootRect.left >= flowRect?.right - 1 && navRect.left >= rootRect.left - 1 &&
+            contentRect.left >= navRect.right - 1) {
           Services.prefs.setStringPref("fluxion.library.visual.health", "history-bookmarks-downloads-rendered");
+          Services.prefs.setStringPref(
+            "fluxion.library.geometry.visual.health",
+            "library-nav-and-content-clear-flow",
+          );
           Services.prefs.savePrefFile(null);
         }
       } catch (error) {

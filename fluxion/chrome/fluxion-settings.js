@@ -35,7 +35,9 @@
     #fluxion-settings[hidden] { display: none !important; }
     :root[data-fluxion-settings-visible] #identity-icon-box { display: none !important; }
     #fluxion-settings {
-      min-width: 0; flex: 1; display: grid; grid-template-columns: 184px minmax(420px, 720px) 1fr;
+      position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
+      inset-inline-end: 0; z-index: 3; min-width: 0;
+      display: grid; grid-template-columns: 184px minmax(420px, 720px) 1fr;
       color: var(--fluxion-ink); background: var(--fluxion-bg-raised); overflow: auto;
       font: menu; font-size: 13px;
     }

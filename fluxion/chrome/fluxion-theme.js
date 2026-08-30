@@ -72,21 +72,33 @@
         window.gBrowser.selectedTab = tab;
         window.setTimeout(() => {
           const control = window.document.getElementById("fluxion-theme-choice");
+          const flowRect = window.document.getElementById("fluxion-flow")?.getBoundingClientRect();
+          const settingsRect = window.document.getElementById("fluxion-settings")?.getBoundingClientRect();
+          const navRect = window.document.querySelector(".fluxion-settings-nav")?.getBoundingClientRect();
+          const mainRect = window.document.querySelector(".fluxion-settings-main")?.getBoundingClientRect();
           const activeId = Services.prefs.getStringPref(ACTIVE_THEME_PREF, "");
           const computed = window.getComputedStyle(window.document.documentElement).colorScheme;
           if (
             activeId === FluxionThemeCore.THEME_IDS.dark &&
-            current() === "dark" && control?.value === "dark" && computed.includes("dark")
+            current() === "dark" && control?.value === "dark" && computed.includes("dark") &&
+            settingsRect?.left >= flowRect?.right - 1 &&
+            navRect?.left >= settingsRect?.left - 1 && mainRect?.left >= navRect?.right - 1
           ) {
             Services.prefs.setStringPref(
               "fluxion.theme.visual.health",
               "dark-theme-enabled-in-live-gecko-chrome",
             );
+            Services.prefs.setStringPref(
+              "fluxion.settings.geometry.visual.health",
+              "settings-nav-and-content-clear-flow",
+            );
             window.dispatchEvent(new window.CustomEvent("FluxionThemeVisualReady"));
           } else {
             Services.prefs.setStringPref(
               "fluxion.theme.visual.error",
-              `active=${activeId} current=${current()} control=${control?.value} scheme=${computed}`,
+              `active=${activeId} current=${current()} control=${control?.value} scheme=${computed} ` +
+                `flow=${flowRect?.left},${flowRect?.right} settings=${settingsRect?.left},${settingsRect?.right} ` +
+                `nav=${navRect?.left},${navRect?.right} main=${mainRect?.left},${mainRect?.right}`,
             );
           }
           Services.prefs.savePrefFile(null);
