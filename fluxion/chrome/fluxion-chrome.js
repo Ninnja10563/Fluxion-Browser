@@ -145,10 +145,16 @@
       box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
     }
     #PanelUI-button { display: none !important; }
-    #fluxion-toolbar-menu,
-    #fluxion-toolbar-menu > .toolbarbutton-icon {
+    #fluxion-toolbar-menu {
       color: var(--fluxion-ink) !important;
-      -moz-context-properties: fill !important; fill: currentColor !important;
+      width: 30px !important; min-width: 30px !important; height: 30px !important;
+      align-items: center; justify-content: center;
+    }
+    #fluxion-toolbar-menu > .toolbarbutton-icon { display: none !important; }
+    #fluxion-toolbar-menu:not([disabled]):hover { background: var(--fluxion-hover) !important; }
+    #fluxion-toolbar-glyph {
+      display: block; width: 16px; height: 16px; flex: none;
+      color: inherit; fill: currentColor; pointer-events: none;
     }
     @media (-moz-platform: macos) {
       #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
@@ -743,16 +749,13 @@
   }
 
   const toolbarTarget = document.getElementById("nav-bar-customization-target");
-  const toolbarMenuIcon = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' " +
-    "viewBox='0 0 24 24'%3E%3Cpath fill='context-fill' d='M5 4.5h13.5l-7.2 6.3H18L6 " +
-    "20l3.5-7H5z'/%3E%3C/svg%3E";
+  const toolbarMenuPath = "M5 4.5h13.5l-7.2 6.3H18L6 20l3.5-7H5z";
   const toolbarMenuButton = xul("toolbarbutton", {
     id: "fluxion-toolbar-menu",
     class: "toolbarbutton-1 chromeclass-toolbar-additional",
     type: "menu",
     label: "Fluxion menu",
     tooltiptext: "Fluxion menu",
-    image: toolbarMenuIcon,
     removable: "false",
   });
   toolbarMenuButton.setAttribute("aria-label", "Fluxion menu");
@@ -877,6 +880,18 @@
   toolbarMenuButton.appendChild(toolbarMenuPopup);
   if (toolbarTarget) {
     toolbarTarget.appendChild(toolbarMenuButton);
+    // Complete Gecko's generated button children before adding our standard
+    // inline glyph; keep native menu and keyboard handling on the XUL host.
+    toolbarMenuButton.render();
+    const glyph = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    glyph.id = "fluxion-toolbar-glyph";
+    glyph.setAttribute("viewBox", "0 0 24 24");
+    glyph.setAttribute("aria-hidden", "true");
+    glyph.setAttribute("focusable", "false");
+    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
+    path.setAttribute("d", toolbarMenuPath);
+    glyph.appendChild(path);
+    toolbarMenuButton.appendChild(glyph);
     cleanup.push(() => toolbarMenuButton.remove());
   }
 
@@ -3598,8 +3613,9 @@
   }
   if (Services.env.get("FLUXION_VISUAL_TOOLBAR_MENU_TEST") === "1") {
     on(window, "FluxionThemeVisualReady", () => {
-      const icon = toolbarMenuButton.querySelector(".toolbarbutton-icon");
-      const iconStyle = icon && window.getComputedStyle(icon);
+      const icon = document.getElementById("fluxion-toolbar-glyph");
+      const path = icon?.querySelector("path");
+      const iconStyle = path && window.getComputedStyle(path);
       const buttonStyle = window.getComputedStyle(toolbarMenuButton);
       const background = window.getComputedStyle(document.getElementById("nav-bar")).backgroundColor;
       const luminance = color => {
@@ -3615,23 +3631,23 @@
       const contrast = (Math.max(foregroundLight, backgroundLight) + 0.05) /
         (Math.min(foregroundLight, backgroundLight) + 0.05);
       const rect = icon?.getBoundingClientRect();
-      const contextProperties = iconStyle?.getPropertyValue("-moz-context-properties") || "";
-      const contextFill = contextProperties.split(/\s*,\s*/).includes("fill");
       const theme = window.FluxionTheme?.current();
       const valid = theme === "dark" && rect?.width >= 16 && rect?.height >= 16 &&
-        iconStyle.fill === buttonStyle.color && contextFill && contrast >= 4.5;
+        iconStyle.fill === buttonStyle.color && contrast >= 4.5 &&
+        icon.parentNode === toolbarMenuButton && path.getAttribute("d") === toolbarMenuPath &&
+        icon.getAttribute("aria-hidden") === "true";
       const diagnostics = JSON.stringify({
         theme, scheme: window.getComputedStyle(document.documentElement).colorScheme,
         iconPresent: Boolean(icon), iconParent: icon?.parentNode?.id || "",
         iconColor: iconStyle?.color, fill: iconStyle?.fill, buttonFill: buttonStyle.fill,
-        color: buttonStyle.color, background, contextProperties, contextFill, contrast,
+        color: buttonStyle.color, background, contrast, inlineSVG: Boolean(path),
         iconWidth: rect?.width, iconHeight: rect?.height,
         iconDisplay: iconStyle?.display, iconVisibility: iconStyle?.visibility,
       });
       Services.prefs.setStringPref("fluxion.toolbarMenu.icon.report", diagnostics);
-      if (valid) Services.prefs.setStringPref("fluxion.toolbarMenu.icon.health", "dark-context-fill-and-contrast-verified");
+      if (valid) Services.prefs.setStringPref("fluxion.toolbarMenu.icon.health", "dark-inline-svg-and-contrast-verified");
       else Services.prefs.setStringPref("fluxion.toolbarMenu.visual.error",
-        `Toolbar bolt failed native dark-mode context-fill or contrast verification: ${diagnostics}`);
+        `Toolbar bolt failed native dark-mode inline-glyph or contrast verification: ${diagnostics}`);
       Services.prefs.savePrefFile(null);
     }, { once: true });
     window.setTimeout(() => {
@@ -3649,7 +3665,7 @@
         toolbarMenuPopup.parentNode === toolbarMenuButton && toolbarMenuPopup.localName === "menupopup" &&
         buttonRect.width >= 24 && buttonRect.width <= 38 && buttonRect.height >= 24 &&
         toolbarMenuButton.getAttribute("aria-label") === "Fluxion menu" &&
-        toolbarMenuButton.getAttribute("image") === toolbarMenuIcon &&
+        toolbarMenuButton.querySelector("#fluxion-toolbar-glyph path")?.getAttribute("d") === toolbarMenuPath &&
         expectedLabels.every(label => labels.includes(label));
       const navigationVisible = urlbarRect?.width >= 300 && urlbarRect?.height >= 28 &&
         backRect?.width >= 24 && backRect?.height >= 24;

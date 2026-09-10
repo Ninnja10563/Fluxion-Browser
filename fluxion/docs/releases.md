@@ -93,7 +93,7 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    hidden Settings window after cross-window enable, exclusion, provider, and
    deletion changes. The general integration gate requires grounded text results
    to be visible before semantic completion, plus a visible dark-mode toolbar
-   icon with native context fill and at least 4.5:1 measured color contrast.
+   inline SVG icon with at least 4.5:1 measured color contrast.
    A separate fresh-profile Flow gate repeats 24 batches of 20 native title/audio
    updates across 200 visible tabs. It requires stable row and control identity,
    scroll, focus, selection, workspace controls, and no structural removals;

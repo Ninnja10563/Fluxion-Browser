@@ -17,8 +17,8 @@ Version 0.48 improves live settings and Memory search interaction:
 - query native semantic history and enriched page evidence concurrently;
 - synchronize Memory settings across visible and hidden windows without
   overwriting unsaved exclusion edits or unlocking pending controls;
-- fix the Fluxion toolbar icon's dark-mode contrast and verify its real Gecko
-  context fill, alongside native progressive-search and cross-window UI checks.
+- render the Fluxion toolbar glyph as inline SVG with proper dark-mode contrast,
+  alongside native progressive-search and cross-window UI checks.
 
 Version 0.47 makes Library useful beyond recent records:
 
