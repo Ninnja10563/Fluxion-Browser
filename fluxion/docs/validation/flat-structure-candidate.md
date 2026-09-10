@@ -63,3 +63,19 @@ The initial pending-native status above describes the pre-diagnostic stage.
 The branch is now natively checked, but remains outside 0.59: main-branch
 integration, a new milestone version and full release staging are still
 required before any public DMG can include this work.
+
+## Subsequent packaging safety follow-up
+
+Manual DMG packaging no longer defaults to the stale `0.6.0-preview.1` label.
+It reads the supplied app's bundled product release as data, cross-checks both
+bundle version fields and the Settings product version, and rejects any
+explicit version mismatch before packaging tools or output changes. It does
+not infer an older app's identity from the current source checkout.
+
+All 677 local tests pass on this branch. Six full-shell packaging regressions
+cover older-app defaults, explicit and stable releases, malformed or conflicting
+metadata, missing arguments and preservation of existing output on rejection.
+Their macOS packaging commands are explicitly simulated; this later change
+has not yet passed an actual native DMG build. The diagnostic above tested the
+earlier structural source, not this packaging follow-up. Neither change is in
+the 0.59 release candidate.
