@@ -71,14 +71,18 @@
     return hostname === domain || hostname.endsWith(`.${domain}`);
   }
 
-  function isExcludedUrl(value, domains) {
+  function matchesExcludedUrl(value, domains, prepared) {
     try {
       // DNS's optional root dot must not bypass the same domain exclusion.
       const hostname = new URL(value).hostname.toLocaleLowerCase().replace(/\.$/, "");
-      return parseExcludedDomains(domains).some(domain => domainMatches(hostname, domain));
+      return (prepared ? domains : parseExcludedDomains(domains)).some(domain => domainMatches(hostname, domain));
     } catch (_) {
       return true;
     }
+  }
+
+  function isExcludedUrl(value, domains) {
+    return matchesExcludedUrl(value, domains, false);
   }
 
   function isSensitiveUrl(value) {
@@ -94,14 +98,25 @@
     }
   }
 
-  function canIndexPage(page, domains = []) {
+  function canIndexAgainstDomains(page, domains, prepared) {
     if (!page || page.isPrivate || page.hasPasswordField) return false;
     const url = String(page.url || "");
-    return !isSensitiveUrl(url) && !isExcludedUrl(url, domains);
+    return !isSensitiveUrl(url) && !matchesExcludedUrl(url, domains, prepared);
+  }
+
+  function canIndexPage(page, domains = []) {
+    return canIndexAgainstDomains(page, domains, false);
+  }
+
+  function createPageFilter(domains = []) {
+    // Snapshot one bounded operation's policy, never a live preferences cache.
+    const prepared = Object.freeze(parseExcludedDomains(domains));
+    return page => canIndexAgainstDomains(page, prepared, true);
   }
 
   const api = Object.freeze({
     canIndexPage,
+    createPageFilter,
     isExcludedUrl,
     isSensitiveUrl,
     normaliseDomain,

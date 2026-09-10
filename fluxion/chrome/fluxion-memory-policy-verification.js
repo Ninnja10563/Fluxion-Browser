@@ -44,6 +44,10 @@
     const dbPath = PathUtils.join(PathUtils.profileDir, "fluxion_memory.sqlite");
     if (phase === "seed") {
       write("stage", "initializing-current-owned-schema");
+      // Keep Gecko's regional embedding dimension fixed across this storage
+      // fixture's launches; this does not enable or invoke its model.
+      Services.prefs.setStringPref("browser.search.region", "US");
+      Services.prefs.savePrefFile(null);
       const { FluxionMemoryStore } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionMemoryStore.sys.mjs");
       await FluxionMemoryStore.get(urls[1]);
       await FluxionMemoryStore.pruneExisting();

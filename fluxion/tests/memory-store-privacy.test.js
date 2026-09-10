@@ -62,7 +62,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     Cu: { reportError: error => errors.push(error) },
     URL,
     FluxionMemorySearch,
-    FluxionMemoryPolicy,
+    FluxionMemoryPolicy: options.policy || FluxionMemoryPolicy,
     setTimeout(callback, delay) {
       if (delay === 0) { yields++; queueMicrotask(callback); return ++timerID; }
       timers.set(++timerID, callback); return timerID;
@@ -518,6 +518,22 @@ test("policy scan advances by scanned IDs across safe batches and yields at boun
   assert.equal(f.yields(), 2);
   assert.equal(f.pages.size, 518); assert.equal(f.vectors.size, 518);
   assert.equal(f.pages.has(261), false); assert.equal(f.pages.has(520), false);
+});
+
+test("policy scan prepares exclusion lists per batch rather than once for every saved page", async () => {
+  const domains = Array.from({ length: 200 }, (_, index) => `excluded-${index}.example`);
+  const snapshots = [];
+  const policy = { ...FluxionMemoryPolicy, createPageFilter(values) {
+    snapshots.push(Array.from(values));
+    return FluxionMemoryPolicy.createPageFilter(values);
+  } };
+  const f = persistedEvidence(Array.from({ length: 520 }, (_, index) => `https://safe.example/${index}`),
+    new Map([["fluxion.memory.excludedDomains", JSON.stringify(domains)]]), { policy });
+  await f.store.get("https://safe.example/0");
+  assert.equal(snapshots.length, 3);
+  assert.ok(snapshots.every(values => JSON.stringify(values) === JSON.stringify(domains)));
+  assert.equal(f.pages.size, 520);
+  assert.equal(f.vectors.size, 520);
 });
 
 test("startup sweep failure rolls back vector deletion and rejects every read until restart", async () => {

@@ -73,9 +73,10 @@ async function pruneBlocked(db, domains) {
       "SELECT id,url FROM pages WHERE id > :after ORDER BY id LIMIT :limit", { after, limit },
     );
     if (!rows.length) return;
-    const blocked = rows.filter(row => !FluxionMemoryPolicy.canIndexPage(
-      { url: row.getResultByName("url") }, domains ?? excludedDomains(),
-    ));
+    // Preferences cannot change during this synchronous batch. Normalize the
+    // exclusion list once, then take a fresh snapshot after the next SQL wait.
+    const canIndex = FluxionMemoryPolicy.createPageFilter(domains ?? excludedDomains());
+    const blocked = rows.filter(row => !canIndex({ url: row.getResultByName("url") }));
     if (blocked.length) {
       await db.executeTransaction(async () => {
         for (const row of blocked) {

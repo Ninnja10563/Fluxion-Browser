@@ -664,7 +664,9 @@ on the roadmap.
 The enriched store imports the same policy through a privileged module bridge.
 Before exposing its first connection on each launch, it removes blocked page
 text and vectors in transactional, 256-row keyset batches, yielding between
-full batches. Initialization failure closes the connection and prevents reads;
+full batches. Each batch prepares an immutable normalized exclusion snapshot;
+the next batch reads current policy again, without retaining a cross-event
+preference cache. Initialization failure closes the connection and prevents reads;
 the next launch retries the policy sweep. Non-private window startup also
 prunes an existing evidence database when Memory is disabled, without creating
 one in a never-enabled profile. Upserts recheck the current policy after their

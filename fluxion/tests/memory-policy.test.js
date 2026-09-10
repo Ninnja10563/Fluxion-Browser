@@ -62,3 +62,45 @@ test("ordinary encoded article paths remain eligible without broad substring exc
   assert.equal(policy.canIndexPage({ url: "https://example.com/guide", isPrivate: true }), false);
   assert.equal(policy.canIndexPage({ url: "https://example.com/guide", hasPasswordField: true }), false);
 });
+
+test("prepared page filters preserve public policy across URL, privacy and domain variants", () => {
+  const inputs = [[], ["example.com", "bücher.example"], '["www.example.com.","docs.example.org"]',
+    "EXAMPLE.com, bücher.example", null, false, {}, ["not a host", "https://www.example.com./path"]];
+  const urls = ["https://example.com./article", "https://docs.example.com/article", "https://notexample.com/",
+    "https://example.com.evil.invalid/", "https://docs.bücher.example./article", "https://safe.example/%61ccount",
+    "https://safe.example/docs%2Flogin", "https://safe.example/%2561ccount", "https://safe.example/caf%C3%A9",
+    "https://safe.example/bad%GG", "https://safe.example/docs?redirect=%2Faccount", "https://login.safe.example/",
+    "https://user:secret@safe.example/article", "file:///private.txt", "javascript:alert(1)", "not a URL", ""];
+  for (const domains of inputs) {
+    const prepared = policy.createPageFilter(domains);
+    for (const url of urls) for (const flags of [{}, { isPrivate: true }, { hasPasswordField: true }]) {
+      const page = { url, ...flags };
+      assert.equal(prepared(page), policy.canIndexPage(page, domains), `${url} / ${JSON.stringify(domains)}`);
+    }
+    for (const page of [null, undefined, {}, false]) assert.equal(prepared(page), policy.canIndexPage(page, domains));
+  }
+});
+
+test("prepared policy is an immutable normalization snapshot, not a live caller array", () => {
+  let normalizations = 0;
+  const domains = [{ toString() { normalizations++; return "https://www.Example.com./path"; } }];
+  const prepared = policy.createPageFilter(domains);
+  assert.equal(normalizations, 1);
+  domains[0] = "safe.example"; domains.push("new.example");
+  for (let index = 0; index < 256; index++) {
+    assert.equal(prepared({ url: "https://docs.example.com/article" }), false);
+    assert.equal(prepared({ url: "https://safe.example/article" }), true);
+  }
+  assert.equal(normalizations, 1, "per-page checks must not normalize excluded domains again");
+  const fresh = policy.createPageFilter(domains);
+  assert.equal(fresh({ url: "https://safe.example/article" }), false);
+  assert.equal(fresh({ url: "https://docs.example.com/article" }), true);
+});
+
+test("prepared domains preserve normalization deduplication and the existing 200-domain boundary", () => {
+  const domains = Array.from({ length: 201 }, (_, index) => `blocked-${index}.example`);
+  const prepared = policy.createPageFilter(domains);
+  assert.equal(prepared({ url: "https://blocked-199.example/article" }), false);
+  assert.equal(prepared({ url: "https://blocked-200.example/article" }), true);
+  assert.equal(prepared({ url: "https://[broken/article" }), false);
+});
