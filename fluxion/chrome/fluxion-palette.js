@@ -26,6 +26,7 @@
   let aiRequest = 0;
   let placesTimer = 0;
   let memoryRequest = 0;
+  let memoryPendingGateComplete = false;
 
   const create = (tag, className) => {
     const element = document.createElementNS(HTML, tag);
@@ -626,6 +627,7 @@
   }
 
   function choose(index = activeIndex) {
+    if (layer.hidden) return;
     const item = visibleItems[index];
     if (!item) return;
     close();
@@ -636,6 +638,7 @@
   function setActive(index) {
     if (!visibleItems.length) {
       activeIndex = 0;
+      input.removeAttribute("aria-activedescendant");
       return;
     }
     activeIndex = (index + visibleItems.length) % visibleItems.length;
@@ -700,12 +703,19 @@
       renderItems([], "Describe a page you remember");
       return;
     }
-    results.replaceChildren();
-    const pending = create("div", "fluxion-palette-empty");
-    pending.textContent = "Searching local Browser Memory…";
-    results.appendChild(pending);
-    const response = await window.FluxionMemory.search(search, ui.currentWorkspace());
-    if (request !== memoryRequest || mode !== "memory" || input.value.trim() !== search) return;
+    renderItems([], "Searching local Browser Memory…");
+    const isCurrent = () => request === memoryRequest && !layer.hidden &&
+      mode === "memory" && input.value.trim() === search;
+    let response;
+    try {
+      response = await window.FluxionMemory.search(search, ui.currentWorkspace());
+    } catch (error) {
+      if (!isCurrent()) return;
+      Cu.reportError(error);
+      renderItems([], "Browser Memory could not be searched");
+      return;
+    }
+    if (!isCurrent()) return;
     const stateLabels = {
       building: "Local index is building · Exact history matches are available now",
       lexical: "Local semantic model unavailable · Showing exact history matches",
@@ -746,6 +756,34 @@
       response.answer?.state === "grounded" &&
       response.answer.evidence.some(item => item.excerpt)
     ) {
+      if (!memoryPendingGateComplete) {
+        memoryPendingGateComplete = true;
+        const tabCount = gBrowser.tabs.length;
+        const selectedTab = gBrowser.selectedTab;
+        const hadResult = visibleItems.length > 0 && input.hasAttribute("aria-activedescendant");
+        input.value = `${search} revised`;
+        input.dispatchEvent(new window.Event("input", { bubbles: true }));
+        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        const debounceSafe = !layer.hidden && !visibleItems.length &&
+          !input.hasAttribute("aria-activedescendant") &&
+          gBrowser.tabs.length === tabCount && gBrowser.selectedTab === selectedTab;
+        window.clearTimeout(placesTimer);
+        input.value = search;
+        const restoredSearch = renderMemory();
+        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        const pendingSafe = !layer.hidden && !visibleItems.length &&
+          !input.hasAttribute("aria-activedescendant") &&
+          gBrowser.tabs.length === tabCount && gBrowser.selectedTab === selectedTab;
+        if (!hadResult || !debounceSafe || !pendingSafe) {
+          Services.prefs.setStringPref("fluxion.palette.async.error",
+            `Memory selection safety: result=${hadResult}, debounce=${debounceSafe}, pending=${pendingSafe}`);
+        } else {
+          Services.prefs.setStringPref("fluxion.palette.async.health", "memory-pending-results-not-selectable");
+        }
+        Services.prefs.savePrefFile(null);
+        await restoredSearch;
+        return;
+      }
       Services.prefs.setStringPref("fluxion.memory.grounding.health", "grounded-evidence-visible");
       Services.prefs.savePrefFile(null);
       window.dispatchEvent(new window.CustomEvent("FluxionGroundingVisualReady"));
@@ -769,13 +807,9 @@
     const request = ++aiRequest;
     askController?.abort();
     askController = new window.AbortController();
-    visibleItems = [];
-    results.replaceChildren();
-    const pending = create("div", "fluxion-palette-empty");
-    pending.textContent = mode === "compare"
+    renderItems([], mode === "compare"
       ? "Reading the selected pages and asking the configured provider…"
-      : "Reading this page and asking the configured provider…";
-    results.appendChild(pending);
+      : "Reading this page and asking the configured provider…");
     status.hidden = false;
     status.textContent = "Treating page content as untrusted data · Escape cancels";
     try {
@@ -827,10 +861,7 @@
       return;
     }
     if (mode === "memory") {
-      renderMemory().catch(error => {
-        Cu.reportError(error);
-        if (mode === "memory") renderItems([], "Browser Memory could not be searched");
-      });
+      renderMemory().catch(Cu.reportError);
       return;
     }
     status.hidden = true;
@@ -844,9 +875,18 @@
 
   function queuePlaces() {
     window.clearTimeout(placesTimer);
-    if (mode === "ask" || mode === "compare") { renderAskPrompt(); return; }
+    activeIndex = 0;
+    if (mode === "ask" || mode === "compare") {
+      aiRequest += 1;
+      askController?.abort();
+      askController = null;
+      renderAskPrompt();
+      return;
+    }
     if (mode === "memory") {
       memoryRequest += 1;
+      renderItems([], input.value.trim().length < 2
+        ? "Describe a page you remember" : "Searching local Browser Memory…");
       placesTimer = window.setTimeout(() => render(false), 140);
       return;
     }
@@ -857,6 +897,12 @@
   }
 
   function open(nextMode = "all", sourceTab = null) {
+    window.clearTimeout(placesTimer);
+    memoryRequest += 1;
+    aiRequest += 1;
+    askController?.abort();
+    askController = null;
+    if (layer.hidden) lastFocus = document.activeElement;
     mode = nextMode;
     splitSource = nextMode === "split" ? sourceTab : null;
     askBrowser = nextMode === "ask"
@@ -865,7 +911,6 @@
     compareBrowsers = nextMode === "compare"
       ? (Array.isArray(sourceTab) ? sourceTab : []).map(item => item?.linkedBrowser || item).filter(Boolean).slice(0, 4)
       : [];
-    lastFocus = document.activeElement;
     layer.hidden = false;
     input.value = "";
     input.placeholder = mode === "split"
@@ -879,7 +924,7 @@
           : "Search commands, tabs, history, and bookmarks";
     activeIndex = 0;
     render(false);
-    window.requestAnimationFrame(() => input.focus());
+    window.requestAnimationFrame(() => { if (!layer.hidden) input.focus(); });
   }
 
   function openSplitPicker(sourceTab, orientation) {
@@ -894,6 +939,8 @@
     askController?.abort();
     askController = null;
     layer.hidden = true;
+    visibleItems = [];
+    input.removeAttribute("aria-activedescendant");
     input.value = "";
     splitSource = null;
     pendingSplitOrientation = window.FluxionSplitViews.SIDE_BY_SIDE;
@@ -944,6 +991,9 @@
   });
   on(window, "unload", () => {
     window.clearTimeout(placesTimer);
+    memoryRequest += 1;
+    aiRequest += 1;
+    askController?.abort();
     while (cleanup.length) cleanup.pop()();
     layer.remove();
     style.remove();

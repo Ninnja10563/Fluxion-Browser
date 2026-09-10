@@ -12,6 +12,39 @@ let shutdownStarted = false;
 let shutdownBlockerRegistered = false;
 let shutdownPromise;
 let shutdownStep = "Database has not been opened";
+// Shared across browser windows: privacy changes invalidate work already in flight.
+let revision = 0;
+let historyDeletion = Promise.resolve();
+const HISTORY_EVENTS = ["history-cleared", "page-removed"];
+const PENDING_REMOVAL_PREF = "fluxion.memory.pendingRemoval";
+const recoverOnOpen = Services.prefs.getBoolPref(PENDING_REMOVAL_PREF, false);
+let pendingRemovals = 0;
+
+function persistRemovalPending(value) {
+  Services.prefs.setBoolPref(PENDING_REMOVAL_PREF, value);
+  Services.prefs.savePrefFile(null);
+}
+
+function removeEvidence(remove, fullClear = false) {
+  revision += 1;
+  pendingRemovals += 1;
+  const previous = historyDeletion;
+  let persistenceError;
+  try { persistRemovalPending(true); } catch (error) { persistenceError = error; }
+  historyDeletion = (async () => {
+    if (persistenceError) throw persistenceError;
+    try { await previous; } catch (error) { if (!fullClear) throw error; }
+    await remove(await connection());
+  })().then(() => {
+    pendingRemovals -= 1;
+    if (!pendingRemovals) persistRemovalPending(false);
+  }, error => {
+    pendingRemovals -= 1;
+    throw error;
+  });
+  historyDeletion.catch(Cu.reportError);
+  return historyDeletion;
+}
 
 function vectorFrom(result, expectedSize) {
   let value = result?.output ?? result;
@@ -47,6 +80,15 @@ async function connection() {
             await db.setSchemaVersion(SCHEMA_VERSION);
           });
         }
+        if (recoverOnOpen) {
+          // A crash or failed removal may leave evidence whose Places visits
+          // are gone. Recover conservatively before exposing any stored data.
+          await db.executeTransaction(async () => {
+            await db.execute("DELETE FROM page_vectors");
+            await db.execute("DELETE FROM pages");
+          });
+          if (!pendingRemovals) persistRemovalPending(false);
+        }
         shutdownStep = "Database open";
         return db;
       } catch (error) {
@@ -65,6 +107,8 @@ async function connection() {
 }
 
 async function closeConnection() {
+  PlacesObservers.removeListener(HISTORY_EVENTS, onHistoryEvents);
+  await historyDeletion.catch(Cu.reportError);
   shutdownStarted = true;
   shutdownPromise ||= (async () => {
     const pending = connectionPromise;
@@ -108,14 +152,19 @@ function generator() {
 }
 
 async function embedAndStore(url, text) {
+  const startedAt = revision;
+  await historyDeletion;
   const db = await connection();
+  if (startedAt !== revision) return;
   const engine = generator();
   const result = await engine.embed(text);
+  if (startedAt !== revision) return;
   const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
   const rows = await db.executeCached("SELECT id FROM pages WHERE url=:url", { url });
   if (!rows.length) return;
   const rowid = rows[0].getResultByName("id");
   await db.executeTransaction(async () => {
+    if (startedAt !== revision) return;
     await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
     await db.executeCached("INSERT INTO page_vectors(rowid,embedding) VALUES(:rowid,:vector)", { rowid, vector });
   });
@@ -129,8 +178,12 @@ function withTimeout(promise, milliseconds) {
 }
 
 export const FluxionMemoryStore = Object.freeze({
-  async upsert(page) {
+  get revision() { return revision; },
+
+  async upsert(page, expectedRevision = revision) {
+    await historyDeletion;
     const db = await connection();
+    if (expectedRevision !== revision) return false;
     const parameters = {
       url: page.url,
       title: page.title,
@@ -149,6 +202,7 @@ export const FluxionMemoryStore = Object.freeze({
         headings=excluded.headings, content=excluded.content, workspace=excluded.workspace,
         tab_group=excluded.tab_group, last_visit=excluded.last_visit,
         visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, parameters);
+    return expectedRevision === revision;
   },
 
   async embed(url, text) {
@@ -156,6 +210,8 @@ export const FluxionMemoryStore = Object.freeze({
   },
 
   async search(query, limit = 12, includeSemantic = true) {
+    const startedAt = revision;
+    await historyDeletion;
     const db = await connection();
     const pattern = `%${query.replace(/[\\%_]/g, value => `\\${value}`)}%`;
     const lexical = await db.executeCached(`SELECT *, 0.0 AS distance FROM pages
@@ -176,52 +232,86 @@ export const FluxionMemoryStore = Object.freeze({
       Cu.reportError(error);
     }
     const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","tab_group","last_visit","visit_count","distance"].map(name => [name === "tab_group" ? "group" : name === "last_visit" ? "lastVisit" : name === "visit_count" ? "visitCount" : name, item.getResultByName(name)]));
-    return { lexical: lexical.map(row), semantic: semantic.map(row) };
+    return startedAt === revision
+      ? { lexical: lexical.map(row), semantic: semantic.map(row) }
+      : { lexical: [], semantic: [] };
   },
 
   async get(url) {
+    const startedAt = revision;
+    await historyDeletion;
     const db = await connection();
     const rows = await db.executeCached(
       "SELECT url,title,description,headings,content FROM pages WHERE url=:url",
       { url },
     );
-    if (!rows.length) return null;
+    if (startedAt !== revision || !rows.length) return null;
     return Object.fromEntries(["url", "title", "description", "headings", "content"]
       .map(name => [name, rows[0].getResultByName(name)]));
   },
 
   async deleteBlocked(domains) {
-    const db = await connection();
-    const rows = await db.execute("SELECT id,url FROM pages");
-    const blocked = rows.filter(item => domains.some(domain => {
-      try { const host = new URL(item.getResultByName("url")).hostname; return host === domain || host.endsWith(`.${domain}`); } catch (_) { return true; }
-    }));
-    await db.executeTransaction(async () => {
-      for (const item of blocked) {
-        const rowid = item.getResultByName("id");
-        await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
-        await db.executeCached("DELETE FROM pages WHERE id=:rowid", { rowid });
-      }
+    await removeEvidence(async db => {
+      const rows = await db.execute("SELECT id,url FROM pages");
+      const blocked = rows.filter(item => domains.some(domain => {
+        try { const host = new URL(item.getResultByName("url")).hostname; return host === domain || host.endsWith(`.${domain}`); } catch (_) { return true; }
+      }));
+      await db.executeTransaction(async () => {
+        for (const item of blocked) {
+          const rowid = item.getResultByName("id");
+          await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
+          await db.executeCached("DELETE FROM pages WHERE id=:rowid", { rowid });
+        }
+      });
+    });
+  },
+
+  async deleteURLs(urls) {
+    await removeEvidence(async db => {
+      await db.executeTransaction(async () => {
+        for (const url of new Set(urls)) {
+          await db.executeCached(
+            "DELETE FROM page_vectors WHERE rowid IN (SELECT id FROM pages WHERE url=:url)", { url });
+          await db.executeCached("DELETE FROM pages WHERE url=:url", { url });
+        }
+      });
     });
   },
 
   async clearVectors() {
-    const db = await connection();
-    await db.execute("DELETE FROM page_vectors");
+    await removeEvidence(db => db.executeTransaction(() => db.execute("DELETE FROM page_vectors")));
   },
 
   async vectorCount() {
+    await historyDeletion;
     const db = await connection();
     const rows = await db.execute("SELECT count(*) AS count FROM page_vectors");
     return Number(rows[0]?.getResultByName("count") || 0);
   },
 
   async clear() {
-    const db = await connection();
-    await db.executeTransaction(async () => { await db.execute("DELETE FROM page_vectors"); await db.execute("DELETE FROM pages"); });
+    await removeEvidence(async db => {
+      await db.executeTransaction(async () => { await db.execute("DELETE FROM page_vectors"); await db.execute("DELETE FROM pages"); });
+    }, true);
   },
 
   async shutdown() {
     await closeConnection();
   },
 });
+
+function onHistoryEvents(events) {
+  if (shutdownStarted) return;
+  const removed = events.filter(event => event.type === "page-removed");
+  const clearAll = events.some(event => event.type === "history-cleared") ||
+    removed.some(event => !event.url);
+  if (!clearAll && !removed.length) return;
+  // A Memory record combines visits, so even removing only some visits erases
+  // that URL's evidence. Bookmarked pages must not retain deleted history text.
+  const deletion = clearAll ? FluxionMemoryStore.clear()
+    : FluxionMemoryStore.deleteURLs(removed.map(event => event.url));
+  // Failed removal must keep reads unavailable until a successful full clear.
+  deletion.catch(() => {});
+}
+
+PlacesObservers.addListener(HISTORY_EVENTS, onHistoryEvents);

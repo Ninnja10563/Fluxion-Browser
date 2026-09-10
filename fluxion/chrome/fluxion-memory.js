@@ -244,6 +244,7 @@
   }
 
   async function search(searchText, currentWorkspace = "") {
+    const startedAt = FluxionMemoryStore.revision;
     const query = String(searchText || "").trim();
     if (PrivateBrowsingUtils.isWindowPrivate(window)) {
       return { results: [], state: "private", answer: FluxionMemoryGrounding.ground(query, []) };
@@ -289,6 +290,10 @@
       Cu.reportError(error);
     }
 
+    if (startedAt !== FluxionMemoryStore.revision || !enabled()) {
+      return { results: [], state: enabled() ? "ready" : "disabled",
+        answer: FluxionMemoryGrounding.ground(query, []) };
+    }
     const openTabsByUrl = new Map();
     const workspaceNames = new Map(window.FluxionUI.workspaces().map(item => [item.id, item.name]));
     for (const tab of window.gBrowser.tabs) {
@@ -366,13 +371,16 @@
     return next;
   }
 
-  async function indexBrowser(browser) {
+  async function indexBrowser(browser, startedAt = FluxionMemoryStore.revision) {
     if (!enabled() || PrivateBrowsingUtils.isWindowPrivate(window) || !browser) return;
+    if (startedAt !== FluxionMemoryStore.revision) return;
     const url = browser.currentURI?.spec || "";
     if (Date.now() - (indexedAt.get(url) || 0) < 30000) return url;
     if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
     const actor = browser.browsingContext?.currentWindowGlobal?.getActor("FluxionMemoryPage");
     const extracted = await actor?.sendQuery("FluxionMemory:Extract");
+    if (startedAt !== FluxionMemoryStore.revision || !enabled() ||
+        PrivateBrowsingUtils.isWindowPrivate(window) || browser.currentURI?.spec !== url) return;
     if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") === "1") {
       Services.prefs.setStringPref("fluxion.memory.enrichment.stage", "content-extracted");
       Services.prefs.savePrefFile(null);
@@ -382,14 +390,15 @@
     const embeddingText = FluxionMemoryContent.embeddingText(page);
     if (embeddingText.length < 80) return;
     const tab = window.gBrowser.getTabForBrowser(browser);
-    await FluxionMemoryStore.upsert({
+    const stored = await FluxionMemoryStore.upsert({
       ...page,
       embeddingText,
       workspace: tab ? window.FluxionUI.tabWorkspace(tab) : "",
       tabGroup: tab?.group?.label || "",
       lastVisit: Date.now(),
       indexedAt: Date.now(),
-    });
+    }, startedAt);
+    if (!stored || startedAt !== FluxionMemoryStore.revision) return;
     if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") !== "1" && embeddingsEnabled()) {
       await FluxionMemoryStore.embed(page.url, embeddingText);
     }
@@ -403,7 +412,7 @@
   }
 
   indexScheduler = new FluxionIndexScheduler.IndexScheduler({
-    run: browser => indexBrowser(browser).catch(error => {
+    run: job => indexBrowser(job.browser, job.revision).catch(error => {
       Cu.reportError(error);
       return null;
     }),
@@ -417,7 +426,7 @@
 
   function scheduleIndex(browser) {
     if (!enabled() || !browser || PrivateBrowsingUtils.isWindowPrivate(window)) return false;
-    return indexScheduler.enqueue(browser, browser);
+    return indexScheduler.enqueue(browser, { browser, revision: FluxionMemoryStore.revision });
   }
 
   const progressListener = {
@@ -530,6 +539,34 @@
         throw new Error("low-priority queue did not resume within its bound");
       })
       .then(indexedURL => FluxionMemoryStore.get(indexedURL))
+      .then(async record => {
+        const deletedURL = "https://example.com/?fluxion-memory-deletion-test=1";
+        await PlacesUtils.history.insert({
+          url: deletedURL, title: "Fluxion Memory deletion fixture",
+          visits: [{ date: new Date(), transition: PlacesUtils.history.TRANSITIONS.LINK }],
+        });
+        await FluxionMemoryStore.upsert({
+          url: deletedURL, title: "Fluxion Memory deletion fixture", description: "",
+          headings: "", text: "Evidence that must be forgotten with its browsing history.",
+          workspace: "", tabGroup: "", lastVisit: Date.now(), indexedAt: Date.now(),
+        });
+        if (!(await FluxionMemoryStore.get(deletedURL))) {
+          throw new Error("history deletion gate failed to create its Memory fixture");
+        }
+        await PlacesUtils.history.remove(deletedURL);
+        for (let attempt = 0; attempt < 40; attempt += 1) {
+          if (!(await FluxionMemoryStore.get(deletedURL))) {
+            if (!(await FluxionMemoryStore.get(testURL))) {
+              throw new Error("history deletion removed unrelated Memory evidence");
+            }
+            Services.prefs.setStringPref("fluxion.memory.deletion.health", "places-removal-deleted-only-associated-evidence");
+            Services.prefs.savePrefFile(null);
+            return record;
+          }
+          await new Promise(resolve => window.setTimeout(resolve, 50));
+        }
+        throw new Error("Places history removal retained Browser Memory evidence");
+      })
       .then(record => {
         const evidence = [record?.title, record?.description, record?.headings, record?.content]
           .filter(Boolean).join(" ").toLocaleLowerCase();

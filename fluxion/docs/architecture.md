@@ -299,6 +299,28 @@ same product layer with platform packaging and title-bar adapters.
 
 ## Local Browser Memory boundary
 
+Asynchronous Memory work carries a shared revision from the profile's enriched
+store. Privacy changes invalidate earlier extraction, embedding, and search
+work across browser windows. Page extraction also rechecks the live browsing
+context and exclusion policy before committing evidence, preventing a response
+from a previous navigation from being attributed to the current page.
+Gecko Places removal notifications delete the corresponding extracted evidence
+and vectors. Removing only some visits also removes that URL's combined Memory
+record, since an extract cannot safely be attributed to a surviving visit.
+Clearing history clears the enriched store, including evidence for bookmarked
+pages whose Places records remain. Reads await these deletion operations.
+A persisted pending-removal marker covers interrupted or failed deletions.
+On the next launch, that marker forces the enriched store to clear before
+any records become readable. This recovery conservatively discards all enriched
+Memory evidence; it does not delete additional Gecko history or bookmarks.
+The observer contract follows Gecko's
+[Places notifications](https://firefox-source-docs.mozilla.org/browser/places/notifyObservers.html).
+
+The command palette invalidates pending requests whenever its query, mode, or
+open state changes. Editing a query immediately removes the previous executable
+results; delayed successes and failures cannot replace the current results.
+Editing a page question also aborts the previous provider request.
+
 Browser Memory is opt-in and uses Gecko's packaged
 `PlacesSemanticHistoryManager`, `EmbeddingsGenerator`, and SQLite `vec0`
 extension. Gecko's title index remains in `places_semantic.sqlite`; Fluxion's

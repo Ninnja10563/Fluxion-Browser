@@ -59,12 +59,16 @@ passes:
    `+2` hidden count. It drives Arrow Down into the next visible page, requires
    Gecko selection and DOM focus to agree after rerender, and requires the
    inactive group to return to one heading row. This compact gate completes in
-   the startup window before pointer-close and workspace fixtures begin changing
+   an isolated app launch before the broader fixtures begin changing
    selection or intentionally holding Flow geometry. It then focuses that
    heading, expands it with Right Arrow, collapses it with Left Arrow, and
    requires the heading to remain the only roving Tab stop after each native
    state change. The pointer-close gate waits for this keyboard fixture to
-   release Flow before it begins its own intentional geometry hold.
+   release Flow before it begins its own intentional geometry hold. Both
+   assertions must pass in this separate profile before the complete suite
+   starts in another process. The complete suite still renders native groups;
+   separating these interactions prevents unrelated synthetic tab selections
+   from corrupting their measurements.
    A Focus gate then collapses Flow to its real 3px layout rail, requires its
    translated controls to be inert and keyboard discoverable, reveals the
    232px surface, and compares Gecko's content rectangle before and after. Any
@@ -117,6 +121,13 @@ passes:
    scheduler, proves it is absent while the queue is paused, then requires the
    same page and its evidence to appear after the scheduler resumes. This blocks
    publication if Browser Memory bypasses its bounded serial queue.
+   It then creates a separate Places visit and Memory record, deletes that URL
+   through Gecko history, and requires its extracted evidence to disappear
+   while the unrelated indexed page remains available.
+   The Memory palette gate changes a query after real results arrive and presses
+   Return both during debounce and during the next asynchronous search. No
+   previous result may open, and the current search must still complete before
+   the grounding fixture continues.
    An embedding-settings gate then drives the live Search & Memory selector to
    Keywords only, requires Gecko's ML and semantic-history gates to turn off,
    retrieves the extracted page through lexical evidence, and restores Gecko's

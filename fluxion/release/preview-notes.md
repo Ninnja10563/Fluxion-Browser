@@ -8,6 +8,19 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.42 improves privacy and search correctness:
+
+- prevent delayed extraction or embedding work from restoring Browser Memory
+  records after clearing data, excluding a site, or disabling embeddings;
+- propagate Gecko history deletion into Fluxion's extracted page evidence and
+  vectors, including deleted visits for pages that remain bookmarked;
+- clear selectable palette results as soon as a Memory query changes, so
+  pressing Return while searching cannot open a result from the previous query;
+- ignore outdated search failures and answers, cancel provider requests when
+  a question changes, and preserve focus when switching palette modes;
+- run the native group-keyboard and pointer-close checks in their own browser
+  launch so other automated tab operations cannot disturb the measurement.
+
 Version 0.41 makes native group headings first-class keyboard destinations in
 Flow instead of mouse-only labels:
 

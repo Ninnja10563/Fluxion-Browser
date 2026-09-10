@@ -3394,7 +3394,9 @@
         }, 80);
       });
     };
-    window.setTimeout(() => runCollapsedGroupGate(), 100);
+    if (Services.env.get("FLUXION_VISUAL_GROUP_INTERACTION_TEST") !== "0") {
+      window.setTimeout(() => runCollapsedGroupGate(), 100);
+    }
   }
   if (Services.env.get("FLUXION_VISUAL_SPLIT_TEST") === "1") {
     const primary = gBrowser.addTrustedTab("https://example.com/?fluxion-split=left");

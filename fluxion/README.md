@@ -60,6 +60,8 @@ The current preview is runnable and includes:
 - independent Browser Memory embedding control: **Keywords only** keeps local
   titles and page evidence searchable with ML and vectors disabled, while
   **Gecko on-device semantic** restores private local meaning search;
+- Browser Memory deletion follows Gecko history removal, and pending indexing
+  work is invalidated by privacy changes so deleted evidence cannot return;
 - a bounded, deduplicating Browser Memory queue that runs one page at a time
   and yields during user activity, low battery, active media/sharing, or memory
   pressure;

@@ -16,6 +16,8 @@ fi
 
 check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-app-check.XXXXXX")"
 profile="$check_root/profile"
+flow_profile="$check_root/flow-profile"
+flow_log="$check_root/flow.log"
 log="$check_root/fluxion.log"
 provider_log="$check_root/ollama-stub.log"
 ai_request="$check_root/ai-request.json"
@@ -55,8 +57,44 @@ if (( provider_attempt == 40 )); then
   exit 1
 fi
 
-printf 'Verifying that the Flow tab sidebar loads...\n' >&2
-FLUXION_PROFILE="$profile" FLUXION_VISUAL_WORKSPACE_RESUME_TEST=1 FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_STATUS_TEST=1 FLUXION_VISUAL_DROP_TEST=1 FLUXION_VISUAL_CLOSE_STABILITY_TEST=1 FLUXION_VISUAL_FOCUS_TEST=1 FLUXION_VISUAL_TOOLBAR_MENU_TEST=1 FLUXION_VISUAL_PAGE_MENU_TEST=1 FLUXION_VISUAL_PALETTE_COMMAND_TEST=1 FLUXION_VISUAL_CLOSED_TABS_TEST=1 FLUXION_VISUAL_SEARCH_ENGINE_TEST=1 FLUXION_VISUAL_THEME_TEST=1 FLUXION_VISUAL_CLEAR_DATA_TEST=1 FLUXION_VISUAL_ORGANISATION_TEST=1 FLUXION_VISUAL_SCALE_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 FLUXION_VISUAL_AI_COMPARE_TEST=1 FLUXION_VISUAL_LIBRARY_TEST=1 FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1 FLUXION_VISUAL_PERMISSIONS_TEST=1 FLUXION_VISUAL_ABOUT_TEST=1 \
+printf 'Verifying isolated Flow keyboard and pointer interactions...\n' >&2
+# These checks hold focus and row geometry across animation frames. Other
+# fixtures deliberately select, close, and reorder tabs, so use a fresh process
+# and profile to keep those actions from invalidating the measured interaction.
+FLUXION_PROFILE="$flow_profile" FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_GROUP_INTERACTION_TEST=1 FLUXION_VISUAL_CLOSE_STABILITY_TEST=1 \
+  "$launcher" https://example.com/ >"$flow_log" 2>&1 &
+process_id=$!
+flow_attempt=0
+flow_verified=false
+while (( flow_attempt < 160 )); do
+  if [[ -f "$flow_profile/prefs.js" ]] && \
+      grep -q 'user_pref("fluxion.groups.collapsed.health", "active-page-visible-and-group-heading-roving")' "$flow_profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.closeStability.health", "pointer-close-held-one-row-until-movement")' "$flow_profile/prefs.js"; then
+    flow_verified=true
+    break
+  fi
+  if ! kill -0 "$process_id" 2>/dev/null; then
+    break
+  fi
+  sleep 0.25
+  ((flow_attempt += 1))
+done
+if [[ "$flow_verified" != true ]]; then
+  printf 'The isolated Flow keyboard/pointer integration check failed.\n' >&2
+  if [[ -f "$flow_profile/prefs.js" ]]; then
+    grep 'user_pref("fluxion\..*\(health\|error\)"' "$flow_profile/prefs.js" >&2 || true
+  fi
+  sed -n '1,160p' "$flow_log" >&2
+  exit 1
+fi
+kill "$process_id" 2>/dev/null || true
+wait "$process_id" 2>/dev/null || true
+process_id=""
+
+printf 'Verifying the complete browser integration suite...\n' >&2
+export FLUXION_VISUAL_GROUP_INTERACTION_TEST=0
+export FLUXION_VISUAL_CLOSE_STABILITY_TEST=0
+FLUXION_PROFILE="$profile" FLUXION_VISUAL_WORKSPACE_RESUME_TEST=1 FLUXION_VISUAL_GROUP_TEST=1 FLUXION_VISUAL_SPLIT_TEST=1 FLUXION_VISUAL_STATUS_TEST=1 FLUXION_VISUAL_DROP_TEST=1 FLUXION_VISUAL_FOCUS_TEST=1 FLUXION_VISUAL_TOOLBAR_MENU_TEST=1 FLUXION_VISUAL_PAGE_MENU_TEST=1 FLUXION_VISUAL_PALETTE_COMMAND_TEST=1 FLUXION_VISUAL_CLOSED_TABS_TEST=1 FLUXION_VISUAL_SEARCH_ENGINE_TEST=1 FLUXION_VISUAL_THEME_TEST=1 FLUXION_VISUAL_CLEAR_DATA_TEST=1 FLUXION_VISUAL_ORGANISATION_TEST=1 FLUXION_VISUAL_SCALE_TEST=1 FLUXION_VISUAL_MEMORY_TEST=1 FLUXION_VISUAL_ENRICHMENT_TEST=1 FLUXION_VISUAL_GROUNDING_TEST=1 FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST=1 FLUXION_VISUAL_SETTINGS_TEST=1 FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST=1 FLUXION_VISUAL_SLEEP_TEST=1 FLUXION_VISUAL_PEEK_TEST=1 FLUXION_VISUAL_MULTISELECT_TEST=1 FLUXION_VISUAL_SHORTCUT_TEST=1 FLUXION_VISUAL_AI_TEST=1 FLUXION_VISUAL_AI_COMPARE_TEST=1 FLUXION_VISUAL_LIBRARY_TEST=1 FLUXION_VISUAL_BOOKMARK_FOLDER_TEST=1 FLUXION_VISUAL_PERMISSIONS_TEST=1 FLUXION_VISUAL_ABOUT_TEST=1 \
   "$launcher" https://example.com/ >"$log" 2>&1 &
 process_id=$!
 
@@ -66,9 +104,11 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.chrome.health", "flow-sidebar-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.workspaceResume.health", "two-workspace-active-pages-round-tripped")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.palette.async.health", "memory-pending-results-not-selectable")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.health", "local-memory-controls-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.engine.health", "\(local-vector-store-opened\|lexical-fallback-available\)")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.enrichment.health", "content-indexed-and-retrieved")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.memory.deletion.health", "places-removal-deleted-only-associated-evidence")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.scheduler.health", "bounded-serial-queue-paused-and-resumed")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.grounding.health", "grounded-evidence-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.embeddingSettings.health", "keyword-mode-retained-recall-and-local-mode-restored")' "$profile/prefs.js" && \
@@ -99,11 +139,9 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.about.route.health", "settings-about-route-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.visual.health", "versioned-about-fluxion-visible")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.groups.collapsed.health", "active-page-visible-and-group-heading-roving")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-side-by-side-and-stacked-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.status.health", "native-gecko-tab-states-projected-and-controllable")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.drop.health", "native-drag-reorder-and-two-orientation-split")' "$profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.closeStability.health", "pointer-close-held-one-row-until-movement")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.focus.health", "focus-rail-overlay-revealed-without-content-reflow")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.toolbarMenu.health", "product-menu-mounted-and-native-command-executed")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.pageMenu.health", "native-page-tools-wired-and-zoom-round-tripped")' "$profile/prefs.js" && \
@@ -150,11 +188,13 @@ while (( attempt < 360 )); do
 done
 
 printf '%s\n' \
-  'Fluxion.app opened Gecko but the Flow sidebar did not load.' \
+  'Fluxion.app did not complete every required browser integration check.' \
   'The build is invalid and will not be presented as successful.' >&2
 if [[ -f "$profile/prefs.js" ]]; then
   printf 'Observed Fluxion health markers:\n' >&2
   grep 'user_pref("fluxion\..*\.health"' "$profile/prefs.js" >&2 || true
+  printf 'Observed fixture errors:\n' >&2
+  grep 'user_pref("fluxion\..*\.error"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.enrichment\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.scheduler\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.embeddingSettings\.error"' "$profile/prefs.js" >&2 || true

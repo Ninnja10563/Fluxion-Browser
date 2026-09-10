@@ -45,6 +45,9 @@ controls work and its failure paths have been tested.
   vector deletion controls (implemented)
 - privacy-gated heading/body extraction and richer local metadata (implemented)
 - inspectable Browser Memory answer evidence (implemented)
+- history-removal propagation and invalidation of pending extraction, embeddings,
+  and searches (implemented; native release verification covers exact URL
+  deletion and preservation of unrelated evidence)
 
 ## Phase 5 — optional AI providers
 
