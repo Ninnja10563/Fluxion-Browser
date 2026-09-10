@@ -69,8 +69,11 @@ controls work and its failure paths have been tested.
   draft-safe Settings, shared preferences and responsive bounds is implemented
   in the published 0.56 preview, with packaged pointer-capture, native keyboard,
   narrow-window geometry and clean-relaunch validation passed; physical OS
-  pointer and assistive-technology audits remain, as does removing horizontal
-  scrolling from Workspace settings at the narrowest window size
+  pointer and assistive-technology audits remain
+- all-section responsive Settings, including workspace editing, complete
+  permission expiry and origin/context-specific permission-reset names
+  (implemented in the 0.57 candidate; packaged checks passed at 320/600 pixel
+  root widths across all ten sections without horizontal page scrolling)
 - Settings-owned shortcut capture and collision-aware customized-map loading,
   including valid swaps/cycles and cross-window preference synchronization
   (implemented; packaged DOM-event integration gate added)

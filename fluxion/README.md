@@ -10,7 +10,8 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 The 0.57 candidate focuses on narrow Settings layouts across every section,
 including workspace editing, permission decisions and keyboard shortcuts.
-Native validation is pending; the published DMG below remains 0.56.
+All 601 tests and native diagnostics passed; full release staging is next.
+The published DMG below remains 0.56.
 
 ## Latest published changes
 
