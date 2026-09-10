@@ -56,7 +56,16 @@ controls work and its failure paths have been tested.
   collapsed-group projection plus a focus-stable keyboard tree for headings
   and child pages)
 - fuzzy command palette and high-volume tab search (initial command, tab,
-  workspace, history, and bookmark search implemented)
+  workspace, history, and bookmark search implemented; bounded ranking and live
+  workspace-name/group context verified with 1,000 native tabs; slower
+  structural-update samples still need performance work)
+- snapshot-bound Flow menu actions and cancellation focus restoration
+  (implemented with stale-target regression tests and native macOS tab/group
+  menu keyboard navigation; broader pointer and assistive-technology audits
+  remain)
+- live General/Appearance preference controls with unsaved-draft preservation
+  (implemented; two-window packaged verification passed); adjustable
+  expanded sidebar width remains unimplemented
 - Settings-owned shortcut capture and collision-aware customized-map loading,
   including valid swaps/cycles and cross-window preference synchronization
   (implemented; packaged DOM-event integration gate added)
