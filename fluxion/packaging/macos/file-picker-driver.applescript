@@ -2,6 +2,72 @@
 property resolverExecutable : ""
 property remotePanelPID : 0
 
+on shortDiagnostic(valueToFormat)
+  try
+    set valueText to valueToFormat as text
+    if (length of valueText) > 96 then return (text 1 thru 96 of valueText) & "…"
+    return valueText
+  on error
+    return "<unavailable>"
+  end try
+end shortDiagnostic
+
+on remoteTreeSummary(remoteProcess)
+  set lines to {}
+  set pendingNodes to {remoteProcess}
+  set scanned to 0
+  set deadline to (current date) + 20
+  -- Breadth-first AXChildren traversal also includes application-root remote
+  -- views which System Events does not classify as windows or sheets.
+  repeat while (count of pendingNodes) > 0 and scanned < 200 and (current date) < deadline
+    set currentNode to item 1 of pendingNodes
+    if (count of pendingNodes) > 1 then
+      set pendingNodes to items 2 thru -1 of pendingNodes
+    else
+      set pendingNodes to {}
+    end if
+    set scanned to scanned + 1
+    set lineText to "node" & scanned
+    with timeout of 2 seconds
+    tell application "System Events"
+      repeat with attributeName in {"AXRole", "AXSubrole", "AXTitle", "AXDescription", "AXIdentifier", "AXEnabled", "AXFocused"}
+        if (current date) >= deadline then exit repeat
+        try
+          set attributeValue to value of attribute (contents of attributeName) of currentNode
+          set lineText to lineText & " " & (contents of attributeName) & "=" & my shortDiagnostic(attributeValue)
+        on error errorText number errorNumber
+          set lineText to lineText & " " & (contents of attributeName) & "=error" & errorNumber
+        end try
+      end repeat
+      try
+        set lineText to lineText & " actions=" & my shortDiagnostic(name of every action of currentNode)
+      end try
+      try
+        try
+          set childNodes to value of attribute "AXChildren" of currentNode
+          if childNodes is missing value then set childNodes to UI elements of currentNode
+        on error
+          set childNodes to UI elements of currentNode
+        end try
+        set lineText to lineText & " children=" & (count of childNodes)
+        repeat with childNode in childNodes
+          if scanned + (count of pendingNodes) >= 200 then exit repeat
+          set end of pendingNodes to contents of childNode
+        end repeat
+      on error errorText number errorNumber
+        set lineText to lineText & " childrenError=" & errorNumber
+      end try
+    end tell
+    end timeout
+    set end of lines to lineText
+  end repeat
+  set summary to linefeed & "remoteTree nodes=" & scanned & "; pending=" & (count of pendingNodes) & "; deadlineReached=" & ((current date) >= deadline)
+  repeat with lineText in lines
+    set summary to summary & linefeed & (contents of lineText)
+  end repeat
+  return summary
+end remoteTreeSummary
+
 on requireNativeAction(ownedPID)
   my requireFrontmost(ownedPID)
   if remotePanelPID is not 0 then
@@ -115,9 +181,22 @@ on ownedWindowSummary(ownedPID)
         end repeat
         set summary to summary & "; descendant roles=" & (roles as text) & "; firstReadError=" & firstReadError
       end repeat
-      return summary
     end tell
   end tell
+  try
+    set candidatePID to (do shell script (quoted form of resolverExecutable) & " " & ownedPID & " --authorized") as integer
+    set summary to summary & "; authorizedRemotePID=" & candidatePID
+    tell application "System Events"
+      set remoteProcess to first application process whose unix id is candidatePID
+      set summary to summary & my remoteTreeSummary(remoteProcess)
+      set summary to summary & "; remoteAppRole=" & (value of attribute "AXRole" of remoteProcess)
+      set summary to summary & "; remoteWindows=" & (count of windows of remoteProcess)
+      set summary to summary & "; remoteChildren=" & (count of (value of attribute "AXChildren" of remoteProcess))
+    end tell
+  on error errorText number errorNumber
+    set summary to summary & "; remoteReadError=" & errorNumber & ":" & errorText
+  end try
+  return summary
 end ownedWindowSummary
 
 on run arguments

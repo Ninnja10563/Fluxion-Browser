@@ -87,6 +87,28 @@ codesign --verify --deep --strict ../.runtime/Fluxion.app
 
 The `file` result should identify an `arm64` Mach-O executable on an M3 Mac.
 
+Additional packaged-app regression checks use isolated temporary profiles:
+
+```sh
+./scripts/verify-macos-shortcuts.sh ../.runtime/Fluxion.app
+./scripts/verify-macos-file-picker.sh ../.runtime/Fluxion.app
+```
+
+The shortcut check exercises rendered Settings controls and cross-window
+preferences using DOM keyboard events; it is not an OS keyboard-input test.
+The file-picker check uses LaunchServices, System Events and the actual macOS
+open panel, then verifies the selected file's bytes through a loopback upload.
+UI automation requires a graphical login and the applicable macOS automation
+and accessibility permissions. Missing permission or ambiguous dialog ownership
+fails the check; no replacement picker or file-list injection is used.
+
+macOS renders its open panel in an AppKit helper process. The test builds a
+read-only ownership resolver with Xcode's `clang` into its temporary directory.
+It dynamically resolves a private macOS responsibility-PID function and accepts
+only the exact system helper attributed to this browser process, never a shared
+Terminal/CI ancestor. An unavailable function fails closed. This test helper
+is not bundled with Fluxion and is not needed for ordinary browsing or uploads.
+
 ## Troubleshooting
 
 Fluxion accepts links and local files through macOS **Open With**. To target a
