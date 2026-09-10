@@ -21,6 +21,8 @@ Version 0.53 improves Memory context and keyboard customization:
   them, showing conflicts without opening unrelated browser controls;
 - preserve valid customized shortcut swaps and cycles through preference
   loading and cross-window synchronization;
+- keep a bookmark save bound to the page and folder originally requested,
+  even when the user changes tabs or folders during the duplicate lookup;
 - add required packaged-app checks for shortcut editing and real macOS file
   picker cancellation, Unicode-path selection, and multipart upload bytes.
 

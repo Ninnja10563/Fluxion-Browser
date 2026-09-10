@@ -7,6 +7,55 @@ const vm = require("node:vm");
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
+test("saving a bookmark retains the originally requested page and folder across deferred duplicate lookup", async () => {
+  const h = harness({ section: "bookmarks", initialURI: "about:downloads#bookmarks" });
+  const inserted = [], lookups = [];
+  let finishLookup;
+  h.bookmarks.fetch = (query, callback) => new Promise(resolve => {
+    lookups.push(query.url); finishLookup = items => { items.forEach(callback); resolve(); };
+  });
+  h.bookmarks.insert = async record => { inserted.push(record); return { guid: "saved_______" }; };
+  h.tab.linkedBrowser.currentURI.spec = "https://first.example/article";
+  h.tab.label = "First article"; h.selectCurrent();
+  h.tab.linkedBrowser.currentURI.spec = "about:downloads#bookmarks"; h.selectCurrent();
+  h.savePage.click();
+  assert.deepEqual(lookups, ["https://first.example/article"]);
+  h.tab.linkedBrowser.currentURI.spec = "https://second.example/article";
+  h.tab.label = "Second article"; h.selectCurrent();
+  h.folderSelect.value = "different___"; h.folderSelect.dispatch("change");
+  finishLookup([]); await settle();
+  assert.equal(inserted.length, 1);
+  assert.equal(inserted[0].url, "https://first.example/article");
+  assert.equal(inserted[0].title, "First article");
+  assert.equal(inserted[0].parentGuid, "unfiled_____");
+  assert.equal(h.note.textContent, "Saved “First article”.");
+});
+
+test("deferred bookmark duplicate and failure results never insert the newly selected page", async () => {
+  for (const fail of [false, true]) {
+    const h = harness({ section: "bookmarks", initialURI: "about:downloads#bookmarks" });
+    const inserted = [];
+    let finishLookup;
+    h.bookmarks.fetch = (_query, callback) => new Promise((resolve, reject) => {
+      finishLookup = () => {
+        if (fail) reject(new Error("Bookmark database unavailable"));
+        else { callback({ parentGuid: "unfiled_____" }); resolve(); }
+      };
+    });
+    h.bookmarks.insert = async record => { inserted.push(record); };
+    h.tab.linkedBrowser.currentURI.spec = "https://first.example/article";
+    h.tab.label = "First article"; h.selectCurrent();
+    h.tab.linkedBrowser.currentURI.spec = "about:downloads#bookmarks"; h.selectCurrent();
+    h.savePage.click();
+    h.tab.linkedBrowser.currentURI.spec = "https://second.example/article";
+    h.tab.label = "Second article"; h.selectCurrent();
+    finishLookup(); await settle();
+    assert.equal(inserted.length, 0);
+    assert.equal(h.note.textContent, fail ? "Bookmark database unavailable" : "“First article” is already saved in the requested folder.");
+    assert.equal(h.errors.length, fail ? 1 : 0);
+  }
+});
+
 // Execute the complete shipped chrome script and its real pure helpers. Only
 // browser/DOM IO is replaced; SQL resolution is deliberately controllable.
 function harness({ section = "history", initialURI = "about:downloads#history", downloads = [] } = {}) {
@@ -132,6 +181,9 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const byClass = name => elements.find(node => node.className === name);
   const input = byClass("fluxion-library-search");
   return { window, document, queries, errors, timers, input, opened, navigations, tab,
+    bookmarks: PlacesUtils.bookmarks,
+    savePage: elements.find(node => node.textContent === "Save current page"),
+    folderSelect: byClass("fluxion-library-folder-select"), note: byClass("fluxion-library-note"),
     selectCurrent: () => window.FluxionUI.selectTab(tab),
     sectionButton: label => elements.find(node => node.parentNode?.className === "fluxion-library-nav" && node.textContent === label),
     location: browser => progressListener.onLocationChange(browser),

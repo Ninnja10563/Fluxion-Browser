@@ -610,21 +610,22 @@
 
   async function saveLastWebPage() {
     if (!lastWebPage) throw new Error("Open an ordinary webpage before saving a bookmark.");
+    const { url, title } = lastWebPage;
     const parentGuid = currentBookmarkFolder !== "all"
       ? currentBookmarkFolder : PlacesUtils.bookmarks.unfiledGuid;
     const existing = [];
-    await PlacesUtils.bookmarks.fetch({ url: lastWebPage.url }, item => existing.push(item));
+    await PlacesUtils.bookmarks.fetch({ url }, item => existing.push(item));
     if (existing.some(item => item.parentGuid === parentGuid)) {
-      note.textContent = "This page is already saved in the selected folder.";
+      note.textContent = `“${title || url}” is already saved in the requested folder.`;
       return;
     }
     await PlacesUtils.bookmarks.insert({
       parentGuid,
-      title: lastWebPage.title || lastWebPage.url,
-      url: lastWebPage.url,
+      title: title || url,
+      url,
       index: PlacesUtils.bookmarks.DEFAULT_INDEX,
     });
-    note.textContent = `Saved “${lastWebPage.title || lastWebPage.url}”.`;
+    note.textContent = `Saved “${title || url}”.`;
     await refreshAll();
   }
 
