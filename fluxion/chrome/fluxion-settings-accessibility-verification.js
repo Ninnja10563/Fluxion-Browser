@@ -172,6 +172,11 @@
               `Native exclusion-list accessible name does not match ${expectedName}`);
             control.focus();
             assert(document.activeElement === control, `Exclusion-list control cannot receive keyboard focus: ${expectedName}`);
+            if (control.type === "checkbox") {
+              const bounds = rect(control);
+              assert(bounds.width > 0 && bounds.width <= 20 && bounds.height > 0 && bounds.height <= 20,
+                `Exclusion-list checkbox stretched beyond native size: ${JSON.stringify(bounds)}`);
+            }
             fields.push({ ...check(control, "exclusion-list", size), accessibleName: expectedName, focused: true });
           }
           assert(fields.length === 6, "Exclusion-list editor omitted name/domains/enabled or Save/Cancel/Remove");

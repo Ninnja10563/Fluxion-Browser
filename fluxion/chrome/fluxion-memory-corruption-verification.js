@@ -60,7 +60,7 @@
         await db.execute("INSERT INTO vec_history(rowid,embedding) VALUES(:id,:vector)",
           { id: rows[0].getResultByName("rowid"), vector });
       });
-      const rows = await db.execute(`SELECT v.rowid,hex(v.embedding) AS bytes,m.url_hash AS hash
+      const rows = await db.execute(`SELECT v.rowid,hex(v.embedding) AS bytes,CAST(m.url_hash AS TEXT) AS hash
         FROM vec_history v JOIN vec_history_mapping m ON m.rowid=v.rowid`);
       assert(rows.length === 1 && rows[0].getResultByName("bytes"), "Seed native bytes are missing");
       write("baseline", JSON.stringify({ id: rows[0].getResultByName("rowid"), bytes: rows[0].getResultByName("bytes"),
@@ -89,7 +89,7 @@
       assert(baseline?.bytes && Number.isInteger(baseline.id), "Missing seed baseline");
       let db = await Sqlite.openConnection({ path, extensions: ["vec"], readOnly: true });
       try {
-        const rows = await db.execute(`SELECT v.rowid,hex(v.embedding) AS bytes,m.url_hash AS hash
+        const rows = await db.execute(`SELECT v.rowid,hex(v.embedding) AS bytes,CAST(m.url_hash AS TEXT) AS hash
           FROM vec_history v JOIN vec_history_mapping m ON m.rowid=v.rowid`);
         assert(rows.length === 1 && rows[0].getResultByName("rowid") === baseline.id &&
           rows[0].getResultByName("bytes") === baseline.bytes && String(rows[0].getResultByName("hash")) === baseline.hash,

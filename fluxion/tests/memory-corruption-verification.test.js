@@ -48,7 +48,8 @@ async function check(options = {}) {
           assert.match(sql, /^SELECT /, "Verifier raw connection must never mutate data");
           events.push(purged ? "read-purged" : "read-retained");
           if (purged) return [row({ vectors: options.purgeRetains ? 1 : 0, mappings: 0 })];
-          return options.missingVector ? [] : [row({ rowid: 7, bytes: options.changedVector ? "FFFFFFFF" : "0000803E", hash: "1234" })];
+          assert.match(sql, /CAST\(m\.url_hash AS TEXT\)/, "Mapping hashes must avoid numeric precision loss");
+          return options.missingVector ? [] : [row({ rowid: 7, bytes: options.changedVector ? "FFFFFFFF" : "0000803E", hash: options.changedMapping ? "1235" : "1234" })];
         }, async close() { events.push("raw-close"); if (options.closeError) throw new Error("fixture close failed"); } };
       } } };
       throw new Error(`Unexpected import ${uri}`);
@@ -69,7 +70,7 @@ test("full shipped corruption verifier bypasses adapter, verifies retained bytes
   for (const config of result.configs) { assert.equal(config.readOnly, true); assert.match(config.path, /\/places_semantic\.sqlite$/); }
 });
 test("lost or changed native vector cannot pass or initiate explicit purge", async () => {
-  for (const option of ["missingVector", "changedVector", "missingVisit"]) {
+  for (const option of ["missingVector", "changedVector", "changedMapping", "missingVisit"]) {
     const result = await check({ [option]: true });
     assert.ok(result.prefs.has(`${prefix}.error`), option);
     assert.equal(result.prefs.has(`${prefix}.check.health`), false);
