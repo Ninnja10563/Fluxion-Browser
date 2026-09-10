@@ -113,6 +113,21 @@ metadata after both clean relaunch and abrupt-process crash recovery.
 
 ## Custom components
 
+Flow menu sessions are separated into `core/flow-menu-session.js`. Each native
+popup captures immutable target membership, validates it again before command
+execution, and cancels when its workspace or targets become stale. Native
+command handling precedes `popuphidden` in the locked Gecko/Cocoa implementation;
+claimed actions therefore retain their captured state until dismissal, while
+Escape can restore the current DOM projection of its original anchor. Focus
+restoration is gated by window and control ownership, not just tab identity.
+
+Palette tab records use weak ownership and prepared search fields. Raw metadata
+is checked on every search, including changes made while the palette is closed.
+The query is normalized once; bounded top-K insertion retains the same score,
+confidence cutoff, fallback ordering, and original-index tie rules as a full
+sort. `scripts/benchmark-tab-search.cjs` compares the frozen 0.54 ranker and
+current code in identical Node VM contexts; it does not measure native painting.
+
 ```text
 bin/fluxion
   -> isolated Firefox profile

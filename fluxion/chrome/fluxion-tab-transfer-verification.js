@@ -1,4 +1,4 @@
-/* global Services, ChromeUtils, PathUtils, SessionStore, Cu */
+/* global Services, ChromeUtils, PathUtils, IOUtils, SessionStore, Cu */
 (function verifyTabTransfer(window) {
   "use strict";
   if (Services.env.get("FLUXION_TAB_TRANSFER_TEST") !== "1") return;
@@ -51,6 +51,74 @@
     assert(response.ok, "Transfer HTTP evidence unavailable");
     return (await response.json()).loads;
   };
+  let keyboardSequence = 0;
+  async function nativeKey(action) {
+    const driver = Services.env.get("FLUXION_TAB_TRANSFER_KEYBOARD_DIR");
+    assert(driver === PathUtils.join(PathUtils.parent(PathUtils.profileDir), "keyboard"),
+      "Native keyboard driver is not isolated with the fixture profile");
+    assert(["activate", "open", "down", "right", "escape"].includes(action) && ++keyboardSequence <= 128,
+      "Invalid or excessive native keyboard request");
+    if (action !== "activate") assert(Services.focus.activeWindow === window,
+      "Native keyboard fixture lost its exact source window");
+    write("keyboardRequest", `${keyboardSequence}:${action}`);
+    await waitFor(() => IOUtils.exists(PathUtils.join(driver, `${keyboardSequence}.sent`)),
+      `Owned-process native keyboard driver did not complete ${action}`);
+  }
+  async function keyboardMenu(anchor, contextId, moveMenuId, submenuId, kind) {
+    const context = window.document.getElementById(contextId);
+    const menu = window.document.getElementById(moveMenuId);
+    const submenu = window.document.getElementById(submenuId);
+    assert(anchor?.isConnected && context && menu && submenu, `${kind} keyboard menu fixture is missing`);
+    const evidence = { kind, transport: "System Events native key codes; initial anchor focus set by chrome", highlighted: [] };
+    (report.nativeKeyboard ||= []).push(evidence);
+    let selectedItem = null;
+    const observe = event => {
+      if (!event.isTrusted || ![context, submenu].includes(event.target.parentNode)) return;
+      selectedItem = event.target;
+      evidence.highlighted.push({ parent: event.target.parentNode.id, label: event.target.getAttribute("label") });
+    };
+    context.addEventListener("DOMMenuItemActive", observe);
+    try {
+      window.focus();
+      await nativeKey("activate");
+      await waitFor(() => Services.focus.activeWindow === window && window.document.hasFocus(), "Owned source window did not become foreground");
+      anchor.scrollIntoView({ block: "nearest", behavior: "instant" });
+      anchor.focus({ preventScroll: true });
+      assert(window.document.activeElement === anchor, `${kind} anchor could not receive keyboard focus`);
+      await nativeKey("open");
+      await waitFor(() => context.state === "open", `Native Shift+F10 did not open the ${kind} menu`);
+      evidence.nativeMenu = context.isNativeMenu;
+      assert(context.isNativeMenu, `${kind} context menu is not an OS-native menu`);
+      await nativeKey("down");
+      await waitFor(() => selectedItem?.parentNode === context, "Native menu did not expose its highlighted first entry");
+      // Cocoa reports active leaf items, not highlighted submenu headers. Count
+      // remaining enabled siblings from an observed native selection; never set
+      // activeChild or pretend an attribute changed in response to the keyboard.
+      const items = [...context.children].filter(item => ["menu", "menuitem"].includes(item.localName) &&
+        !item.hidden && !item.disabled && window.getComputedStyle(item).display !== "none" &&
+        window.getComputedStyle(item).visibility !== "collapse");
+      const from = items.indexOf(selectedItem), target = items.indexOf(menu);
+      assert(from >= 0 && target >= from && target - from <= 40, "Move to Window navigation sequence is not bounded");
+      for (let index = from; index < target; index++) await nativeKey("down");
+      await nativeKey("right");
+      await waitFor(() => submenu.state === "open", "Native ArrowRight did not open Move to Window");
+      selectedItem = null;
+      await nativeKey("down");
+      await waitFor(() => selectedItem?.parentNode === submenu && !selectedItem.disabled,
+        "Native submenu ArrowDown did not highlight an enabled command");
+      evidence.submenuLabel = selectedItem.getAttribute("label");
+      await nativeKey("escape");
+      await waitFor(() => submenu.state === "closed", "Native Escape did not close Move to Window");
+      if (context.state !== "closed") await nativeKey("escape");
+      await waitFor(() => context.state === "closed" && window.document.activeElement === anchor &&
+        Services.focus.activeWindow === window, `Native Escape did not restore ${kind} anchor focus`);
+      evidence.restoredAnchorFocus = true;
+    } finally {
+      context.removeEventListener("DOMMenuItemActive", observe);
+      write("report", JSON.stringify(report));
+      if (context.state !== "closed") context.hidePopup();
+    }
+  }
   async function move(owner, tab, destination, extra = {}) {
     const before = await read(tab), oldClosed = closedCount(owner);
     const result = await owner.FluxionTabTransfer.move([tab], destination,
@@ -266,6 +334,18 @@
     "Native drop lost move/workspace/closed-history semantics");
     report.dragInput = "Native Gecko DataTransfer and DOM DragEvents; not physical OS drag or trusted dragend";
     report.checks.push("native-gecko-datatransfer-shipped-flow-dom-drop-retains-live-document");
+
+    write("stage", "native-flow-keyboard-menus");
+    const keyboardPage = await page(window);
+    const keyboardRow = await waitFor(() => [...window.document.querySelectorAll(".fluxion-tab")]
+      .find(item => item._fluxionTab === keyboardPage.tab), "Keyboard tab row did not render");
+    await keyboardMenu(keyboardRow, "fluxion-tab-context", "fluxion-move-window-menu", "fluxion-move-window-popup", "tab");
+    const groupPage = await page(window);
+    const keyboardGroup = window.gBrowser.addTabGroup([keyboardPage.tab, groupPage.tab], { label: "Keyboard transfer fixture" });
+    const heading = await waitFor(() => [...window.document.querySelectorAll(".fluxion-group-heading")]
+      .find(item => item._fluxionGroup === keyboardGroup), "Keyboard group heading did not render");
+    await keyboardMenu(heading, "fluxion-group-context", "fluxion-move-group-window-menu", "fluxion-move-group-window-popup", "group");
+    report.checks.push("native-os-keyboard-tab-and-group-menu-open-navigation-and-escape-focus");
 
     write("stage", "last-visible-tab-with-hidden-workspace");
     const workspaceSource = await newWindow();

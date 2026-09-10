@@ -25,6 +25,7 @@
   let contextTab = null;
   let contextGroup = null;
   let contextWorkspace = null;
+  let flowMenuSession = null;
   let dragTab = null;
   let dragTabs = [];
   let dragTargetElement = null;
@@ -1386,6 +1387,10 @@
   }
 
   function contextTabs(tab = contextTab) {
+    if (!arguments.length) {
+      const menuContext = flowMenuSession?.context(contextMenu);
+      if (menuContext) return [...menuContext.tabs];
+    }
     return FluxionTabSelection.contextTabs(tab, gBrowser.selectedTabs);
   }
 
@@ -2368,6 +2373,7 @@
       updateWindowTitle();
       return;
     }
+    flowMenuSession?.reconcile();
     const focusedTabBeforeRender = document.activeElement
       ?.closest?.(".fluxion-tab")?._fluxionTab || null;
     const focusedGroupBeforeRender = document.activeElement
@@ -2468,6 +2474,7 @@
   }
 
   function scheduleRender(event = null) {
+    flowMenuSession?.reconcile();
     if (event?.type === "TabClose") {
       closingTabs.delete(event.target);
       if (pointerCloseHold?.tabs.has(event.target)) pointerCloseHold.closed.add(event.target);
@@ -2835,6 +2842,84 @@
   });
 
   popupSet.append(contextMenu, groupMenu, workspaceMenu);
+
+  function initialiseFlowMenus() {
+    const roots = [contextMenu, groupMenu, workspaceMenu];
+    const flowItems = () => [...renderedPinnedTabElements(), ...renderedTreeItems()];
+    const liveTab = tab => Boolean(tab?.parentNode && !tab.closing && gBrowser.tabs.includes(tab));
+    flowMenuSession = window.FluxionFlowMenuSession.create({
+      snapshot(input, root) {
+        const kind = root === contextMenu ? "tab" : root === groupMenu ? "group" : "workspace";
+        const anchor = kind === "tab" ? tabElements.get(input.tab) :
+          kind === "group" ? groupElements.get(input.group) : workspaceElements.get(input.workspaceId);
+        const tabs = kind === "tab" ? FluxionTabSelection.contextTabs(input.tab, gBrowser.selectedTabs) :
+          kind === "group" ? [...(input.group?.tabs || [])] : [];
+        return { ...input, kind, workspace: currentWorkspace, workspaceRevision: JSON.stringify(workspaces),
+          tabs, tabWorkspaces: tabs.map(tabWorkspace),
+          anchor,
+          keyboardOwned: document.activeElement === anchor,
+          anchorIndex: flowItems().indexOf(anchor),
+        };
+      },
+      validate(context) {
+        if (window.closed || currentWorkspace !== context.workspace ||
+            JSON.stringify(workspaces) !== context.workspaceRevision) return false;
+        if (context.kind === "workspace") return workspaces.some(item => item.id === context.workspaceId);
+        if (!context.tabs.length || context.tabs.some((tab, index) =>
+          !liveTab(tab) || tabWorkspace(tab) !== context.tabWorkspaces[index])) return false;
+        if (context.kind === "group") return gBrowser.tabGroups.includes(context.group) &&
+          context.group.tabs.length === context.tabs.length && context.tabs.every(tab => tab.group === context.group);
+        return liveTab(context.tab);
+      },
+      cancelNative: root => root.hidePopup(),
+      schedule: callback => window.requestAnimationFrame(callback),
+      restore(context, root) {
+        if (!context.keyboardOwned || window.closed || !document.hasFocus() ||
+            Services.focus.activeWindow !== window) return;
+        // Native menus can outlive the DOM row used to open them. Resolve the
+        // current projection; never focus a detached anchor or another window.
+        const active = document.activeElement;
+        const matching = context.kind === "tab" ? tabElements.get(context.tab) :
+          context.kind === "group" ? groupElements.get(context.group) : workspaceElements.get(context.workspaceId);
+        if (active && active !== document.body && active !== document.documentElement &&
+            active !== flow && active !== matching && !matching?.contains(active) &&
+            active !== context.anchor && !context.anchor?.contains(active) && !root.contains(active)) return;
+        if (context.kind === "workspace") {
+          (workspaceElements.get(context.workspaceId) || workspaceElements.get(currentWorkspace))?.focus({ preventScroll: true });
+          return;
+        }
+        const items = flowItems();
+        const target = items.includes(matching) ? matching : items[Math.max(0, Math.min(context.anchorIndex, items.length - 1))];
+        if (target) focusFlowItem(target);
+        else newTabButton.focus({ preventScroll: true });
+      },
+    });
+    for (const root of roots) {
+      on(root, "popupshowing", event => {
+        if (event.target !== root) return;
+        const input = { tab: contextTab, group: contextGroup, workspaceId: contextWorkspace };
+        if (flowMenuSession.context(root)) return;
+        const context = flowMenuSession.begin(root, input);
+        if (!context) { event.preventDefault(); return; }
+        contextTab = context.tab; contextGroup = context.group; contextWorkspace = context.workspaceId;
+      }, true);
+      on(root, "command", event => {
+        if (!flowMenuSession.beforeCommand(root)) {
+          event.preventDefault();
+          event.stopImmediatePropagation();
+        }
+      }, true);
+      on(root, "popuphidden", event => {
+        if (event.target !== root) return;
+        flowMenuSession.afterHidden(root);
+        if (root === contextMenu) contextTab = null;
+        else if (root === groupMenu) contextGroup = null;
+        else contextWorkspace = null;
+      });
+    }
+    cleanup.push(() => flowMenuSession.dispose());
+  }
+  initialiseFlowMenus();
 
   on(modeButton, "click", cycleSidebar);
   on(window, "FluxionShortcutsChanged", updateModeButtonTitle);

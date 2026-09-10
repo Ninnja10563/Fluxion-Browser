@@ -42,6 +42,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
 
+      - name: Check Flow updates and thousand-tab search responsiveness
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-flow.sh '.runtime/Fluxion.app'
+
       - name: Check packaged Settings shortcut capture and cross-window saves
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-shortcuts.sh '.runtime/Fluxion.app'

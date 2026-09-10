@@ -27,6 +27,7 @@
   let placesTimer = 0;
   let memoryRequest = 0;
   let memoryPendingGateComplete = false;
+  const tabSearchItems = new WeakMap();
 
   const create = (tag, className) => {
     const element = document.createElementNS(HTML, tag);
@@ -512,16 +513,24 @@
           window.FluxionSplitViews.canSplit(splitSource, tab)
         )
       : [...gBrowser.tabs];
-    return tabs.map(tab => ({
-      label: tab.label || "New tab",
-      detail: tab.linkedBrowser?.currentURI?.displaySpec || "",
-      kind: mode === "split" ? "Split" : "Tab",
-      boost: tab === gBrowser.selectedTab ? 18 : 0,
-      keywords: [ui.tabWorkspace(tab), tab.group?.label || ""],
-      run: () => source
-        ? ui.createSplitView(source, tab, { orientation: pendingSplitOrientation })
-        : ui.selectTab(tab),
-    }));
+    return tabs.map(tab => {
+      let cached = tabSearchItems.get(tab);
+      if (!cached || cached.source !== source) {
+        cached = { source, item: { run: () => source
+          ? ui.createSplitView(source, tab, { orientation: pendingSplitOrientation })
+          : ui.selectTab(tab) } };
+        tabSearchItems.set(tab, cached);
+      }
+      const item = cached.item;
+      // Read live metadata even when Gecko changed it while the palette was
+      // closed. Stable record identity lets search reuse unchanged text fields.
+      item.label = tab.label || "New tab";
+      item.detail = tab.linkedBrowser?.currentURI?.displaySpec || "";
+      item.kind = mode === "split" ? "Split" : "Tab";
+      item.boost = tab === gBrowser.selectedTab ? 18 : 0;
+      item.keywords = [ui.tabWorkspace(tab), tab.group?.label || ""];
+      return item;
+    });
   }
 
   function workspaceItems() {

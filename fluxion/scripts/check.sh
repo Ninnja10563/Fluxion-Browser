@@ -31,6 +31,7 @@ bash -n \
   scripts/verify-macos-session.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
+node --check scripts/benchmark-tab-search.cjs
 node --check scripts/browsing-fixture.mjs
 node --check chrome/core/url.js
 node --check chrome/core/search.js
@@ -64,6 +65,7 @@ node --check chrome/core/tab-selection.js
 node --check chrome/core/tab-status.js
 node --check chrome/core/tab-drop.js
 node --check chrome/core/tab-transfer-drag.js
+node --check chrome/core/flow-menu-session.js
 node --check chrome/core/workspaces.js
 node --check chrome/core/workspace-editor.js
 node --check chrome/core/workspace-tabs.js

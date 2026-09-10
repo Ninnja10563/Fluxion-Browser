@@ -8,10 +8,12 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.54 candidate focuses on moving real Gecko tabs between browser windows,
-including workspace context, grouped/split pages, and private-window boundaries.
-Temporary Peek pages must be promoted before transfer. A dedicated packaged
-verification gate is being added; native validation is pending.
+The 0.55 candidate focuses on keyboard/menu continuity and many-tab search.
+Menu commands retain their original targets and refuse stale ones; tab search
+reuses unchanged normalized fields while retaining the existing ranking rules.
+Native keyboard-menu and 1,000-tab search validation is in progress.
+The frozen 0.54 candidate passed its native browser checks but is still waiting
+for successful live update discovery before release.
 Only candidates that pass the full release workflow are published as DMGs.
 
 The current preview is runnable and includes:

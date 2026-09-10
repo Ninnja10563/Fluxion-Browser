@@ -8,6 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.55 is an interaction-quality candidate in development:
+
+- retain the original tab selection for a menu command, refusing stale tabs,
+  groups, or workspaces instead of operating on changed targets;
+- restore the current Flow row after keyboard menu cancellation, without
+  pulling focus away from another control or window;
+- reuse normalized tab-search fields and maintain only the best bounded result
+  set, preserving exact/fuzzy scoring, confidence filtering, and stable ties;
+- validate live metadata so changed titles, URLs, workspaces, and group names
+  cannot leave obsolete cached search results;
+- extend native keyboard/menu and 1,000-tab search verification.
+
+It has not passed release validation and has no published DMG. Local CPU-only
+benchmark results are not claims of native input-to-paint latency.
+
 Version 0.54 is a candidate for native cross-window tab handling. Its release
 verification is pending; the implementation must pass the complete macOS
 workflow before a DMG is published.
