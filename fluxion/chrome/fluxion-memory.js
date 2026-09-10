@@ -160,10 +160,10 @@
   }
 
   async function applyExclusions() {
-    if (!embeddingsEnabled() || !manager || exclusionSweep) return exclusionSweep;
+    if (!embeddingsEnabled() || PrivateBrowsingUtils.isWindowPrivate(window) || exclusionSweep) return exclusionSweep;
     exclusionSweep = FluxionNativeMemory.runMutation(async () => {
-      const connection = await manager.getConnection();
-      if (!connection) return;
+      const native = FluxionNativeMemory.getManager();
+      const connection = await FluxionNativeMemory.storageConnection();
       const rows = await connection.execute(`
         SELECT map.rowid AS rowid, places.url AS url
         FROM vec_history_mapping map
@@ -173,7 +173,9 @@
         !isAllowedResult(row.getResultByName("url"))
       );
       if (!blocked.length) return;
-      const sentinel = new Float32Array(manager.getEmbeddingSize());
+      // Array.isArray crosses chrome/module realms; Gecko's Float32Array
+      // instanceof check does not accept this window's typed-array constructor.
+      const sentinel = new Array(native.getEmbeddingSize()).fill(0);
       sentinel[0] = 1;
       const vector = PlacesUtils.tensorToSQLBindable(sentinel);
       await connection.executeTransaction(async () => {
@@ -189,7 +191,7 @@
           );
         }
       });
-    }).catch(Cu.reportError).finally(() => { exclusionSweep = null; });
+    }).finally(() => { exclusionSweep = null; });
     return exclusionSweep;
   }
 
@@ -226,7 +228,7 @@
       const semanticManager = getManager();
       await semanticManager.getConnection();
       semanticManager.onPagesRankChanged();
-      applyExclusions();
+      applyExclusions().catch(Cu.reportError);
     }
     Services.prefs.savePrefFile(null);
     indexScheduler?.wake();
@@ -265,7 +267,7 @@
             .map(row => ({ ...row, lastVisit: Number(row.lastVisit || 0) / 1000 }));
           state = "ready";
         }
-        applyExclusions();
+        applyExclusions().catch(Cu.reportError);
       } catch (error) {
         Cu.reportError(error);
         state = "lexical";
@@ -330,7 +332,7 @@
     const semanticManager = getManager();
     const connection = await semanticManager.getConnection();
     semanticManager.onPagesRankChanged();
-    applyExclusions();
+    applyExclusions().catch(Cu.reportError);
     indexScheduler?.wake();
     return connection ? "semantic" : "lexical";
   }
@@ -351,24 +353,43 @@
     if (embeddingError) throw embeddingError;
   }
 
-  async function excludeDomain(value) {
+  function excludeDomain(value) {
+    return FluxionNativeMemory.runControl(() => addExcludedDomain(value));
+  }
+
+  async function addExcludedDomain(value) {
     const domain = FluxionMemoryPolicy.normaliseDomain(value);
     if (!domain) return false;
     const next = [...new Set([...excludedDomains(), domain])].slice(0, 200);
     Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
     Services.prefs.savePrefFile(null);
-    await applyExclusions();
-    await FluxionMemoryStore.deleteBlocked(next);
+    await deleteExcludedEvidence(next);
     return true;
   }
 
-  async function setExcludedDomains(values) {
+  function setExcludedDomains(values) {
+    return FluxionNativeMemory.runControl(() => replaceExcludedDomains(values));
+  }
+
+  async function replaceExcludedDomains(values) {
     const next = [...new Set(values.map(FluxionMemoryPolicy.normaliseDomain).filter(Boolean))].slice(0, 200);
     Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
     Services.prefs.savePrefFile(null);
-    await applyExclusions();
-    await FluxionMemoryStore.deleteBlocked(next);
+    await deleteExcludedEvidence(next);
     return next;
+  }
+
+  async function deleteExcludedEvidence(domains) {
+    // An older background sweep may already have selected its blocked rows
+    // before this preference edit. Wait for it, then scan the current policy.
+    if (exclusionSweep) await exclusionSweep.catch(() => {});
+    let nativeError = null;
+    try { await applyExclusions(); }
+    catch (error) { nativeError = error; }
+    // A native database failure must not prevent deletion of extracted text
+    // and vectors in Fluxion's independent evidence store.
+    await FluxionMemoryStore.deleteBlocked(domains);
+    if (nativeError) throw nativeError;
   }
 
   async function indexBrowser(browser, startedAt = FluxionMemoryStore.revision) {
@@ -438,7 +459,7 @@
   };
   window.gBrowser.addTabsProgressListener(progressListener);
 
-  const observer = () => { applyExclusions(); };
+  const observer = () => { applyExclusions().catch(Cu.reportError); };
   const embeddingPrefObserver = {
     observe() {
       applyEmbeddingFeaturePrefs();

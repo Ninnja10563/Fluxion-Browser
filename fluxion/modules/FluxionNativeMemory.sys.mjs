@@ -106,6 +106,7 @@ function purge() {
 
 export const FluxionNativeMemory = Object.freeze({
   getManager,
+  storageConnection,
   pending,
   purge,
   runControl,

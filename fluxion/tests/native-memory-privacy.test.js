@@ -16,7 +16,15 @@ function fixture(saved = new Map()) {
   const prefs = saved;
   const timers = new Map(), operations = [], errors = [];
   let timerId = 0, factoryCalls = 0;
-  const state = { vectors: 2, mapping: 2, enriched: 2, failDelete: false, beforeWrite: null, beforeInit: null, writes: 0 };
+  const state = { vectors: 2, mapping: 2, enriched: 2, failDelete: false, beforeWrite: null, beforeInit: null, writes: 0,
+    exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null };
+  // Model the relevant native converter contract in a separate ESM-like
+  // realm: Array.isArray crosses realms, instanceof Float32Array does not.
+  const tensorToSQLBindable = vm.runInNewContext(`value => {
+    if (Array.isArray(value)) value = new Float32Array(value);
+    if (!(value instanceof Float32Array)) throw new Error("Invalid tensor format");
+    return value;
+  }`);
   const Services = { env: { get: () => "" }, obs: { addObserver() {}, removeObserver() {} }, prefs: {
     getBoolPref: (key, fallback) => prefs.get(key) ?? fallback,
     getStringPref: (key, fallback) => prefs.get(key) ?? fallback,
@@ -34,16 +42,23 @@ function fixture(saved = new Map()) {
         if (sql.endsWith("vec_history_mapping")) state.mapping = 0;
       }
       if (sql.startsWith("SELECT count")) return [{ getResultByName: () => state.vectors }];
+      if (sql.includes("SELECT map.rowid")) return state.exclusionRows.map(row => ({ getResultByName: name => row[name] }));
       return [];
+    },
+    async executeCached(sql, parameters) {
+      if (state.beforeCached) await state.beforeCached;
+      if (state.failExclusion) throw new Error("native exclusion disk unavailable");
+      state.cachedWrites.push({ sql, parameters });
     },
     async executeTransaction(callback) { return callback(); },
   };
   const native = {
     enoughEntries: true,
+    getEmbeddingSize: () => 3,
     async getConnection() {
       if (state.beforeInit) await state.beforeInit;
       operations.push("manager initialized");
-      return prefs.get("browser.ml.enable") && prefs.get("places.semanticHistory.featureGate") ? db : null;
+      return state.qualified && prefs.get("browser.ml.enable") && prefs.get("places.semanticHistory.featureGate") ? db : null;
     },
     semanticDB: { async getConnection() { operations.push("storage opened"); return db; } },
     async updateVectorDB() {
@@ -73,8 +88,9 @@ function fixture(saved = new Map()) {
     async clearVectors() { state.enriched = 0; },
     async clear() { state.enriched = 0; },
     async vectorCount() { return state.enriched; },
+    async deleteBlocked(domains) { state.ownedExclusions.push(Array.from(domains)); },
   };
-  function chromeWindow() {
+  function chromeWindow({ isPrivate = false } = {}) {
     const window = { navigator: {}, ...timerTools,
       addEventListener() {}, removeEventListener() {}, dispatchEvent() {}, CustomEvent: class {},
       gBrowser: { tabs: [], addTabsProgressListener() {}, removeTabsProgressListener() {} },
@@ -82,7 +98,7 @@ function fixture(saved = new Map()) {
     const ctx = vm.createContext({ window, Services, URL, Cc: {}, Ci: {},
       Cu: { reportError: error => errors.push(error) },
       ChromeUtils: { importESModule: () => ({ FluxionNativeMemory: adapter, FluxionMemoryStore,
-        PlacesUtils: {}, PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
+        PlacesUtils: { tensorToSQLBindable }, PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate } }) },
     });
     for (const file of ["core/settings.js", "core/index-scheduler.js", "core/memory-policy.js",
       "core/memory-content.js", "core/memory-ranking.js", "core/memory-grounding.js", "fluxion-memory.js"]) {
@@ -90,11 +106,85 @@ function fixture(saved = new Map()) {
     }
     return window.FluxionMemory;
   }
-  return { adapter, native, state, prefs, operations, errors, chromeWindow,
+  return { adapter, native, state, prefs, operations, errors, chromeWindow, tensorToSQLBindable,
     factoryCalls: () => factoryCalls,
     expireTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
   };
 }
+
+test("full chrome exclusion sentinel crosses the native converter realm and updates only blocked rows", async () => {
+  const f = fixture(new Map([["fluxion.memory.excludedDomains", '["excluded.example"]']]));
+  assert.throws(() => f.tensorToSQLBindable(new Float32Array([1, 0, 0])), /Invalid tensor format/);
+  assert.deepEqual(Array.from(f.tensorToSQLBindable([1, 0, 0])), [1, 0, 0]);
+  f.state.exclusionRows = [
+    { rowid: 7, url: "https://excluded.example/article" },
+    { rowid: 8, url: "https://allowed.example/article" },
+  ];
+  await f.chromeWindow().enable();
+  await settle();
+  assert.equal(f.state.cachedWrites.length, 2, "native exclusion sweep did not complete its delete+sentinel write");
+  const [remove, insert] = f.state.cachedWrites;
+  assert.match(remove.sql, /^DELETE FROM vec_history/);
+  assert.equal(remove.parameters.rowid, 7);
+  assert.match(insert.sql, /^INSERT INTO vec_history/);
+  assert.equal(insert.parameters.rowid, 7);
+  assert.deepEqual(Array.from(insert.parameters.vector), [1, 0, 0]);
+  assert.deepEqual(f.errors, []);
+});
+
+test("exclusions purge native evidence from another window even when hardware gate returns no connection", async () => {
+  const f = fixture();
+  const main = f.chromeWindow(), companion = f.chromeWindow();
+  f.state.qualified = false;
+  assert.equal(await main.enable(), "lexical");
+  await settle();
+  assert.equal(await f.native.getConnection(), null);
+  f.state.exclusionRows = [{ rowid: 9, url: "https://excluded.example/article" }];
+  await companion.setExcludedDomains(["excluded.example"]);
+  assert.equal(f.state.cachedWrites.length, 2);
+  assert.equal(f.state.cachedWrites[1].parameters.rowid, 9);
+  assert.deepEqual(Array.from(f.state.cachedWrites[1].parameters.vector), [1, 0, 0]);
+  assert.equal(f.factoryCalls(), 1);
+  assert.deepEqual(f.errors, []);
+});
+
+test("private-window exclusion processing never opens native semantic storage", async () => {
+  const f = fixture(new Map([["fluxion.memory.enabled", true]]));
+  const privateWindow = f.chromeWindow({ isPrivate: true });
+  await privateWindow.setExcludedDomains(["excluded.example"]);
+  assert.equal(f.factoryCalls(), 0);
+  assert.equal(f.operations.length, 0);
+});
+
+test("explicit domain exclusion reports native cleanup failure instead of claiming success", async () => {
+  const f = fixture();
+  const main = f.chromeWindow();
+  await main.enable(); await settle();
+  f.state.exclusionRows = [{ rowid: 9, url: "https://excluded.example/article" }];
+  f.state.failExclusion = true;
+  await assert.rejects(main.setExcludedDomains(["excluded.example"]), /native exclusion disk unavailable/);
+  assert.deepEqual(f.state.ownedExclusions, [["excluded.example"]]);
+  await assert.rejects(main.excludeDomain("another.example"), /native exclusion disk unavailable/);
+  assert.deepEqual(f.state.ownedExclusions[1], ["excluded.example", "another.example"]);
+  assert.deepEqual(f.errors, [], "explicit cleanup must reject to its caller, not swallow the failure");
+});
+
+test("an explicit exclusion edit performs a fresh sweep after an older blocked-row snapshot commits", async () => {
+  const f = fixture(new Map([["fluxion.memory.excludedDomains", '["old.example"]']]));
+  const main = f.chromeWindow();
+  f.state.exclusionRows = [{ rowid: 1, url: "https://old.example/page" }, { rowid: 2, url: "https://new.example/page" }];
+  const wait = deferred(); f.state.beforeCached = wait.promise;
+  await main.enable(); await settle();
+  const edit = main.setExcludedDomains(["old.example", "new.example"]);
+  await settle();
+  assert.equal(f.state.ownedExclusions.length, 0, "edit completed while the older sweep remained pending");
+  f.state.beforeCached = null;
+  wait.resolve(); await edit;
+  const inserts = f.state.cachedWrites.filter(write => write.sql.startsWith("INSERT"));
+  assert.deepEqual(inserts.map(write => write.parameters.rowid), [1, 1, 2]);
+  assert.deepEqual(f.state.ownedExclusions, [["old.example", "new.example"]]);
+  assert.deepEqual(f.errors, []);
+});
 
 test("full Memory chrome clears actual native storage from a window with no local manager", async () => {
   const f = fixture();

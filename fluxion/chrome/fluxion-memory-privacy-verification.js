@@ -61,11 +61,11 @@
       assert(connection, `${label} could not reopen native semantic storage`);
       await empty(label);
     }
-    const tensor = new Float32Array(manager.getEmbeddingSize());
+    const tensor = new Array(manager.getEmbeddingSize()).fill(0);
     assert(tensor.length > 0, "Native embedding dimension is invalid");
     tensor[0] = 1;
     const vector = PlacesUtils.tensorToSQLBindable(tensor);
-    async function seed(label, id) {
+    async function seed(label, id, seededVector = vector) {
       stage(label);
       const url = `https://memory-privacy-fixture.invalid/evidence/${id}`;
       await PlacesUtils.history.insert({ url, title: `Fluxion privacy verification evidence ${id}`,
@@ -77,15 +77,43 @@
           SELECT url_hash FROM places.moz_places WHERE url = :url RETURNING rowid`, { url });
         assert(rows.length === 1, "Native privacy fixture has no genuine Places mapping");
         await connection.execute("INSERT INTO vec_history (rowid, embedding) VALUES (:rowid, :vector)",
-          { rowid: rows[0].getResultByName("rowid"), vector });
+          { rowid: rows[0].getResultByName("rowid"), vector: seededVector });
       });
       const result = await counts();
       report.checks.push({ label, ...result });
       assert(result.vectors > 0 && result.mappings > 0, `${label} did not populate actual native tables`);
+      return url;
     }
-    await seed("seed-before-provider-disable", 91047001);
+    const nonSentinel = new Array(tensor.length).fill(0);
+    assert(nonSentinel.length > 1, "Native fixture needs at least two vector dimensions");
+    nonSentinel[1] = 1;
+    const excludedURL = await seed("seed-before-provider-disable", 91047001,
+      PlacesUtils.tensorToSQLBindable(nonSentinel));
+    async function storedExcludedVector() {
+      const rows = await connection.execute(`SELECT v.embedding AS embedding
+        FROM vec_history_mapping m JOIN vec_history v ON v.rowid = m.rowid
+        JOIN places.moz_places p ON p.url_hash = m.url_hash WHERE p.url = :url`, { url: excludedURL });
+      assert(rows.length === 1, "Excluded-page mapping must remain paired with exactly one native vector");
+      const bytes = Uint8Array.from(rows[0].getResultByName("embedding"));
+      assert(bytes.byteLength === tensor.length * 4, "Native vector blob has an unexpected byte length");
+      const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+      return Array.from({ length: tensor.length }, (_, index) => view.getFloat32(index * 4, true));
+    }
+    const initialVector = await storedExcludedVector();
+    assert(initialVector[0] === 0 && initialVector[1] === 1, "Exclusion fixture was already a sentinel");
+    stage("excluding-native-evidence-from-other-window");
+    await companion.FluxionMemory.setExcludedDomains(["memory-privacy-fixture.invalid"]);
+    const scrubbed = await storedExcludedVector();
+    assert(scrubbed[0] === 1 && scrubbed.slice(1).every(value => value === 0),
+      "Other-window domain exclusion did not scrub actual native vector bytes");
+    report.checks.push({ label: "other-window-exclusion-scrub", mappingRetained: true,
+      originalVectorReplaced: true, dimensions: scrubbed.length });
     await window.FluxionMemory.setEmbeddingProvider("disabled");
     await empty("provider-disabled");
+    const recall = await companion.FluxionMemory.search("privacy verification");
+    assert(!recall.results.some(result => result.url === excludedURL), "Excluded page leaked into keyword-only Memory results");
+    report.checks.push({ label: "excluded-evidence-filtered-from-keyword-results", filtered: true });
+    await companion.FluxionMemory.setExcludedDomains([]);
     await window.FluxionMemory.setEmbeddingProvider("gecko-local");
     await reenabledEmpty("provider-reenabled");
     await seed("seed-before-other-window-disable", 91047002);

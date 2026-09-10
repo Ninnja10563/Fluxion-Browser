@@ -443,7 +443,14 @@ deletion normalize the optional DNS root dot, so `example.com.` and its
 subdomains cannot bypass an `example.com` exclusion. Excluded vector rows are replaced
 with a content-free sentinel and filtered at query time, preventing the native
 indexer from immediately recreating page-derived vectors while retaining the
-ordinary history record. Clearing Browser Memory disables its feature gates,
+ordinary history record. Explicit exclusion cleanup uses shared storage-only
+access even when the initiating window has not opened the native manager or
+the machine does not qualify for native semantic search. Plain numeric arrays
+cross the browser-chrome/module boundary for Gecko's tensor converter; a
+window-owned typed array fails its realm-specific `instanceof` check. Cleanup
+attempts both native scrubbing and enriched-evidence deletion, and reports
+failures rather than silently claiming success.
+Clearing Browser Memory disables its feature gates,
 deletes vector rows and mappings, and schedules the semantic database files for
 removal at the next startup. The same actions delete matching records and
 vectors from Fluxion's enriched store. They do not silently delete ordinary

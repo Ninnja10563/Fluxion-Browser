@@ -81,7 +81,10 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    retains the real storage connection while disabled, so a null feature-gated
    accessor cannot masquerade as successful deletion. This is a cleanup test,
    not model-inference evidence; the real semantic retrieval gate remains
-   separate. Fresh indexing after explicit re-enablement is permitted.
+   separate. The same gate reads an excluded page's actual vector bytes before
+   and after a second-window exclusion, requires its content-free replacement
+   and retained mapping, and verifies exclusion from keyword results. Fresh
+   indexing after explicit re-enablement is permitted.
    A separate fresh-profile Flow gate repeats 24 batches of 20 native title/audio
    updates across 200 visible tabs. It requires stable row and control identity,
    scroll, focus, selection, workspace controls, and no structural removals;
