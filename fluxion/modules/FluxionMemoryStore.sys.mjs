@@ -269,7 +269,7 @@ export const FluxionMemoryStore = Object.freeze({
     await historyDeletion;
     const db = await connection();
     const escapeLike = text => `%${text.replace(/[\\%_]/g, value => `\\${value}`)}%`;
-    const parameters = { pattern: escapeLike(String(query).trim()), limit };
+    const parameters = { exact: String(query).trim(), pattern: escapeLike(String(query).trim()), limit };
     const fields = ["title", "url", "description", "headings", "content"];
     const matches = terms.map((term, index) => {
       parameters[`term${index}`] = escapeLike(term);
@@ -278,10 +278,11 @@ export const FluxionMemoryStore = Object.freeze({
     const lexical = await db.executeCached(`SELECT *, 0.0 AS distance FROM pages
       WHERE ${matches.join(" AND ")}
       ORDER BY CASE
-        WHEN title LIKE :pattern ESCAPE '\\' OR url LIKE :pattern ESCAPE '\\' THEN 0
-        WHEN headings LIKE :pattern ESCAPE '\\' OR description LIKE :pattern ESCAPE '\\' THEN 1
-        WHEN content LIKE :pattern ESCAPE '\\' THEN 2 ELSE 3 END,
-        last_visit DESC LIMIT :limit`, parameters);
+        WHEN title = :exact COLLATE NOCASE OR url = :exact COLLATE NOCASE THEN 0
+        WHEN title LIKE :pattern ESCAPE '\\' OR url LIKE :pattern ESCAPE '\\' THEN 1
+        WHEN headings LIKE :pattern ESCAPE '\\' OR description LIKE :pattern ESCAPE '\\' THEN 2
+        WHEN content LIKE :pattern ESCAPE '\\' THEN 3 ELSE 4 END,
+        last_visit DESC, url ASC LIMIT :limit`, parameters);
     const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","tab_group","last_visit","visit_count","distance"].map(name => [name === "tab_group" ? "group" : name === "last_visit" ? "lastVisit" : name === "visit_count" ? "visitCount" : name, item.getResultByName(name)]));
     if (startedAt === revision && typeof onLexical === "function") {
       try { onLexical(lexical.map(row)); } catch (error) { Cu.reportError(error); }

@@ -121,6 +121,35 @@ test("lexical query wildcard characters remain literal", async () => {
   ]), ["https://exact.example/"]);
 });
 
+test("old exact titles and URLs survive a full candidate page of newer phrase matches", async () => {
+  const partials = Array.from({ length: 30 }, (_, index) => ({
+    url: `https://partial.example/${index}`, title: `Discussion of godot timer tips ${index}`, last_visit: index + 100,
+  }));
+  const rows = await lexicalURLs("godot timer", [
+    ...partials, { url: "https://exact.example/", title: "Godot Timer", last_visit: 1 },
+  ], 18);
+  assert.equal(rows.length, 18);
+  assert.equal(rows[0], "https://exact.example/");
+
+  const exactURL = "https://docs.example/timer";
+  const urls = await lexicalURLs(exactURL, [
+    ...Array.from({ length: 30 }, (_, index) => ({ url: `${exactURL}/tips/${index}`, last_visit: index + 100 })),
+    { url: exactURL, title: "Original reference", last_visit: 1 },
+  ], 18);
+  assert.equal(urls[0], exactURL);
+});
+
+test("candidate ties are deterministic and exact tier treats wildcard characters literally", async () => {
+  const pages = [
+    { url: "https://b.example/", title: "50% a_b", last_visit: 10 },
+    { url: "https://a.example/", title: "50% a_b", last_visit: 10 },
+    { url: "https://prefix.example/", title: "50% a_b examples", last_visit: 100 },
+    { url: "https://wrong.example/", title: "500 axb", last_visit: 1000 },
+  ];
+  assert.deepEqual(await lexicalURLs("50% a_b", pages, 2), ["https://a.example/", "https://b.example/"]);
+  assert.deepEqual(await lexicalURLs("50% a_b", pages.toReversed(), 2), ["https://a.example/", "https://b.example/"]);
+});
+
 test("embedding timeout releases indexing, prevents request buildup, and discards late vectors", async () => {
   const { store, embedding, embeddingStarted, writes, expireEmbeddingWait, embeddingCalls } = fixture();
   const pending = store.embed("https://stalled.example/", "Slow embedding");

@@ -3,7 +3,8 @@
 `macOS integration diagnostics` is a separate, read-only-permission workflow
 for developing native Settings accessibility, external URL/file delivery,
 AI credential/privacy checks, real transfers and native website authentication,
-and Library keyboard/menu interaction.
+Library keyboard/menu interaction, workspace restoration/editing, and integrated
+exact/semantic Memory retrieval.
 It builds the same locked runtime but does not contact the release-discovery
 API, create DMGs, upload applications, or publish releases. A diagnostic pass
 never replaces the complete release gates below. This allows native debugging

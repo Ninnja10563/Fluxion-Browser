@@ -81,6 +81,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),
     FluxionPermissionPolicy: require("../chrome/core/permissions.js"),
     FluxionWorkspaces: require("../chrome/core/workspaces.js"),
+    FluxionWorkspaceEditor: require("../chrome/core/workspace-editor.js"),
   });
   const root = document.getElementById("fluxion-settings");
   return {

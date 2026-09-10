@@ -53,6 +53,8 @@ The current preview is runnable and includes:
 - persistent workspace creation, renaming, reordering, symbols, restrained
   accents, deletion with safe cross-window tab migration, and drag-to-workspace
   movement, available from both Flow and a dedicated live Settings section;
+- stable workspace controls across windows, with local name drafts retained
+  until committed and reopened tabs made visible in their original workspace;
 - a restrained Fluxion navigation skin over Gecko's native security-aware URL
   field and a universal `Cmd/Ctrl+K` command palette;
 - fuzzy keyboard search across commands, open tabs, workspaces, history, and
@@ -67,6 +69,8 @@ The current preview is runnable and includes:
 - optional Browser Memory search over non-private history, combining exact
   Places matches with Gecko's on-device embeddings, recency, frequency, and
   workspace relevance;
+- duplicate-source-invariant Memory scoring and exact title/URL candidate
+  priority so older exact matches are not hidden by recent partial matches;
 - independent Browser Memory embedding control: **Keywords only** keeps local
   titles and page evidence searchable with ML and vectors disabled, while
   **Gecko on-device semantic** restores private local meaning search;

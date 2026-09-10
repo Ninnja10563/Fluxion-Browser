@@ -35,25 +35,32 @@
     const records = new Map();
     const getRecord = row => {
       const key = String(row.url || "");
-      if (!records.has(key)) records.set(key, { row: { ...row }, score: 0 });
+      if (!records.has(key)) records.set(key, { row: {}, score: 0, lexical: 0, similarity: 0, distance: null });
       const record = records.get(key);
       record.row = { ...record.row, ...row };
+      record.lexical = Math.max(record.lexical, lexicalStrength(query, row));
       return record;
     };
 
-    (keywordRows || []).forEach((row, index) => {
+    // Sources overlap: Places and enriched lexical queries can return the same
+    // URL, as can both vector stores. Source availability must not multiply a
+    // page's lexical evidence or let duplicate vectors overpower an exact hit.
+    (keywordRows || []).forEach(getRecord);
+    (semanticRows || []).forEach(row => {
       const record = getRecord(row);
-      record.score += 2.2 / (12 + index);
-      record.score += lexicalStrength(query, row);
-    });
-    (semanticRows || []).forEach((row, index) => {
-      const record = getRecord(row);
-      const similarity = Math.max(0, 1 - Number(row.distance ?? 1));
-      record.score += 1.5 / (12 + index) + similarity * 2.6;
+      const distance = Number(row.distance);
+      if (row.distance !== null && row.distance !== undefined && Number.isFinite(distance)) {
+        record.similarity = Math.max(record.similarity, Math.max(0, Math.min(1, 1 - distance)));
+        record.distance = record.distance === null ? distance : Math.min(record.distance, distance);
+      }
     });
 
     for (const record of records.values()) {
-      record.score += lexicalStrength(query, record.row);
+      record.lexical = Math.max(record.lexical, lexicalStrength(query, record.row));
+      record.score = record.lexical * 2 + record.similarity * 2.6;
+      // A lexical SQL placeholder distance is not semantic provenance.
+      if (record.distance === null) delete record.row.distance;
+      else record.row.distance = record.distance;
       const lastVisit = Number(record.row.lastVisit || 0);
       if (lastVisit > 0) {
         const ageDays = Math.max(0, now - lastVisit) / 86400000;
@@ -64,8 +71,9 @@
     }
 
     return [...records.values()]
-      .sort((left, right) => right.score - left.score ||
-        Number(right.row.lastVisit || 0) - Number(left.row.lastVisit || 0))
+      .sort((left, right) => Number(right.lexical === 8) - Number(left.lexical === 8) ||
+        right.score - left.score || Number(right.row.lastVisit || 0) - Number(left.row.lastVisit || 0) ||
+        String(left.row.url).localeCompare(String(right.row.url)))
       .slice(0, Math.max(0, Math.min(Number(options.limit) || 12, 100)))
       .map(record => ({ ...record.row, memoryScore: record.score }));
   }

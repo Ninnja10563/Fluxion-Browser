@@ -23,6 +23,7 @@ bash -n \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-library.sh \
+  scripts/verify-macos-workspaces.sh \
   scripts/verify-macos-session.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
@@ -57,6 +58,7 @@ node --check chrome/core/tab-selection.js
 node --check chrome/core/tab-status.js
 node --check chrome/core/tab-drop.js
 node --check chrome/core/workspaces.js
+node --check chrome/core/workspace-editor.js
 node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-flow-performance.js
@@ -67,6 +69,7 @@ node --check chrome/fluxion-update-verification.js
 node --check chrome/fluxion-external-open-verification.js
 node --check chrome/fluxion-settings-accessibility-verification.js
 node --check chrome/fluxion-ai-privacy-verification.js
+node --check chrome/fluxion-workspace-verification.js
 node --check scripts/ai-privacy-fixture.mjs
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js

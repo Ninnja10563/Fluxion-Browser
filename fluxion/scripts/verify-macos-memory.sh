@@ -36,10 +36,13 @@ printf 'Verifying real Gecko local embeddings and nonliteral retrieval in a fres
 FLUXION_PROFILE="$profile" FLUXION_SEMANTIC_MODEL_TEST=1 \
   "$launcher" about:blank >"$log" 2>&1 &
 process_id=$!
-for (( attempt = 0; attempt < 1040; attempt += 1 )); do
+for (( attempt = 0; attempt < 1280; attempt += 1 )); do
   if [[ -f "$profile/prefs.js" ]]; then
     if grep -q 'user_pref("fluxion.memory.semantic.health", "gecko-model-generated-vectors-and-recalled-nonliteral-evidence")' "$profile/prefs.js"; then
-      printf 'Verified real Gecko model vectors and semantic-only plant evidence retrieval.\n' >&2
+      grep -Fq 'user_pref("fluxion.memory.ranking.health", "old-exact-page-recalled-beyond-native-candidate-cap")' "$profile/prefs.js" || {
+        printf 'Integrated exact-match ranking evidence is missing.\n' >&2; exit 1;
+      }
+      printf 'Verified old exact-match recall, real Gecko model vectors, and semantic-only plant evidence retrieval.\n' >&2
       exit 0
     fi
     if grep -q 'user_pref("fluxion.memory.semantic.error",' "$profile/prefs.js"; then break; fi
@@ -50,7 +53,7 @@ done
 
 printf 'The real local semantic model gate failed; keyword fallback does not pass this check.\n' >&2
 if [[ -f "$profile/prefs.js" ]]; then
-  grep 'user_pref("fluxion.memory.semantic\.' "$profile/prefs.js" >&2 || true
+  grep -E 'user_pref\("fluxion.memory.(semantic|ranking)\.' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,160p' "$log" >&2
 exit 1

@@ -60,6 +60,14 @@ jobs:
           FLUXION_LIBRARY_SCREENSHOT: ${{ runner.temp }}/fluxion-library.png
         run: ./fluxion/scripts/verify-macos-library.sh '.runtime/Fluxion.app'
 
+      - name: Check workspace restoration and cross-window editing
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-workspaces.sh '.runtime/Fluxion.app'
+
+      - name: Check exact and real semantic Memory retrieval
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-memory.sh '.runtime/Fluxion.app'
+
       - name: Preserve Library diagnostic snapshot
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

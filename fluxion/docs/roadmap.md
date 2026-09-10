@@ -41,6 +41,9 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- restored-page workspace reconciliation and stable cross-window workspace
+  controls, including preserved Settings name drafts and keyboard focus
+  (implemented; broader native interaction auditing continues)
 - named/reorderable workspaces and Gecko-native tab groups (implemented,
   including live Settings management, safe cross-window tab migration, and a
   collapsed-group projection plus a focus-stable keyboard tree for headings
@@ -53,6 +56,9 @@ controls work and its failure paths have been tested.
 
 ## Phase 4 — local semantic history
 
+- source-duplication-invariant ranking and old exact-title/URL candidate
+  retention before limits (implemented; consistent accent/Unicode candidate
+  normalization and historical-versus-current workspace/group semantics remain)
 - opt-in Gecko-local embeddings, independently selectable keyword-only recall,
   sensitive-origin/domain exclusions, hybrid history ranker, and complete
   vector deletion controls (implemented)

@@ -1,12 +1,12 @@
-/* global Cu, gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy, FluxionWorkspaces */
+/* global Cu, gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy, FluxionWorkspaces, FluxionWorkspaceEditor */
 (function initialiseFluxionSettings(window) {
   "use strict";
 
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.51.0";
-  const PRODUCT_RELEASE = "0.51.0-preview.1";
+  const PRODUCT_VERSION = "0.52.0";
+  const PRODUCT_RELEASE = "0.52.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -451,6 +451,13 @@
     return svg;
   }
 
+  const workspaceEditor = FluxionWorkspaceEditor.attach(workspaceList, {
+    create, select, mark: workspaceMark, scrollContainer: main,
+    update: (id, changes) => window.FluxionUI.updateWorkspace(id, changes),
+    move: (id, direction) => window.FluxionUI.moveWorkspace(id, direction),
+    remove: id => window.FluxionUI.deleteWorkspace(id),
+    note: message => setNote(message, "workspaces"),
+  });
   renderWorkspaces = () => {
     const items = window.FluxionUI.workspaces();
     const currentId = window.FluxionUI.currentWorkspace();
@@ -458,72 +465,7 @@
     workspaceCurrent.textContent = `Current: ${items.find(item => item.id === currentId)?.name || "Workspace"}`;
     workspaceAdd.disabled = items.length >= FluxionWorkspaces.MAX_WORKSPACES;
     workspaceName.disabled = workspaceAdd.disabled;
-    workspaceList.replaceChildren();
-    for (const [index, workspace] of items.entries()) {
-      const item = create("section", "fluxion-settings-workspace-row");
-      item.dataset.workspaceId = workspace.id;
-      item.setAttribute("role", "listitem");
-      const identity = create("div", "fluxion-settings-workspace-identity");
-      const name = create("input", "fluxion-settings-control fluxion-settings-workspace-name");
-      name.type = "text";
-      name.maxLength = 32;
-      name.value = workspace.name;
-      name.setAttribute("aria-label", `Name for ${workspace.name}`);
-      name.addEventListener("change", () => {
-        const updated = window.FluxionUI.updateWorkspace(workspace.id, { name: name.value });
-        if (updated) setNote(`Renamed workspace to ${updated.name}.`, "workspaces");
-        else {
-          renderWorkspaces();
-          setNote("Workspace names cannot be empty.", "workspaces");
-        }
-      });
-      const state = create("span", "fluxion-settings-workspace-current", workspace.id === currentId ? "Current" : "");
-      identity.append(workspaceMark(workspace.icon, workspace.accent), name, state);
-
-      const controls = create("div", "fluxion-settings-workspace-controls");
-      const symbol = select([
-        ["circle", "Circle"], ["diamond", "Diamond"], ["square", "Square"],
-        ["arc", "Arc"], ["grid", "Grid"],
-      ], workspace.icon, value => {
-        window.FluxionUI.updateWorkspace(workspace.id, { icon: value });
-        setNote(`${workspace.name} symbol updated.`, "workspaces");
-      });
-      symbol.classList.add("fluxion-settings-control");
-      symbol.setAttribute("aria-label", `Symbol for ${workspace.name}`);
-      const accent = select([
-        ["slate", "Slate"], ["blue", "Blue"], ["ochre", "Ochre"],
-        ["sage", "Sage"], ["rose", "Rose"],
-      ], workspace.accent, value => {
-        window.FluxionUI.updateWorkspace(workspace.id, { accent: value });
-        setNote(`${workspace.name} accent updated.`, "workspaces");
-      });
-      accent.classList.add("fluxion-settings-control");
-      accent.setAttribute("aria-label", `Accent for ${workspace.name}`);
-      const actions = create("div", "fluxion-settings-workspace-actions");
-      const up = create("button", "fluxion-settings-button", "Up");
-      up.type = "button";
-      up.disabled = index === 0;
-      up.setAttribute("aria-label", `Move ${workspace.name} earlier`);
-      up.addEventListener("click", () => window.FluxionUI.moveWorkspace(workspace.id, -1));
-      const down = create("button", "fluxion-settings-button", "Down");
-      down.type = "button";
-      down.disabled = index === items.length - 1;
-      down.setAttribute("aria-label", `Move ${workspace.name} later`);
-      down.addEventListener("click", () => window.FluxionUI.moveWorkspace(workspace.id, 1));
-      const remove = create("button", "fluxion-settings-button danger", "Delete");
-      remove.type = "button";
-      remove.disabled = items.length === 1;
-      remove.setAttribute("aria-label", `Delete ${workspace.name}`);
-      remove.addEventListener("click", () => {
-        if (window.FluxionUI.deleteWorkspace(workspace.id)) {
-          setNote(`${workspace.name} deleted; its tabs were moved safely.`, "workspaces");
-        }
-      });
-      actions.append(up, down, remove);
-      controls.append(symbol, accent, actions);
-      item.append(identity, controls);
-      workspaceList.appendChild(item);
-    }
+    workspaceEditor.sync(items, currentId);
   };
   workspaceCreate.addEventListener("submit", event => {
     event.preventDefault();
@@ -1131,6 +1073,7 @@
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
+    workspaceEditor.destroy();
     aiDisposed = true;
     Services.prefs.removeObserver("fluxion.ai.", aiPreferenceObserver);
     updateDisposed = true;

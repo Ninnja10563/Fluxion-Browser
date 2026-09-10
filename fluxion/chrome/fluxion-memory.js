@@ -613,8 +613,73 @@
       Services.prefs.savePrefFile(null);
     };
     (async () => {
+      stage("waiting-for-places-before-ranking");
+      const { PlacesBrowserStartup } = ChromeUtils.importESModule(
+        "moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs"
+      );
+      const startupDeadline = Date.now() + 20000;
+      while (!PlacesBrowserStartup._placesBrowserInitComplete) {
+        if (Date.now() >= startupDeadline) throw new Error("Places startup did not finish before ranking verification");
+        await new Promise(resolve => window.setTimeout(resolve, 100));
+      }
+      stage("seeding-exact-ranking-candidates");
+      await window.FluxionMemory.setEmbeddingProvider("disabled");
+      await window.FluxionMemory.enable();
+      const rankingQuery = "fluxion exact recall fixture";
+      const exactURL = "https://memory-ranking-fixture.invalid/exact";
+      const now = Date.now();
+      const rankingPages = [
+        { url: exactURL, title: rankingQuery, time: now - 7 * 86400000, exact: true },
+        ...Array.from({ length: 30 }, (_, index) => ({
+          url: `https://memory-ranking-fixture.invalid/partial-${index}`,
+          title: `Discussion about ${rankingQuery} examples ${index}`,
+          time: now - (index + 1) * 10000, exact: false,
+        })),
+      ];
+      try {
+        for (const page of rankingPages) {
+          await PlacesUtils.history.insert({ url: page.url, title: page.title,
+            visits: Array.from({ length: page.exact ? 1 : 3 }, (_, index) => ({
+              date: new Date(page.time - index * 1000),
+              transition: page.exact ? PlacesUtils.history.TRANSITIONS.LINK : PlacesUtils.history.TRANSITIONS.TYPED,
+            })),
+          });
+          if (!(await FluxionMemoryStore.upsert({
+            url: page.url, title: page.title, description: "", headings: "",
+            text: "Saved source for candidate ordering verification.", workspace: "", tabGroup: "",
+            lastVisit: page.time, indexedAt: now,
+          }))) throw new Error("Ranking fixture evidence was not stored");
+        }
+        stage("checking-exact-ranking-beyond-places-cap");
+        const rankingDeadline = Date.now() + 20000;
+        let keywords;
+        do {
+          keywords = keywordRows(rankingQuery);
+          if (keywords.length === 24 && !keywords.some(row => row.url === exactURL)) break;
+          await new Promise(resolve => window.setTimeout(resolve, 100));
+        } while (Date.now() < rankingDeadline);
+        if (keywords.length !== 24 || keywords.some(row => row.url === exactURL)) {
+          throw new Error("Ranking fixture did not put the old exact page beyond Places' 24-row frecency cap");
+        }
+        const recalled = await window.FluxionMemory.search(rankingQuery);
+        if (recalled.state !== "keyword-only" || recalled.results[0]?.url !== exactURL ||
+            recalled.answer?.sourceURL !== exactURL) {
+          throw new Error("Integrated keyword-only Memory did not rank the old exact page first");
+        }
+      } finally {
+        stage("cleaning-exact-ranking-fixtures");
+        for (const page of rankingPages) await PlacesUtils.history.remove(page.url);
+        await FluxionMemoryStore.deleteURLs(rankingPages.map(page => page.url));
+      }
+      if (keywordRows(rankingQuery).length || await FluxionMemoryStore.get(exactURL)) {
+        throw new Error("Ranking fixture cleanup retained history or extracted evidence");
+      }
+      Services.prefs.setStringPref("fluxion.memory.ranking.health", "old-exact-page-recalled-beyond-native-candidate-cap");
+      Services.prefs.savePrefFile(null);
+
       const deadline = Date.now() + 240000;
       stage("enabling-local-model");
+      await window.FluxionMemory.setEmbeddingProvider("gecko-local");
       await enable();
       const pages = [
         {

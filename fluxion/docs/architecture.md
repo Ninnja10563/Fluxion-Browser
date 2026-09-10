@@ -139,6 +139,20 @@ it never closes a page as a side effect. The packaged gate drives the visible
 Settings controls, while the multi-launch gate independently proves the
 metadata returns after Gecko restores the profile.
 
+After initial restoration, both native tab selection and `SSTabRestored` queue
+one reconciliation against the final selected tab's saved workspace. Intentional
+workspace switches are guarded so their intermediate Gecko selection events
+cannot reverse the user's action. Native undo-close and Flow's Recently Closed
+therefore converge on the same visible selection.
+
+Workspace buttons and the modular Settings workspace editor retain DOM identity
+by workspace ID. The editor owns uncommitted name drafts separately from saved
+metadata, so remote renames, symbols, accents, and ordering cannot erase typing.
+On supported Gecko, [state-preserving DOM moves](https://developer.mozilla.org/en-US/docs/Web/API/Element/moveBefore)
+retain focus, selection, and composition; older engines use a guarded fallback
+that cannot commit drafts as a side effect of moving a node. Deletion repairs
+only focus owned by the removed editor, never focus in another control.
+
 Packaged recovery validation uses Gecko's real shutdown and startup path rather
 than serialising Fluxion state in a test fixture. One app launch creates two
 normal windows. The primary window records distinct active pages in Focus and
@@ -418,8 +432,9 @@ Native and enriched retrieval run concurrently. These are embedding deadlines,
 not guarantees on disk latency or the total search duration.
 
 Enriched keyword retrieval matches each query term across title, URL,
-description, headings, and body before hybrid ranking. Whole-phrase title/URL
-matches take priority when bounding candidates. Embedding calls are single-flight
+description, headings, and body before hybrid ranking. Exact title/URL matches
+precede whole-phrase matches before bounding candidates, so recent partial
+matches cannot exclude an older exact record. Embedding calls are single-flight
 with a 10-second indexing wait and a 1.5-second query wait. Gecko has no
 per-request cancellation here: a timed-out model request may finish internally,
 but cannot write a late vector or accumulate more model requests. Other pages
@@ -450,7 +465,12 @@ queries, so model startup can never block navigation or lexical recall. Fluxion
 merges semantic
 results with exact/fuzzy Places evidence, recency,
 visit frequency, and active-workspace relevance. Exact evidence has an explicit
-ranking advantage over a weaker semantic neighbour.
+ranking advantage over a weaker semantic neighbour. A URL receives lexical
+strength once and only its strongest semantic similarity, independent of how
+many sources return it. Lexical placeholder distances are not reported as
+semantic evidence. The native gate first recalls an old exact record omitted
+by Places' frecency candidate cap, then generates real local model vectors and
+verifies nonliteral retrieval independently.
 
 Page indexing crosses a separate scheduling boundary before extraction or
 embedding begins. A deduplicating queue holds at most 64 page browsers and runs

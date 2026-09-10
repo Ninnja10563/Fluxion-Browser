@@ -8,6 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.52 improves workspace continuity and exact Memory recall:
+
+- follow reopened pages to their original workspace, including Gecko's native
+  reopen command and Fluxion's Recently Closed actions;
+- retain workspace button identity and keyboard focus when another window
+  renames or reorders workspaces;
+- keep Settings workspace controls stable, preserving uncommitted names and
+  text selection through cross-window changes until the user commits the edit;
+- retain usable focus during workspace reordering and move it safely after a
+  focused workspace is deleted;
+- rank each Memory URL once across duplicate sources, with one strongest
+  semantic signal and explicit priority for exact title/URL matches;
+- keep older exact matches eligible before candidate limits, with native
+  integrated recall tests in addition to genuine local-model retrieval.
+
 Version 0.51 improves Library interaction and page-extraction efficiency:
 
 - replace repeated History, Bookmark, and Folder action buttons with one compact

@@ -43,6 +43,8 @@
   const workspaceElements = new Map();
   let sessionRestoreSettled = false;
   let pendingRestoreWorkspace = null;
+  let workspaceSwitchDepth = 0;
+  let workspaceSelectionQueued = false;
   let groupRenderSequence = 0;
 
   Promise.resolve(SessionStore.promiseAllWindowsRestored).then(() => {
@@ -1256,45 +1258,69 @@
 
   function switchWorkspace(id, options = {}) {
     if (!workspaces.some(item => item.id === id)) return;
-    if (!sessionRestoreSettled && options.reconcileRestore !== false) {
-      pendingRestoreWorkspace = id;
-    }
-    const previous = gBrowser.selectedTab;
-    if (previous?.parentNode && tabWorkspace(previous) === currentWorkspace) {
-      rememberWorkspaceTab(previous);
-    }
-    currentWorkspace = id;
-    if (options.persistWindow !== false) {
-      try {
-        SessionStore.setCustomWindowValue(window, FluxionWorkspaceTabs.WINDOW_VALUE_KEY, id);
-      } catch (error) {
-        Cu.reportError(error);
+    workspaceSwitchDepth += 1;
+    try {
+      if (!sessionRestoreSettled && options.reconcileRestore !== false) {
+        pendingRestoreWorkspace = id;
       }
-    }
-    if (!privateWindow && options.updateProfileFallback !== false) {
-      Services.prefs.setStringPref(PREF_CURRENT, id);
-    }
-
-    let workspaceTabs = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === id);
-    for (const tab of workspaceTabs) {
-      if (tab.hidden) gBrowser.showTab(tab);
-    }
-    if (!workspaceTabs.length) {
-      const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
-      setTabWorkspace(tab, id);
-      workspaceTabs = [tab];
-    }
-
-    if (tabWorkspace(gBrowser.selectedTab) !== id) {
-      gBrowser.selectedTab = preferredWorkspaceTab(id, workspaceTabs) || workspaceTabs[0];
-    }
-    rememberWorkspaceTab(gBrowser.selectedTab);
-    for (const tab of gBrowser.tabs) {
-      if (tabWorkspace(tab) !== id && !tab.hidden && tab !== gBrowser.selectedTab) {
-        gBrowser.hideTab(tab);
+      const previous = gBrowser.selectedTab;
+      if (previous?.parentNode && tabWorkspace(previous) === currentWorkspace) {
+        rememberWorkspaceTab(previous);
       }
+      currentWorkspace = id;
+      if (options.persistWindow !== false) {
+        try {
+          SessionStore.setCustomWindowValue(window, FluxionWorkspaceTabs.WINDOW_VALUE_KEY, id);
+        } catch (error) {
+          Cu.reportError(error);
+        }
+      }
+      if (!privateWindow && options.updateProfileFallback !== false) {
+        Services.prefs.setStringPref(PREF_CURRENT, id);
+      }
+
+      let workspaceTabs = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === id);
+      for (const tab of workspaceTabs) {
+        if (tab.hidden) gBrowser.showTab(tab);
+      }
+      if (!workspaceTabs.length) {
+        const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
+        setTabWorkspace(tab, id);
+        workspaceTabs = [tab];
+      }
+
+      if (tabWorkspace(gBrowser.selectedTab) !== id) {
+        gBrowser.selectedTab = preferredWorkspaceTab(id, workspaceTabs) || workspaceTabs[0];
+      }
+      rememberWorkspaceTab(gBrowser.selectedTab);
+      for (const tab of gBrowser.tabs) {
+        if (tabWorkspace(tab) !== id && !tab.hidden && tab !== gBrowser.selectedTab) {
+          gBrowser.hideTab(tab);
+        }
+      }
+      scheduleRender();
+    } finally {
+      workspaceSwitchDepth -= 1;
     }
-    scheduleRender();
+  }
+
+  function reconcileSelectedWorkspace() {
+    if (!sessionRestoreSettled || workspaceSwitchDepth || workspaceSelectionQueued) return;
+    workspaceSelectionQueued = true;
+    // SessionStore restores custom values around selection notifications. Read
+    // the final live selection, never a tab captured before another user action.
+    Promise.resolve().then(() => {
+      workspaceSelectionQueued = false;
+      if (!sessionRestoreSettled || workspaceSwitchDepth || window.closed) return;
+      const tab = gBrowser.selectedTab;
+      if (!tab?.parentNode || tab.closing) return;
+      const id = storedTabWorkspace(tab);
+      if (id && id !== currentWorkspace && workspaces.some(item => item.id === id)) {
+        switchWorkspace(id);
+      } else if (id === currentWorkspace) {
+        rememberWorkspaceTab(tab);
+      }
+    }).catch(Cu.reportError);
   }
 
   function cycleWorkspace(direction) {
@@ -2233,56 +2259,79 @@
     const signature = JSON.stringify([currentWorkspace, workspaces]);
     if (signature === workspaceRenderSignature) return;
     workspaceRenderSignature = signature;
-    workspaceList.replaceChildren();
-    workspaceElements.clear();
+    const focusedButton = [...workspaceElements.values()].find(button => button === document.activeElement);
     const colours = { slate: "#68747b", blue: "#51748a", ochre: "#92794d", sage: "#667c69", rose: "#8b646b" };
     for (const [workspaceIndex, workspace] of workspaces.entries()) {
-      const button = create("button", "fluxion-workspace");
-      button.type = "button";
+      let button = workspaceElements.get(workspace.id);
+      if (!button) {
+        button = create("button", "fluxion-workspace");
+        button.type = "button";
+        button.setAttribute("role", "tab");
+        const label = create("span", "fluxion-workspace-name");
+        button.append(workspaceSymbol(workspace.icon), label);
+        button._fluxionWorkspaceLabel = label;
+        button._fluxionWorkspaceIcon = workspace.icon;
+        button.addEventListener("click", () => switchWorkspace(workspace.id));
+        button.addEventListener("keydown", event => {
+          if (!FluxionFlowNavigation.handlesRovingKey(event.key, "horizontal")) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const targetIndex = FluxionFlowNavigation.rovingIndex(
+            workspaces.length, workspaces.findIndex(item => item.id === workspace.id), event.key, "horizontal",
+          );
+          const target = workspaces[targetIndex];
+          if (target) {
+            focusWorkspaceAfterRender = target.id;
+            switchWorkspace(target.id);
+          }
+        });
+        button.addEventListener("contextmenu", event => {
+          event.preventDefault();
+          contextWorkspace = workspace.id;
+          workspaceMenu.openPopupAtScreen(event.screenX, event.screenY, true);
+        });
+        button.addEventListener("dragover", event => {
+          if (!dragTab || tabWorkspace(dragTab) === workspace.id) return;
+          event.preventDefault();
+          clearTabDropFeedback();
+          button.setAttribute("data-dragover", "true");
+        });
+        button.addEventListener("dragleave", () => button.removeAttribute("data-dragover"));
+        button.addEventListener("drop", event => {
+          event.preventDefault();
+          button.removeAttribute("data-dragover");
+          if (dragTabs.length) moveTabsToWorkspace(dragTabs, workspace.id);
+          resetTabDrag();
+        });
+        workspaceElements.set(workspace.id, button);
+      }
       button.tabIndex = workspace.id === currentWorkspace ? 0 : -1;
       button.title = workspace.name;
-      button.setAttribute("role", "tab");
       button.setAttribute("aria-selected", String(workspace.id === currentWorkspace));
       button.setAttribute("aria-posinset", String(workspaceIndex + 1));
       button.setAttribute("aria-setsize", String(workspaces.length));
       button.style.setProperty("--workspace-accent", colours[workspace.accent]);
-      const label = create("span", "fluxion-workspace-name");
-      label.textContent = workspace.name;
-      button.append(workspaceSymbol(workspace.icon), label);
-      button.addEventListener("click", () => switchWorkspace(workspace.id));
-      button.addEventListener("keydown", event => {
-        if (!FluxionFlowNavigation.handlesRovingKey(event.key, "horizontal")) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const targetIndex = FluxionFlowNavigation.rovingIndex(
-          workspaces.length, workspaceIndex, event.key, "horizontal",
-        );
-        const target = workspaces[targetIndex];
-        if (target) {
-          focusWorkspaceAfterRender = target.id;
-          switchWorkspace(target.id);
-        }
-      });
-      button.addEventListener("contextmenu", event => {
-        event.preventDefault();
-        contextWorkspace = workspace.id;
-        workspaceMenu.openPopupAtScreen(event.screenX, event.screenY, true);
-      });
-      button.addEventListener("dragover", event => {
-        if (!dragTab || tabWorkspace(dragTab) === workspace.id) return;
-        event.preventDefault();
-        clearTabDropFeedback();
-        button.setAttribute("data-dragover", "true");
-      });
-      button.addEventListener("dragleave", () => button.removeAttribute("data-dragover"));
-      button.addEventListener("drop", event => {
-        event.preventDefault();
-        button.removeAttribute("data-dragover");
-        if (dragTabs.length) moveTabsToWorkspace(dragTabs, workspace.id);
-        resetTabDrag();
-      });
-      workspaceList.appendChild(button);
-      workspaceElements.set(workspace.id, button);
+      button._fluxionWorkspaceLabel.textContent = workspace.name;
+      if (button._fluxionWorkspaceIcon !== workspace.icon) {
+        button.firstChild.replaceWith(workspaceSymbol(workspace.icon));
+        button._fluxionWorkspaceIcon = workspace.icon;
+      }
+      const position = workspaceList.children[workspaceIndex];
+      if (position !== button) {
+        if (button.parentNode === workspaceList && typeof workspaceList.moveBefore === "function") {
+          workspaceList.moveBefore(button, position || null);
+        } else workspaceList.insertBefore(button, position || null);
+      }
+    }
+    for (const [id, button] of workspaceElements) {
+      if (!workspaces.some(workspace => workspace.id === id)) {
+        button.remove();
+        workspaceElements.delete(id);
+      }
+    }
+    if (focusedButton && document.activeElement !== focusedButton &&
+        [document.body, document.documentElement, null].includes(document.activeElement)) {
+      (focusedButton.isConnected ? focusedButton : workspaceElements.get(currentWorkspace))?.focus({ preventScroll: true });
     }
     addWorkspaceButton.disabled = workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES;
   }
@@ -2826,8 +2875,10 @@
   }
   on(gBrowser.tabContainer, "TabSelect", () => {
     const tab = gBrowser.selectedTab;
-    if (tab?.parentNode && tabWorkspace(tab) === currentWorkspace) rememberWorkspaceTab(tab);
+    if (tab?.parentNode && storedTabWorkspace(tab) === currentWorkspace) rememberWorkspaceTab(tab);
+    reconcileSelectedWorkspace();
   });
+  on(gBrowser.tabContainer, "SSTabRestored", reconcileSelectedWorkspace);
   for (const eventName of [
     "TabSelect", "SplitViewCreated", "SplitViewTabChange", "TabSplitViewActivate",
   ]) {
