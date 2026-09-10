@@ -82,7 +82,10 @@ controls work and its failure paths have been tested.
   200-tab initial render and repeated content-update gates, stable in-place
   content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
-- macOS notarization, Windows signing, Linux packages, and update service
+- explicit in-app Fluxion release discovery (implemented, with preview-aware
+  version checks, official asset validation, and manual download/installation)
+- macOS notarization, Windows signing, Linux packages, and authenticated
+  automatic installation/update service
 - signed and notarized Apple Silicon DMGs attached to GitHub Releases for each
   stable, release-worthy milestone; early milestone DMGs remain clearly marked
   prereleases until Developer ID signing and notarization are configured

@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.48.0-preview.1
+        default: 0.49.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.48.0-preview.1
+        default: v0.49.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -132,6 +132,21 @@ jobs:
         with:
           name: Fluxion-${{ inputs.version }}-chrome-inspection
           path: ${{ runner.temp }}/fluxion-chrome.png
+          if-no-files-found: warn
+
+      - name: Verify explicit Fluxion update discovery
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          FLUXION_UPDATES_SCREENSHOT: ${{ runner.temp }}/fluxion-updates.png
+        run: ./fluxion/scripts/verify-macos-updates.sh '.runtime/Fluxion.app'
+
+      - name: Preserve update inspection snapshot
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-updates-inspection
+          path: ${{ runner.temp }}/fluxion-updates.png
           if-no-files-found: warn
 
       - name: Preserve Library inspection snapshot

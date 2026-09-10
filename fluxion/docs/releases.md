@@ -24,6 +24,9 @@ the full native gates, and publish a new Fluxion DMG promptly. This check does
 not install updates or claim users have the latest version. Preview application
 updates are manual; Firefox's updater is blocked by `DisableAppUpdate` so it
 cannot replace Fluxion with Firefox. Extension updates remain independent.
+About can now check the recent public Fluxion release list explicitly and offer
+a compatible macOS DMG. A metadata check is not a verification of downloaded
+bytes, a guarantee of upstream security currency, or an automatic installer.
 
 1. Run with `publish=false`. GitHub builds and ad-hoc signs the universal app,
    launches Gecko with an isolated profile, requires Flow, command palette,
@@ -94,6 +97,13 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    deletion changes. The general integration gate requires grounded text results
    to be visible before semantic completion, plus a visible dark-mode toolbar
    inline SVG icon with at least 4.5:1 measured color contrast.
+   A separate fresh-profile update gate opens About, confirms the check remains
+   idle until the real button is pressed, queries the fixed public GitHub API,
+   and verifies the displayed full installed/latest version and download-action
+   state. Native HTTP observation requires one credential/referrer-free GET,
+   with no asset request, automatic navigation, or new Downloads entry. The
+   gate preserves an About screenshot and fails on API/network errors instead
+   of substituting a mocked successful release response.
    A separate fresh-profile Flow gate repeats 24 batches of 20 native title/audio
    updates across 200 visible tabs. It requires stable row and control identity,
    scroll, focus, selection, workspace controls, and no structural removals;

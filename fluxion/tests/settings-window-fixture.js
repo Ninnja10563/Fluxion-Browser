@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates } = {}) {
   const preferences = new Map(saved);
   const elements = [];
   class Element {
@@ -43,14 +43,16 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     createElementNS: (_ns, tag) => Object.assign(new Element(), { tagName: tag }),
   };
   const firstBrowser = { currentURI: { spec: initialURL } };
+  const opened = [];
   let progress;
   const gBrowser = {
     selectedBrowser: firstBrowser, tabContainer: new Element(),
     addTabsProgressListener(listener) { progress = listener; }, removeTabsProgressListener() {},
+    addTrustedTab(url) { opened.push(url); return { linkedBrowser: { currentURI: { spec: url } } }; },
   };
   const window = Object.assign(new Element(), {
     document, FluxionMemory: memory, Event: class { constructor(type) { this.type = type; } },
-    FluxionUI: { workspaces: () => [], currentWorkspace: () => "work" },
+    FluxionUI: { workspaces: () => [], currentWorkspace: () => "work", setTabWorkspace() {} },
     FluxionTheme: { current: () => "system" },
     FluxionAI: { config: () => ({ provider: "disabled", endpoint: "", model: "" }) },
     FluxionShortcuts: { actions: () => [] },
@@ -64,8 +66,9 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,
-    ChromeUtils: { importESModule: () => ({ SearchService: { init: async () => {}, getVisibleEngines: async () => [] } }) },
-    Services: { prefs, env: { get: () => "" }, appinfo: { platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
+    ChromeUtils: { importESModule: name => name.includes("FluxionUpdates") ? { FluxionUpdates: updates }
+      : { SearchService: { init: async () => {}, getVisibleEngines: async () => [] } } },
+    Services: { prefs, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
     FluxionSettings: globalThis.FluxionSettings,
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),
@@ -74,7 +77,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
   });
   const root = document.getElementById("fluxion-settings");
   return {
-    gBrowser, firstBrowser, root, deck, errors, preferences, window, document,
+    gBrowser, firstBrowser, root, deck, errors, preferences, window, document, opened,
     unload() { window.dispatchEvent({ type: "unload" }); },
     homepage: elements.find(element => element.type === "text" && element.spellcheck === false),
     section: () => elements.find(element => element.dataset.section && !element.hidden)?.dataset.section,
@@ -93,4 +96,3 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
 }
 
 module.exports = settingsFixture;
-

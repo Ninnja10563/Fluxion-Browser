@@ -19,6 +19,7 @@ test("release workflow defaults agree with the product package and tag", () => {
 
 test("About Fluxion presents the current product version without remote scripts", () => {
   const productVersion = packageData.version.split("-")[0];
+  assert.match(settings, new RegExp(`PRODUCT_RELEASE = "${packageData.version.replaceAll(".", "\\.")}"`));
   assert.match(settings, new RegExp(`PRODUCT_VERSION = "${productVersion.replaceAll(".", "\\.")}"`));
   assert.match(settings, /!about\.textContent\.includes\("Firefox Browser"\)/);
   assert.match(settings, /Mozilla Gecko/);

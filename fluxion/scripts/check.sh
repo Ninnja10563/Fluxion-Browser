@@ -16,6 +16,7 @@ bash -n \
   scripts/verify-macos-sleep.sh \
   scripts/verify-macos-memory.sh \
   scripts/verify-macos-memory-privacy.sh \
+  scripts/verify-macos-updates.sh \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-library.sh \
@@ -58,6 +59,7 @@ node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
+node --check chrome/fluxion-update-verification.js
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-shortcuts.js
@@ -76,6 +78,8 @@ node --check actors/FluxionBrowsingVerificationChild.sys.mjs
 node --check actors/FluxionBrowsingVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --check modules/FluxionNativeMemory.sys.mjs
+node --check modules/FluxionRelease.sys.mjs
+node --check modules/FluxionUpdates.sys.mjs
 node --test tests/*.test.js
 python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-stub.py").read_text(encoding="utf-8"))'
 

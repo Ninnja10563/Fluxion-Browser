@@ -75,6 +75,8 @@ The current preview is runnable and includes:
   bounded native model waits, and stable selected-page identity during reranking;
 - live cross-window Memory settings that preserve pending controls and unsaved
   exclusion edits;
+- explicit About update checks with full preview-version comparison, validated
+  official macOS download links, and no automatic network check or installation;
 - a bounded, deduplicating Browser Memory queue that runs one page at a time
   and yields during user activity, low battery, active media/sharing, or memory
   pressure;

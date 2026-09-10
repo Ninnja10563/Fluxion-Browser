@@ -306,6 +306,28 @@ needs a security-update review. Preview users must install the new Fluxion DMG;
 Mozilla's `DisableAppUpdate` policy prevents the inherited updater from
 overwriting the product, without disabling extension or security-service updates.
 
+About provides an explicit Fluxion release check. `FluxionUpdates` is a privileged,
+process-shared module; importing it performs no network request. A user action
+fetches only the fixed public GitHub releases endpoint, omitting credentials and
+referrer, rejecting redirects, and bounding the streamed response to 4 MiB and
+100 records. A 10-second deadline aborts the request, including response-body
+reads. Concurrent checks share one request; failures are not cached or retried
+automatically. Rate-limit, malformed-response, and network failures are not
+reported as being up to date.
+
+The pure `FluxionRelease` selector compares full `major.minor.patch-preview.N`
+versions numerically, treats a stable version as newer than its own previews,
+and excludes previews for stable installations. It validates non-draft release
+flags, the exact repository/tag URL, and one uploaded positive-size universal
+DMG plus matching checksum asset with exact official URLs. It chooses the highest
+compatible version among the bounded recent records without relying on ordering;
+no compatible candidate is an indeterminate result, and an older candidate never
+produces a download action. Only macOS currently has packaged update support.
+This is release discovery, not binary-integrity verification or a signed updater.
+Downloading is a separate user action through Gecko, and installation remains
+manual. Developer ID signing, notarization, and authenticated automatic updates
+remain release-hardening work.
+
 The macOS bundle includes `fluxion/runtime-provenance.json` with source version,
 build IDs, original executable/signature-manifest hashes, and a source identity.
 The development cache hashes small authoritative files and inspects full source

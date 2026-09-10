@@ -5,7 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.48.0";
+  const PRODUCT_VERSION = "0.49.0";
+  const PRODUCT_RELEASE = "0.49.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -934,10 +935,74 @@
   row(about, "Source", "Fluxion is developed in public and Gecko components retain their original licenses.", source);
   const releases = create("button", "fluxion-settings-button", "Open Fluxion releases");
   releases.type = "button";
+  let availableUpdate = null;
+  let updateDisposed = false;
   releases.addEventListener("click", () => openAboutDestination(
-    "https://github.com/Ninnja10563/Fluxion-Browser/releases",
+    availableUpdate?.releaseURL || "https://github.com/Ninnja10563/Fluxion-Browser/releases",
   ));
-  row(about, "Updates", "Install new versions from Fluxion’s GitHub releases. Automatic app updates are not available in this preview.", releases);
+  const updateControls = create("div");
+  const updateActions = create("div", "fluxion-settings-actions");
+  const checkUpdate = create("button", "fluxion-settings-button", "Check for updates");
+  checkUpdate.id = "fluxion-update-check";
+  checkUpdate.type = "button";
+  const downloadUpdate = create("button", "fluxion-settings-button", "Download macOS DMG");
+  downloadUpdate.id = "fluxion-update-download";
+  downloadUpdate.type = "button";
+  downloadUpdate.hidden = true;
+  downloadUpdate.addEventListener("click", () => {
+    if (availableUpdate?.state === "available") openAboutDestination(availableUpdate.downloadURL);
+  });
+  const updateStatus = create("p", "fluxion-settings-note", `Installed ${PRODUCT_RELEASE}. Not checked.`);
+  updateStatus.id = "fluxion-update-status";
+  updateStatus.setAttribute("role", "status");
+  updateStatus.dataset.state = "idle";
+  updateStatus.dataset.installed = PRODUCT_RELEASE;
+  checkUpdate.addEventListener("click", async () => {
+    if (checkUpdate.disabled || updateDisposed) return;
+    checkUpdate.disabled = true;
+    availableUpdate = null;
+    downloadUpdate.hidden = true;
+    updateStatus.dataset.state = "checking";
+    delete updateStatus.dataset.latest;
+    delete updateStatus.dataset.reason;
+    updateStatus.textContent = "Checking Fluxion releases on GitHub…";
+    try {
+      const { FluxionUpdates } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionUpdates.sys.mjs");
+      const result = await FluxionUpdates.check(PRODUCT_RELEASE, Services.appinfo.OS);
+      if (updateDisposed) return;
+      updateStatus.dataset.state = result.state;
+      if (result.latest) updateStatus.dataset.latest = result.latest;
+      if (result.reason) {
+        updateStatus.dataset.state = "error";
+        updateStatus.dataset.reason = result.reason;
+        const messages = {
+          "rate-limit": "GitHub's request limit was reached. Try again later.",
+          timeout: "The update check timed out. Try again when the connection is available.",
+          "too-large": "The release list exceeded the safe response size. Open Fluxion releases to check manually.",
+        };
+        updateStatus.textContent = messages[result.reason] || "The release list could not be retrieved safely. Try again later or open Fluxion releases.";
+      } else if (result.state === "available") {
+        availableUpdate = result;
+        downloadUpdate.hidden = false;
+        updateStatus.textContent = `${result.latest} is available. Installed ${PRODUCT_RELEASE}. Download and installation require your action.`;
+      } else if (result.state === "current") {
+        updateStatus.textContent = `No newer compatible release found. Installed ${PRODUCT_RELEASE}; newest downloadable release ${result.latest}.`;
+      } else if (result.state === "unsupported") {
+        updateStatus.textContent = "Packaged update downloads are currently available for macOS only. You can still view Fluxion releases.";
+      } else {
+        updateStatus.textContent = "No compatible downloadable release was found in the recent release list. You can inspect Fluxion releases manually.";
+      }
+    } catch (error) {
+      if (updateDisposed) return;
+      updateStatus.dataset.state = "error";
+      updateStatus.textContent = `Could not check for updates: ${error.message}. Try again later or open Fluxion releases.`;
+    } finally {
+      if (!updateDisposed) checkUpdate.disabled = false;
+    }
+  });
+  updateActions.append(checkUpdate, releases);
+  updateControls.append(updateActions, updateStatus, downloadUpdate);
+  row(about, "Updates", "Checks GitHub only when requested. Automatic installation is not available in this preview.", updateControls);
   const licenses = create("button", "fluxion-settings-button", "Open third-party licenses");
   licenses.type = "button";
   licenses.addEventListener("click", () => openAboutDestination("about:license"));
@@ -985,6 +1050,7 @@
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
+    updateDisposed = true;
     gBrowser.removeTabsProgressListener(progressListener);
     gBrowser.tabContainer.removeEventListener("TabSelect", syncVisibility);
     root.remove();

@@ -8,6 +8,18 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.49 adds explicit Fluxion update discovery:
+
+- check for newer compatible releases from About without leaving the browser;
+- compare full preview versions correctly and avoid offering older packages;
+- validate the official repository, release tag, and matching universal DMG and
+  checksum assets before exposing a download action;
+- contact GitHub only when requested, without cookies, authorization, or a
+  referrer, with bounded response size and a timeout;
+- show rate-limit and connection failures honestly, preserve a manual releases
+  link, and never download or install an update automatically;
+- verify the actual About action against GitHub in the packaged macOS browser.
+
 Version 0.48 improves live settings and Memory search interaction:
 
 - show grounded text matches before optional semantic work completes, preserving
