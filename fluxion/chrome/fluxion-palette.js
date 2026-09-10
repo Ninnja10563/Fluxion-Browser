@@ -506,6 +506,7 @@
 
   function tabItems() {
     const source = splitSource;
+    const orientation = pendingSplitOrientation;
     const tabs = mode === "split"
       ? [...gBrowser.tabs].filter(tab =>
           ui.tabWorkspace(tab) === ui.currentWorkspace() &&
@@ -519,7 +520,7 @@
       boost: tab === gBrowser.selectedTab ? 18 : 0,
       keywords: [ui.tabWorkspace(tab), tab.group?.label || ""],
       run: () => source
-        ? ui.createSplitView(source, tab, { orientation: pendingSplitOrientation })
+        ? ui.createSplitView(source, tab, { orientation })
         : ui.selectTab(tab),
     }));
   }

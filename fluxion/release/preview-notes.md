@@ -20,6 +20,8 @@ workflow before a DMG is published.
 - keep hidden workspace pages and their source window alive when moving its
   last visible tab;
 - require a temporary Peek page to become a normal tab before it can move;
+- retain the requested stacked orientation when choosing a tab from the split
+  picker, including after the palette closes;
 - open detached pages in a clean native destination without an extra new-tab
   placeholder, while preserving any destination page the user has edited;
 - verify adopted tabs again after clean relaunch and abrupt-process recovery,

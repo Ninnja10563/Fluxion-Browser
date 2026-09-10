@@ -39,9 +39,11 @@ FLUXION_PROFILE="$profile" FLUXION_VISUAL_INCREMENTAL_TEST=1 \
 process_id=$!
 for (( attempt = 0; attempt < 480; attempt += 1 )); do
   if [[ -f "$profile/prefs.js" ]]; then
-    if grep -q 'user_pref("fluxion.flow.performance.health", "stable-200-tab-background-updates")' "$profile/prefs.js"; then
+    if grep -q 'user_pref("fluxion.flow.performance.health", "stable-200-tab-background-updates")' "$profile/prefs.js" &&
+       grep -q 'user_pref("fluxion.flow.performance.stackedPicker.health", "native-stacked-pair-after-palette-close-verified")' "$profile/prefs.js"; then
       printf 'Verified stable native Flow rows and focus across repeated 200-tab background updates.\n' >&2
       grep 'user_pref("fluxion.flow.performance.metrics"' "$profile/prefs.js" >&2
+      grep 'user_pref("fluxion.flow.performance.stackedPicker.health"' "$profile/prefs.js" >&2
       exit 0
     fi
     if grep -q 'user_pref("fluxion.flow.performance.error",' "$profile/prefs.js"; then break; fi

@@ -169,6 +169,39 @@
     await settle();
     assertStable();
     assert(mutationRecords === beforeIgnored, "Unrelated or off-workspace attributes caused visible Flow mutations");
+    // Finish observing background updates before exercising a structural split.
+    observer.disconnect();
+    observer = null;
+    await waitFor(() => window.FluxionPalette, "Shipped palette did not initialise", 10000);
+    const source = fixtures[6], target = fixtures[7];
+    target.setAttribute("label", "Unique stacked picker destination");
+    changed(target, ["label"]);
+    ui.selectTab(source);
+    window.FluxionPalette.open("all");
+    const input = document.getElementById("fluxion-palette-input");
+    const firstLabel = () => document.querySelector("#fluxion-palette-results .fluxion-palette-result-label")?.textContent;
+    const type = value => {
+      input.value = value;
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    };
+    const enter = () => input.dispatchEvent(new window.KeyboardEvent("keydown", {
+      key: "Enter", bubbles: true, cancelable: true,
+    }));
+    await waitFor(() => document.activeElement === input, "Split command palette did not focus input");
+    type("Open stacked split");
+    assert(firstLabel() === "Open stacked split", "Actual stacked split command was not found");
+    enter();
+    await waitFor(() => document.activeElement === input && input.placeholder.includes("bottom pane"),
+      "Stacked command did not open its actual picker");
+    type(target.label);
+    assert(firstLabel() === target.label, "Stacked picker did not find its requested native tab");
+    enter();
+    await waitFor(() => source.splitview && source.splitview === target.splitview,
+      "Choosing a palette result did not create the native split pair", 5000);
+    assert(window.FluxionSplitViews.orientationOf(source.splitview) === window.FluxionSplitViews.STACKED,
+      "Closing the picker reset its requested stacked orientation before activation");
+    assert(document.getElementById("fluxion-palette-layer").hidden, "Split picker stayed open after choosing");
+    Services.prefs.setStringPref(`${prefix}.stackedPicker.health`, "native-stacked-pair-after-palette-close-verified");
   }
 
   run().then(() => {
@@ -182,6 +215,7 @@
     Cu.reportError(error);
   }).finally(() => {
     observer?.disconnect();
+    window.FluxionPalette?.close();
     if (originalSelected?.parentNode) ui.selectTab(originalSelected);
     const remaining = fixtures.filter(tab => tab.parentNode);
     if (remaining.length) gBrowser.removeTabs(remaining, { animate: false });
