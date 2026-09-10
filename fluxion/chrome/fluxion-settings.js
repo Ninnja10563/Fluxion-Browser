@@ -933,8 +933,10 @@
     "https://github.com/Ninnja10563/Fluxion-Browser",
   ));
   row(about, "Source", "Fluxion is developed in public and Gecko components retain their original licenses.", source);
-  const releases = create("button", "fluxion-settings-button", "Open Fluxion releases");
+  const releases = create("button", "fluxion-settings-button", "All releases");
+  releases.id = "fluxion-update-releases";
   releases.type = "button";
+  releases.setAttribute("aria-label", "Open Fluxion releases");
   let availableUpdate = null;
   let updateDisposed = false;
   releases.addEventListener("click", () => openAboutDestination(
@@ -942,9 +944,10 @@
   ));
   const updateControls = create("div");
   const updateActions = create("div", "fluxion-settings-actions");
-  const checkUpdate = create("button", "fluxion-settings-button", "Check for updates");
+  const checkUpdate = create("button", "fluxion-settings-button", "Check now");
   checkUpdate.id = "fluxion-update-check";
   checkUpdate.type = "button";
+  checkUpdate.setAttribute("aria-label", "Check for Fluxion updates");
   const downloadUpdate = create("button", "fluxion-settings-button", "Download macOS DMG");
   downloadUpdate.id = "fluxion-update-download";
   downloadUpdate.type = "button";
@@ -961,6 +964,8 @@
     if (checkUpdate.disabled || updateDisposed) return;
     checkUpdate.disabled = true;
     availableUpdate = null;
+    releases.textContent = "All releases";
+    releases.setAttribute("aria-label", "Open Fluxion releases");
     downloadUpdate.hidden = true;
     updateStatus.dataset.state = "checking";
     delete updateStatus.dataset.latest;
@@ -983,6 +988,8 @@
         updateStatus.textContent = messages[result.reason] || "The release list could not be retrieved safely. Try again later or open Fluxion releases.";
       } else if (result.state === "available") {
         availableUpdate = result;
+        releases.textContent = "Release notes";
+        releases.setAttribute("aria-label", `Open Fluxion ${result.latest} release notes`);
         downloadUpdate.hidden = false;
         updateStatus.textContent = `${result.latest} is available. Installed ${PRODUCT_RELEASE}. Download and installation require your action.`;
       } else if (result.state === "current") {
@@ -1396,7 +1403,7 @@
           }
           if (!about.textContent.includes(`Mozilla Gecko ${geckoVersion}`) ||
               !about.textContent.includes(`Build ${geckoBuildID}`) ||
-              !about.textContent.includes("Open Fluxion releases")) {
+              releases.getAttribute("aria-label") !== "Open Fluxion releases") {
             throw new Error("About did not expose engine provenance and manual Fluxion releases");
           }
           Services.prefs.setStringPref("fluxion.updates.health", "package-policy-blocked-foreground-firefox-update");

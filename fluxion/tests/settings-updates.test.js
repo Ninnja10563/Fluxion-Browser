@@ -77,3 +77,19 @@ test("structured network failures are shown as failures rather than no compatibl
     assert.doesNotMatch(h.status.textContent, /No compatible downloadable release was found/);
   }
 });
+
+test("compact release control retains a descriptive name and opens the correct destination", async () => {
+  const h = fixture();
+  const releases = h.document.getElementById("fluxion-update-releases");
+  assert.equal(releases.textContent, "All releases");
+  assert.equal(releases.getAttribute("aria-label"), "Open Fluxion releases");
+  h.click(releases);
+  assert.deepEqual(h.opened, ["https://github.com/Ninnja10563/Fluxion-Browser/releases"]);
+  h.click();
+  const releaseURL = "https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v1.0.0";
+  h.calls[0].resolve({ state: "available", latest: "1.0.0", releaseURL, downloadURL: "download" }); await settle();
+  assert.equal(releases.textContent, "Release notes");
+  assert.equal(releases.getAttribute("aria-label"), "Open Fluxion 1.0.0 release notes");
+  h.click(releases);
+  assert.equal(h.opened[1], releaseURL);
+});

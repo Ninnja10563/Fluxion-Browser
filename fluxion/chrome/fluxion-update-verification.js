@@ -35,6 +35,13 @@
     window.gBrowser.selectedTab = tab;
     const get = suffix => window.document.getElementById(`fluxion-update-${suffix}`);
     await waitFor(() => get("check")?.getBoundingClientRect().height > 0, "About update controls did not become visible");
+    for (const id of ["check", "releases"]) {
+      const range = window.document.createRange();
+      range.selectNodeContents(get(id));
+      assert(range.getClientRects().length === 1, `Update ${id} action label wrapped instead of fitting its compact control`);
+      assert(get(id).getAttribute("aria-label"), `Update ${id} action has no explicit accessible name`);
+    }
+    report.compactActionLabels = true;
     assert(get("status").dataset.state === "idle", "Opening About started an update check automatically");
     await pause(250);
     assert(report.requests === 0 && report.assetRequests === 0, "Update traffic occurred before the user action");

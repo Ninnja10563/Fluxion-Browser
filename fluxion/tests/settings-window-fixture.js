@@ -25,6 +25,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
       return this.children.find(child => child.value === value) || null;
     }
     setAttribute(key, value) { this.attributes.set(key, value); }
+    getAttribute(key) { return this.attributes.get(key) ?? null; }
     hasAttribute(key) { return this.attributes.has(key); }
     removeAttribute(key) { this.attributes.delete(key); }
     toggleAttribute(key, value) { if (value) this.setAttribute(key, ""); else this.removeAttribute(key); }
