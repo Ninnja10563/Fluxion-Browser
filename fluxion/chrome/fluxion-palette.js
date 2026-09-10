@@ -1367,6 +1367,14 @@
             `${error?.message || error}\n${error?.stack || ""}\n${JSON.stringify(state)}`);
           Services.prefs.savePrefFile(null);
         };
+        const retryReadiness = stage => {
+          state.stage = stage;
+          Services.prefs.setStringPref("fluxion.dataClearing.visual.stage", JSON.stringify(state));
+          if (attempt < 50) {
+            if (attempt % 10 === 0) Services.prefs.savePrefFile(null);
+            window.setTimeout(() => verifyDialog(attempt + 1), 100);
+          } else fail(new Error("Native dialog did not settle"));
+        };
         try {
           const frameWindow = window.gDialogBox?.dialog?.frameContentWindow;
           const dialogDocument = frameWindow?.document;
@@ -1376,6 +1384,18 @@
           const dialog = dialogDocument?.querySelector("dialog");
           state.dialogType = dialog?.localName || "missing";
           state.getButtonType = typeof dialog?.getButton;
+          // XUL's prototype exposes getButton before its load-time setup has
+          // populated the button map. Do not invoke that getter while loading.
+          if (!state.open || dialogDocument?.readyState !== "complete" ||
+              !dialog || typeof dialog.getButton !== "function") {
+            retryReadiness("awaiting-loaded-dialog");
+            return;
+          }
+          if (dialogDocument.documentURI !== "chrome://browser/content/sanitize_v2.xhtml") {
+            fail(new Error("Unexpected native sanitizer document"));
+            return;
+          }
+          state.stage = "checking-loaded-controls";
           const categoryGroup = dialogDocument?.getElementById("clearPrivateDataGroupbox");
           const categories = categoryGroup?.querySelectorAll("checkbox");
           state.categories = categories?.length || 0;
@@ -1386,13 +1406,10 @@
           state.cancel = Boolean(cancel);
           state.accept = Boolean(accept);
           if (!state.open || !dialog || !duration || !(categories?.length >= 5) || !cancel || !accept) {
-            if (attempt < 50) {
-              window.setTimeout(() => verifyDialog(attempt + 1), 100);
-              return;
-            }
-            fail(new Error("Native dialog did not settle"));
+            retryReadiness("awaiting-complete-controls");
             return;
           }
+          state.stage = "awaiting-native-cancel-result";
           Services.prefs.setStringPref(
             "fluxion.dataClearing.surface.health",
             "time-range-categories-and-actions-visible",
