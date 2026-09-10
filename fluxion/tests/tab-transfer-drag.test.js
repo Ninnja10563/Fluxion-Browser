@@ -19,6 +19,15 @@ test("typed tab payload retains object identity and selected order across window
   assert.equal(restored[0], tabs[0]);
   assert.equal(restored[1], tabs[1]);
 });
+test("current Gecko documentGlobal ownership works without legacy ownerGlobal", () => {
+  const documentGlobal = {}, tabs = [{ documentGlobal }, { documentGlobal }], transfer = dataTransfer();
+  assert.ok(Drag.write(transfer, tabs));
+  assert.deepEqual(Drag.read(transfer, tab => tabs.includes(tab)), tabs);
+  assert.equal(Drag.ownerOf(tabs[0]), documentGlobal);
+  const foreign = { documentGlobal: {} };
+  transfer.mozSetDataAt(Drag.TYPE, foreign, 1);
+  assert.deepEqual(Drag.read(transfer, () => true), []);
+});
 test("page text, duplicate objects, and mixed-window payloads cannot become tab transfers", () => {
   for (const tabs of [["tab"], [{ ownerGlobal: {} }, { ownerGlobal: {} }]]) {
     const transfer = dataTransfer(); Drag.write(transfer, tabs);

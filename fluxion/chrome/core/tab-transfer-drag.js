@@ -2,6 +2,7 @@
   "use strict";
   const TYPE = "application/x-fluxion-tab";
   const LIMIT = 2048;
+  const ownerOf = tab => tab?.documentGlobal || tab?.ownerGlobal || tab?.ownerDocument?.defaultView;
 
   function write(transfer, tabs) {
     if (!transfer?.mozSetDataAt || !tabs?.length || tabs.length > LIMIT) return false;
@@ -26,8 +27,8 @@
     try {
       const tabs = Array.from({ length: count }, (_, index) => transfer.mozGetDataAt(TYPE, index));
       if (new Set(tabs).size !== count || tabs.some(tab => !isBrowserTab(tab))) return [];
-      const source = tabs[0].ownerGlobal;
-      return tabs.every(tab => tab.ownerGlobal === source) ? tabs : [];
+      const source = ownerOf(tabs[0]);
+      return source && tabs.every(tab => ownerOf(tab) === source) ? tabs : [];
     } catch (_) { return []; }
   }
 
@@ -45,7 +46,7 @@
     return true;
   }
 
-  const api = Object.freeze({ TYPE, LIMIT, write, read, shouldDetach });
+  const api = Object.freeze({ TYPE, LIMIT, ownerOf, write, read, shouldDetach });
   global.FluxionTransferDrag = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis !== "undefined" ? globalThis : this);

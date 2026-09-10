@@ -16,12 +16,13 @@
   const menus = [];
   const browserWindows = () => [...Services.wm.getEnumerator("navigator:browser")]
     .filter(candidate => !candidate.closed && candidate.gBrowser && candidate.FluxionUI);
+  const ownerOf = FluxionTransferDrag.ownerOf;
   function isBrowserTab(tab, memberships = null) {
     try {
       return tab?.localName === "tab" && !tab.closing &&
         Services.scriptSecurityManager.isSystemPrincipal(tab.nodePrincipal) &&
-        (memberships ? memberships.get(tab.ownerGlobal)?.has(tab) :
-          browserWindows().includes(tab.ownerGlobal) && [...tab.ownerGlobal.gBrowser.tabs].includes(tab));
+        (memberships ? memberships.get(ownerOf(tab))?.has(tab) :
+          browserWindows().includes(ownerOf(tab)) && [...ownerOf(tab).gBrowser.tabs].includes(tab));
     } catch (_) { return false; }
   }
   const readDrag = event => {
@@ -79,13 +80,13 @@
   on(flow, "dragstart", event => {
     dragging = [];
     const tab = rowFor(event)?._fluxionTab;
-    if (!isBrowserTab(tab) || tab.ownerGlobal !== window) return;
+    if (!isBrowserTab(tab) || ownerOf(tab) !== window) return;
     const tabs = FluxionTabSelection.contextTabs(tab, gBrowser.selectedTabs);
     if (FluxionTransferDrag.write(event.dataTransfer, tabs)) dragging = [...tabs];
   });
   on(flow, "dragover", event => {
     const tabs = readDrag(event);
-    if (!tabs.length || tabs[0].ownerGlobal === window) return;
+    if (!tabs.length || ownerOf(tabs[0]) === window) return;
     event.stopPropagation();
     const destination = dropDestination(event, tabs);
     const eligible = destination && transfer.eligibility(tabs, window, destination.options);
@@ -110,7 +111,7 @@
   });
   on(flow, "drop", event => {
     const tabs = readDrag(event);
-    if (!tabs.length || tabs[0].ownerGlobal === window) return;
+    if (!tabs.length || ownerOf(tabs[0]) === window) return;
     event.preventDefault();
     event.stopPropagation();
     const destination = dropDestination(event, tabs);
@@ -128,7 +129,7 @@
     const tabs = dragging;
     dragging = [];
     clearMarker();
-    if (!tabs.length || tabs.some(tab => !isBrowserTab(tab) || tab.ownerGlobal !== window)) return;
+    if (!tabs.length || tabs.some(tab => !isBrowserTab(tab) || ownerOf(tab) !== window)) return;
     const windows = browserWindows().map(candidate => ({
       left: candidate.screenX, top: candidate.screenY, width: candidate.outerWidth, height: candidate.outerHeight,
     }));
@@ -163,7 +164,7 @@
       if (event.target !== popup) return;
       popup.replaceChildren();
       const tabs = [...contextSnapshot];
-      if (!tabs.length || tabs.some(tab => !isBrowserTab(tab) || tab.ownerGlobal !== window)) {
+      if (!tabs.length || tabs.some(tab => !isBrowserTab(tab) || ownerOf(tab) !== window)) {
         addItem("These tabs are no longer available", null, { disabled: "true" });
         return;
       }

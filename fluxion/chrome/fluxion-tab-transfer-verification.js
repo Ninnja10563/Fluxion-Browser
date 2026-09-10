@@ -162,6 +162,8 @@
     const detached = await window.FluxionTabTransfer.detach([detachable.tab], { workspaceId: "build", selectTab: detachable.tab });
     assert(detached.window && detached.complete && detached.tabs.length === 1, "New-window detach did not complete");
     ownedWindows.push(detached.window); ownedTabs.push(...detached.tabs);
+    assert(detached.window.gBrowser.tabs.length === 1,
+      "Successful detach retained the untouched default new-tab placeholder");
     assert(detached.window !== window && detached.window.gBrowser.tabs.includes(detached.tabs[0]) &&
       !window.gBrowser.tabs.includes(detachable.tab) && closedCount(window) === beforeDetach,
     "Detach did not retain unique tab ownership without closed history");
@@ -195,6 +197,13 @@
       const targetIndex = window.FluxionTabTransfer.eligibleWindows([menuPage.tab]).indexOf(destination);
       assert(targetIndex >= 0, "Expected destination was not offered by the shipped menu");
       popup.dispatchEvent(new window.Event("popupshowing", { bubbles: true }));
+      report.menuSource = {
+        documentGlobalMatches: menuPage.tab.documentGlobal === window,
+        legacyOwnerGlobalMatches: menuPage.tab.ownerGlobal === window,
+        systemPrincipal: Services.scriptSecurityManager.isSystemPrincipal(menuPage.tab.nodePrincipal),
+        labels: [...popup.children].map(child => child.getAttribute("label")),
+      };
+      write("report", JSON.stringify(report));
       const item = popup.querySelector(`[data-fluxion-window-target="${targetIndex}"]`);
       assert(item && !item.disabled, "Move to Window destination command was not populated");
       item.dispatchEvent(new window.Event("command", { bubbles: true }));
@@ -211,6 +220,43 @@
       popup.hidePopup();
       context.hidePopup();
     }
+
+    write("stage", "native-datatransfer-dom-routing");
+    const dragPage = await page(window);
+    const dropPage = await page(destination);
+    window.gBrowser.clearMultiSelectedTabs();
+    window.FluxionUI.selectTab(dragPage.tab);
+    destination.FluxionUI.selectTab(dropPage.tab);
+    const sourceRow = await waitFor(() => [...window.document.querySelectorAll(".fluxion-tab")]
+      .find(item => item._fluxionTab === dragPage.tab), "Drag source Flow row was not rendered");
+    const targetRow = await waitFor(() => [...destination.document.querySelectorAll(".fluxion-tab")]
+      .find(item => item._fluxionTab === dropPage.tab), "Drop destination Flow row was not rendered");
+    targetRow.scrollIntoView({ block: "nearest", behavior: "instant" });
+    const rect = targetRow.getBoundingClientRect();
+    assert(rect.width > 0 && rect.height > 0, "Drop target must have real rendered geometry");
+    const payload = new window.DataTransfer();
+    sourceRow.dispatchEvent(new window.DragEvent("dragstart", {
+      bubbles: true, cancelable: true, dataTransfer: payload,
+    }));
+    assert(payload.mozItemCount === 1 && payload.mozGetDataAt("application/x-fluxion-tab", 0) === dragPage.tab,
+      "Shipped dragstart did not encode the actual native tab in Gecko DataTransfer");
+    const eventOptions = { bubbles: true, cancelable: true, dataTransfer: payload,
+      clientX: rect.left + rect.width / 2, clientY: rect.top + 1 };
+    const over = new destination.DragEvent("dragover", eventOptions);
+    targetRow.dispatchEvent(over);
+    assert(over.defaultPrevented && payload.dropEffect === "move", "Foreign native drag was not accepted as a move");
+    const beforeDrop = new Set(destination.gBrowser.tabs), beforeDropClosed = closedCount(window);
+    targetRow.dispatchEvent(new destination.DragEvent("drop", eventOptions));
+    const dropped = await waitFor(() => [...destination.gBrowser.tabs]
+      .find(tab => !beforeDrop.has(tab) && !window.gBrowser.tabs.includes(dragPage.tab)),
+    "Native DataTransfer DOM drop did not adopt the source page");
+    ownedTabs.push(dropped);
+    sameDocument(dragPage.state, await read(dropped));
+    assert(payload.dropEffect === "move" && destination.FluxionUI.tabWorkspace(dropped) ===
+      destination.FluxionUI.tabWorkspace(dropPage.tab) && closedCount(window) === beforeDropClosed,
+    "Native drop lost move/workspace/closed-history semantics");
+    report.dragInput = "Native Gecko DataTransfer and DOM DragEvents; not physical OS drag or trusted dragend";
+    report.checks.push("native-gecko-datatransfer-shipped-flow-dom-drop-retains-live-document");
   }
   run().then(() => write("health", "native-adoption-live-state-privacy-and-detach-verified"))
     .catch(error => { write("error", `${error?.message || error}\n${error?.stack || ""}`); Cu.reportError(error); })

@@ -52,7 +52,7 @@ function dataTransfer(tabs = []) {
 function fixture() {
   const windows = [], adoptions = [], alerts = [], errors = [], created = [];
   const Services = { wm: { getEnumerator: () => windows }, scriptSecurityManager: { isSystemPrincipal: value => value === "system" },
-    prompt: { alert: (_window, _title, message) => alerts.push(message) }, prefs: { getStringPref: (_key, fallback) => fallback } };
+    focus: { activeWindow: null }, prompt: { alert: (_window, _title, message) => alerts.push(message) }, prefs: { getStringPref: (_key, fallback) => fallback } };
   function createWindow(isPrivate = false) {
     const document = { createXULElement: name => new Node(name, document), getElementById: id => {
       const scan = node => node.getAttribute("id") === id ? node : node.children.map(scan).find(Boolean);
@@ -61,6 +61,8 @@ function fixture() {
     document.root = new Node("root", document);
     const window = new Node("window", document);
     Object.assign(window, { document, isPrivate, closed: false, setTimeout, screenX: windows.length * 400, screenY: 0, outerWidth: 300, outerHeight: 300, gBrowserInit: { delayedStartupFinished: true } });
+    window.focusCount = 0;
+    window.focus = () => { window.focusCount++; Services.focus.activeWindow = window; };
     windows.push(window);
     const flow = document.root.appendChild(new Node("aside", document)); flow.setAttribute("id", "fluxion-flow");
     const list = flow.appendChild(new Node("div", document)); list.setAttribute("class", "fluxion-tabs");
@@ -70,7 +72,7 @@ function fixture() {
     const reindex = () => window.gBrowser.tabs.forEach((tab, index) => { tab._tPos = index; });
     window.addTab = (label = "Page", workspace = "a") => {
       const tab = new Node("tab", document);
-      Object.assign(tab, { ownerGlobal: window, nodePrincipal: "system", parentNode: {}, label, linkedBrowser: {
+      Object.assign(tab, { documentGlobal: window, nodePrincipal: "system", parentNode: {}, label, linkedBrowser: {
         currentURI: { spec: label === "about:blank" ? label : `https://example.test/${label}` },
         browsingContext: { currentWindowGlobal: {}, sessionHistory: { count: 1 } },
       } });
@@ -86,7 +88,7 @@ function fixture() {
       adoptTab(old, options) {
         adoptions.push({ old, target: window, options });
         const next = window.addTab(old.label); next.linkedBrowser = old.linkedBrowser;
-        old.ownerGlobal.gBrowser.removeTab(old); return next;
+        old.documentGlobal.gBrowser.removeTab(old); return next;
       },
       adoptTabGroup(group, options) {
         const tabs = group.tabs.map(tab => this.adoptTab(tab, options));
@@ -114,11 +116,13 @@ function fixture() {
   const sourceWindow = createWindow(), target = createWindow();
   const sourceTab = sourceWindow.addTab("Original"), targetTab = target.addTab("Destination", "b");
   sourceWindow.addTab("Remaining"); sourceWindow.contextTabs = [sourceTab];
-  return { sourceWindow, target, sourceTab, targetTab, createWindow, adoptions, alerts, errors, created };
+  return { sourceWindow, target, sourceTab, targetTab, createWindow, adoptions, alerts, errors, created, Services };
 }
 
 test("foreign native tab payload uses the actual adapter with destination workspace and insertion edge", async () => {
   const f = fixture(), row = f.target.row(f.targetTab), transfer = dataTransfer([f.sourceTab]);
+  assert.equal("ownerGlobal" in f.sourceTab, false, "native Gecko155 Node exposes documentGlobal, not the legacy property");
+  assert.equal(f.sourceTab.documentGlobal, f.sourceWindow);
   const over = fire(row, "dragover", { dataTransfer: transfer, clientX: 50, clientY: 129 });
   assert.equal(over.defaultPrevented, true); assert.equal(row.dataset.dropIntent, "reorder-after");
   fire(row, "drop", { dataTransfer: transfer, clientX: 50, clientY: 129 }); await flush();
@@ -126,6 +130,7 @@ test("foreign native tab payload uses the actual adapter with destination worksp
   assert.equal(f.adoptions[0].target, f.target); assert.equal(f.adoptions[0].options.tabIndex, 1);
   assert.equal(f.target.gBrowser.selectedTab.getAttribute("fluxion-workspace"), "b");
   assert.equal(row.dataset.dropIntent, undefined); assert.match(f.target.status.textContent, /1 tab moved/);
+  assert.equal(f.target.focusCount, 1); assert.equal(f.Services.focus.activeWindow, f.target); assert.deepEqual(f.errors, []);
 });
 
 test("private, stale and forged foreign payloads perform no adoption", async () => {
@@ -193,6 +198,7 @@ test("genuine drag-out dispatch and New Window menu use native detach", async ()
     }
     await flush(); assert.equal(f.created.length, 1); assert.equal(f.adoptions.length, 1);
     assert.equal(f.created[0].gBrowser.tabs.length, 1); assert.equal(f.created[0].gBrowser.tabs[0].label, "Original");
+    assert.equal(f.created[0].focusCount, 1); assert.equal(f.Services.focus.activeWindow, f.created[0]); assert.deepEqual(f.errors, []);
   }
 });
 

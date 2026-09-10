@@ -141,6 +141,8 @@
       if (selectedTab && options.selectTab !== false) target.FluxionUI.selectTab(selectedTab);
       if (liveWindow(source)) source.FluxionUI.reconcileTransferredTabs();
       if (liveWindow(target)) target.FluxionUI.reconcileTransferredTabs();
+      if (!error && resultTabs.length === moving.length && options.selectTab !== false &&
+          liveWindow(target) && liveTab(selectedTab, target)) target.focus();
     } catch (cause) { error ||= cause?.message || String(cause); Cu.reportError(cause); }
     return { tabs: resultTabs, selectedTab, complete: !error && resultTabs.length === moving.length, ...(error ? { error } : {}) };
   }

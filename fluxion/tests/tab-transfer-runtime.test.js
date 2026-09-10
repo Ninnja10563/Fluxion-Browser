@@ -11,6 +11,7 @@ function fixture({ newTabURL = "about:newtab" } = {}) {
   function createWindow(isPrivate = false) {
     const listeners = new Set();
     const window = { closed: false, isPrivate, setTimeout, gBrowserInit: { delayedStartupFinished: true } };
+    window.focus = () => calls.push(["focus", window]);
     windows.push(window);
     const reindex = () => window.gBrowser.tabs.forEach((tab, index) => { tab._tPos = index; });
     function addTab(url = "https://example.test/") {
@@ -104,6 +105,8 @@ test("native adoption preserves the live browser, pin and workspace while keepin
   assert.equal(f.source.gBrowser.tabs.length, 1);
   assert.equal(f.source.gBrowser.tabs[0].linkedBrowser.currentURI.spec, "about:newtab");
   assert.equal(f.calls.some(([kind]) => kind === "remove"), false);
+  assert.equal(f.calls.filter(([kind]) => kind === "focus").length, 1);
+  assert.ok(f.calls.find(([kind]) => kind === "focus")[1] === f.target);
 });
 
 test("private, stale, foreign and Peek inputs are rejected before native writes", async () => {
@@ -148,6 +151,7 @@ test("partial group failure reports adopted live nodes and leaves surviving sour
   assert.equal(result.tabs.length, 1); assert.equal(result.tabs[0].getAttribute("fluxion-workspace"), "b");
   assert.ok(f.source.gBrowser.tabs.includes(b)); assert.ok(b.parentNode);
   assert.equal(f.calls.some(([kind]) => kind === "remove"), false);
+  assert.equal(f.calls.some(([kind]) => kind === "focus"), false);
 });
 
 test("detach uses native window startup, revalidates source and removes only untouched empty destination tab", async () => {
@@ -176,6 +180,7 @@ test("background group transfers preserve destination selection and collapsed st
   assert.ok(f.target.gBrowser.selectedTab === selected);
   assert.equal(result.tabs[0].group.collapsed, true);
   assert.equal(f.calls.find(([kind]) => kind === "group")[2].selectTab, false);
+  assert.equal(f.calls.some(([kind]) => kind === "focus"), false);
 });
 
 test("partial selection leaves the source group intact and preserves original workspaces by default", async () => {
