@@ -132,13 +132,29 @@
     report.checks.push("native-group-collapse-and-stacked-split-fallback-correct");
     report.complete = true;
   }
-  run().catch(error => { write("error", `${error.message}\n${error.stack || ""}`); Cu.reportError(error); })
-    .finally(() => {
-      observer?.disconnect();
-      write("report", JSON.stringify(report));
-      if (report.complete) write("health", "keyed-1000-tab-structure-and-native-fallbacks-verified");
-      if (original?.parentNode) gBrowser.selectedTab = original;
+  function complete(primaryError = null) {
+    const failures = primaryError ? [primaryError] : [];
+    const attempt = action => { try { action(); } catch (error) { failures.push(error); } };
+    attempt(() => observer?.disconnect());
+    attempt(() => { if (original?.parentNode) gBrowser.selectedTab = original; });
+    attempt(() => {
       const remaining = fixtures.filter(tab => tab.parentNode);
       if (remaining.length) gBrowser.removeTabs(remaining, { animate: false });
     });
+    report.complete = Boolean(report.complete && !failures.length);
+    if (failures.length) report.failures = failures.map(error => `${error.message}\n${error.stack || ""}`);
+    attempt(() => write("report", JSON.stringify(report)));
+    if (!failures.length && report.complete) {
+      attempt(() => write("health", "keyed-1000-tab-structure-and-native-fallbacks-verified"));
+    }
+    if (failures.length) {
+      report.complete = false;
+      // A failed flush must not leave a success pref for a later flush to save.
+      attempt(() => Services.prefs.clearUserPref(`${prefix}.health`));
+      const detail = failures.map(error => `${error.message}\n${error.stack || ""}`).join("\nAdditional failure:\n");
+      attempt(() => write("error", detail));
+      for (const error of failures) Cu.reportError(error);
+    }
+  }
+  run().then(() => complete(), complete);
 })(window);

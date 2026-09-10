@@ -8,6 +8,11 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.60 is in development: flat workspaces retain Flow rows and focused
+controls during tab opening, closing and reordering, and manual DMG packaging
+validates the supplied app's release identity. Full combined native staging is
+required before publication; the latest download remains 0.59 below.
+
 Fluxion 0.59 is published: encoded sensitive routes remain excluded from
 Browser Memory, including saved evidence from older profiles. Native macOS
 privacy and restart checks verify selective cleanup while preserving safe

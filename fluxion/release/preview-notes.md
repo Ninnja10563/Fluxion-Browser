@@ -8,6 +8,13 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.60 is an unpublished tab-structure candidate. Flat workspaces retain
+unaffected Flow rows and controls through native opening, closing, movement and
+pin-role changes. Reordering uses minimal DOM relocations while preserving
+owned focus. Groups, splits and workspace changes keep full-render fallbacks.
+Manual DMG labels must match the supplied app's bundled release metadata.
+Combined native staging and real packaging remain required before release.
+
 Version 0.59 is a published Memory privacy preview. It closes encoded
 sensitive-path bypasses and rechecks stored text/vector evidence against the
 same policy, including startup with Memory disabled. No browsing URL is

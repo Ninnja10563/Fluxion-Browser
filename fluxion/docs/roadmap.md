@@ -136,6 +136,10 @@ controls work and its failure paths have been tested.
   and duplicate same-call ownership reads, reducing the instrumented 1,000-tab
   selection path from 6,010 to 4,006 reads; authoritative passes and O(N) scans
   remain, with no cache across restoration events)
+- preserve flat Flow rows through opening, closing and reordering, with
+  minimal DOM moves and exact owned control-focus retention (0.60 candidate;
+  earlier isolated structural diagnostics passed, combined release staging
+  remains required; complex topology still uses full-render fallbacks)
 - bounded page evidence traversal without DOM cloning or full text-node reads,
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)

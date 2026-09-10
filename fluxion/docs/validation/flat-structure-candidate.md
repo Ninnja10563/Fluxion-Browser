@@ -1,7 +1,9 @@
 # Flat Flow structural reconciliation candidate
 
-This work is isolated on `perf/flow-reconcile`; it is not part of the 0.59
-Memory privacy release candidate and must not be merged without native checks.
+This work originated on `perf/flow-reconcile` and is not part of the published
+0.59 Memory privacy release. After the native diagnostic below, it was
+integrated into the [0.60 candidate](0.60-candidate.md); combined full staging
+is still required before publication.
 
 ## Scope
 
@@ -36,8 +38,8 @@ background add/remove/reorder, pin/unpin, exact focused controls, unrelated
 subtree writes, native order and group/split fallback behavior. Its operations
 are native Gecko calls and chrome focus, not physical OS pointer input.
 
-Native execution and review remain pending. Do not promote a diagnostic app
-or infer release readiness from the Node boundary tests alone.
+The initial native diagnostic is recorded below. Do not promote a diagnostic
+app or infer release readiness from the Node boundary tests alone.
 
 All 671 local regression tests pass, including the adjacent-swap tie case.
 The native gate retains every row/control in that case, permits only either
@@ -59,10 +61,9 @@ Memory privacy and clean/SIGKILL session recovery also passed. This is not
 physical OS drag/high-refresh-rate hardware profiling. Artifact
 `10175441307` (`Fluxion-structure-evidence`) holds the native report.
 
-The initial pending-native status above describes the pre-diagnostic stage.
-The branch is now natively checked, but remains outside 0.59: main-branch
-integration, a new milestone version and full release staging are still
-required before any public DMG can include this work.
+That native diagnostic covered the structural source, outside 0.59. Main-branch
+integration and the new milestone version are now present in the 0.60 candidate;
+full combined release staging remains required before a public DMG includes it.
 
 ## Subsequent packaging safety follow-up
 

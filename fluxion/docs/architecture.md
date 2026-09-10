@@ -986,8 +986,9 @@ Content-only tab events now queue only affected visible tabs. The updater
 preserves row, title, close-control, and audio-control identity, and touches
 only changed state. Unrelated attributes and off-workspace content events do
 not refresh visible rows. Workspace buttons retain identity while their model
-is unchanged. Selection, grouping, movement, and other structural events still
-use the full projection path; this is not a virtualized tab list. Audio actions
+is unchanged. Selection and flat structural events use the incremental paths
+described below; complex topology still uses full projection. This is not a
+virtualized tab list. Audio actions
 read current native state rather than capturing the state at row creation.
 
 A separate packaged-app gate drives 24 batches of 20 native title/audio events
@@ -1096,6 +1097,37 @@ operations, and real Flow activation handlers. Identity, mutation and focus
 assertions are distinct from hosted event-to-frame timings. Group, pin and
 split transitions remain part of that gate rather than being inferred from
 plain tabs alone.
+
+## Flat Flow structural updates
+
+In a flat workspace (no grouped or split pages), opening, closing and moving
+native tabs reconcile rows keyed by the actual Gecko tab objects. Existing
+rows refresh only changed content. Pinning or unpinning recreates the affected
+row for its changed accessibility role, while retaining the other rows.
+Switching workspaces or entering/leaving grouped or split topology retains
+full projection as the correctness fallback.
+
+A longest-increasing-subsequence plan keeps already ordered rows stationary
+and relocates only the necessary DOM nodes. A single native reorder therefore
+needs one DOM relocation, although adjacent-swap ties can relocate the neighbor
+instead of the tab that emitted the native event. Both retain object identity.
+State-preserving `moveBefore` is preferred when available; the fallback repairs
+owned close/audio focus only if focus fell to the document, without stealing
+focus from another control. Pointer-close holding remains authoritative.
+
+Authoritative tab/workspace reads remain O(N), and the ordering plan is
+O(N log N). This reduces DOM work; it does not establish constant-time tab
+operations, sustained frame rates or content-heavy memory performance. The
+native structure gate uses 1,000 tabs (40 eager, 960 lazy), actual Gecko tab
+operations and chrome focus. Group/split fallback correctness is tested
+separately from flat row retention.
+
+Manual DMG packaging derives its default release from the supplied app's
+bundled Settings constants, parsed as data. It requires the complete release
+and product/bundle versions to agree, and refuses an explicit mismatched label
+before packaging tools or output mutations. It never labels an older app with
+the current checkout's version. Native packaging/signature gates remain
+mandatory in addition to shell control-flow tests with simulated macOS tools.
 
 ## Native tab-status ownership
 

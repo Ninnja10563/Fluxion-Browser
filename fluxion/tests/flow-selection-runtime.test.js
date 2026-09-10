@@ -395,3 +395,55 @@ test("adjacent forward LIS ties may move the equivalent neighbor while preservin
   }
   assert.equal(f.gBrowser.selectedTab, neighbor);
 });
+
+test("existing pinned controls keep focus and identity while membership and pin order update ARIA", () => {
+  const f = fixture(14);
+  for (const tab of f.tabs.slice(0, 3)) tab.pinned = true;
+  f.context.scheduleRender({ type: "TabPinned", target: f.tabs[2] }); f.flush();
+  const pinned = f.tabs.slice(0, 3), identities = new Map(pinned.map(tab => [tab, f.row(tab)]));
+  const controls = new Map(pinned.map(tab => [tab, f.row(tab)._fluxionParts.close]));
+  f.gBrowser.selectedTab = pinned[1]; f.flush();
+  controls.get(pinned[1]).focus();
+  const treeIdentities = new Map(f.tabs.slice(3).map(tab => [tab, f.row(tab)]));
+  const verify = expected => {
+    assert.deepEqual(f.pinnedTabs.children.map(row => row._fluxionTab), expected);
+    for (let index = 0; index < expected.length; index++) {
+      const row = f.row(expected[index]);
+      assert.equal(row.getAttribute("role"), "tab");
+      assert.equal(row.getAttribute("aria-posinset"), String(index + 1));
+      assert.equal(row.getAttribute("aria-setsize"), String(expected.length));
+    }
+    for (const tab of pinned) {
+      assert.equal(f.row(tab), identities.get(tab));
+      assert.equal(f.row(tab)._fluxionParts.close, controls.get(tab));
+    }
+    assert.equal(f.document.activeElement, controls.get(pinned[1]));
+    for (const container of [f.pinnedTabs, f.tabsList]) {
+      assert.equal(container.children.filter(row => row.tabIndex === 0).length, 1);
+    }
+  };
+  verify(pinned);
+
+  const added = f.tabs[8], oldOrdinaryRow = f.row(added);
+  added.pinned = true;
+  f.tabs.splice(f.tabs.indexOf(added), 1); f.tabs.splice(1, 0, added);
+  f.context.scheduleRender({ type: "TabPinned", target: added }); f.flush();
+  verify([pinned[0], added, pinned[1], pinned[2]]);
+  assert.notEqual(f.row(added), oldOrdinaryRow);
+  for (const [tab, row] of treeIdentities) if (tab !== added) assert.equal(f.row(tab), row);
+
+  const addedPinRow = f.row(added);
+  f.tabs.splice(f.tabs.indexOf(pinned[2]), 1); f.tabs.unshift(pinned[2]);
+  f.context.scheduleRender({ type: "TabMove", target: pinned[2] }); f.flush();
+  verify([pinned[2], pinned[0], added, pinned[1]]);
+  assert.equal(f.row(added), addedPinRow);
+
+  added.pinned = false;
+  f.tabs.splice(f.tabs.indexOf(added), 1); f.tabs.push(added);
+  f.context.scheduleRender({ type: "TabUnpinned", target: added }); f.flush();
+  verify([pinned[2], pinned[0], pinned[1]]);
+  assert.notEqual(f.row(added), addedPinRow);
+  assert.equal(f.row(added).getAttribute("role"), "treeitem");
+  assert.equal(f.row(added).getAttribute("aria-posinset"), null);
+  assert.equal(f.row(added).getAttribute("aria-setsize"), null);
+});
