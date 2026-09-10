@@ -76,6 +76,86 @@
     report.pages.push({ section, uniqueRows: seen.size, pageCount: Math.ceil(count / 100), stableFirstPage: true, keyboardFocusPreserved: true });
   }
 
+  async function keyboardAndMenus(PlacesUtils, folderGuid) {
+    const rows = [...root.querySelectorAll(".fluxion-library-row")];
+    const list = root.querySelector(".fluxion-library-list");
+    const content = root.querySelector(".fluxion-library-content");
+    const primary = row => row.querySelector(".fluxion-library-open");
+    const more = row => row.querySelector(".fluxion-library-more");
+    const key = (value, extra = {}) => document.activeElement.dispatchEvent(
+      new window.KeyboardEvent("keydown", { key: value, bubbles: true, cancelable: true, ...extra }));
+    const popup = document.getElementById("fluxion-library-item-menu");
+    assert(rows.length === 100 && popup, "Native Library interaction fixture requires 100 rows and its shared popup");
+    assert(document.querySelectorAll("#fluxion-library-item-menu").length === 1, "Library created more than one item popup");
+    assert(rows.filter(row => primary(row).tabIndex === 0).length === 1 &&
+      rows.every(row => more(row)?.tabIndex === -1), "Library results do not have one primary Tab stop and off-sequence action controls");
+    assert([...list.querySelectorAll("button, a, input, select, textarea")].filter(node => node.tabIndex >= 0).length === 1,
+      "Repeated Library row actions still expand the Tab sequence");
+    content.scrollTop = 0;
+    primary(rows[0]).focus();
+    key("ArrowDown");
+    assert(document.activeElement === primary(rows[1]), "Down arrow did not move to the next Library result");
+    key("End");
+    await waitFor(() => document.activeElement === primary(rows[99]) && content.scrollTop > 0,
+      "End did not focus and reveal the last Library result");
+    const endScroll = content.scrollTop;
+    key("Home");
+    await waitFor(() => document.activeElement === primary(rows[0]) && content.scrollTop < endScroll &&
+      primary(rows[0]).getBoundingClientRect().top >= content.getBoundingClientRect().top,
+      "Home did not return to the first Library result");
+    key("ArrowRight");
+    assert(document.activeElement === more(rows[0]), "Right arrow did not focus the row action control");
+    key("ArrowLeft");
+    assert(document.activeElement === primary(rows[0]), "Left arrow did not return to the primary row action");
+    key("ArrowRight");
+    key("F10", { shiftKey: true });
+    await waitFor(() => popup.state === "open", "Shift+F10 did not open the native item popup");
+    const title = rows[0].querySelector(".fluxion-library-row-title").textContent;
+    for (const action of ["Open", "Rename", "Move", "Remove"]) {
+      const item = [...popup.querySelectorAll("menuitem")].find(node => node.getAttribute("label") === action);
+      assert(item && !item.disabled && item.getAttribute("aria-label") === `${action} ${title}`,
+        `Native ${action} action is not bound to the chosen bookmark`);
+    }
+    window.focus();
+    // Exercise Gecko's native popup key handling, not a synthetic DOM event
+    // whose default action cannot close an operating-system-backed menu.
+    window.windowUtils.sendNativeKeyEvent(0, 0x35, 0, "\u001b", "\u001b");
+    await waitFor(() => popup.state === "closed" && document.activeElement === more(rows[0]),
+      "Native Escape did not dismiss the menu and restore its action-button focus");
+    key("F10", { shiftKey: true });
+    await waitFor(() => popup.state === "open", "Native item menu did not reopen");
+    await query("cedar", values => values.length === 1);
+    await waitFor(() => popup.state === "closed", "A changed real Places query retained a stale item menu");
+    assert(document.activeElement === input, "Closing a stale menu stole focus from the user's search");
+
+    window.FluxionLibrary.open("folders");
+    await query("", () => [...root.querySelectorAll(".fluxion-library-row")]
+      .some(row => row._fluxionLibraryId === PlacesUtils.bookmarks.toolbarGuid));
+    const protectedRow = [...root.querySelectorAll(".fluxion-library-row")]
+      .find(row => row._fluxionLibraryId === PlacesUtils.bookmarks.toolbarGuid);
+    more(protectedRow).focus();
+    more(protectedRow).click();
+    await waitFor(() => popup.state === "open", "Protected-folder menu did not open");
+    for (const action of ["Rename", "Delete"]) {
+      const item = [...popup.querySelectorAll("menuitem")].find(node => node.getAttribute("label") === action);
+      assert(item?.disabled, `Protected native bookmark folder permits ${action}`);
+    }
+    for (const action of ["View", "New inside"]) {
+      const item = [...popup.querySelectorAll("menuitem")].find(node => node.getAttribute("label") === action);
+      assert(item && !item.disabled, `Protected bookmark folder lost safe ${action} action`);
+    }
+    popup.hidePopup();
+    await waitFor(() => popup.state === "closed", "Protected-folder popup did not close");
+    window.FluxionLibrary.open("bookmarks");
+    const select = root.querySelector(".fluxion-library-folder-select");
+    select.value = folderGuid;
+    select.dispatchEvent(new window.Event("change", { bubbles: true }));
+    await query("Fluxion Archive", values => values.length === 100 && values.every(value => value.includes("bookmark")));
+    report.assertions.push("single-roving-tabstop-across-100-results", "arrow-home-end-and-row-actions-keyboard",
+      "native-item-menu-context-and-escape-focus", "stale-query-closes-native-menu", "protected-folder-menu-actions");
+    Services.prefs.setStringPref(`${prefix}.interactionHealth`, "roving-list-and-native-item-menu-verified");
+  }
+
   async function run() {
     await SessionStore.promiseAllWindowsRestored;
     assert(window.FluxionLibrary, "Native Library did not initialise");
@@ -154,6 +234,7 @@
     select.dispatchEvent(new window.Event("change", { bubbles: true }));
     await query("Fluxion Archive", rows => rows.length === 100 && rows.every(title => title.includes("bookmark")));
     await pages("bookmarks", 550);
+    await keyboardAndMenus(PlacesUtils, folder.guid);
     const content = root.querySelector(".fluxion-library-content");
     const next = root.querySelector('[aria-label="Next Library page"]');
     content.scrollTop = 1800;

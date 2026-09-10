@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, ChromeUtils, FluxionLibraryData, FluxionLibraryDownloads, FluxionLibraryQuery, FluxionLibraryChanges, FluxionUrl, Ci, Cu */
+/* global gBrowser, Services, SessionStore, ChromeUtils, FluxionLibraryData, FluxionLibraryDownloads, FluxionLibraryQuery, FluxionLibraryChanges, FluxionLibraryNavigation, FluxionUrl, Ci, Cu */
 (function initialiseFluxionLibrary(window) {
   "use strict";
 
@@ -55,7 +55,7 @@
       border-radius: 4px; padding: 0 10px; color: var(--fluxion-ink); background: var(--fluxion-bg); font: inherit;
     }
     .fluxion-library-search:focus-visible, .fluxion-library-nav button:focus-visible,
-    .fluxion-library-open:focus-visible, .fluxion-library-action:focus-visible,
+    .fluxion-library-open:focus-visible, .fluxion-library-action:focus-visible, .fluxion-library-more:focus-visible,
     .fluxion-library-folder-select:focus-visible, .fluxion-library-row:focus-visible,
     .fluxion-library-list:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: 1px;
@@ -88,13 +88,18 @@
     .fluxion-library-row {
       min-height: 50px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
       align-items: center; gap: 14px; border-bottom: 1px solid var(--fluxion-line); padding: 7px 2px;
+      scroll-margin-block-start: 56px;
     }
+    .fluxion-library-instructions { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .fluxion-library-open { min-width: 0; border: 0; padding: 0; color: inherit; background: transparent; text-align: start; font: inherit; }
     .fluxion-library-open:hover .fluxion-library-row-title { text-decoration: underline; text-decoration-thickness: 1px; }
     .fluxion-library-row-title, .fluxion-library-row-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fluxion-library-row-title { font-weight: 550; }
     .fluxion-library-row-detail { margin-top: 3px; color: var(--fluxion-muted); font-size: 11px; }
     .fluxion-library-actions { display: flex; gap: 5px; }
+    .fluxion-library-more { display: grid; place-items: center; width: 28px; height: 28px; border: 0; border-radius: 3px; color: var(--fluxion-muted); background: transparent; }
+    .fluxion-library-more:hover, .fluxion-library-more[aria-expanded="true"] { background: var(--fluxion-hover); color: var(--fluxion-ink); }
+    .fluxion-library-more svg { width: 16px; height: 16px; fill: currentColor; }
     .fluxion-library-action {
       min-height: 27px; border: 1px solid var(--fluxion-line); border-radius: 4px; padding: 3px 8px;
       color: var(--fluxion-muted); background: var(--fluxion-bg); font: inherit; font-size: 11px;
@@ -146,6 +151,10 @@
   sectionHead.append(heading, sectionTools);
   const listNode = create("div", "fluxion-library-list");
   listNode.setAttribute("role", "list");
+  const navigationHelp = create("span", "fluxion-library-instructions",
+    "Use Up and Down to move between items, Home and End for the first and last item. Press Right for actions, Left to return, or Shift F10 to open the item menu. Tab leaves the list.");
+  navigationHelp.id = "fluxion-library-navigation-help";
+  listNode.setAttribute("aria-describedby", navigationHelp.id);
   const note = create("div", "fluxion-library-note");
   note.setAttribute("role", "status");
   const pagination = create("div", "fluxion-library-pagination");
@@ -158,7 +167,7 @@
   const pageLabel = create("span", "fluxion-library-page-label");
   pageLabel.setAttribute("role", "status");
   pagination.append(previousPage, pageLabel, nextPage);
-  content.append(sectionHead, pagination, listNode, note);
+  content.append(sectionHead, pagination, navigationHelp, listNode, note);
   body.append(nav, content);
   root.append(header, body);
   browserBox.appendChild(root);
@@ -186,6 +195,80 @@
   let retainedPlaces = false;
   let queryTimer = 0;
   let visibleTab = null;
+  const itemMenu = document.createXULElement("menupopup");
+  itemMenu.id = "fluxion-library-item-menu";
+  document.getElementById("mainPopupSet").appendChild(itemMenu);
+  let menuTarget = null;
+  let menuRevision = 0;
+  const libraryNavigation = FluxionLibraryNavigation.attach(listNode, {
+    enabled: () => currentSection !== "downloads",
+    canAct: () => !loading && !root.hidden,
+    onMenu: (row, anchor, event) => openRowMenu(row, anchor, event),
+  });
+
+  function validRowTarget(target) {
+    return target && !destroyed && !root.hidden && !loading && selectedLibraryTab() &&
+      target.section === currentSection && target.generation === refreshToken &&
+      [...listNode.children].includes(target.row) && target.row._fluxionLibraryItem === target.item &&
+      (currentSection === "folders" ? folderPage : data[currentSection]).includes(target.item);
+  }
+
+  function dismissItemMenu() {
+    menuRevision += 1;
+    const previous = menuTarget;
+    menuTarget = null;
+    previous?.row.querySelector(".fluxion-library-more")?.setAttribute("aria-expanded", "false");
+    itemMenu.hidePopup();
+  }
+
+  itemMenu.addEventListener("popuphidden", () => {
+    const target = menuTarget;
+    menuTarget = null;
+    target?.row.querySelector(".fluxion-library-more")?.setAttribute("aria-expanded", "false");
+    const focused = document.activeElement;
+    if (validRowTarget(target) && (focused === target.focusOrigin || focused === document.body ||
+        focused === document.documentElement || itemMenu.contains(focused))) {
+      target.anchor.focus({ preventScroll: true });
+    }
+  });
+
+  function openRowMenu(row, anchor, event) {
+    const target = { row, anchor, item: row._fluxionLibraryItem, section: currentSection,
+      generation: refreshToken, focusOrigin: document.activeElement };
+    if (!validRowTarget(target) || target.item.kind === "downloads") return;
+    event?.preventDefault();
+    dismissItemMenu();
+    const revision = menuRevision;
+    const show = () => {
+      if (revision !== menuRevision || !validRowTarget(target)) return;
+      showRowMenu(target, event);
+    };
+    if (itemMenu.state === "hiding") itemMenu.addEventListener("popuphidden", show, { once: true });
+    else show();
+  }
+
+  function showRowMenu(target, event) {
+    const { row, anchor } = target;
+    menuTarget = target;
+    itemMenu.replaceChildren();
+    for (const [label, execute] of row._fluxionLibraryCommands) {
+      const command = document.createXULElement("menuitem");
+      command.setAttribute("label", label);
+      command.setAttribute("aria-label", `${label} ${target.item.title}`);
+      if (!execute) command.setAttribute("disabled", "true");
+      command.addEventListener("command", () => {
+        if (!execute || !validRowTarget(target)) return;
+        dismissItemMenu();
+        Promise.resolve().then(() => {
+          if (validRowTarget(target)) return execute(() => validRowTarget(target));
+        }).catch(error => { if (!destroyed && !root.hidden) note.textContent = error.message; Cu.reportError(error); });
+      });
+      itemMenu.appendChild(command);
+    }
+    row.querySelector(".fluxion-library-more").setAttribute("aria-expanded", "true");
+    if (event?.type === "contextmenu" && event.button === 2) itemMenu.openPopupAtScreen(event.screenX, event.screenY, true);
+    else itemMenu.openPopup(anchor, "after_start", 0, 0, false, false, event);
+  }
 
   function isLibraryTab(tab) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
@@ -542,6 +625,7 @@
   function renderRow(item) {
     const row = create("div", "fluxion-library-row");
     row._fluxionLibraryId = item.id;
+    row._fluxionLibraryItem = item;
     row.setAttribute("role", "listitem");
     const primary = create("button", "fluxion-library-open");
     primary.type = "button";
@@ -580,30 +664,51 @@
       actions.append(...Object.values(controls));
       row._fluxionParts = { primary, title, detail, controls };
       updateDownloadRow(row, item);
-    } else if (item.kind === "folders") {
-      const viewFolder = () => {
-        currentBookmarkFolder = item.id;
-        selectSection("bookmarks");
-      };
-      primary.addEventListener("click", viewFolder);
-      actions.append(action("View", viewFolder), action("New inside", () => createFolder(item.id)));
-      if (!PROTECTED_FOLDER_GUIDS.has(item.id)) {
-        actions.append(action("Rename", () => renameFolder(item)), action("Delete", () => deleteFolder(item)));
-      }
     } else {
-      primary.addEventListener("click", () => openURL(item.url));
-      actions.append(action("Open", () => openURL(item.url)));
-      if (item.kind === "bookmarks") {
-        actions.append(action("Rename", () => renameBookmark(item)), action("Move", () => moveBookmark(item)));
+      const open = item.kind === "folders" ? () => {
+        currentBookmarkFolder = item.id;
+        return selectSection("bookmarks");
+      } : () => openURL(item.url);
+      const commands = [[item.kind === "folders" ? "View" : "Open", open]];
+      if (item.kind === "folders") {
+        commands.push(["New inside", () => createFolder(item.id)]);
+        commands.push(["Rename", PROTECTED_FOLDER_GUIDS.has(item.id) ? null : () => renameFolder(item)]);
+        commands.push(["Delete", PROTECTED_FOLDER_GUIDS.has(item.id) ? null : () => deleteFolder(item)]);
+      } else {
+        if (item.kind === "bookmarks") commands.push(["Rename", () => renameBookmark(item)], ["Move", () => moveBookmark(item)]);
+        commands.push(["Remove", async stillValid => {
+          const name = item.kind === "bookmarks" ? "bookmark" : "history entry";
+          if (!Services.prompt.confirm(window, `Remove ${name}?`, `Remove “${item.title}” from ${item.kind}?`) || !stillValid()) return;
+          if (item.kind === "bookmarks") await PlacesUtils.bookmarks.remove(item.id);
+          else await PlacesUtils.history.remove(item.url);
+          note.textContent = `${item.title} removed.`;
+          await refreshAll();
+        }]);
       }
-      actions.append(action("Remove", async () => {
-        const name = item.kind === "bookmarks" ? "bookmark" : "history entry";
-        if (!Services.prompt.confirm(window, `Remove ${name}?`, `Remove “${item.title}” from ${item.kind}?`)) return;
-        if (item.kind === "bookmarks") await PlacesUtils.bookmarks.remove(item.id);
-        else await PlacesUtils.history.remove(item.url);
-        note.textContent = `${item.title} removed.`;
-        await refreshAll();
-      }));
+      row._fluxionLibraryCommands = commands;
+      primary.setAttribute("aria-label", `${item.kind === "folders" ? "View folder" : "Open"} ${item.title}`);
+      primary.addEventListener("click", () => {
+        const target = { row, item, section: item.kind, generation: refreshToken };
+        if (validRowTarget(target)) Promise.resolve().then(() => validRowTarget(target) && open()).catch(Cu.reportError);
+      });
+      const more = create("button", "fluxion-library-more");
+      more.type = "button";
+      more.tabIndex = -1;
+      more.setAttribute("aria-label", `Actions for ${item.title}`);
+      more.setAttribute("aria-haspopup", "menu");
+      more.setAttribute("aria-expanded", "false");
+      more.title = `Actions for ${item.title}`;
+      const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      icon.setAttribute("viewBox", "0 0 16 16");
+      icon.setAttribute("aria-hidden", "true");
+      for (const x of [3, 8, 13]) {
+        const dot = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        dot.setAttribute("cx", x); dot.setAttribute("cy", "8"); dot.setAttribute("r", "1.2"); icon.appendChild(dot);
+      }
+      more.appendChild(icon);
+      more.addEventListener("click", event => openRowMenu(row, more, event));
+      row.addEventListener("contextmenu", event => openRowMenu(row, primary, event));
+      actions.appendChild(more);
     }
     row.append(primary, actions);
     return row;
@@ -660,6 +765,7 @@
   }
 
   function render() {
+    dismissItemMenu();
     if (root.hidden) return;
     const restoreReading = retainedPlaces;
     const focused = document.activeElement;
@@ -704,9 +810,12 @@
       }
       content.scrollTop = scrollPosition;
     }
+    libraryNavigation.sync({ restoreFocus: Boolean(focusedRow) });
   }
 
   function renderPageState() {
+    if (currentSection === "downloads") listNode.removeAttribute("aria-describedby");
+    else listNode.setAttribute("aria-describedby", navigationHelp.id);
     listNode.setAttribute("aria-busy", String(loading));
     root.dataset.queryState = loading ? "loading" : queryError ? "error" : "ready";
     previousPage.disabled = loading || !previousCursors.length;
@@ -723,6 +832,7 @@
   }
 
   function invalidateQuery({ reset = true, keepTimer = false, retain = false } = {}) {
+    dismissItemMenu();
     refreshToken += 1;
     downloadRefreshToken += 1;
     if (!keepTimer) {
@@ -824,6 +934,7 @@
     const tab = selectedLibraryTab();
     const visible = Boolean(tab);
     const wasVisible = !root.hidden;
+    if (!visible) dismissItemMenu();
     root.hidden = !visible;
     if (visible) contentDeck.hidden = true;
     else if (!document.documentElement.hasAttribute("data-fluxion-settings-visible")) contentDeck.hidden = false;
@@ -904,6 +1015,9 @@
   PlacesUtils.observers.addListener(FluxionLibraryChanges.TYPES, onPlacesChanged);
   window.addEventListener("unload", () => {
     destroyed = true;
+    dismissItemMenu();
+    libraryNavigation.destroy();
+    itemMenu.remove();
     retainedPlaces = false;
     refreshToken += 1;
     downloadRefreshToken += 1;

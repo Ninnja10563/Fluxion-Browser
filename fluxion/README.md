@@ -35,7 +35,8 @@ The current preview is runnable and includes:
 - live Downloads rows that retain controls and focus during progress, safely
   finalize unfinished transfers on removal, and retain completed files;
 - Library search over the full Places history and bookmark database, with
-  compact 100-row pages, folder filtering, and live native edit updates;
+  compact 100-row pages, folder filtering, live native edit updates, a single
+  keyboard entry point, and concise native item menus;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration; a collapsed group keeps
   its active page visible, reports the remaining hidden pages as `+N`, and
@@ -326,7 +327,11 @@ Places database; downloads update from Gecko's live download list and remain
 separate in private windows. Finished files can be opened or revealed, active
 downloads canceled, interrupted downloads retried, and list entries removed.
 The Bookmarks section can save the last ordinary webpage, filter by a nested
-folder, rename bookmarks, and move them between folders. The Folders section
+folder, rename bookmarks, and move them between folders. Titles open items;
+the ellipsis menu holds their other actions. Use Up/Down or Home/End within a
+result list, Right to reach its menu button, Left to return, or Shift+F10 to
+open the menu directly. Tab exits the list instead of visiting every row.
+The Folders section
 creates root folders or subfolders, renames user folders, and safely refuses to
 delete non-empty folders. Gecko's advanced organizer remains available for
 bulk operations and import/export.

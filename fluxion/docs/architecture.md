@@ -557,12 +557,16 @@ removed and must be entered again rather than sent to a guessed destination.
 Ask Current Page reuses the narrow `FluxionMemoryPage` actor. Before extraction,
 and again after receiving its plain-data result, the chrome service applies the
 private-window, sensitive-route, password-form, scheme, and excluded-domain
-policy. The actor removes editable draft subtrees and derives headings from the
-same sanitized clone, rather than reading an independent unsanitized heading
+policy. The actor skips editable draft subtrees and derives headings from the
+same bounded sanitized traversal, rather than reading an independent unsanitized heading
 channel. Editable extraction roots and document-wide editing mode produce no
 evidence. Existing indexed evidence is not retroactively classified; users can
-erase it through Clear Browser Memory. Full-DOM cloning before output truncation
-still needs a separate traversal-budget performance improvement.
+erase it through Clear Browser Memory. The iterative walker stops after 4,096
+visited nodes or 24,000 text characters, uses bounded `substringData` reads,
+and never clones the DOM or reads a whole subtree's text. Heading evidence is
+limited to 24 entries of 240 characters; title extraction has its own 64-node,
+300-character budget. Native source and password selectors remain document-wide;
+these limits describe evidence traversal, not all work done by the DOM engine.
 Shared revision tracking and abort controllers invalidate pending AI
 work on provider, endpoint, model, key, or domain-exclusion changes, including
 changes in another window. Requests recheck eligibility after extraction,

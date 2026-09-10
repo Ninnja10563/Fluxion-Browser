@@ -20,6 +20,9 @@ controls work and its failure paths have been tested.
 - full-database Library history/bookmark search, pre-limit folder filtering,
   bounded cursor pagination, stale-query isolation, and live native Places
   updates (implemented; representative very-large-profile timing remains)
+- compact native Library item menus and one-entry-point result-list keyboard
+  navigation, with focus retention, stale-action guards, and protected folders
+  (implemented; Downloads retains its direct live transfer controls)
 - automated multi-launch session recovery and private-window isolation coverage
   for multiple normal windows with distinct active workspaces, pins, native
   groups, split views, persistent restore-on-startup choice, Places, and Browser
@@ -85,6 +88,9 @@ controls work and its failure paths have been tested.
   200-tab initial render and repeated content-update gates, stable in-place
   content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
+- bounded page evidence traversal without DOM cloning or full text-node reads,
+  with editable/form subtree pruning (implemented; native document-wide source
+  and password selectors remain, and broader resource profiling is still needed)
 - explicit in-app Fluxion release discovery (implemented, with preview-aware
   version checks, official asset validation, and manual download/installation)
 - macOS notarization, Windows signing, Linux packages, and authenticated

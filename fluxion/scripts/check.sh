@@ -36,6 +36,7 @@ node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js
 node --check chrome/core/library-query.js
 node --check chrome/core/library-changes.js
+node --check chrome/core/library-navigation.js
 node --check chrome/core/library-downloads.js
 node --check chrome/core/data-clearing.js
 node --check chrome/core/theme.js

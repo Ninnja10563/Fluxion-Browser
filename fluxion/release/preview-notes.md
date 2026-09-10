@@ -8,6 +8,19 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.51 improves Library interaction and page-extraction efficiency:
+
+- replace repeated History, Bookmark, and Folder action buttons with one compact
+  native item menu, retaining all existing actions and protected-folder rules;
+- enter a 100-row Library page through one Tab stop, move with Up/Down and
+  Home/End, and reach item actions with Right/Left or Shift+F10;
+- keep focus stable across refreshes and dismiss stale menus when queries or
+  sections change, without affecting Downloads' live transfer controls;
+- bound page-evidence walking to 4,096 nodes and 24,000 characters, avoiding
+  full-DOM cloning and unbounded text reads while preserving draft exclusions;
+- verify native menu dismissal, contextual actions, keyboard focus, pagination,
+  and protected folders in the packaged macOS app.
+
 Version 0.50 strengthens native macOS integration:
 
 - give Fluxion its own Gecko process-routing namespace while preserving native

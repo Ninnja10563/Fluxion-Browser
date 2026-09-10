@@ -5,21 +5,29 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-// Minimal tree DOM, rather than precomputed query responses: clone, selector
-// traversal and removal change the actual text and heading evidence.
+// Minimal tree DOM, rather than precomputed query responses. Native selectors
+// use the backing tree separately from instrumented extraction DOM reads.
 class Element {
   constructor(tag, attributes = {}, children = []) {
     this.tag = tag;
     this.attributes = attributes;
     this.children = [];
+    this.reads = { visited: 0, firstChild: 0 };
     for (const child of children) this.append(child);
   }
   append(child) {
     if (typeof child === "string") child = new Text(child);
+    if (this.children.length) this.children[this.children.length - 1].nextSibling = child;
     child.parent = this;
+    child.nextSibling = null;
     this.children.push(child);
   }
   get textContent() { return this.children.map(child => child.textContent).join(""); }
+  get nodeType() { return 1; }
+  get localName() { this.reads.visited++; return this.tag; }
+  getAttribute(name) { return this.attributes[name] ?? null; }
+  get firstChild() { this.reads.firstChild++; return this.children[0] || null; }
+  get content() { return this.attributes.content || ""; }
   get isContentEditable() {
     const own = this.attributes.contenteditable?.toLowerCase();
     if (own === "false") return false;
@@ -39,24 +47,35 @@ class Element {
   }
   closest(selector) { return this.matches(selector) ? this : this.parent?.closest(selector) || null; }
   querySelectorAll(selector) {
-    return this.children.flatMap(child => child instanceof Element
-      ? [...(child.matches(selector) ? [child] : []), ...child.querySelectorAll(selector)] : []);
+    const pending = [...this.children].reverse(), matches = [];
+    while (pending.length) {
+      const node = pending.pop();
+      if (!(node instanceof Element)) continue;
+      if (node.matches(selector)) matches.push(node);
+      for (let i = node.children.length - 1; i >= 0; i--) pending.push(node.children[i]);
+    }
+    return matches;
   }
   querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
   remove() { this.parent.children = this.parent.children.filter(child => child !== this); }
-  cloneNode() { return new Element(this.tag, { ...this.attributes }, this.children.map(child => child.cloneNode(true))); }
+  cloneNode() { throw new Error("Extraction must not clone the DOM"); }
 }
 class Text {
-  constructor(value) { this.textContent = value; }
-  cloneNode() { return new Text(this.textContent); }
+  constructor(value) { this.value = value; this.reads = []; }
+  get nodeType() { return 3; }
+  get textContent() { throw new Error("Extraction must not read complete text node contents"); }
+  substringData(offset, count) { this.reads.push({ offset, count }); return this.value.slice(offset, offset + count); }
+  cloneNode() { throw new Error("Extraction must not clone text"); }
 }
 const el = (tag, attributes, ...children) => new Element(tag, attributes, children);
 function extract(body, options = {}) {
-  const documentElement = el("html", {}, body);
+  const documentElement = el("html", {}, el("head", {}, options.title || el("title", {}, "Fixture"),
+    ...(options.description ? [el("meta", { name: "description", content: options.description })] : [])), body);
   documentElement.lang = "en";
   const document = {
     documentElement, body, designMode: options.designMode || "off",
-    documentURI: "https://example.org/editor", title: "Fixture",
+    documentURI: "https://example.org/editor",
+    get title() { throw new Error("Extraction must bound the title DOM read"); },
     querySelector: selector => documentElement.querySelector(selector),
     createTextNode: value => new Text(value),
   };
@@ -78,8 +97,79 @@ test("rich-text and plaintext drafts never enter body or heading evidence", () =
     assert.match(result.text, /Public article/);
     assert.doesNotMatch(JSON.stringify(result), /Secret/);
     assert.deepEqual([...result.headings], ["Published heading"]);
-    assert.match(body.textContent, /Secret/, "extraction must not mutate the live page");
+    assert.equal(body.children[0].children.length, 3, "extraction must not mutate the live page");
   }
+});
+
+test("normal paragraph, inline and heading boundaries remain readable", () => {
+  const result = extract(el("body", {}, el("main", {},
+    el("h1", {}, "Plants ", el("em", {}, "and light")),
+    el("p", {}, "Photo", el("span", {}, "synthesis")),
+    el("p", {}, "Stores energy"), el("div", {}, "Next block"))));
+  assert.equal(result.text.replace(/\s+/g, " ").trim(), "Plants and light Photosynthesis Stores energy Next block");
+  assert.deepEqual([...result.headings], ["Plants and light"]);
+  assert.equal(result.title, "Fixture");
+});
+
+test("a huge text node uses one bounded native substring read and stops before following content", () => {
+  const huge = new Text("x".repeat(1000000));
+  const tail = el("p", {}, "Unvisited tail");
+  const result = extract(el("body", {}, el("main", {}, huge, tail)));
+  assert.equal(result.text.length, 24000);
+  assert.equal(huge.reads.length, 1);
+  assert.deepEqual(huge.reads[0], { offset: 0, count: 23999 });
+  assert.equal(tail.reads.visited, 0);
+});
+
+test("wide trees stop at the node budget without walking later siblings", () => {
+  const nodes = Array.from({ length: 10000 }, () => el("span", {}));
+  const main = new Element("main", {}, nodes);
+  const result = extract(el("body", {}, main));
+  assert.equal(main.reads.visited + nodes.reduce((sum, node) => sum + node.reads.visited, 0), 4096);
+  assert.equal(nodes[4095].reads.visited, 0);
+  assert.equal(nodes.at(-1).reads.firstChild, 0);
+  assert.ok(result.text.length <= 24000);
+});
+
+test("deep trees have bounded iterative traversal without recursion or reads past budget", () => {
+  const main = el("main", {}), nodes = [main];
+  let parent = main;
+  for (let i = 0; i < 12000; i++) {
+    const node = el("span", {});
+    nodes.push(node);
+    parent.append(node);
+    parent = node;
+  }
+  parent.append("Unvisited deep secret");
+  const result = extract(el("body", {}, main));
+  assert.equal(nodes.reduce((sum, node) => sum + node.reads.visited, 0), 4096);
+  assert.equal(nodes[4096].reads.firstChild, 0);
+  assert.doesNotMatch(result.text, /secret/);
+});
+
+test("excluded wide/deep subtrees are pruned at their roots without spending traversal budget", () => {
+  const hiddenChildren = Array.from({ length: 6000 }, () => el("span", {}, "Secret"));
+  const form = new Element("form", {}, hiddenChildren);
+  const editor = el("div", { contenteditable: "PlainText-Only" }, el("h2", {}, "Secret heading"));
+  Object.defineProperty(form, "firstChild", { get() { throw new Error("Walk entered form"); } });
+  Object.defineProperty(editor, "firstChild", { get() { throw new Error("Walk entered editor"); } });
+  const result = extract(el("body", {}, el("main", {}, form, editor, el("p", {}, "Public text after skipped drafts"))));
+  assert.match(result.text, /Public text after skipped drafts/);
+  assert.doesNotMatch(JSON.stringify(result), /Secret/);
+  assert.equal(hiddenChildren.reduce((sum, node) => sum + node.reads.visited, 0), 0);
+});
+
+test("heading count, heading text, title and description have independent hard bounds", () => {
+  const headingNodes = Array.from({ length: 40 }, () => el("h2", {}, "h".repeat(500)));
+  const titleText = new Text("t".repeat(100000));
+  const result = extract(el("body", {}, new Element("main", {}, headingNodes)), {
+    title: el("title", {}, titleText), description: "d".repeat(100000),
+  });
+  assert.equal(result.headings.length, 24);
+  assert.ok(result.headings.every(heading => heading.length === 240));
+  assert.equal(result.title.length, 300);
+  assert.deepEqual(titleText.reads, [{ offset: 0, count: 300 }]);
+  assert.equal(result.description.length, 1000);
 });
 
 test("editable root, editable ancestor and designMode yield no evidence", () => {

@@ -42,6 +42,9 @@ for ((attempt=0; attempt<720; attempt++)); do
   if [[ -f "$profile/prefs.js" ]]; then
     if grep -Fq 'user_pref("fluxion.library.verification.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.library.verification.health", "full-places-search-and-pagination-verified")' "$profile/prefs.js"; then
+      grep -Fq 'user_pref("fluxion.library.verification.interactionHealth", "roving-list-and-native-item-menu-verified")' "$profile/prefs.js" || {
+        printf 'Native Library keyboard/menu evidence is missing.\n' >&2; break;
+      }
       printf 'Verified full Places search, folder filtering, deterministic pagination, and latest-query results.\n'
       grep 'fluxion\.library\.verification\.report' "$profile/prefs.js"
       if [[ -n "${FLUXION_LIBRARY_SCREENSHOT:-}" ]]; then
