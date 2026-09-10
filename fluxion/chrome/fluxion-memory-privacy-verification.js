@@ -70,11 +70,31 @@
       const url = `https://memory-privacy-fixture.invalid/evidence/${id}`;
       await PlacesUtils.history.insert({ url, title: `Fluxion privacy verification evidence ${id}`,
         visits: [{ date: new Date(), transition: PlacesUtils.history.TRANSITIONS.TYPED }] });
+      const canonical = await PlacesUtils.history.fetch(url, { includeVisits: true });
+      const attached = await connection.execute(`SELECT id, url, url_hash, last_visit_date
+        FROM places.moz_places WHERE url = :url`, { url });
+      report.seedDiagnostics = { url, canonicalURL: canonical?.url?.href,
+        canonicalVisits: canonical?.visits?.length || 0, attachedRows: attached.length,
+        nativeTransactionOpen: connection.transactionInProgress };
+      if (attached.length !== 1) {
+        const databases = await connection.execute("PRAGMA database_list");
+        report.seedDiagnostics.databases = databases.map(row => ({
+          name: row.getResultByName("name"), file: row.getResultByName("file"),
+        }));
+      }
+      assert(canonical?.visits?.length > 0 && attached.length === 1,
+        `Native privacy seed is not visible in attached Places: ${JSON.stringify(report.seedDiagnostics)}`);
       await connection.executeTransaction(async () => {
         // Use a genuine Places hash so orphan cleanup cannot independently
         // remove the seeded vector and accidentally make this test pass.
         const rows = await connection.execute(`INSERT INTO vec_history_mapping (url_hash)
           SELECT url_hash FROM places.moz_places WHERE url = :url RETURNING rowid`, { url });
+        report.seedDiagnostics.returnedMappings = rows.length;
+        if (rows.length !== 1) {
+          const stored = await connection.execute(`SELECT m.rowid FROM vec_history_mapping m
+            JOIN places.moz_places p ON p.url_hash = m.url_hash WHERE p.url = :url`, { url });
+          report.seedDiagnostics.storedMappings = stored.length;
+        }
         assert(rows.length === 1, "Native privacy fixture has no genuine Places mapping");
         await connection.execute("INSERT INTO vec_history (rowid, embedding) VALUES (:rowid, :vector)",
           { rowid: rows[0].getResultByName("rowid"), vector: seededVector });
