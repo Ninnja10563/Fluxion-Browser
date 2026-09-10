@@ -32,6 +32,8 @@ The current preview is runnable and includes:
   with private windows and evidence excluded from recovery;
 - live Downloads rows that retain controls and focus during progress, safely
   finalize unfinished transfers on removal, and retain completed files;
+- Library search over the full Places history and bookmark database, with
+  compact 100-row pages, folder filtering, and live native edit updates;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration; a collapsed group keeps
   its active page visible, reports the remaining hidden pages as `+N`, and
@@ -207,7 +209,9 @@ Useful launcher options:
 No JavaScript package installation is required.
 
 Building and running Fluxion on macOS does not require Node.js. The JavaScript
-unit-test commands below require Node.js 20 or newer.
+unit-test commands below require Node.js 20 or newer and Python 3. The Library
+query tests use Python's standard-library SQLite to execute the production SQL;
+Gecko's native Unicode matcher is verified separately in the packaged macOS app.
 
 ```sh
 ./scripts/check.sh

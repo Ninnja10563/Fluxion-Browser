@@ -8,6 +8,18 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.47 makes Library useful beyond recent records:
+
+- search the full Places history and bookmark database instead of only the
+  newest 300 history entries or 500 bookmarks;
+- browse compact 100-row pages with deterministic timestamp/ID cursors;
+- filter bookmark folders before limiting results and retain native Unicode
+  title/URL matching plus folder-name search;
+- prevent older asynchronous searches from replacing the current query;
+- refresh visible results after native or other-window history/bookmark edits;
+- require real macOS checks over 360 history records and 550 bookmarks, with
+  pagination, older matches, folder isolation, Unicode, and live edit assertions.
+
 Version 0.46 strengthens everyday browsing reliability:
 
 - keep Downloads rows and controls stable during transfer progress instead of

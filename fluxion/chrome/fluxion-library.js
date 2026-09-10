@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, ChromeUtils, FluxionLibraryData, FluxionLibraryDownloads, FluxionUrl, Ci, Cu */
+/* global gBrowser, Services, SessionStore, ChromeUtils, FluxionLibraryData, FluxionLibraryDownloads, FluxionLibraryQuery, FluxionLibraryChanges, FluxionUrl, Ci, Cu */
 (function initialiseFluxionLibrary(window) {
   "use strict";
 
@@ -56,7 +56,8 @@
     }
     .fluxion-library-search:focus-visible, .fluxion-library-nav button:focus-visible,
     .fluxion-library-open:focus-visible, .fluxion-library-action:focus-visible,
-    .fluxion-library-folder-select:focus-visible, .fluxion-library-row:focus-visible {
+    .fluxion-library-folder-select:focus-visible, .fluxion-library-row:focus-visible,
+    .fluxion-library-list:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: 1px;
     }
     .fluxion-library-private { color: var(--fluxion-muted); font-size: 11px; }
@@ -98,8 +99,11 @@
       min-height: 27px; border: 1px solid var(--fluxion-line); border-radius: 4px; padding: 3px 8px;
       color: var(--fluxion-muted); background: var(--fluxion-bg); font: inherit; font-size: 11px;
     }
-    .fluxion-library-action:hover { color: var(--fluxion-ink); background: var(--fluxion-hover); }
+    .fluxion-library-action:hover:not(:disabled) { color: var(--fluxion-ink); background: var(--fluxion-hover); }
+    .fluxion-library-action:disabled { opacity: .45; }
     .fluxion-library-action[hidden] { display: none !important; }
+    .fluxion-library-pagination { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
+    .fluxion-library-page-label { color: var(--fluxion-muted); font-size: 11px; }
     .fluxion-library-empty { padding: 48px 8px; color: var(--fluxion-muted); text-align: center; }
     .fluxion-library-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 11px; }
     @media (max-width: 820px) {
@@ -118,6 +122,7 @@
   header.appendChild(create("div", "fluxion-library-title", "Fluxion Library"));
   const search = create("input", "fluxion-library-search");
   search.type = "search";
+  search.maxLength = 500;
   search.placeholder = "Search history, bookmarks, or downloads";
   search.setAttribute("aria-label", "Search current Library section");
   header.appendChild(search);
@@ -143,12 +148,23 @@
   listNode.setAttribute("role", "list");
   const note = create("div", "fluxion-library-note");
   note.setAttribute("role", "status");
-  content.append(sectionHead, listNode, note);
+  const pagination = create("div", "fluxion-library-pagination");
+  const previousPage = create("button", "fluxion-library-action", "Previous");
+  previousPage.type = "button";
+  previousPage.setAttribute("aria-label", "Previous Library page");
+  const nextPage = create("button", "fluxion-library-action", "Next");
+  nextPage.type = "button";
+  nextPage.setAttribute("aria-label", "Next Library page");
+  const pageLabel = create("span", "fluxion-library-page-label");
+  pageLabel.setAttribute("role", "status");
+  pagination.append(previousPage, pageLabel, nextPage);
+  content.append(sectionHead, pagination, listNode, note);
   body.append(nav, content);
   root.append(header, body);
   browserBox.appendChild(root);
 
   const data = { history: [], bookmarks: [], folders: [], downloads: [] };
+  let folderPage = [];
   const navButtons = new Map();
   let currentSection = "history";
   let currentBookmarkFolder = "all";
@@ -160,6 +176,16 @@
   let destroyed = false;
   let downloadRefreshToken = 0;
   const downloadRows = new Map();
+  const PAGE_SIZE = FluxionLibraryQuery.PAGE_SIZE;
+  let pageCursor = null;
+  const previousCursors = [];
+  let nextCursor = null;
+  let hasMore = false;
+  let loading = false;
+  let queryError = "";
+  let queryTimer = 0;
+  let visibleTab = null;
+  let visibleURI = "";
 
   function isLibraryTab(tab) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
@@ -192,53 +218,36 @@
     return FluxionLibraryDownloads.describe(download).status;
   }
 
-  async function queryHistory() {
+  async function queryHistory(context) {
     const db = await PlacesUtils.promiseDBConnection();
-    const rows = await db.execute(`
-      SELECT p.url, COALESCE(NULLIF(p.title, ''), p.url) AS title,
-             p.last_visit_date / 1000 AS visited, COUNT(v.id) AS visits
-      FROM moz_places p JOIN moz_historyvisits v ON v.place_id = p.id
-      WHERE p.hidden = 0 AND p.last_visit_date IS NOT NULL
-      GROUP BY p.id ORDER BY p.last_visit_date DESC LIMIT 300
-    `);
-    return rows.map(row => FluxionLibraryData.normalise({
+    const query = FluxionLibraryQuery.history(context);
+    const page = FluxionLibraryQuery.pageFromRows(await db.execute(query.sql, query.params), query.pageSize);
+    return { ...page, items: page.rows.map(row => FluxionLibraryData.normalise({
       id: row.getResultByName("url"),
       url: row.getResultByName("url"),
       title: row.getResultByName("title"),
       detail: `${row.getResultByName("visits")} visits · ${formatWhen(row.getResultByName("visited"))}`,
       timestamp: row.getResultByName("visited"),
-    }, "history"));
+    }, "history")) };
   }
 
-  async function queryBookmarks() {
+  async function queryBookmarks(context) {
     const db = await PlacesUtils.promiseDBConnection();
-    const rows = await db.execute(`
-      SELECT b.guid, COALESCE(NULLIF(b.title, ''), p.url) AS title, p.url,
-             b.dateAdded / 1000 AS added, parent.guid AS parentGuid,
-             CASE parent.guid
-               WHEN :toolbarGuid THEN 'Bookmarks Toolbar'
-               WHEN :menuGuid THEN 'Bookmarks Menu'
-               WHEN :unfiledGuid THEN 'Other Bookmarks'
-               WHEN :mobileGuid THEN 'Mobile Bookmarks'
-               ELSE COALESCE(NULLIF(parent.title, ''), 'Bookmarks')
-             END AS folder
-      FROM moz_bookmarks b JOIN moz_places p ON p.id = b.fk
-      LEFT JOIN moz_bookmarks parent ON parent.id = b.parent
-      WHERE b.type = 1 ORDER BY b.dateAdded DESC LIMIT 500
-    `, {
+    const query = FluxionLibraryQuery.bookmarks({ ...context, roots: {
       toolbarGuid: PlacesUtils.bookmarks.toolbarGuid,
       menuGuid: PlacesUtils.bookmarks.menuGuid,
       unfiledGuid: PlacesUtils.bookmarks.unfiledGuid,
       mobileGuid: PlacesUtils.bookmarks.mobileGuid,
-    });
-    return rows.map(row => FluxionLibraryData.normalise({
+    } });
+    const page = FluxionLibraryQuery.pageFromRows(await db.execute(query.sql, query.params), query.pageSize);
+    return { ...page, items: page.rows.map(row => FluxionLibraryData.normalise({
       guid: row.getResultByName("guid"),
       url: row.getResultByName("url"),
       title: row.getResultByName("title"),
       detail: `${row.getResultByName("folder")} · Saved ${formatWhen(row.getResultByName("added"))}`,
       parentGuid: row.getResultByName("parentGuid"),
       timestamp: row.getResultByName("added"),
-    }, "bookmarks"));
+    }, "bookmarks")) };
   }
 
   function rootFolderTitle(guid, title) {
@@ -297,11 +306,20 @@
     return downloadsReady;
   }
 
-  async function queryDownloads() {
+  function pageItems(items, context) {
+    const offset = context.cursor?.offset || 0;
+    const filtered = items.filter(item => FluxionLibraryData.matches(item, context.search));
+    const page = filtered.slice(offset, offset + PAGE_SIZE);
+    const more = offset + page.length < filtered.length;
+    return { items: page, hasMore: more, cursor: more ? { offset: offset + PAGE_SIZE } : null };
+  }
+
+  async function queryDownloads(context) {
     await initialiseDownloads();
     const downloads = await downloadList.getAll();
-    return downloads.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0))
-      .slice(0, 300).map((download, index) => {
+    const items = downloads.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0) ||
+      String(a.target?.path || "").localeCompare(String(b.target?.path || "")))
+      .map((download, index) => {
         const path = download.target?.path || "";
         const filename = path.split(/[\\/]/).pop() || download.source?.url || "Download";
         return FluxionLibraryData.normalise({
@@ -314,21 +332,55 @@
           raw: download,
         }, "downloads");
       });
+    return pageItems(items, context);
   }
 
   async function refreshAll() {
+    window.clearTimeout(queryTimer);
+    queryTimer = 0;
+    if (destroyed || root.hidden) return;
     const token = ++refreshToken;
     const downloadsToken = ++downloadRefreshToken;
-    const [history, bookmarks, folders, downloads] = await Promise.all([
-      queryHistory(), queryBookmarks(), queryFolders(), queryDownloads(),
-    ]);
-    if (destroyed || token !== refreshToken) return;
-    data.history = history;
-    data.bookmarks = bookmarks;
-    data.folders = folders;
-    if (downloadsToken === downloadRefreshToken) data.downloads = downloads;
-    refreshFolderSelect();
-    render();
+    const section = currentSection;
+    const context = { search: search.value, cursor: pageCursor, pageSize: PAGE_SIZE,
+      folderGuid: currentBookmarkFolder === "all" ? "" : currentBookmarkFolder };
+    loading = true;
+    queryError = "";
+    renderPageState();
+    try {
+      let page;
+      if (section === "history") page = await queryHistory(context);
+      else if (section === "downloads") page = await queryDownloads(context);
+      else {
+        const folders = await queryFolders();
+        if (destroyed || token !== refreshToken) return;
+        data.folders = folders;
+        refreshFolderSelect();
+        if (section === "bookmarks" && context.folderGuid !== (currentBookmarkFolder === "all" ? "" : currentBookmarkFolder)) {
+          resetPaging();
+          return refreshAll();
+        }
+        page = section === "bookmarks" ? await queryBookmarks(context) : pageItems(folders, context);
+      }
+      if (destroyed || token !== refreshToken || (section === "downloads" && downloadsToken !== downloadRefreshToken)) return;
+      if (section !== "folders") data[section] = page.items;
+      // Folder metadata feeds the picker; preserve it separately from its page.
+      if (section === "folders") folderPage = page.items;
+      hasMore = page.hasMore;
+      nextCursor = page.cursor;
+      loading = false;
+      render();
+    } catch (error) {
+      if (destroyed || token !== refreshToken || (section === "downloads" && downloadsToken !== downloadRefreshToken)) return;
+      loading = false;
+      queryError = error.message || "The Library could not be read.";
+      if (section !== "folders") data[section] = [];
+      if (section === "folders") folderPage = [];
+      hasMore = false;
+      nextCursor = null;
+      render();
+      Cu.reportError(error);
+    }
   }
 
   const downloadRefresh = FluxionLibraryDownloads.createRefreshQueue({
@@ -336,11 +388,28 @@
     clearTimer: timer => window.clearTimeout(timer),
     reportError: Cu.reportError,
     refresh: async () => {
+      if (root.hidden || currentSection !== "downloads") return;
       const token = ++downloadRefreshToken;
-      const downloads = await queryDownloads();
-      if (destroyed || token !== downloadRefreshToken) return;
-      data.downloads = downloads;
-      if (!root.hidden && currentSection === "downloads") render();
+      const request = refreshToken;
+      try {
+        const downloads = await queryDownloads({ search: search.value, cursor: pageCursor });
+        if (destroyed || token !== downloadRefreshToken || request !== refreshToken) return;
+        data.downloads = downloads.items;
+        hasMore = downloads.hasMore;
+        nextCursor = downloads.cursor;
+        loading = false;
+        queryError = "";
+        if (!root.hidden && currentSection === "downloads") render();
+      } catch (error) {
+        if (destroyed || token !== downloadRefreshToken || request !== refreshToken) return;
+        loading = false;
+        queryError = error.message || "Downloads could not be read.";
+        data.downloads = [];
+        hasMore = false;
+        nextCursor = null;
+        render();
+        Cu.reportError(error);
+      }
     },
   });
 
@@ -600,15 +669,18 @@
     addPageButton.hidden = currentSection !== "bookmarks";
     addPageButton.disabled = !lastWebPage;
     newFolderButton.hidden = !["bookmarks", "folders"].includes(currentSection);
-    const sourceItems = currentSection === "bookmarks"
-      ? FluxionLibraryData.bookmarksInFolder(data.bookmarks, currentBookmarkFolder)
-      : data[currentSection];
-    const items = FluxionLibraryData.filter(sourceItems, search.value, 300);
-    summary.textContent = `${items.length}${items.length !== sourceItems.length ? ` of ${sourceItems.length}` : ""} items`;
+    const items = currentSection === "folders" ? folderPage : data[currentSection];
+    summary.textContent = `${items.length} items${hasMore ? " · More available" : ""}`;
+    renderPageState();
     if (currentSection === "downloads") renderDownloads(items);
     else { downloadRows.clear(); listNode.replaceChildren(); }
     if (!items.length) {
-      listNode.appendChild(create("div", "fluxion-library-empty", search.value ? "No matching items" : `No ${labels[currentSection].toLocaleLowerCase()} yet`));
+      listNode.appendChild(create("div", "fluxion-library-empty", queryError
+        ? "Could not load this page. Try again."
+        : loading ? (search.value ? "Searching Library…" : "Loading Library…")
+          : previousCursors.length ? "No items on this page"
+            : search.value ? "No matching items" : `No ${labels[currentSection].toLocaleLowerCase()} yet`));
+      if (queryError) listNode.appendChild(action("Try again", () => refreshAll()));
     } else if (currentSection !== "downloads") {
       const fragment = document.createDocumentFragment();
       for (const item of items) fragment.appendChild(renderRow(item));
@@ -616,15 +688,47 @@
     }
   }
 
-  function selectSection(id) {
+  function renderPageState() {
+    listNode.setAttribute("aria-busy", String(loading));
+    root.dataset.queryState = loading ? "loading" : queryError ? "error" : "ready";
+    previousPage.disabled = loading || !previousCursors.length;
+    nextPage.disabled = loading || !hasMore;
+    pageLabel.textContent = `Page ${previousCursors.length + 1}`;
+    if (queryError) note.textContent = queryError;
+  }
+
+  function resetPaging() {
+    pageCursor = null;
+    previousCursors.length = 0;
+    nextCursor = null;
+    hasMore = false;
+  }
+
+  function invalidateQuery({ reset = true, keepTimer = false } = {}) {
+    refreshToken += 1;
+    downloadRefreshToken += 1;
+    if (!keepTimer) {
+      window.clearTimeout(queryTimer);
+      queryTimer = 0;
+    }
+    if (reset) resetPaging();
+    if (currentSection === "folders") folderPage = [];
+    else data[currentSection] = [];
+    loading = true;
+    queryError = "";
+    note.textContent = "";
+    render();
+  }
+
+  function selectSection(id, { preserveSearch = false } = {}) {
     currentSection = FluxionLibraryData.section(id);
     const tab = selectedLibraryTab();
     tab?.setAttribute("fluxion-library-section", currentSection);
     if (tab) tab.label = `Library · ${currentSection[0].toUpperCase()}${currentSection.slice(1)}`;
     window.FluxionUI.refresh();
-    search.value = "";
-    note.textContent = "";
-    render();
+    if (!preserveSearch) search.value = "";
+    invalidateQuery();
+    return refreshAll();
   }
 
   function refreshFolderSelect() {
@@ -656,9 +760,34 @@
   nav.appendChild(manage);
   folderSelect.addEventListener("change", () => {
     currentBookmarkFolder = folderSelect.value;
-    search.value = "";
-    render();
+    invalidateQuery();
+    refreshAll();
   });
+  const advancePage = async direction => {
+    if (loading || (direction > 0 ? !hasMore : !previousCursors.length)) return;
+    const clicked = direction > 0 ? nextPage : previousPage;
+    const ownedFocus = document.activeElement === clicked;
+    if (direction > 0) {
+      previousCursors.push(pageCursor);
+      pageCursor = nextCursor;
+    } else pageCursor = previousCursors.pop();
+    invalidateQuery({ reset: false });
+    // Page controls remain stable during requests. If the clicked control
+    // becomes disabled on the first/last page, focus the results deliberately.
+    const pagingToken = refreshToken + 1;
+    await refreshAll();
+    const neutralFocus = document.activeElement === document.body ||
+      document.activeElement === document.documentElement;
+    if (destroyed || root.hidden || pagingToken !== refreshToken ||
+        (document.activeElement !== clicked && !(ownedFocus && neutralFocus))) return;
+    if (clicked.disabled) {
+      listNode.tabIndex = -1;
+      listNode.focus({ preventScroll: true });
+    } else clicked.focus({ preventScroll: true });
+    content.scrollTop = 0;
+  };
+  previousPage.addEventListener("click", () => advancePage(-1));
+  nextPage.addEventListener("click", () => advancePage(1));
   addPageButton.addEventListener("click", () => saveLastWebPage().catch(error => {
     note.textContent = error.message; Cu.reportError(error);
   }));
@@ -669,14 +798,24 @@
   function syncVisibility() {
     const tab = selectedLibraryTab();
     const visible = Boolean(tab);
+    const wasVisible = !root.hidden;
     root.hidden = !visible;
     if (visible) contentDeck.hidden = true;
     else if (!document.documentElement.hasAttribute("data-fluxion-settings-visible")) contentDeck.hidden = false;
     document.documentElement.toggleAttribute("data-fluxion-library-visible", visible);
     if (visible) {
       privacy.textContent = PrivateBrowsingUtils.isWindowPrivate(window) ? "Private downloads only" : "Stored in this Fluxion profile";
-      selectSection(tabSection(tab));
-      refreshAll().catch(error => { note.textContent = error.message; Cu.reportError(error); });
+      const uri = tab.linkedBrowser?.currentURI?.spec || "";
+      const changed = tab !== visibleTab || uri !== visibleURI || tabSection(tab) !== currentSection;
+      visibleTab = tab;
+      visibleURI = uri;
+      if (changed) selectSection(tabSection(tab));
+      else if (!wasVisible) refreshAll();
+    } else {
+      refreshToken += 1;
+      downloadRefreshToken += 1;
+      window.clearTimeout(queryTimer);
+      loading = false;
     }
   }
 
@@ -712,9 +851,26 @@
     },
   };
   gBrowser.addTabsProgressListener(progressListener);
-  search.addEventListener("input", render);
+  search.addEventListener("input", () => {
+    invalidateQuery();
+    queryTimer = window.setTimeout(() => refreshAll(), 140);
+  });
+  const onPlacesChanged = events => {
+    if (destroyed || root.hidden) return;
+    const affected = FluxionLibraryChanges.affected(events);
+    if (!affected[currentSection]) return;
+    // Keep a first-event deadline: continuous visits must not starve updates.
+    // Keyset cursors stay valid when new entries arrive ahead of this page.
+    invalidateQuery({ reset: false, keepTimer: true });
+    if (!queryTimer) queryTimer = window.setTimeout(() => refreshAll(), 100);
+  };
+  PlacesUtils.observers.addListener(FluxionLibraryChanges.TYPES, onPlacesChanged);
   window.addEventListener("unload", () => {
     destroyed = true;
+    refreshToken += 1;
+    downloadRefreshToken += 1;
+    window.clearTimeout(queryTimer);
+    PlacesUtils.observers.removeListener(FluxionLibraryChanges.TYPES, onPlacesChanged);
     downloadRefresh.close();
     gBrowser.tabContainer.removeEventListener("TabSelect", handleTabSelect);
     gBrowser.removeTabsProgressListener(progressListener);
@@ -752,14 +908,18 @@
           target: target.path,
         });
         await downloadList.add(download);
+        open("history");
+        await refreshAll();
+        const hasHistory = data.history.some(item => item.url === url) && listNode.textContent.includes("Fluxion Library Reference");
+        open("bookmarks");
+        await refreshAll();
+        const hasBookmark = data.bookmarks.some(item => item.url === url) && listNode.textContent.includes("Fluxion Library Reference");
         open("downloads");
         const flowRect = document.getElementById("fluxion-flow")?.getBoundingClientRect();
         const rootRect = root.getBoundingClientRect();
         const navRect = nav.getBoundingClientRect();
         const contentRect = content.getBoundingClientRect();
         await refreshAll();
-        const hasHistory = data.history.some(item => item.url === url);
-        const hasBookmark = data.bookmarks.some(item => item.url === url);
         const hasDownload = data.downloads.some(item => item.title === "Fluxion-Library-Preview.pdf");
         if (hasHistory && hasBookmark && hasDownload &&
             rootRect.left >= flowRect?.right - 1 && navRect.left >= rootRect.left - 1 &&
@@ -791,6 +951,7 @@
     window.setTimeout(async () => {
       try {
         const url = "https://example.edu/fluxion-library";
+        open("folders");
         await refreshAll();
         let folder = data.folders.find(item => item.title === "Fluxion Research");
         if (!folder) {
@@ -813,7 +974,6 @@
         currentBookmarkFolder = folder.id;
         open("bookmarks");
         await refreshAll();
-        selectSection("bookmarks");
         const filed = data.bookmarks.find(item => item.id === bookmark.guid);
         if (filed?.parentGuid === folder.id &&
             data.folders.some(item => item.id === folder.id) &&

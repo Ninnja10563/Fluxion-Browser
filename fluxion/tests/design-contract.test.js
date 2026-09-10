@@ -14,6 +14,7 @@ const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js
 const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
 const shortcuts = fs.readFileSync(path.join(root, "chrome/fluxion-shortcuts.js"), "utf8");
 const library = fs.readFileSync(path.join(root, "chrome/fluxion-library.js"), "utf8");
+const libraryQuery = fs.readFileSync(path.join(root, "chrome/core/library-query.js"), "utf8");
 const permissions = fs.readFileSync(path.join(root, "chrome/fluxion-permissions.js"), "utf8");
 const sessionRecovery = fs.readFileSync(path.join(root, "chrome/fluxion-session-recovery.js"), "utf8");
 const workspaceTabs = fs.readFileSync(path.join(root, "chrome/core/workspace-tabs.js"), "utf8");
@@ -473,7 +474,8 @@ test("macOS visual gate waits for settled chrome", () => {
 
 test("Fluxion Library owns visible history, bookmark, and download workflows", () => {
   assert.match(library, /PlacesUtils\.promiseDBConnection/);
-  assert.match(library, /moz_historyvisits/);
+  assert.match(libraryQuery, /moz_historyvisits/);
+  assert.match(libraryQuery, /moz_bookmarks/);
   assert.match(library, /moz_bookmarks/);
   assert.match(library, /Downloads\.getList/);
   assert.match(library, /Downloads\.PRIVATE/);

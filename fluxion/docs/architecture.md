@@ -502,6 +502,23 @@ and `PlacesUtils.bookmarks` after explicit confirmation. Bookmark URLs pass
 through Fluxion's safe navigation policy so a stored script-bearing scheme is
 never executed from privileged chrome.
 
+Library history and bookmark search is applied inside Places before the page
+limit. Pages use a descending native microsecond timestamp and record-ID cursor,
+with one lookahead record to determine whether Next is available; at most 100
+result rows are displayed. This avoids skipping tied timestamps or loading an
+entire profile into the UI. Bookmark folder restrictions also run before the
+limit. Native `autocomplete_match` supplies literal, Unicode-aware matching
+across title, URL, and bookmark folder labels; its upstream title/URL matching
+bound remains 255 bytes, so this is not full-text page-content search. Browser
+Memory remains the separate extracted-content retrieval system.
+
+Every search, section, folder, and page change invalidates pending result
+delivery. Only the current query may replace rows or their loading state.
+Gecko [Places event notifications](https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_155_0_1_RELEASE/dom/chrome-webidl/PlacesEvent.webidl)
+refresh the visible affected section after native
+or other-window edits; hidden views defer database work until shown. History
+deletion and bookmark changes cannot repopulate a view from an old response.
+
 Folder hierarchy is projected from Places parent GUIDs; Fluxion does not keep a
 parallel folder tree. The toolbar, menu, unfiled, mobile, root, and tag folders
 are protected from rename or deletion. Moving a bookmark supplies Gecko's

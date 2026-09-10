@@ -16,6 +16,7 @@ bash -n \
   scripts/verify-macos-memory.sh \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
+  scripts/verify-macos-library.sh \
   scripts/verify-macos-session.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
@@ -27,6 +28,8 @@ node --check chrome/core/flow-tab-content.js
 node --check chrome/core/index-scheduler.js
 node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js
+node --check chrome/core/library-query.js
+node --check chrome/core/library-changes.js
 node --check chrome/core/library-downloads.js
 node --check chrome/core/data-clearing.js
 node --check chrome/core/theme.js
@@ -51,6 +54,7 @@ node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js
+node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-shortcuts.js

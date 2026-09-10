@@ -17,6 +17,9 @@ controls work and its failure paths have been tested.
   surfaces backed by Firefox services (settings, unified Library, native
   bookmark-folder editing, per-site permission management, and SearchService-
   owned palette routing implemented)
+- full-database Library history/bookmark search, pre-limit folder filtering,
+  bounded cursor pagination, stale-query isolation, and live native Places
+  updates (implemented; representative very-large-profile timing remains)
 - automated multi-launch session recovery and private-window isolation coverage
   for multiple normal windows with distinct active workspaces, pins, native
   groups, split views, persistent restore-on-startup choice, Places, and Browser
