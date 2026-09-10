@@ -95,7 +95,11 @@
     const global = browser.browsingContext.currentWindowGlobal;
     navButton("bookmarks").click();
     await settled("bookmarks");
-    assert(titles().length === 100 && titles().every(title => title.includes("bookmark")),
+    // The unfiltered section also contains Gecko's default bookmarks and the
+    // deliberately seeded other-folder record. Require our unique real rows
+    // without pretending those legitimate records should disappear.
+    assert(titles().length === 100 && titles().some(title => /^Fluxion Archive bookmark \d{3}$/.test(title)) &&
+      !titles().some(title => /^Fluxion Archive history \d{3}$/.test(title)),
       "Bookmark route did not display real bookmark records");
     assert(browser.browsingContext.currentWindowGlobal === global,
       "A Library section change reloaded the underlying document");
