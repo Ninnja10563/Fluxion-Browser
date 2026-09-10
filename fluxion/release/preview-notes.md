@@ -10,10 +10,9 @@ interface is built out incrementally.
 
 Version 0.58 is an unreleased tab-selection candidate. It targets unchanged
 Flow row identity during ordinary selection and fewer redundant workspace
-session writes and reads. All 625 tests and native diagnostics passed, including
-the packaged 1,000-tab selection gate. Full staging must pass the real anonymous
-update check after GitHub's quota reset before publication; 0.57 remains the
-latest DMG.
+session writes and reads. All 631 tests pass, and native diagnostics passed the
+packaged 1,000-tab selection gate. Full staging is being repeated after fixture
+ownership and native menu evidence improvements; 0.57 remains the latest DMG.
 
 Version 0.57 is a published Settings-layout preview:
 

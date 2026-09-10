@@ -742,14 +742,33 @@
       });
     } catch (error) {
       settled = true;
+      if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" && search === "example") {
+        Services.prefs.setStringPref("fluxion.memory.grounding.error", `Grounding search rejected: current=${isCurrent()} ${error.stack || error}`);
+        Services.prefs.savePrefFile(null);
+      }
       if (!isCurrent()) return;
       Cu.reportError(error);
       renderItems([], "Browser Memory could not be searched");
       return;
     }
     settled = true;
-    if (!isCurrent()) return;
+    if (!isCurrent()) {
+      if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" && search === "example") {
+        Services.prefs.setStringPref("fluxion.memory.grounding.error",
+          `Grounding final response became stale: request=${request}/${memoryRequest} mode=${mode} hidden=${layer.hidden} queryChanged=${input.value.trim() !== search}`);
+        Services.prefs.savePrefFile(null);
+      }
+      return;
+    }
     renderMemoryResponse(response);
+    if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" && search === "example") {
+      Services.prefs.setStringPref("fluxion.memory.grounding.stage",
+        `final:${response.state}:answer=${response.answer?.state}:results=${response.results.length}`);
+      if (response.answer?.state !== "grounded" || !response.answer.evidence.some(item => item.excerpt)) {
+        Services.prefs.setStringPref("fluxion.memory.grounding.error", "Grounding final response lacked excerpt-backed evidence");
+      }
+      Services.prefs.savePrefFile(null);
+    }
     if (
       Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" &&
       response.answer?.state === "grounded" &&
@@ -1422,11 +1441,44 @@
       render(false);
     }, 1200);
   }
+  async function waitForGroundingOwners(enabled, readHealth, pause, reportPending, now = Date.now) {
+    const dependencies = [
+      ["FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST", "fluxion.memory.embeddingSettings.health"],
+      ["FLUXION_VISUAL_CLEAR_DATA_TEST", "fluxion.dataClearing.cancel.health"],
+      ["FLUXION_VISUAL_AI_TEST", "fluxion.ai.visual.health"],
+      ["FLUXION_VISUAL_AI_COMPARE_TEST", "fluxion.ai.compare.visual.health"],
+      ["FLUXION_VISUAL_SEARCH_ENGINE_TEST", "fluxion.palette.localAddress.health"],
+      ["FLUXION_VISUAL_SEARCH_ENGINE_TEST", "fluxion.webSearch.health"],
+      ["FLUXION_VISUAL_PALETTE_COMMAND_TEST", "fluxion.paletteCommands.health"],
+      ["FLUXION_VISUAL_CLOSED_TABS_TEST", "fluxion.closedTabs.health"],
+    ].filter(([flag]) => enabled(flag)).map(([, pref]) => pref);
+    const deadline = now() + 65000;
+    for (;;) {
+      const pending = dependencies.filter(pref => !readHealth(pref));
+      reportPending(pending);
+      if (!pending.length) return;
+      if (now() >= deadline) throw new Error(`Grounding palette ownership timed out: ${pending.join(", ")}`);
+      await pause();
+    }
+  }
   if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1") {
-    const runGroundingVisualGate = () => {
+    const runGroundingVisualGate = async () => {
+      let previousStage = "";
+      await waitForGroundingOwners(flag => Services.env.get(flag) === "1",
+        pref => Services.prefs.getStringPref(pref, ""),
+        () => new Promise(resolve => window.setTimeout(resolve, 100)), pending => {
+          const stage = pending.length ? `waiting:${pending.join(",")}` : "owners-settled-starting-search";
+          if (stage === previousStage) return;
+          previousStage = stage;
+          Services.prefs.setStringPref("fluxion.memory.grounding.stage", stage);
+          Services.prefs.savePrefFile(null);
+        });
       open("memory");
       input.value = "example";
-      renderMemory().catch(error => {
+      await renderMemory();
+    };
+    const startGroundingVisualGate = () => {
+      runGroundingVisualGate().catch(error => {
         Services.prefs.setStringPref("fluxion.memory.grounding.error", String(error));
         Services.prefs.savePrefFile(null);
         Cu.reportError(error);
@@ -1435,9 +1487,9 @@
     // Changing embedding providers removes vectors and invalidates searches.
     // Wait for that fixture's restoration before evaluating grounded results.
     if (Services.env.get("FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST") === "1") {
-      on(window, "FluxionMemoryEmbeddingSettingsVisualReady", runGroundingVisualGate, { once: true });
+      on(window, "FluxionMemoryEmbeddingSettingsVisualReady", startGroundingVisualGate, { once: true });
     } else {
-      on(window, "FluxionMemoryVisualReady", runGroundingVisualGate, { once: true });
+      on(window, "FluxionMemoryVisualReady", startGroundingVisualGate, { once: true });
     }
   }
   if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
@@ -1514,6 +1566,9 @@
         "local-proposal-visible-and-confirmation-required",
       );
       Services.prefs.savePrefFile(null);
+      // This is the final serialized palette fixture; release its surface only
+      // after the actual visible suggestion has satisfied the gate.
+      close();
     }
   }
   if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {

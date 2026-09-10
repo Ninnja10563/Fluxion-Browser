@@ -10,6 +10,7 @@ const vm = require("node:vm");
 // The DOM stand-in only supplies the browser operations used by this dialog.
 function harness(environment = {}) {
   const elements = [];
+  const prefs = new Map();
   let document;
   class Element {
     constructor() {
@@ -74,12 +75,15 @@ function harness(environment = {}) {
     gBrowser: { selectedBrowser: {}, addTrustedTab(url) { opened.push(url); return {}; } },
     ChromeUtils: { importESModule: () => ({}) },
     Cu: { reportError: error => errors.push(error) },
-    Services: { env: { get: name => environment[name] || "" }, prefs: { setStringPref() {}, savePrefFile() {} } },
+    Services: { env: { get: name => environment[name] || "" }, prefs: {
+      setStringPref: (key, value) => prefs.set(key, value), getStringPref: (key, fallback) => prefs.get(key) ?? fallback,
+      savePrefFile() {},
+    } },
   });
   const input = document.getElementById("fluxion-palette-input");
   const results = document.getElementById("fluxion-palette-results");
   return {
-    window, document, originalFocus, input, results, memory, ai, opened, errors,
+    window, document, originalFocus, input, results, memory, ai, opened, errors, prefs,
     type(value) { input.value = value; input.dispatch("input"); },
     flushTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
     flushFrames() { frames.splice(0).forEach(fn => fn()); },
@@ -260,20 +264,23 @@ test("opening another AI page invalidates the former page's request", async () =
   assert.doesNotMatch(h.text(), /obsolete failure/);
 });
 
-test("packaged grounding waits until the embedding settings fixture restores its provider", () => {
+test("packaged grounding waits until the embedding settings fixture restores its provider", async () => {
   const h = harness({
     FLUXION_VISUAL_GROUNDING_TEST: "1",
     FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST: "1",
   });
   h.window.dispatch("FluxionMemoryVisualReady");
   assert.equal(h.memory.length, 0);
+  h.prefs.set("fluxion.memory.embeddingSettings.health", "keyword-mode-retained-recall-and-local-mode-restored");
   h.window.dispatch("FluxionMemoryEmbeddingSettingsVisualReady");
+  await settle();
   assert.equal(h.memory.length, 1);
   assert.equal(h.memory[0].args[0], "example");
 });
 
-test("packaged grounding runs directly after extraction when embedding settings are not exercised", () => {
+test("packaged grounding runs directly after extraction when embedding settings are not exercised", async () => {
   const h = harness({ FLUXION_VISUAL_GROUNDING_TEST: "1" });
   h.window.dispatch("FluxionMemoryVisualReady");
+  await settle();
   assert.equal(h.memory.length, 1);
 });

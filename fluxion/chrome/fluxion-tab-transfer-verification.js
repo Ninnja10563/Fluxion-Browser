@@ -69,7 +69,7 @@
     const menu = window.document.getElementById(moveMenuId);
     const submenu = window.document.getElementById(submenuId);
     assert(anchor?.isConnected && context && menu && submenu, `${kind} keyboard menu fixture is missing`);
-    const evidence = { kind, transport: "System Events native key codes; initial anchor focus set by chrome", highlighted: [] };
+    const evidence = { kind, transport: "System Events native key codes; initial anchor focus set by chrome", highlighted: [], keys: [] };
     (report.nativeKeyboard ||= []).push(evidence);
     let selectedItem = null;
     const observe = event => {
@@ -77,19 +77,53 @@
       selectedItem = event.target;
       evidence.highlighted.push({ parent: event.target.parentNode.id, label: event.target.getAttribute("label") });
     };
+    const state = () => ({
+      context: context.state, submenu: submenu.state,
+      popups: [...context.querySelectorAll("menupopup")].map(popup => ({
+        id: popup.id, menu: popup.parentNode?.getAttribute("label"), state: popup.state,
+      })),
+      activeElement: window.document.activeElement?.id || window.document.activeElement?.className || "",
+      anchorFocused: window.document.activeElement === anchor,
+      documentFocused: window.document.hasFocus(), ownedWindowActive: Services.focus.activeWindow === window,
+      highlighted: selectedItem ? { parent: selectedItem.parentNode?.id, label: selectedItem.getAttribute("label") } : null,
+    });
+    const key = async (action, expected = null) => {
+      const entry = { action, expected: expected?.getAttribute("label") || null, before: state() };
+      evidence.keys.push(entry);
+      const observedBefore = evidence.highlighted.length;
+      try {
+        await nativeKey(action);
+        entry.injectionAcknowledged = true;
+        entry.afterInjection = state();
+        if (expected?.localName === "menuitem") {
+          await waitFor(() => selectedItem === expected && evidence.highlighted.length > observedBefore,
+            `Native ${action} did not highlight expected leaf ${entry.expected}`);
+          entry.acknowledgement = "trusted DOMMenuItemActive for expected leaf";
+        } else if (expected?.localName === "menu") {
+          // Cocoa does not emit the leaf-active event for submenu headers.
+          // Yield two browser tasks for diagnostics; this is NOT a processed-key
+          // acknowledgement. The actual submenu-open assertion remains required.
+          entry.acknowledgement = "submenu header unacknowledged; two event-loop turns only";
+          await new Promise(resolve => window.setTimeout(resolve, 0));
+          await new Promise(resolve => window.setTimeout(resolve, 0));
+        }
+      } finally {
+        entry.after = state();
+      }
+    };
     context.addEventListener("DOMMenuItemActive", observe);
     try {
       window.focus();
-      await nativeKey("activate");
+      await key("activate");
       await waitFor(() => Services.focus.activeWindow === window && window.document.hasFocus(), "Owned source window did not become foreground");
       anchor.scrollIntoView({ block: "nearest", behavior: "instant" });
       anchor.focus({ preventScroll: true });
       assert(window.document.activeElement === anchor, `${kind} anchor could not receive keyboard focus`);
-      await nativeKey("open");
+      await key("open");
       await waitFor(() => context.state === "open", `Native Shift+F10 did not open the ${kind} menu`);
       evidence.nativeMenu = context.isNativeMenu;
       assert(context.isNativeMenu, `${kind} context menu is not an OS-native menu`);
-      await nativeKey("down");
+      await key("down");
       await waitFor(() => selectedItem?.parentNode === context, "Native menu did not expose its highlighted first entry");
       // Cocoa reports active leaf items, not highlighted submenu headers. Count
       // remaining enabled siblings from an observed native selection; never set
@@ -98,22 +132,26 @@
         !item.hidden && !item.disabled && window.getComputedStyle(item).display !== "none" &&
         window.getComputedStyle(item).visibility !== "collapse");
       const from = items.indexOf(selectedItem), target = items.indexOf(menu);
+      evidence.navigation = { from, target, items: items.map(item => ({
+        id: item.id, kind: item.localName, label: item.getAttribute("label"),
+      })) };
       assert(from >= 0 && target >= from && target - from <= 40, "Move to Window navigation sequence is not bounded");
-      for (let index = from; index < target; index++) await nativeKey("down");
-      await nativeKey("right");
+      for (let index = from; index < target; index++) await key("down", items[index + 1]);
+      await key("right");
       await waitFor(() => submenu.state === "open", "Native ArrowRight did not open Move to Window");
       selectedItem = null;
-      await nativeKey("down");
+      await key("down");
       await waitFor(() => selectedItem?.parentNode === submenu && !selectedItem.disabled,
         "Native submenu ArrowDown did not highlight an enabled command");
       evidence.submenuLabel = selectedItem.getAttribute("label");
-      await nativeKey("escape");
+      await key("escape");
       await waitFor(() => submenu.state === "closed", "Native Escape did not close Move to Window");
-      if (context.state !== "closed") await nativeKey("escape");
+      if (context.state !== "closed") await key("escape");
       await waitFor(() => context.state === "closed" && window.document.activeElement === anchor &&
         Services.focus.activeWindow === window, `Native Escape did not restore ${kind} anchor focus`);
       evidence.restoredAnchorFocus = true;
     } finally {
+      evidence.final = state();
       context.removeEventListener("DOMMenuItemActive", observe);
       write("report", JSON.stringify(report));
       if (context.state !== "closed") context.hidePopup();
