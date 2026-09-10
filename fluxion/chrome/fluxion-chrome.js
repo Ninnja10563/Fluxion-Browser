@@ -2025,7 +2025,13 @@
     item.addEventListener("keydown", event => {
       const pinned = Boolean(item.closest(".fluxion-pinned-tabs"));
       const orientation = pinned ? "horizontal" : "vertical";
-      if (!pinned && event.key === "ArrowLeft") {
+      if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+        event.preventDefault();
+        event.stopPropagation();
+        contextTab = tab;
+        focusFlowItem(item);
+        contextMenu.openPopup(item, "after_start", 0, 0, true);
+      } else if (!pinned && event.key === "ArrowLeft") {
         const heading = item.closest(".fluxion-group")
           ?.querySelector(":scope > .fluxion-group-heading");
         if (!heading) return;
@@ -2315,6 +2321,7 @@
         workspaceElements.set(workspace.id, button);
       }
       button.tabIndex = workspace.id === currentWorkspace ? 0 : -1;
+      button.setAttribute("data-workspace-id", workspace.id);
       button.title = workspace.name;
       button.setAttribute("aria-selected", String(workspace.id === currentWorkspace));
       button.setAttribute("aria-posinset", String(workspaceIndex + 1));
@@ -2956,6 +2963,7 @@
     addWorkspace,
     closedTabCount,
     closedTabs,
+    contextTabs,
     createGroup: () => createGroupForTab(gBrowser.selectedTab),
     createSuggestedGroup: (tabs, name) => createNamedGroup(tabs, name),
     createSplitView,
@@ -2972,6 +2980,15 @@
     openDeveloperTools,
     openNewSplit,
     refresh: scheduleRender,
+    withWorkspaceReconciliationPaused(action) {
+      workspaceSwitchDepth += 1;
+      try { return action(); }
+      finally { workspaceSwitchDepth -= 1; }
+    },
+    reconcileTransferredTabs() {
+      switchWorkspace(currentWorkspace, { reconcileRestore: false });
+      scheduleRender();
+    },
     renameWorkspace,
     reopenClosedTab,
     reverseSplitView,

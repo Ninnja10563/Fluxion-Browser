@@ -92,6 +92,7 @@ Additional packaged-app regression checks use isolated temporary profiles:
 ```sh
 ./scripts/verify-macos-shortcuts.sh ../.runtime/Fluxion.app
 ./scripts/verify-macos-file-picker.sh ../.runtime/Fluxion.app
+./scripts/verify-macos-tab-transfer.sh ../.runtime/Fluxion.app
 ```
 
 The shortcut check exercises rendered Settings controls and cross-window

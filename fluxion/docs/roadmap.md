@@ -43,6 +43,10 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- native cross-window tab transfer with coherent workspace, pin, group, and
+  split-page handling; normal/private separation and explicit Peek promotion
+  before transfer (0.54 implementation in progress; dedicated packaged gate
+  added, native verification pending)
 - restored-page workspace reconciliation and stable cross-window workspace
   controls, including preserved Settings name drafts and keyboard focus
   (implemented; broader native interaction auditing continues)

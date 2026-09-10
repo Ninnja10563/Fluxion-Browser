@@ -8,10 +8,10 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.53 candidate separates saved Memory context from currently open tabs and
-repairs shortcut capture and customized shortcut-map restoration. Its packaged
-macOS verification adds an actual system file-picker cancellation/upload gate.
-Bookmark saves also retain their original page and folder during async lookup.
+The 0.54 candidate focuses on moving real Gecko tabs between browser windows,
+including workspace context, grouped/split pages, and private-window boundaries.
+Temporary Peek pages must be promoted before transfer. A dedicated packaged
+verification gate is being added; native validation is pending.
 Only candidates that pass the full release workflow are published as DMGs.
 
 The current preview is runnable and includes:

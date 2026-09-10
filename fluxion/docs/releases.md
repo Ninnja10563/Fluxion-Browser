@@ -284,7 +284,11 @@ cancelled, incomplete, or diagnostic-only runs, even at the same source commit.
 Before promotion:
 
 - Check the official repository, release workflow path, dispatch event, full
-  source SHA, and completed/success run status. Every required product test and
+  source SHA, explicitly intended source branch, and completed/success run status.
+  A preserved milestone branch may be used while `main` advances: record its
+  exact reviewed SHA and build that branch's workflow/version, not a mixture
+  with newer `main` files. For example, `release/0.53-preview` preserves the
+  0.53 candidate while 0.54 development proceeds. Every required product test and
   native gate, including real release discovery, must have succeeded in that
   run; packaging and artifact upload must also have succeeded.
 - Select the one unexpired, exact-version universal artifact belonging to that

@@ -8,6 +8,23 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.54 is a candidate for native cross-window tab handling. Its release
+verification is pending; the implementation must pass the complete macOS
+workflow before a DMG is published.
+
+- move actual Gecko tabs between browser windows instead of reopening their
+  URLs as replacement pages;
+- handle workspace membership, pins, native groups, and split-page state
+  coherently during transfer;
+- reject transfers across normal/private window boundaries;
+- require a temporary Peek page to become a normal tab before it can move;
+- add a required packaged-app transfer gate alongside all existing browsing,
+  session, privacy, shortcut, and native macOS file-picker checks.
+
+The transfer gate must exercise real browser windows and Gecko tab adoption.
+It is not a claim of OS-level drag automation or exhaustive website-state
+compatibility; native verification results will determine release readiness.
+
 Version 0.53 improves Memory context and keyboard customization:
 
 - distinguish a page's saved workspace/group from the workspaces where it is

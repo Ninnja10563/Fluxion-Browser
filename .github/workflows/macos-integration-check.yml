@@ -86,6 +86,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-workspaces.sh '.runtime/Fluxion.app'
 
+      - name: Check native cross-window tab transfer and privacy boundaries
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-tab-transfer.sh '.runtime/Fluxion.app'
+
       - name: Check exact and real semantic Memory retrieval
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-memory.sh '.runtime/Fluxion.app'

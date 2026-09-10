@@ -23,6 +23,7 @@ bash -n \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-file-picker.sh \
+  scripts/verify-macos-tab-transfer.sh \
   scripts/verify-macos-shortcuts.sh \
   scripts/verify-macos-library.sh \
   scripts/verify-macos-workspaces.sh \
@@ -62,6 +63,7 @@ node --check chrome/core/tab-sleeping.js
 node --check chrome/core/tab-selection.js
 node --check chrome/core/tab-status.js
 node --check chrome/core/tab-drop.js
+node --check chrome/core/tab-transfer-drag.js
 node --check chrome/core/workspaces.js
 node --check chrome/core/workspace-editor.js
 node --check chrome/core/workspace-tabs.js
@@ -69,6 +71,9 @@ node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-file-picker-verification.js
+node --check chrome/fluxion-tab-transfer.js
+node --check chrome/fluxion-window-tabs.js
+node --check chrome/fluxion-tab-transfer-verification.js
 node --check chrome/fluxion-shortcut-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
@@ -80,6 +85,7 @@ node --check chrome/fluxion-settings-accessibility-verification.js
 node --check chrome/fluxion-ai-privacy-verification.js
 node --check chrome/fluxion-workspace-verification.js
 node --check scripts/ai-privacy-fixture.mjs
+node --check scripts/tab-transfer-fixture.mjs
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-shortcuts.js
@@ -98,6 +104,8 @@ node --check actors/FluxionBrowsingVerificationChild.sys.mjs
 node --check actors/FluxionBrowsingVerificationParent.sys.mjs
 node --check actors/FluxionFilePickerVerificationChild.sys.mjs
 node --check actors/FluxionFilePickerVerificationParent.sys.mjs
+node --check actors/FluxionTabTransferVerificationChild.sys.mjs
+node --check actors/FluxionTabTransferVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --check modules/FluxionMemorySearch.sys.mjs
 node --check modules/FluxionNativeMemory.sys.mjs
