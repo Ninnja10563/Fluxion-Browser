@@ -39,7 +39,14 @@
     });
   }
 
-  const api = Object.freeze({ fields, fold, foldedFields, migrateV1 });
+  async function migrateV2(db) {
+    // No current workspace lookup can recover a historical name reliably.
+    await db.executeTransaction(async () => {
+      await db.execute("ALTER TABLE pages ADD COLUMN workspace_name TEXT NOT NULL DEFAULT ''");
+      await db.setSchemaVersion(3);
+    });
+  }
+  const api = Object.freeze({ fields, fold, foldedFields, migrateV1, migrateV2 });
   scope.FluxionMemorySearch = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;
 })(typeof globalThis === "object" ? globalThis : this);

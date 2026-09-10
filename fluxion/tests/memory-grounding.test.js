@@ -11,14 +11,14 @@ test("grounded answers cite only supplied browser records", () => {
     title: "LanceDB Documentation",
     content: "LanceDB is an open-source database for local vector search and multimodal data.",
     workspace: "build",
-    workspaceName: "Development",
+    savedWorkspaceName: "Development",
     lastVisit: now - 86400000,
   }], { now });
   assert.equal(answer.state, "grounded");
   assert.match(answer.text, /LanceDB Documentation/);
   assert.equal(answer.sourceURL, "https://lancedb.github.io/docs");
   assert.match(answer.evidence[0].excerpt, /local vector search/);
-  assert.deepEqual(answer.evidence[0].reasons, ["Page words match", "Workspace: Development"]);
+  assert.deepEqual(answer.evidence[0].reasons, ["Page words match", "Saved in Development"]);
   assert.equal(answer.evidence[0].visitLabel, "Visited yesterday");
 });
 

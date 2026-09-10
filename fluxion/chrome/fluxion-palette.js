@@ -808,7 +808,7 @@
       memoryURL: row.url,
       label: row.title || row.url,
       detail: evidence
-        ? `${evidence.domain} · ${evidence.visitLabel}${evidence.workspaceName ? ` · ${evidence.workspaceName}` : ""}`
+        ? [evidence.domain, evidence.visitLabel, ...(evidence.contextLabels || [])].join(" · ")
         : row.url,
       evidence: evidence?.excerpt || "",
       kind: evidence?.reasons?.[0] || "Memory",

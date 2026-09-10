@@ -45,3 +45,17 @@ test("custom shortcuts cannot displace native browsing, editing or Option text e
     assert.equal(policy.normaliseMap({ palette: chord }).palette, current.palette, chord);
   }
 });
+
+test("conflicting shortcut components repair deterministically without breaking a separate valid cycle", () => {
+  const defaults = policy.normaliseMap({});
+  const corrupt = { ...defaults, palette: defaults.tabSearch, tabSearch: defaults.palette,
+    sidebar: defaults.workspaceNext, workspaceNext: defaults.workspaceNext };
+  const result = policy.normaliseMap(corrupt);
+  assert.equal(result.palette, defaults.tabSearch);
+  assert.equal(result.tabSearch, defaults.palette);
+  assert.equal(result.sidebar, defaults.sidebar);
+  assert.equal(result.workspaceNext, defaults.workspaceNext);
+  assert.equal(new Set(Object.values(result)).size, Object.keys(policy.ACTIONS).length);
+  assert.deepEqual(policy.normaliseMap(result), result);
+  assert.deepEqual(policy.normaliseMap(Object.fromEntries(Object.entries(corrupt).reverse())), result);
+});

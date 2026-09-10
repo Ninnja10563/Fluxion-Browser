@@ -113,3 +113,16 @@ test("interrupted migration rolls back added columns and folded data, then safel
   await Search.migrateV1(db);
   assert.equal((await db.execute("PRAGMA user_version"))[0].user_version, 2);
 });
+
+test("v1→v2→v3 leaves historical workspace names unknown and preserves folded evidence/vectors", async t => {
+  const db = database(t);
+  await seed(db, 2);
+  await Search.migrateV1(db);
+  const original = (await db.execute("SELECT * FROM pages WHERE id=2"))[0];
+  await Search.migrateV2(db);
+  const migrated = (await db.execute("SELECT * FROM pages WHERE id=2"))[0];
+  assert.equal((await db.execute("PRAGMA user_version"))[0].user_version, 3);
+  assert.equal(migrated.workspace_name, "");
+  for (const name of Object.keys(original).filter(name => name !== "getResultByName")) assert.equal(migrated[name], original[name]);
+  assert.equal((await db.execute("SELECT hex(embedding) AS value FROM page_vectors"))[0].value, "01020304");
+});

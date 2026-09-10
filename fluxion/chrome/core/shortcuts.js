@@ -64,14 +64,20 @@
 
   function normaliseMap(value) {
     const source = value && typeof value === "object" ? value : {};
-    const result = Object.fromEntries(
-      Object.entries(ACTIONS).map(([id, action]) => [id, action.defaultChord]),
-    );
-    for (const id of Object.keys(ACTIONS)) {
+    const result = {};
+    for (const [id, action] of Object.entries(ACTIONS)) {
       const candidate = parse(source[id]) ? serialise(parse(source[id])) : "";
-      if (!candidate || RESERVED.has(candidate)) continue;
-      const conflicts = Object.entries(result).some(([otherId, value]) => otherId !== id && value === candidate);
-      if (!conflicts) result[id] = candidate;
+      result[id] = candidate && !RESERVED.has(candidate) ? candidate : action.defaultChord;
+    }
+    // Validate the complete mapping: distinct user-defined cycles are valid.
+    // Repair conflicting components together; a default displaced by a repaired
+    // binding can require another pass, but each action resets at most once.
+    for (let pass = 0; pass < Object.keys(ACTIONS).length; pass++) {
+      const counts = new Map();
+      for (const chord of Object.values(result)) counts.set(chord, (counts.get(chord) || 0) + 1);
+      const conflicts = Object.keys(result).filter(id => counts.get(result[id]) > 1);
+      if (!conflicts.length) break;
+      for (const id of conflicts) result[id] = ACTIONS[id].defaultChord;
     }
     return result;
   }

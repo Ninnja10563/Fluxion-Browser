@@ -25,7 +25,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   let embeddingCalls = 0;
   let historyObserver;
   const db = {
-    async getSchemaVersion() { return 2; },
+    async getSchemaVersion() { return 3; },
     async setSchemaVersion(version) { writes.push(`SCHEMA ${version}`); },
     async execute(sql) {
       writes.push(sql);
@@ -183,11 +183,11 @@ test("store recovers pending deletion before migrating v1 and exposes no unmigra
   await store.search("cafe", 12, false);
   const recovery = writes.indexOf("DELETE FROM pages");
   const migration = writes.findIndex(sql => sql.startsWith("ALTER TABLE pages"));
-  const ready = writes.indexOf("SCHEMA 2");
+  const ready = writes.indexOf("SCHEMA 3");
   const query = writes.findIndex(sql => sql.startsWith("SELECT *,"));
   assert.ok(recovery >= 0 && recovery < migration);
   assert.ok(migration < ready && ready < query);
-  assert.equal(writes.filter(sql => sql.startsWith("ALTER TABLE pages")).length, 5);
+  assert.equal(writes.filter(sql => sql.startsWith("ALTER TABLE pages")).length, 6);
 });
 
 test("store rejects reads when v1 migration fails and closes the unready connection", async () => {

@@ -6,6 +6,7 @@
   const PREF = "fluxion.shortcuts";
   const isMac = window.navigator.platform.includes("Mac");
   let shortcuts;
+  let captureControl = null;
   function reload() {
     try {
       shortcuts = FluxionShortcutPolicy.normaliseMap(JSON.parse(Services.prefs.getStringPref(PREF, "{}")));
@@ -20,6 +21,7 @@
   };
   Services.prefs.addObserver(PREF, preferenceObserver);
   window.addEventListener("unload", () => {
+    captureControl = null;
     Services.prefs.removeObserver(PREF, preferenceObserver);
   }, { once: true });
 
@@ -53,7 +55,17 @@
     capture: event => FluxionShortcutPolicy.eventChord(event, isMac),
     format: id => FluxionShortcutPolicy.format(shortcuts[id], isMac),
     get: id => shortcuts[id],
+    beginCapture(control) {
+      if (control?.ownerDocument !== window.document || control.localName !== "button" ||
+          !window.document.getElementById("fluxion-settings")?.contains(control)) return false;
+      captureControl = control;
+      return true;
+    },
+    endCapture(control) { if (captureControl === control) captureControl = null; },
     matches(event, id) {
+      if (captureControl?.isConnected && captureControl.ownerDocument === window.document &&
+          captureControl.dataset.capturing === "true" &&
+          (event.composedPath?.().includes(captureControl) || captureControl.contains(event.target))) return false;
       const chord = FluxionShortcutPolicy.eventChord(event, isMac);
       return Boolean(chord && chord === shortcuts[id]);
     },

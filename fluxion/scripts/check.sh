@@ -22,6 +22,8 @@ bash -n \
   scripts/verify-macos-ai-privacy.sh \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
+  scripts/verify-macos-file-picker.sh \
+  scripts/verify-macos-shortcuts.sh \
   scripts/verify-macos-library.sh \
   scripts/verify-macos-workspaces.sh \
   scripts/verify-macos-default-bookmarks.sh \
@@ -50,6 +52,7 @@ node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
 node --check chrome/core/memory-content.js
 node --check chrome/core/memory-search.js
+node --check chrome/core/memory-context.js
 node --check chrome/core/memory-ranking.js
 node --check chrome/core/memory-grounding.js
 node --check chrome/core/peek.js
@@ -65,6 +68,8 @@ node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js
+node --check chrome/fluxion-file-picker-verification.js
+node --check chrome/fluxion-shortcut-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
 node --check chrome/fluxion-memory-migration-verification.js
@@ -91,6 +96,8 @@ node --check actors/FluxionMemoryPageChild.sys.mjs
 node --check actors/FluxionMemoryPageParent.sys.mjs
 node --check actors/FluxionBrowsingVerificationChild.sys.mjs
 node --check actors/FluxionBrowsingVerificationParent.sys.mjs
+node --check actors/FluxionFilePickerVerificationChild.sys.mjs
+node --check actors/FluxionFilePickerVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --check modules/FluxionMemorySearch.sys.mjs
 node --check modules/FluxionNativeMemory.sys.mjs

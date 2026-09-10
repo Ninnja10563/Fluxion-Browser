@@ -105,6 +105,22 @@ test("Memory text matches are usable before semantic completion", async () => {
   assert.deepEqual(h.opened, ["https://example.org/text-match"]);
 });
 
+test("Memory evidence visibly distinguishes saved context from currently open tabs", async () => {
+  const h = harness();
+  h.window.FluxionPalette.open("memory"); h.type("guide"); h.flushTimers();
+  const row = { url: "https://example.org/guide", title: "Guide" };
+  h.memory[0].resolve({ state: "keyword-only", results: [row], answer: {
+    state: "grounded", text: "Best match", evidence: [{ ...row, domain: "example.org", visitLabel: "Visited yesterday",
+      workspaceName: "Ambiguous obsolete label", contextLabels: ["Saved in School", "Saved group: Research", "Open here in Development / Project"],
+      reasons: ["Exact title match"], excerpt: "Source evidence" }],
+  } });
+  await settle();
+  assert.match(h.text(), /Saved in School/);
+  assert.match(h.text(), /Saved group: Research/);
+  assert.match(h.text(), /Open here in Development \/ Project/);
+  assert.doesNotMatch(h.text(), /Ambiguous obsolete label/);
+});
+
 test("late semantic ranking preserves the selected text match by URL", async () => {
   const h = harness();
   h.window.FluxionPalette.open("memory");

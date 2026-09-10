@@ -251,18 +251,19 @@
     }
 
     const useEmbeddings = embeddingsEnabled();
-    const openTabsByUrl = new Map();
-    const workspaceNames = new Map(window.FluxionUI.workspaces().map(item => [item.id, item.name]));
-    for (const tab of window.gBrowser.tabs) {
-      const url = tab.linkedBrowser?.currentURI?.spec;
-      if (url) openTabsByUrl.set(url, tab);
-    }
-    const annotate = row => {
-      const tab = openTabsByUrl.get(row.url);
-      const workspace = tab ? window.FluxionUI.tabWorkspace(tab) : row.workspace;
-      return { ...row, workspace, workspaceName: workspaceNames.get(workspace) || workspace || "" };
-    };
     const snapshot = (state, lexical = [], semantic = []) => {
+      // Re-read live context for each partial/final snapshot. It is separate
+      // from the saved extraction context, never a replacement for history.
+      const openByUrl = new Map();
+      const names = new Map(window.FluxionUI.workspaces().map(item => [item.id, item.name]));
+      for (const tab of window.gBrowser.tabs) {
+        const url = tab.linkedBrowser?.currentURI?.spec;
+        if (!url || tab.closing) continue;
+        const workspaceId = window.FluxionUI.tabWorkspace(tab);
+        if (!openByUrl.has(url)) openByUrl.set(url, []);
+        openByUrl.get(url).push({ workspaceId, workspaceName: names.get(workspaceId) || "", groupName: tab.group?.label || "" });
+      }
+      const annotate = row => FluxionMemoryContext.annotate(row, openByUrl.get(row.url));
       const results = FluxionMemoryRanking.mergeMemoryResults(query,
         [...keyword, ...lexical].map(annotate), semantic.map(annotate), { currentWorkspace, limit: 12 });
       return { results, state, answer: FluxionMemoryGrounding.ground(query, results) };
@@ -391,6 +392,11 @@
     const url = browser.currentURI?.spec || "";
     if (Date.now() - (indexedAt.get(url) || 0) < 30000) return url;
     if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
+    const tab = window.gBrowser.getTabForBrowser(browser);
+    const workspace = tab ? window.FluxionUI.tabWorkspace(tab) : "";
+    const savedWorkspaceName = window.FluxionUI.workspaces().find(item => item.id === workspace)?.name || "";
+    const tabGroup = tab?.group?.label || "";
+    const capturedAt = Date.now();
     const actor = browser.browsingContext?.currentWindowGlobal?.getActor("FluxionMemoryPage");
     const extracted = await actor?.sendQuery("FluxionMemory:Extract");
     if (startedAt !== FluxionMemoryStore.revision || !enabled() ||
@@ -403,14 +409,12 @@
     if (!FluxionMemoryPolicy.canIndexPage(page, excludedDomains())) return;
     const embeddingText = FluxionMemoryContent.embeddingText(page);
     if (embeddingText.length < 80) return;
-    const tab = window.gBrowser.getTabForBrowser(browser);
     const stored = await FluxionMemoryStore.upsert({
       ...page,
       embeddingText,
-      workspace: tab ? window.FluxionUI.tabWorkspace(tab) : "",
-      tabGroup: tab?.group?.label || "",
-      lastVisit: Date.now(),
-      indexedAt: Date.now(),
+      workspace, savedWorkspaceName, tabGroup,
+      lastVisit: capturedAt,
+      indexedAt: capturedAt,
     }, startedAt);
     if (!stored || startedAt !== FluxionMemoryStore.revision) return;
     if (Services.env.get("FLUXION_VISUAL_ENRICHMENT_TEST") !== "1" && embeddingsEnabled()) {
@@ -649,7 +653,8 @@
           });
           if (!(await FluxionMemoryStore.upsert({
             url: page.url, title: page.title, description: "", headings: "",
-            text: page.text || "Saved source for candidate ordering verification.", workspace: "", tabGroup: "",
+            text: page.text || "Saved source for candidate ordering verification.", workspace: page.exact ? "removed-workspace-fixture" : "",
+            savedWorkspaceName: page.exact ? "Original research" : "", tabGroup: page.exact ? "Historical group" : "",
             lastVisit: page.time, indexedAt: now,
           }))) throw new Error("Ranking fixture evidence was not stored");
         }
@@ -669,6 +674,15 @@
             recalled.answer?.sourceURL !== exactURL) {
           throw new Error("Integrated keyword-only Memory did not rank the old exact page first");
         }
+        const saved = recalled.results[0].savedContext;
+        const labels = recalled.answer.evidence[0].contextLabels;
+        if (saved?.workspaceName !== "Original research" || saved.groupName !== "Historical group" ||
+            !labels.includes("Saved in Original research") || !labels.includes("Saved group: Historical group") ||
+            recalled.results[0].openContexts.length) {
+          throw new Error("Memory did not retain explicit saved context for a workspace that no longer exists");
+        }
+        Services.prefs.setStringPref("fluxion.memory.context.health", "saved-context-retained-without-inventing-current-tabs");
+        Services.prefs.savePrefFile(null);
         stage("checking-normalized-body-only-recall");
         for (const query of ["ecole memoire cafe", "école mémoire café"]) {
           if (keywordRows(query).length) throw new Error("Unicode fixture unexpectedly matched native title/URL history");

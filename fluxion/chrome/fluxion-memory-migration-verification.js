@@ -85,11 +85,19 @@
       });
       assert(matched[0].getResultByName("count") === 103, "Native normalized body query missed migrated rows");
       report.checks.push("103-original-pages-and-native-vector-bytes-preserved", "accented-body-query-matches-migrated-evidence");
+      stage("adding-historical-context-schema");
+      await FluxionMemorySearch.migrateV2(db);
+      const context = (await db.execute("SELECT workspace,workspace_name,tab_group,search_content FROM pages WHERE id=2"))[0];
+      assert(await db.getSchemaVersion() === 3 && context.getResultByName("workspace") === "dev" &&
+        context.getResultByName("workspace_name") === "" && context.getResultByName("tab_group") === "Research" &&
+        context.getResultByName("search_content") === "cafe and office notes", "Context migration invented a historical name or changed evidence");
+      assert(await vectorBytes() === before, "Context migration changed native vector bytes");
+      report.checks.push("v2-to-v3-context-migration-keeps-legacy-name-unknown");
       stage("reopening-native-migrated-fixture");
       await db.close();
       db = null;
       db = await Sqlite.openConnection({ path, extensions: ["vec"] });
-      assert(await db.getSchemaVersion() === 2 && await vectorBytes() === before, "Migrated schema/vector bytes did not survive reopen");
+      assert(await db.getSchemaVersion() === 3 && await vectorBytes() === before, "Migrated schema/vector bytes did not survive reopen");
       report.checks.push("schema-and-native-vectors-survive-reopen");
     } finally {
       // Only this UUID-named verification database and its known SQLite

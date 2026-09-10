@@ -103,6 +103,10 @@ jobs:
         shell: bash
         run: ./fluxion/scripts/verify-macos-flow.sh '.runtime/Fluxion.app'
 
+      - name: Verify packaged Settings shortcut capture and cross-window saves
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-shortcuts.sh '.runtime/Fluxion.app'
+
       - name: Verify fresh-profile defaults and existing bookmarks
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-default-bookmarks.sh '.runtime/Fluxion.app'
@@ -111,6 +115,20 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: ./fluxion/scripts/verify-macos-browsing.sh '.runtime/Fluxion.app'
+
+      - name: Verify real macOS file picker cancellation and upload
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_FILE_PICKER_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-file-picker-evidence
+        run: ./fluxion/scripts/verify-macos-file-picker.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native file picker evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-file-picker-evidence
+          path: ${{ runner.temp }}/fluxion-file-picker-evidence
+          if-no-files-found: warn
 
       - name: Verify full Library search and pagination
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

@@ -4,6 +4,8 @@
 
   const { fold: normalise } = typeof module !== "undefined" && module.exports
     ? require("./memory-search.js") : scope.FluxionMemorySearch;
+  const Context = typeof module !== "undefined" && module.exports
+    ? require("./memory-context.js") : scope.FluxionMemoryContext;
 
   function lexicalStrength(query, row) {
     const needle = normalise(query);
@@ -61,7 +63,7 @@
         record.score += 0.65 / (1 + ageDays / 14);
       }
       record.score += Math.min(0.45, Math.log2(1 + Number(record.row.visitCount || 0)) * 0.08);
-      if (currentWorkspace && record.row.workspace === currentWorkspace) record.score += 0.3;
+      record.score += Context.relevance(record.row, currentWorkspace);
     }
 
     return [...records.values()]

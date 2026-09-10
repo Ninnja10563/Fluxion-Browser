@@ -1,6 +1,8 @@
 /* global globalThis */
 (function exposeMemoryGrounding(scope) {
   "use strict";
+  const Context = typeof module !== "undefined" && module.exports
+    ? require("./memory-context.js") : scope.FluxionMemoryContext;
 
   function normalise(value) {
     return String(value || "").toLocaleLowerCase().replace(/\s+/g, " ").trim();
@@ -44,10 +46,7 @@
       else if (tokens.length && tokens.every(token => text.includes(token))) matches.push(`${name[0].toUpperCase()}${name.slice(1)} words match`);
     }
     if (!matches.length && Number.isFinite(Number(row.distance))) matches.push("Similar page meaning");
-    if (row.workspaceName || row.workspace) {
-      matches.push(`Workspace: ${clean(row.workspaceName || row.workspace, 40)}`);
-    }
-    if (row.group) matches.push(`Group: ${clean(row.group, 50)}`);
+    matches.push(...Context.labels(row));
     return matches.slice(0, 3);
   }
 
@@ -73,6 +72,7 @@
       excerpt: excerpt(query, row),
       reasons: reasons(query, row),
       visitLabel: relativeVisit(row.lastVisit, options.now),
+      contextLabels: Context.labels(row),
       domain: domain(row.url),
     }));
     if (!evidence.length) {

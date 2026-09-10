@@ -869,10 +869,12 @@
     reset.setAttribute("aria-label", reset.title);
     let beforeCapture = key.textContent;
     const stopCapture = () => {
+      window.FluxionShortcuts.endCapture(key);
       key.dataset.capturing = "false";
       key.textContent = window.FluxionShortcuts.format(action.id) || beforeCapture;
     };
     key.addEventListener("click", () => {
+      if (!window.FluxionShortcuts.beginCapture(key)) return;
       beforeCapture = key.textContent;
       key.dataset.capturing = "true";
       key.textContent = "Press shortcut…";

@@ -20,7 +20,7 @@ function fixture(saved = new Map()) {
     exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null,
     beforeStorage: null, failStorage: false, storageOpens: 0, storageReady: false,
     beforeInference: null, inferenceCalls: 0, searchCalls: 0, beforeEnriched: null,
-    nativeResults: [], keywords: [], enrichedResults: { lexical: [], semantic: [] } };
+    nativeResults: [], keywords: [], windows: [], upserts: [], enrichedResults: { lexical: [], semantic: [] } };
   // Model the relevant native converter contract in a separate ESM-like
   // realm: Array.isArray crosses realms, instanceof Float32Array does not.
   const tensorToSQLBindable = vm.runInNewContext(`value => {
@@ -101,6 +101,7 @@ function fixture(saved = new Map()) {
   const adapter = context.FluxionNativeMemory;
   const FluxionMemoryStore = {
     revision: 0,
+    async upsert(page) { state.upserts.push(page); return true; },
     async clearVectors() { state.enriched = 0; },
     async clear() { state.enriched = 0; },
     async vectorCount() { return state.enriched; },
@@ -118,6 +119,7 @@ function fixture(saved = new Map()) {
       gBrowser: { tabs: [], addTabsProgressListener() {}, removeTabsProgressListener() {} },
       FluxionUI: { workspaces: () => [], tabWorkspace: () => "" },
     };
+    state.windows.push(window);
     const PlacesUtils = { tensorToSQLBindable, history: {
       getNewQuery: () => ({}), getNewQueryOptions: () => ({}), executeQuery: () => ({ root: {
         get childCount() { return state.keywords.length; }, getChild: index => state.keywords[index],
@@ -129,7 +131,7 @@ function fixture(saved = new Map()) {
         PlacesUtils, PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate } }) },
     });
     for (const file of ["core/settings.js", "core/index-scheduler.js", "core/memory-policy.js",
-      "core/memory-content.js", "core/memory-search.js", "core/memory-ranking.js", "core/memory-grounding.js", "fluxion-memory.js"]) {
+      "core/memory-content.js", "core/memory-search.js", "core/memory-context.js", "core/memory-ranking.js", "core/memory-grounding.js", "fluxion-memory.js"]) {
       vm.runInContext(fs.readFileSync(path.join(__dirname, "../chrome", file), "utf8"), ctx, { filename: file });
     }
     return window.FluxionMemory;
@@ -159,6 +161,59 @@ test("Memory emits immediate grounded keyword and enriched partials while native
   assert.equal(final.results.length, 2);
   assert.equal(f.state.inferenceCalls, 0);
   wait.resolve(); await settle();
+});
+
+test("indexing captures workspace/group before deferred extraction and does not rewrite that context on movement", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  f.prefs.set("fluxion.memory.embeddingProvider", "disabled");
+  await api.setEmbeddingProvider("disabled");
+  await api.enable();
+  const window = f.state.windows[0], extracted = deferred();
+  const browser = { currentURI: { spec: "https://example.org/article" },
+    browsingContext: { currentWindowGlobal: { getActor: () => ({ sendQuery: () => extracted.promise }) } } };
+  const tab = { workspace: "school", group: { label: "Research" }, linkedBrowser: browser };
+  let names = [{ id: "school", name: "School" }, { id: "dev", name: "Development" }];
+  window.FluxionUI.workspaces = () => names;
+  window.FluxionUI.tabWorkspace = target => target.workspace;
+  window.gBrowser.getTabForBrowser = () => tab;
+  const pending = api.indexBrowser(browser);
+  tab.workspace = "dev"; tab.group.label = "Project";
+  names = [{ id: "dev", name: "Renamed development" }];
+  extracted.resolve({ url: browser.currentURI.spec, title: "Readable article", text: "This is sufficiently long article evidence about plants and scientific research to be indexed by Browser Memory." });
+  await pending;
+  assert.equal(f.state.upserts.length, 1);
+  assert.equal(f.state.upserts[0].workspace, "school");
+  assert.equal(f.state.upserts[0].savedWorkspaceName, "School");
+  assert.equal(f.state.upserts[0].tabGroup, "Research");
+});
+
+test("runtime shows saved context separately and refreshes duplicate live contexts on final snapshot", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  await api.setEmbeddingProvider("disabled"); await api.enable();
+  const window = f.state.windows[0], url = "https://example.org/guide";
+  let names = [{ id: "dev", name: "Development" }, { id: "personal", name: "Personal" }];
+  window.FluxionUI.workspaces = () => names;
+  window.FluxionUI.tabWorkspace = tab => tab.workspace;
+  window.gBrowser.tabs = [
+    { workspace: "dev", group: { label: "Now" }, linkedBrowser: { currentURI: { spec: url } } },
+    { workspace: "personal", linkedBrowser: { currentURI: { spec: url } } },
+    { workspace: "personal", linkedBrowser: { currentURI: { spec: url } } },
+  ];
+  f.state.enrichedResults.lexical = [{ url, title: "Guide", workspace: "school", savedWorkspaceName: "School", group: "Research", indexedAt: 1 }];
+  const deferredResult = deferred(), partials = [];
+  f.state.beforeEnriched = deferredResult.promise;
+  const pending = api.search("guide", "dev", { onPartial: response => partials.push(response) });
+  await settle();
+  assert.equal(partials.at(-1).results[0].openContexts.length, 2);
+  names = [{ id: "dev", name: "Renamed" }];
+  window.gBrowser.tabs.splice(1);
+  deferredResult.resolve();
+  const result = await pending;
+  assert.equal(result.results[0].workspace, "school");
+  assert.equal(result.results[0].savedContext.workspaceName, "School");
+  assert.equal(result.results[0].openContexts.length, 1);
+  assert.equal(result.results[0].openContexts[0].workspaceName, "Renamed");
+  assert.deepEqual(Array.from(result.answer.evidence[0].contextLabels), ["Saved in School", "Saved group: Research", "Open here in Renamed / Now"]);
 });
 
 test("timed-out native inference retains one shared slot across windows and never publishes late vectors", async () => {

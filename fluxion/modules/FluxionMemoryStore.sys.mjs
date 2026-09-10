@@ -6,7 +6,7 @@ import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
 import { FluxionMemorySearch } from "resource://fluxion/modules/FluxionMemorySearch.sys.mjs";
 
 const FILE_NAME = "fluxion_memory.sqlite";
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 let connectionPromise;
 let embedder;
 let pendingEmbedding;
@@ -73,7 +73,7 @@ async function connection() {
             await db.execute(`CREATE TABLE pages (
               id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
               description TEXT NOT NULL, headings TEXT NOT NULL, content TEXT NOT NULL,
-              workspace TEXT NOT NULL, tab_group TEXT NOT NULL, last_visit INTEGER NOT NULL,
+              workspace TEXT NOT NULL, workspace_name TEXT NOT NULL DEFAULT '', tab_group TEXT NOT NULL, last_visit INTEGER NOT NULL,
               visit_count INTEGER NOT NULL DEFAULT 1, indexed_at INTEGER NOT NULL,
               search_title TEXT NOT NULL, search_url TEXT NOT NULL,
               search_description TEXT NOT NULL, search_headings TEXT NOT NULL, search_content TEXT NOT NULL
@@ -121,6 +121,7 @@ async function connection() {
             if (shutdownStarted) throw new Error("Fluxion Memory migration interrupted by shutdown");
           });
         }
+        if (version === 1 || version === 2) await FluxionMemorySearch.migrateV2(db);
         shutdownStep = "Database open";
         return db;
       } catch (error) {
@@ -254,18 +255,19 @@ export const FluxionMemoryStore = Object.freeze({
       headings: page.headings,
       content: page.text,
       workspace: page.workspace,
+      savedWorkspaceName: String(page.savedWorkspaceName || "").slice(0, 120),
       tabGroup: page.tabGroup,
       lastVisit: page.lastVisit,
       indexedAt: page.indexedAt,
       ...FluxionMemorySearch.foldedFields({ ...page, content: page.text }),
     };
     await db.executeCached(`INSERT INTO pages
-        (url,title,description,headings,content,workspace,tab_group,last_visit,indexed_at,
+        (url,title,description,headings,content,workspace,workspace_name,tab_group,last_visit,indexed_at,
          search_title,search_url,search_description,search_headings,search_content)
-        VALUES (:url,:title,:description,:headings,:content,:workspace,:tabGroup,:lastVisit,:indexedAt,
+        VALUES (:url,:title,:description,:headings,:content,:workspace,:savedWorkspaceName,:tabGroup,:lastVisit,:indexedAt,
          :search_title,:search_url,:search_description,:search_headings,:search_content)
         ON CONFLICT(url) DO UPDATE SET title=excluded.title, description=excluded.description,
-        headings=excluded.headings, content=excluded.content, workspace=excluded.workspace,
+        headings=excluded.headings, content=excluded.content, workspace=excluded.workspace, workspace_name=excluded.workspace_name,
         tab_group=excluded.tab_group, last_visit=excluded.last_visit,
         visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at,
         search_title=excluded.search_title, search_url=excluded.search_url,
@@ -300,7 +302,8 @@ export const FluxionMemoryStore = Object.freeze({
         WHEN search_headings LIKE :pattern ESCAPE '\\' OR search_description LIKE :pattern ESCAPE '\\' THEN 2
         WHEN search_content LIKE :pattern ESCAPE '\\' THEN 3 ELSE 4 END,
         last_visit DESC, url ASC LIMIT :limit`, parameters);
-    const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","tab_group","last_visit","visit_count","distance"].map(name => [name === "tab_group" ? "group" : name === "last_visit" ? "lastVisit" : name === "visit_count" ? "visitCount" : name, item.getResultByName(name)]));
+    const aliases = { tab_group: "group", workspace_name: "savedWorkspaceName", indexed_at: "indexedAt", last_visit: "lastVisit", visit_count: "visitCount" };
+    const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","workspace_name","tab_group","indexed_at","last_visit","visit_count","distance"].map(name => [aliases[name] || name, item.getResultByName(name)]));
     if (startedAt === revision && typeof onLexical === "function") {
       try { onLexical(lexical.map(row)); } catch (error) { Cu.reportError(error); }
     }

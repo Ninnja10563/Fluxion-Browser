@@ -4,6 +4,7 @@ import { pathToFileURL } from "node:url";
 
 export const MAX_BODY_BYTES = 128 * 1024;
 export const DOWNLOAD_FILENAME = "fluxion-download.txt";
+export const FILE_PICKER_FILENAME = "Fluxion café upload.txt";
 export const DOWNLOAD_TEXT = "Fluxion native browsing verification\nDownloaded bytes survive a real multipart upload.\n";
 export const DOWNLOAD_BYTES = Buffer.from(DOWNLOAD_TEXT, "utf8");
 export const DOWNLOAD_SHA256 = createHash("sha256").update(DOWNLOAD_BYTES).digest("hex");
@@ -24,6 +25,9 @@ const loginForm = `<form id="login-form" action="/login" method="post">
 const uploadForm = `<form id="upload-form" action="/upload" method="post" enctype="multipart/form-data">
 <label>Downloaded file <input type="file" name="file" required></label>
 <button type="submit">Upload</button></form>`;
+const pickerForm = `<form id="file-picker-form" action="/file-picker-upload" method="post" enctype="multipart/form-data">
+<label>Choose the verification file <input type="file" name="file" required></label>
+<button type="submit">Upload chosen file</button></form>`;
 
 function requestError(status, message) {
   return Object.assign(new Error(message), { status });
@@ -109,6 +113,8 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
     rangeDownloads: 0,
     uploads: 0,
     upload: { verified: false, filename: "", sha256: "", bytes: 0 },
+    filePickerUploads: 0,
+    filePickerUpload: { verified: false, filename: "", sha256: "", bytes: 0 },
     logins: 0,
     rejectedLogins: 0,
     authenticatedVisits: 0,
@@ -183,6 +189,17 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
           state.slowDownloads += 1;
           streamDownload(response, status, headers, payload, slowDurationMs, 3);
         } else send(status, payload, headers);
+      } else if (method === "GET" && url.pathname === "/file-picker") {
+        send(200, page("Fluxion native file picker", pickerForm));
+      } else if (method === "POST" && url.pathname === "/file-picker-upload") {
+        const file = multipartFile(request.headers["content-type"] || "", await readBody(request));
+        if (file.filename.normalize("NFC") !== FILE_PICKER_FILENAME || !file.bytes.equals(DOWNLOAD_BYTES)) {
+          throw requestError(422, "Native picker upload did not match the fixture file");
+        }
+        state.filePickerUploads += 1;
+        state.filePickerUpload = { verified: true, filename: file.filename,
+          sha256: createHash("sha256").update(file.bytes).digest("hex"), bytes: file.bytes.length };
+        send(200, page("Fluxion native picker upload complete", '<p id="picker-upload-result">Chosen file verified</p>'));
       } else if (method === "GET" && url.pathname === "/upload") {
         send(200, page("Fluxion upload form", uploadForm));
       } else if (method === "POST" && url.pathname === "/upload") {
@@ -236,7 +253,7 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
         send(303, "", { Location: "/", "Set-Cookie": "fluxion_fixture_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict" });
       } else if (method === "GET" && url.pathname === "/state") {
         send(200, JSON.stringify(state), { "Content-Type": "application/json" });
-      } else if (["/", "/download", "/download-slow", "/download-partial", "/upload", "/login", "/account", "/logout", "/state", "/basic-cancel/", "/basic-accept/"].includes(url.pathname)) {
+      } else if (["/", "/download", "/download-slow", "/download-partial", "/upload", "/file-picker", "/file-picker-upload", "/login", "/account", "/logout", "/state", "/basic-cancel/", "/basic-accept/"].includes(url.pathname)) {
         send(405, "Method not allowed");
       } else send(404, "Fixture endpoint not found");
     } catch (error) {
@@ -262,6 +279,8 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
     origin, port: address.port, close,
     download: { filename: DOWNLOAD_FILENAME, text: DOWNLOAD_TEXT, sha256: DOWNLOAD_SHA256, bytes: DOWNLOAD_BYTES.length, path: "/download-slow" },
     partialDownload: { filename: PARTIAL_FILENAME, sha256: PARTIAL_SHA256, bytes: PARTIAL_BYTES.length, path: "/download-partial" },
+    filePicker: { filename: FILE_PICKER_FILENAME, text: DOWNLOAD_TEXT, sha256: DOWNLOAD_SHA256,
+      bytes: DOWNLOAD_BYTES.length, path: "/file-picker" },
   };
 }
 
@@ -273,7 +292,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exitCode = 64;
   } else {
     const fixture = await start({ port: value === undefined ? 0 : Number(value) });
-    process.stdout.write(`${JSON.stringify({ origin: fixture.origin, port: fixture.port, download: fixture.download, partialDownload: fixture.partialDownload })}\n`);
+    process.stdout.write(`${JSON.stringify({ origin: fixture.origin, port: fixture.port, download: fixture.download, partialDownload: fixture.partialDownload, filePicker: fixture.filePicker })}\n`);
     const stop = () => fixture.close().catch(error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);

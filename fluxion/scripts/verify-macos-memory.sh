@@ -46,7 +46,10 @@ for (( attempt = 0; attempt < 1280; attempt += 1 )); do
       grep -Fq 'user_pref("fluxion.memory.unicode.health", "normalized-body-only-recall-preserves-original-evidence")' "$profile/prefs.js" || {
         printf 'Integrated normalized body-only recall evidence is missing.\n' >&2; exit 1;
       }
-      printf 'Verified old exact-match and normalized body-only recall, real Gecko model vectors, and semantic-only plant evidence retrieval.\n' >&2
+      grep -Fq 'user_pref("fluxion.memory.context.health", "saved-context-retained-without-inventing-current-tabs")' "$profile/prefs.js" || {
+        printf 'Integrated saved-context evidence is missing.\n' >&2; exit 1;
+      }
+      printf 'Verified saved context, old exact-match and normalized body-only recall, real Gecko model vectors, and semantic-only plant evidence retrieval.\n' >&2
       exit 0
     fi
     if grep -Eq 'user_pref\("fluxion.memory.(semantic|migration).error",' "$profile/prefs.js"; then break; fi
@@ -57,7 +60,7 @@ done
 
 printf 'The real local semantic model gate failed; keyword fallback does not pass this check.\n' >&2
 if [[ -f "$profile/prefs.js" ]]; then
-  grep -E 'user_pref\("fluxion.memory.(semantic|ranking|unicode|migration)\.' "$profile/prefs.js" >&2 || true
+  grep -E 'user_pref\("fluxion.memory.(semantic|ranking|unicode|migration|context)\.' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,160p' "$log" >&2
 exit 1

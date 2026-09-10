@@ -46,6 +46,31 @@ test("downloaded bytes survive multipart upload and mismatched bytes never pass"
   assert.equal((await (await fetch(`${server.origin}/state`)).json()).uploads, 1);
 });
 
+test("native picker endpoint validates Unicode filename and exact bytes independently of injected-upload fixture", async t => {
+  const server = await fixture(t);
+  const html = await (await fetch(`${server.origin}/file-picker`)).text();
+  assert.match(html, /id="file-picker-form"[^>]*action="\/file-picker-upload"[^>]*enctype="multipart\/form-data"/);
+  assert.equal(server.filePicker.filename, server.FILE_PICKER_FILENAME);
+  for (const [filename, bytes, status] of [
+    [server.FILE_PICKER_FILENAME, server.DOWNLOAD_BYTES, 200],
+    [server.FILE_PICKER_FILENAME.normalize("NFD"), server.DOWNLOAD_BYTES, 200],
+    ["unrelated.txt", server.DOWNLOAD_BYTES, 422],
+    [server.FILE_PICKER_FILENAME, Buffer.from("wrong bytes"), 422],
+  ]) {
+    const form = new FormData();
+    form.set("file", new Blob([bytes]), filename);
+    const response = await fetch(`${server.origin}/file-picker-upload`, { method: "POST", body: form });
+    assert.equal(response.status, status);
+    await response.text();
+  }
+  const state = await (await fetch(`${server.origin}/state`)).json();
+  assert.equal(state.filePickerUploads, 2);
+  assert.equal(state.uploads, 0);
+  assert.equal(state.filePickerUpload.sha256, server.DOWNLOAD_SHA256);
+  assert.equal(state.filePickerUpload.bytes, server.DOWNLOAD_BYTES.length);
+  assert.equal(state.filePickerUpload.filename.normalize("NFC"), server.FILE_PICKER_FILENAME);
+});
+
 test("paced download exposes progress before delivering the same final file bytes", async t => {
   const server = await fixture(t, { slowDurationMs: 200 });
   const response = await fetch(`${server.origin}/download-slow`);
