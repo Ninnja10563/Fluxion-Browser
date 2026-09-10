@@ -20,7 +20,8 @@ The current preview is runnable and includes:
   and native group headings; tree-style Up/Down/Home/End plus
   expand/collapse/parent-child arrows, stable focus after selection or close,
   pointer-close rows that hold their position against accidental repeat clicks
-  and then compress on movement, and a packaged 200-tab render gate;
+  and then compress on movement; title and audio updates preserve row/control
+  identity, with packaged 200-tab initial and repeated-update gates;
 - per-workspace active-page memory: returning to a workspace resumes the exact
   native tab last used there, with Gecko recency as a safe first-visit fallback;
 - packaged multi-launch recovery for workspace membership, active pages,

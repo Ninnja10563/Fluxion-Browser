@@ -518,6 +518,12 @@ states before calling `gBrowser.prepareDiscardBrowser`. It then calls
 state, tears down the content browser, and restores it through the ordinary tab
 selection path. Fluxion does not serialize page state itself.
 
+SessionStore preparation is asynchronous. After it resolves, Fluxion rechecks
+eligibility, native browser identity, window ownership, and the sleeping
+preference revision before discarding. A per-tab pending guard deduplicates
+concurrent requests. Preference observers cancel pending work even when another
+window changes the interval away and back; window teardown cancels it too.
+
 Private windows never run the scheduler. Selected, pinned, split, audio/PiP,
 screen/camera/microphone-sharing, busy, closing, and already discarded tabs are
 also excluded. These checks intentionally trade a small amount of potential
@@ -636,6 +642,21 @@ one tab stop, dispatches a real ArrowDown event, and verifies DOM focus follows
 Gecko's changed selected tab after the rebuild. It removes the fixture before
 visual capture. This is a regression gate, not a substitute for later CPU,
 battery, and representative-content memory profiling.
+
+Content-only tab events now queue only affected visible tabs. The updater
+preserves row, title, close-control, and audio-control identity, and touches
+only changed state. Unrelated attributes and off-workspace content events do
+not refresh visible rows. Workspace buttons retain identity while their model
+is unchanged. Selection, grouping, movement, and other structural events still
+use the full projection path; this is not a virtualized tab list. Audio actions
+read current native state rather than capturing the state at row creation.
+
+A separate packaged-app gate drives 24 batches of 20 native title/audio events
+with 200 visible tabs. It checks stable rows and close controls, focus, scroll,
+selection, workspace buttons, and zero structural removals; it also drives real
+mute/unmute. Event-to-frame p50/p95/max timings are recorded in CI logs. These
+cheap-page measurements detect regressions, not a claim of sustained high
+refresh rates on content-heavy browsing sessions.
 
 ## Pointer-close stability
 

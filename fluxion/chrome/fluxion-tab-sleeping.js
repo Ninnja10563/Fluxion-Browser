@@ -1,4 +1,4 @@
-/* global gBrowser, Services, FluxionTabSleepingPolicy */
+/* global Cu, gBrowser, Services, FluxionTabSleepingPolicy */
 (function initialiseFluxionTabSleeping(window) {
   "use strict";
 
@@ -9,6 +9,9 @@
   const PREF_MINUTES = "fluxion.tabs.sleepMinutes";
   let timer = 0;
   let running = false;
+  let destroyed = false;
+  const pending = new WeakSet();
+  let preferenceRevision = 0;
 
   function minutes() {
     return FluxionTabSleepingPolicy.normaliseMinutes(
@@ -35,28 +38,46 @@
   }
 
   async function sleep(tab, { forceAge = false } = {}) {
-    const threshold = minutes() * 60_000;
+    if (destroyed || !tab || pending.has(tab) || ![...gBrowser.tabs].includes(tab)) return false;
+    const scheduledMinutes = minutes();
+    const threshold = scheduledMinutes * 60_000;
     if (!threshold && !forceAge) return false;
     const now = Date.now();
     if (!FluxionTabSleepingPolicy.canSleep(tab, tabState(tab, now, forceAge ? 0 : threshold))) {
       return false;
     }
-    // Gecko flushes SessionStore first and refuses pages with beforeunload
-    // handlers or active tab dialogs. Never force-discard: unsaved forms win.
-    await gBrowser.prepareDiscardBrowser(tab);
-    const discarded = gBrowser.discardBrowser(tab, false);
-    if (discarded) {
-      tab.setAttribute("fluxion-sleeping", "true");
-      gBrowser.tabContainer.dispatchEvent(new CustomEvent("FluxionTabSleep", {
-        bubbles: true,
-        detail: { tab },
-      }));
+    const scheduledRevision = preferenceRevision;
+    const browser = tab.linkedBrowser;
+    pending.add(tab);
+    try {
+      // Flushes can overlap playback, capture, navigation, or preference changes.
+      // Gecko's final guard protects beforeunload/dialogs, but not all of ours.
+      await gBrowser.prepareDiscardBrowser(tab);
+      const currentMinutes = minutes();
+      const currentThreshold = currentMinutes * 60_000;
+      if (destroyed || scheduledRevision !== preferenceRevision ||
+          currentMinutes !== scheduledMinutes ||
+          (!currentThreshold && !forceAge) || ![...gBrowser.tabs].includes(tab) ||
+          tab.linkedBrowser !== browser ||
+          !FluxionTabSleepingPolicy.canSleep(tab, tabState(tab, Date.now(), forceAge ? 0 : currentThreshold))) {
+        return false;
+      }
+      const discarded = gBrowser.discardBrowser(tab, false);
+      if (discarded) {
+        tab.setAttribute("fluxion-sleeping", "true");
+        gBrowser.tabContainer.dispatchEvent(new CustomEvent("FluxionTabSleep", {
+          bubbles: true,
+          detail: { tab },
+        }));
+      }
+      return discarded;
+    } finally {
+      pending.delete(tab);
     }
-    return discarded;
   }
 
   async function run() {
-    if (running || !minutes() || PrivateBrowsingUtils.isWindowPrivate(window)) return 0;
+    if (destroyed || running || !minutes() || PrivateBrowsingUtils.isWindowPrivate(window)) return 0;
     running = true;
     let count = 0;
     try {
@@ -71,8 +92,12 @@
 
   function schedule() {
     window.clearTimeout(timer);
+    if (destroyed) return;
     const delay = FluxionTabSleepingPolicy.nextCheckDelay(minutes());
-    if (delay) timer = window.setTimeout(async () => { await run(); schedule(); }, delay);
+    if (delay) timer = window.setTimeout(async () => {
+      try { await run(); } catch (error) { Cu.reportError(error); }
+      finally { schedule(); }
+    }, delay);
   }
 
   function setMinutes(value) {
@@ -93,7 +118,18 @@
   gBrowser.tabContainer.addEventListener("TabSelect", event => {
     event.target.removeAttribute("fluxion-sleeping");
   });
-  window.addEventListener("unload", () => window.clearTimeout(timer), { once: true });
+  const preferenceObserver = {
+    observe() {
+      preferenceRevision += 1;
+      schedule();
+    },
+  };
+  Services.prefs.addObserver(PREF_MINUTES, preferenceObserver);
+  window.addEventListener("unload", () => {
+    destroyed = true;
+    window.clearTimeout(timer);
+    Services.prefs.removeObserver(PREF_MINUTES, preferenceObserver);
+  }, { once: true });
   window.FluxionTabSleeping = Object.freeze({ minutes, run, setMinutes, sleep, wake });
   schedule();
   Services.prefs.setStringPref("fluxion.sleeping.health", "native-discard-scheduler-loaded");
@@ -101,12 +137,41 @@
 
   if (Services.env.get("FLUXION_VISUAL_SLEEP_TEST") === "1") {
     window.setTimeout(async () => {
-      const candidate = [...gBrowser.tabs].find(tab =>
-        tab !== gBrowser.selectedTab && !tab.pinned && !tab.splitview && tab.linkedPanel
-      );
-      if (candidate && await sleep(candidate, { forceAge: true })) {
+      const fixtureURL = "https://example.com/?fluxion-sleep-race-test=1";
+      const candidate = gBrowser.addTrustedTab(fixtureURL, { skipAnimation: true });
+      window.FluxionUI.setTabWorkspace(candidate, window.FluxionUI.currentWorkspace());
+      try {
+        for (let attempt = 0; attempt < 100 &&
+            (candidate.hasAttribute("busy") || candidate.linkedBrowser?.currentURI?.spec !== fixtureURL); attempt += 1) {
+          await new Promise(resolve => window.setTimeout(resolve, 100));
+        }
+        if (candidate.hasAttribute("busy") || candidate.linkedBrowser?.currentURI?.spec !== fixtureURL) {
+          throw new Error("The sleep race fixture did not finish its HTTPS navigation");
+        }
+        const originalBrowser = candidate.linkedBrowser;
+        const sleeping = sleep(candidate, { forceAge: true });
+        if (!pending.has(candidate)) throw new Error("The sleep race fixture did not enter native state flushing");
+        // The async flush is now pending. Pin through Gecko before the sleeping
+        // continuation can run; this must protect the still-live browser.
+        gBrowser.pinTab(candidate);
+        if (await sleeping || !candidate.linkedPanel || candidate.linkedBrowser !== originalBrowser) {
+          throw new Error("Pinning during state flushing did not prevent native discard");
+        }
+        Services.prefs.setStringPref("fluxion.sleeping.race.health", "pin-during-flush-kept-native-tab-live");
+        gBrowser.unpinTab(candidate);
+        if (!(await sleep(candidate, { forceAge: true }))) {
+          throw new Error("The unpinned eligible fixture did not discard through Gecko");
+        }
         Services.prefs.setStringPref("fluxion.sleeping.visual.health", "native-tab-discarded");
         Services.prefs.savePrefFile(null);
+      } catch (error) {
+        Services.prefs.setStringPref("fluxion.sleeping.error", String(error));
+        Services.prefs.savePrefFile(null);
+        Cu.reportError(error);
+      } finally {
+        if ([...gBrowser.tabs].includes(candidate) && !candidate.closing) {
+          gBrowser.removeTab(candidate, { animate: false, skipSessionStore: true });
+        }
       }
     }, 1800);
   }

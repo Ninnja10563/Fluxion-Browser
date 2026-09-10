@@ -8,6 +8,20 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.45 improves sustained many-tab interaction:
+
+- refresh changed tab content in place instead of rebuilding the entire Flow
+  sidebar for background title, icon, audio, or sharing updates;
+- retain tab/close controls and unchanged workspace buttons, preserving focus
+  and scroll position during background updates;
+- keep audio actions tied to current native media state after row updates;
+- recheck tab-sleep eligibility after SessionStore flushing, protecting tabs
+  that become active, pinned, split, or start media/capture during the wait;
+- cancel pending sleep when preferences change in any window and prevent
+  duplicate sleep requests;
+- require a separate 200-tab native repeated-update test with identity,
+  focus, scroll, media-control, mutation, and measured latency checks.
+
 Version 0.44 improves runtime safety and development browsing:
 
 - package a reviewed Gecko version from Mozilla's versioned archive and verify

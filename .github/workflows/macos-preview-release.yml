@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.44.0-preview.1
+        default: 0.45.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.44.0-preview.1
+        default: v0.45.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -84,6 +84,10 @@ jobs:
           locked_version="$(node -p "require('./fluxion/runtime/gecko-lock.json').version")"
           [[ "$(plutil -extract upstreamVersion raw "$resources/fluxion/runtime-provenance.json")" == "$locked_version" ]]
           [[ "$(plutil -extract policies.DisableAppUpdate raw "$resources/distribution/policies.json")" == 'true' ]]
+
+      - name: Verify repeated native Flow updates
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-flow.sh '.runtime/Fluxion.app'
 
       - name: Verify real local semantic retrieval
         shell: bash

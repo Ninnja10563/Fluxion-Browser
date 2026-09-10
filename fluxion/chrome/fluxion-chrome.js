@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionSplitViews, FluxionTabCloseStability, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
+/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionFlowTabContent, FluxionSplitViews, FluxionTabCloseStability, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -29,6 +29,9 @@
   let dragTabs = [];
   let dragTargetElement = null;
   let renderQueued = false;
+  let structureDirty = true;
+  const dirtyTabs = new Set();
+  let workspaceRenderSignature = "";
   let pointerCloseHold = null;
   let renderDeferredForClose = false;
   let focusTabAfterRender = null;
@@ -264,6 +267,7 @@
       border: 0; padding: 0; color: inherit; background: transparent; border-radius: 4px;
       display: grid; place-items: center; cursor: default;
     }
+    .fluxion-tab > [hidden] { display: none !important; }
     .fluxion-icon-button { width: 24px; height: 24px; font-size: 15px; }
     .fluxion-icon-button:hover, .fluxion-close:hover, .fluxion-audio:hover { background: var(--fluxion-hover); }
     .fluxion-icon-button:focus-visible, .fluxion-tab:focus-visible, .fluxion-workspace:focus-visible,
@@ -1875,12 +1879,30 @@
     });
   }
 
+  function refreshTabElement(tab, item) {
+    const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
+    let splitLabel = "";
+    if (tab.splitview) {
+      const orientation = splitOrientation(tab);
+      const position = FluxionSplitViews.positionLabel(
+        FluxionSplitViews.splitPosition(tab), orientation, tab.splitview.tabs.length,
+      );
+      splitLabel = `${orientation === FluxionSplitViews.STACKED ? "Stacked" : "Side-by-side"} split view, ${position} pane`;
+    }
+    FluxionFlowTabContent.update(item, {
+      sleeping, status: describeTab(tab, sleeping), label: tabLabel(tab),
+      active: tab === gBrowser.selectedTab, multiselected: Boolean(tab.multiselected),
+      url: tab.linkedBrowser?.currentURI?.displaySpec || "", faviconURL: iconFor(tab) || "",
+      peek: tab.hasAttribute("fluxion-peek"), splitLabel,
+    }, { create, fallbackIcon, statusGlyph, controlGlyph });
+  }
+
+  function activateTabAudio(tab) {
+    return FluxionFlowTabContent.activateAudio(tab, () => describeTab(tab, false));
+  }
+
   function createTabElement(tab, { level = 1, role = "treeitem" } = {}) {
     const item = create("div", "fluxion-tab");
-    const sleeping = !tab.linkedPanel || tab.hasAttribute("pending") || tab.hasAttribute("fluxion-sleeping");
-    const status = describeTab(tab, sleeping);
-    item.classList.toggle("is-sleeping", sleeping);
-    item.classList.toggle("is-multiselected", Boolean(tab.multiselected));
     item.tabIndex = tab === gBrowser.selectedTab ? 0 : -1;
     item.draggable = true;
     item._fluxionTab = tab;
@@ -1892,74 +1914,22 @@
         ? "ArrowLeft ArrowRight Home End Delete M"
         : "ArrowUp ArrowDown Home End ArrowLeft Delete M",
     );
-    item.dataset.active = String(tab === gBrowser.selectedTab);
-    item.dataset.status = status.indicators.map(indicator => indicator.kind).join(" ");
-    item.setAttribute("aria-selected", String(tab === gBrowser.selectedTab || tab.multiselected));
-    item.setAttribute(
-      "aria-label",
-      [tabLabel(tab), ...status.labels].join(", "),
-    );
-    item.title = [
-      tabLabel(tab),
-      tab.linkedBrowser?.currentURI?.displaySpec || "",
-      ...status.labels,
-    ].filter(Boolean).join("\n");
-
-    const faviconUrl = iconFor(tab);
-    if (faviconUrl) {
-      const favicon = create("img", "fluxion-favicon");
-      favicon.alt = "";
-      favicon.src = faviconUrl;
-      favicon.addEventListener("error", () => favicon.replaceWith(fallbackIcon()));
-      item.appendChild(favicon);
-    } else {
-      item.appendChild(fallbackIcon());
-    }
-
+    const favicon = fallbackIcon();
     const title = create("span", "fluxion-title");
-    title.textContent = tabLabel(tab);
-    item.appendChild(title);
-
-    if (tab.hasAttribute("fluxion-peek")) {
-      const badge = create("span", "fluxion-peek-badge");
-      badge.textContent = "Peek";
-      badge.title = "Temporary page — switch away to close";
-      item.appendChild(badge);
-    }
-
-    if (tab.splitview) {
-      const splitMark = create("span", "fluxion-split-mark");
-      const position = FluxionSplitViews.splitPosition(tab);
-      const orientation = splitOrientation(tab);
-      const spatialPosition = FluxionSplitViews.positionLabel(
-        position, orientation, tab.splitview.tabs.length,
-      );
-      splitMark.title = `${orientation === FluxionSplitViews.STACKED ? "Stacked" : "Side-by-side"} split view, ${spatialPosition} pane`;
-      splitMark.setAttribute("aria-label", splitMark.title);
-      item.appendChild(splitMark);
-    }
-
-    if (status.indicators.length) {
-      const indicators = create("span", "fluxion-status-strip");
-      indicators.setAttribute("aria-hidden", "true");
-      for (const indicator of status.indicators) indicators.appendChild(statusGlyph(indicator));
-      item.appendChild(indicators);
-    }
-
-    if (status.audio) {
-      const audio = create("button", "fluxion-audio");
-      audio.type = "button";
-      audio.appendChild(controlGlyph(status.audio.kind));
-      audio.title = status.audio.action;
-      audio.setAttribute("aria-label", audio.title);
-      audio.tabIndex = -1;
-      audio.addEventListener("click", event => {
-        event.stopPropagation();
-        if (status.audio.kind === "blocked") tab.resumeDelayedMedia();
-        else tab.toggleMuteAudio();
-      });
-      item.appendChild(audio);
-    }
+    const badge = create("span", "fluxion-peek-badge");
+    badge.textContent = "Peek";
+    badge.title = "Temporary page — switch away to close";
+    const splitMark = create("span", "fluxion-split-mark");
+    const indicators = create("span", "fluxion-status-strip");
+    indicators.setAttribute("aria-hidden", "true");
+    const audio = create("button", "fluxion-audio");
+    audio.type = "button";
+    audio.tabIndex = -1;
+    audio.addEventListener("click", event => {
+      event.stopPropagation();
+      activateTabAudio(tab);
+    });
+    item.append(favicon, title, badge, splitMark, indicators, audio);
 
     const close = create("button", "fluxion-close");
     close.type = "button";
@@ -1972,6 +1942,8 @@
       closeWithStability(tab, item, { closeButton: close, event });
     });
     item.appendChild(close);
+    item._fluxionParts = { favicon, faviconURL: "", title, peek: badge, split: splitMark, indicators, audio, close };
+    refreshTabElement(tab, item);
 
     const select = event => {
       const accelerator = event && (navigator.platform.includes("Mac") ? event.metaKey : event.ctrlKey);
@@ -2024,10 +1996,8 @@
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         closeWithStability(tab, item);
-      } else if (event.key.toLowerCase() === "m" && status.audio) {
+      } else if (event.key.toLowerCase() === "m" && activateTabAudio(tab)) {
         event.preventDefault();
-        if (status.audio.kind === "blocked") tab.resumeDelayedMedia();
-        else tab.toggleMuteAudio();
       }
     });
     item.addEventListener("contextmenu", event => {
@@ -2243,6 +2213,9 @@
   }
 
   function renderWorkspaces() {
+    const signature = JSON.stringify([currentWorkspace, workspaces]);
+    if (signature === workspaceRenderSignature) return;
+    workspaceRenderSignature = signature;
     workspaceList.replaceChildren();
     workspaceElements.clear();
     const colours = { slate: "#68747b", blue: "#51748a", ochre: "#92794d", sage: "#667c69", rose: "#8b646b" };
@@ -2310,6 +2283,8 @@
     const focusedGroupBeforeRender = document.activeElement
       ?.closest?.(".fluxion-group-heading")?._fluxionGroup || null;
     renderQueued = false;
+    structureDirty = false;
+    dirtyTabs.clear();
     renderWorkspaces();
     groupElements.clear();
     tabElements.clear();
@@ -2407,6 +2382,24 @@
       closingTabs.delete(event.target);
       if (pointerCloseHold?.tabs.has(event.target)) pointerCloseHold.closed.add(event.target);
     }
+    const contentOnly = ["TabAttrModified", "TabSharingStateChanged", "FluxionTabSleep", "FluxionPeekChange"]
+      .includes(event?.type);
+    if (contentOnly) {
+      const changed = event.detail?.changed;
+      if (event.type === "TabAttrModified" && Array.isArray(changed) && changed.length &&
+          !changed.some(name => ["label", "image", "busy", "progress", "pending", "attention", "crashed",
+            "soundplaying", "muted", "activemedia-blocked", "pictureinpicture", "sharing", "undiscardable"]
+            .includes(name))) return;
+      const tab = event.detail?.tab || (event.target?.linkedBrowser ? event.target : null);
+      if (tab) {
+        if (!tabElements.has(tab)) return;
+        dirtyTabs.add(tab);
+      } else {
+        for (const renderedTab of tabElements.keys()) dirtyTabs.add(renderedTab);
+      }
+    } else {
+      structureDirty = true;
+    }
     if (pointerCloseHold) {
       renderDeferredForClose = true;
       syncHeldTabSelection();
@@ -2416,7 +2409,15 @@
     if (renderQueued) return;
     renderQueued = true;
     window.requestAnimationFrame(() => {
-      render();
+      if (structureDirty || pointerCloseHold) render();
+      else {
+        renderQueued = false;
+        for (const tab of dirtyTabs) {
+          const item = tabElements.get(tab);
+          if (item?.isConnected && tab.parentNode) refreshTabElement(tab, item);
+        }
+        dirtyTabs.clear();
+      }
       updateWindowTitle();
     });
   }
@@ -2999,12 +3000,12 @@
       const captureRow = tabElements.get(capture);
       const crashedRow = tabElements.get(crashed);
       const checks = {
-        audio: Boolean(videoRow?.querySelector('.fluxion-audio[aria-label="Mute tab"]')),
+        audio: Boolean(videoRow?.querySelector('.fluxion-audio:not([hidden])[aria-label="Mute tab"]')),
         capture: Boolean(captureRow?.querySelector('[data-kind="sharing-camera-microphone"]')),
         captureLabel: Boolean(captureRow?.getAttribute("aria-label").includes("Using the camera and microphone")),
         crash: Boolean(crashedRow?.querySelector('[data-kind="crashed"]')),
         crashExclusive: crashedRow?.querySelectorAll(".fluxion-status").length === 1 &&
-          !crashedRow?.querySelector(".fluxion-audio"),
+          !crashedRow?.querySelector(".fluxion-audio:not([hidden])"),
         loading: Boolean(videoRow?.querySelector('[data-kind="loading"]')),
         pictureInPicture: Boolean(videoRow?.querySelector('[data-kind="picture-in-picture"]')),
         pictureInPictureLabel: Boolean(

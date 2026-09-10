@@ -191,7 +191,9 @@ test("Flow projects live Gecko tab status with accessible, working media control
   assert.match(chrome, /tab\.activeMediaBlocked/);
   assert.match(chrome, /tab\.resumeDelayedMedia\(\)/);
   assert.match(chrome, /tab\.toggleMuteAudio\(\)/);
-  assert.match(chrome, /\[tabLabel\(tab\), \.\.\.status\.labels\]\.join/);
+  const tabContent = fs.readFileSync(path.join(root, "chrome/core/flow-tab-content.js"), "utf8");
+  assert.match(chrome, /FluxionFlowTabContent\.update\(item/);
+  assert.match(tabContent, /\[state\.label, \.\.\.state\.status\.labels\]\.join/);
   assert.match(chrome, /prefers-reduced-motion/);
   assert.match(macVerifier, /FLUXION_VISUAL_STATUS_TEST=1/);
   assert.match(macVerifier, /native-gecko-tab-states-projected-and-controllable/);

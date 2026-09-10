@@ -72,7 +72,8 @@ controls work and its failure paths have been tested.
   DevTools delegation, plus the same availability-checked actions in the
   universal command palette, implemented)
 - performance, battery, memory, and hundreds-of-tabs profiling (packaged
-  200-tab Flow render gate and bounded activity/battery/media/memory-aware
+  200-tab initial render and repeated content-update gates, stable in-place
+  content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
 - macOS notarization, Windows signing, Linux packages, and update service
 - signed and notarized Apple Silicon DMGs attached to GitHub Releases for each

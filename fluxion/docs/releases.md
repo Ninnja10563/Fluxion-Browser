@@ -50,6 +50,14 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    Flow render, requires a single roving tab stop, drives ArrowDown, verifies
    selected-tab and DOM focus identity after rerender, and removes the fixture
    before capture.
+   A separate fresh-profile Flow gate repeats 24 batches of 20 native title/audio
+   updates across 200 visible tabs. It requires stable row and control identity,
+   scroll, focus, selection, workspace controls, and no structural removals;
+   unrelated and off-workspace events must not mutate the visible sidebar.
+   It also drives native mute/unmute and records event-to-frame p50/p95/max in
+   the Actions log. The sleeping gate pins a tab during its real asynchronous
+   SessionStore flush, requires it to remain live, then unpins it and requires
+   a subsequent eligible request to discard through Gecko.
    The split gate drives the same Gecko-native pair through stacked and
    side-by-side layouts, requires both panel geometries to change, and verifies
    that the native splitter remains between live browser panels. The
