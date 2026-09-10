@@ -182,6 +182,20 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-session.sh '.runtime/Fluxion.app'
 
+      - name: Check corrupt Memory policy preserves native evidence on restart
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_MEMORY_CORRUPTION_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-memory-corruption-evidence
+        run: ./fluxion/scripts/verify-macos-memory-corruption.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Memory corruption evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-memory-corruption-evidence
+          path: ${{ runner.temp }}/fluxion-memory-corruption-evidence
+          if-no-files-found: warn
+
       - name: Preserve Library diagnostic snapshot
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

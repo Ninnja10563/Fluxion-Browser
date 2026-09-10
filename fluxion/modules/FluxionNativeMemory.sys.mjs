@@ -1,4 +1,5 @@
 import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
+import { FluxionMemoryPolicy } from "resource://fluxion/modules/FluxionMemoryPolicy.sys.mjs";
 
 const PENDING_PREF = "fluxion.memory.nativePendingRemoval";
 const activeWrites = new Set();
@@ -14,12 +15,18 @@ function pending() {
 }
 
 function mayIndex() {
-  return !pending() && Services.prefs.getBoolPref("fluxion.memory.enabled", false) &&
+  return FluxionMemoryPolicy.readPolicy(Services.prefs).valid && !pending() && Services.prefs.getBoolPref("fluxion.memory.enabled", false) &&
     Services.prefs.getStringPref("fluxion.memory.embeddingProvider", "gecko-local") !== "disabled";
 }
 
 function getManager() {
   if (!manager) {
+    // A newly constructed disabled Gecko manager may remove an initialized
+    // database even without removeOnStartup. Corrupt policy is not deletion
+    // consent; only a genuine pending explicit purge may bypass this guard.
+    if (!FluxionMemoryPolicy.readPolicy(Services.prefs).valid && !pending()) {
+      throw new Error("Repair the exclusion policy before opening native Browser Memory.");
+    }
     const { getPlacesSemanticHistoryManager } = ChromeUtils.importESModule(
       "resource://gre/modules/PlacesSemanticHistoryManager.sys.mjs"
     );

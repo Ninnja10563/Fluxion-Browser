@@ -74,12 +74,42 @@
     write("health", "native-control-names-and-descriptions-verified");
     await verifyResponsiveSettings(root);
   }
+  async function seedExclusionList() {
+    const memory = window.FluxionMemory;
+    const pref = "fluxion.memory.exclusionPolicy";
+    const hadPref = Services.prefs.prefHasUserValue(pref);
+    const savedPref = hadPref ? Services.prefs.getStringPref(pref) : null;
+    const before = memory.exclusionPolicy();
+    assert(before.valid && !before.readOnly, "Native Settings fixture requires a valid writable exclusion policy");
+    const previousIds = new Set(before.lists.map(item => item.id));
+    const fixtureName = "Long private research domain collection";
+    const fixtureDomain = "long-sensitive-research-subdomain.settings-layout-fixture.invalid";
+    const restore = async () => {
+      const current = memory.exclusionPolicy();
+      for (const item of current.lists.filter(item => !previousIds.has(item.id) && item.name === fixtureName &&
+        item.domains.length === 1 && item.domains[0] === fixtureDomain)) {
+        await memory.deleteExclusionList(item.id, memory.exclusionPolicy().revision);
+      }
+      if (hadPref) Services.prefs.setStringPref(pref, savedPref);
+      else Services.prefs.clearUserPref(pref);
+      Services.prefs.savePrefFile(null);
+    };
+    try {
+      const saved = await memory.saveExclusionList({ name: fixtureName, enabled: true,
+        domains: [fixtureDomain] }, before.revision);
+      const created = saved.lists.filter(item => !previousIds.has(item.id));
+      assert(created.length === 1, "Actual Memory API did not create one exclusion list");
+      return { id: created[0].id, restore };
+    } catch (error) { await restore(); throw error; }
+  }
   async function verifyResponsiveSettings(root) {
     deadline = Date.now() + 90000;
     const { document, FluxionUI: ui } = window;
     const main = root.querySelector(".fluxion-settings-main");
     const service = Cc["@mozilla.org/accessibilityService;1"].getService(Ci.nsIAccessibilityService);
     const original = { width: window.outerWidth, height: window.outerHeight };
+    const exclusionFixture = await seedExclusionList();
+    try {
     const principal = Services.scriptSecurityManager.createContentPrincipal(
       Services.io.newURI("https://settings-layout-fixture.invalid"), {});
     for (const [type, expiry, time] of [["camera", Ci.nsIPermissionManager.EXPIRE_NEVER, 0],
@@ -125,6 +155,35 @@
       for (const panel of sections) {
         await show(panel);
         const section = panel.dataset.section;
+        if (section === "search") {
+          const editor = panel.querySelector(`[data-exclusion-list-id="${exclusionFixture.id}"]`);
+          assert(editor, "Actual saved exclusion list was not rendered in Settings");
+          const disclosure = editor.querySelector("summary");
+          if (!editor.open) disclosure.click();
+          await waitFor(() => editor.open && editor.querySelector("textarea").getBoundingClientRect().height > 0,
+            "Saved exclusion-list disclosure did not open");
+          check(disclosure, "exclusion-list-disclosure", size);
+          const fields = [];
+          for (const control of editor.querySelectorAll("input, textarea, button")) {
+            const expectedName = normalize(control.getAttribute("aria-label") || control.textContent);
+            assert(expectedName && !control.disabled, "Exclusion-list control is unnamed or unexpectedly disabled");
+            control.scrollIntoView({ block: "center", inline: "nearest", behavior: "instant" });
+            await waitFor(() => normalize(service.getAccessibleFor(control)?.name) === expectedName,
+              `Native exclusion-list accessible name does not match ${expectedName}`);
+            control.focus();
+            assert(document.activeElement === control, `Exclusion-list control cannot receive keyboard focus: ${expectedName}`);
+            if (control.type === "checkbox") {
+              const bounds = rect(control);
+              assert(bounds.width > 0 && bounds.width <= 20 && bounds.height > 0 && bounds.height <= 20,
+                `Exclusion-list checkbox stretched beyond native size: ${JSON.stringify(bounds)}`);
+            }
+            fields.push({ ...check(control, "exclusion-list", size), accessibleName: expectedName, focused: true });
+          }
+          assert(fields.length === 6, "Exclusion-list editor omitted name/domains/enabled or Save/Cancel/Remove");
+          geometry.exclusionLists ||= [];
+          geometry.exclusionLists.push({ size, listId: exclusionFixture.id, fields,
+            inputSource: "DOM focus and actual native accessibility; not OS keyboard injection" });
+        }
         if (size === 320 && section === "workspaces") {
           const current = ui.workspaces().find(item => item.id === ui.currentWorkspace());
           const currentName = [...panel.querySelectorAll(".fluxion-settings-workspace-name")].find(node => node.value === current.name);
@@ -198,6 +257,10 @@
     }
     window.resizeTo(original.width, original.height);
     write("report", JSON.stringify(report));
+    } finally {
+      window.resizeTo(original.width, original.height);
+      await exclusionFixture.restore();
+    }
     write("geometry.health", "all-settings-sections-fit-320-and-600px");
   }
   run().catch(error => {

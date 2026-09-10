@@ -17,6 +17,10 @@ let shutdownPromise;
 let shutdownStep = "Database has not been opened";
 // Shared across browser windows: privacy changes invalidate work already in flight.
 let revision = 0;
+const exclusionObserver = { observe() { revision += 1; } };
+for (const key of [FluxionMemoryPolicy.POLICY_PREF, FluxionMemoryPolicy.LEGACY_PREF]) {
+  Services.prefs.addObserver(key, exclusionObserver);
+}
 let historyDeletion = Promise.resolve();
 const HISTORY_EVENTS = ["history-cleared", "page-removed"];
 const PENDING_REMOVAL_PREF = "fluxion.memory.pendingRemoval";
@@ -58,9 +62,7 @@ function vectorFrom(result, expectedSize) {
 }
 
 function excludedDomains() {
-  return FluxionMemoryPolicy.parseExcludedDomains(
-    Services.prefs.getStringPref("fluxion.memory.excludedDomains", "[]"),
-  );
+  return FluxionMemoryPolicy.effectiveDomains(FluxionMemoryPolicy.readPolicy(Services.prefs));
 }
 
 async function pruneBlocked(db, domains) {
@@ -75,7 +77,11 @@ async function pruneBlocked(db, domains) {
     if (!rows.length) return;
     // Preferences cannot change during this synchronous batch. Normalize the
     // exclusion list once, then take a fresh snapshot after the next SQL wait.
-    const canIndex = FluxionMemoryPolicy.createPageFilter(domains ?? excludedDomains());
+    const currentDomains = excludedDomains();
+    // Invalid configuration blocks reads/indexing; it is not authorization to
+    // erase every saved page. Explicit recovery restores a valid policy first.
+    if (currentDomains === null) return;
+    const canIndex = FluxionMemoryPolicy.createPageFilter(domains ?? currentDomains);
     const blocked = rows.filter(row => !canIndex({ url: row.getResultByName("url") }));
     if (blocked.length) {
       await db.executeTransaction(async () => {
@@ -239,20 +245,22 @@ function generator() {
 }
 
 async function embedAndStore(url, text) {
+  if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
   const startedAt = revision;
   await historyDeletion;
   const db = await connection();
-  if (startedAt !== revision) return;
+  if (startedAt !== revision || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
   const engine = generator();
   const result = await embedText(text, 10000);
-  if (startedAt !== revision) return;
+  if (startedAt !== revision || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
   const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
   const rows = await db.executeCached("SELECT id FROM pages WHERE url=:url", { url });
-  if (!rows.length) return;
+  if (!rows.length || startedAt !== revision || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
   const rowid = rows[0].getResultByName("id");
   await db.executeTransaction(async () => {
-    if (startedAt !== revision) return;
+    if (startedAt !== revision || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
     await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
+    if (startedAt !== revision || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return;
     await db.executeCached("INSERT INTO page_vectors(rowid,embedding) VALUES(:rowid,:vector)", { rowid, vector });
   });
 }
@@ -286,6 +294,7 @@ export const FluxionMemoryStore = Object.freeze({
   get revision() { return revision; },
 
   async upsert(page, expectedRevision = revision) {
+    if (!FluxionMemoryPolicy.canIndexPage(page, excludedDomains())) return false;
     await historyDeletion;
     const db = await connection();
     if (expectedRevision !== revision) return false;
@@ -315,7 +324,7 @@ export const FluxionMemoryStore = Object.freeze({
         search_title=excluded.search_title, search_url=excluded.search_url,
         search_description=excluded.search_description, search_headings=excluded.search_headings,
         search_content=excluded.search_content`, parameters);
-    return expectedRevision === revision;
+    return expectedRevision === revision && FluxionMemoryPolicy.canIndexPage(page, excludedDomains());
   },
 
   async embed(url, text) {
@@ -323,12 +332,14 @@ export const FluxionMemoryStore = Object.freeze({
   },
 
   async search(query, limit = 12, includeSemantic = true, { onLexical } = {}) {
+    if (excludedDomains() === null) return { lexical: [], semantic: [] };
     const normalizedQuery = FluxionMemorySearch.fold(query);
     const terms = [...new Set(normalizedQuery.split(/\s+/).filter(Boolean))].slice(0, 16);
     if (!terms.length) return { lexical: [], semantic: [] };
     const startedAt = revision;
     await historyDeletion;
     const db = await connection();
+    if (startedAt !== revision || excludedDomains() === null) return { lexical: [], semantic: [] };
     const escapeLike = text => `%${text.replace(/[\\%_]/g, value => `\\${value}`)}%`;
     const parameters = { exact: normalizedQuery, pattern: escapeLike(normalizedQuery), limit };
     const fields = FluxionMemorySearch.fields.map(field => `search_${field}`);
@@ -344,17 +355,20 @@ export const FluxionMemoryStore = Object.freeze({
         WHEN search_headings LIKE :pattern ESCAPE '\\' OR search_description LIKE :pattern ESCAPE '\\' THEN 2
         WHEN search_content LIKE :pattern ESCAPE '\\' THEN 3 ELSE 4 END,
         last_visit DESC, url ASC LIMIT :limit`, parameters);
+    if (startedAt !== revision || excludedDomains() === null) return { lexical: [], semantic: [] };
     const aliases = { tab_group: "group", workspace_name: "savedWorkspaceName", indexed_at: "indexedAt", last_visit: "lastVisit", visit_count: "visitCount" };
     const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","workspace_name","tab_group","indexed_at","last_visit","visit_count","distance"].map(name => [aliases[name] || name, item.getResultByName(name)]));
     if (startedAt === revision && typeof onLexical === "function") {
-      try { onLexical(lexical.map(row)); } catch (error) { Cu.reportError(error); }
+      try { onLexical(lexical.map(row).filter(page => FluxionMemoryPolicy.canIndexPage(page, excludedDomains()))); } catch (error) { Cu.reportError(error); }
     }
     let semantic = [];
     try {
       const counts = await db.execute("SELECT count(*) AS count FROM page_vectors");
+      if (startedAt !== revision || excludedDomains() === null) return { lexical: [], semantic: [] };
       if (includeSemantic && counts[0].getResultByName("count") > 0) {
         const engine = generator();
         const result = await embedText(query, 1500);
+        if (startedAt !== revision || excludedDomains() === null) return { lexical: [], semantic: [] };
         const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
         semantic = await db.executeCached(`SELECT pages.*, matches.distance FROM
           (SELECT rowid,distance FROM page_vectors WHERE embedding MATCH :vector AND k=:limit) matches
@@ -364,19 +378,22 @@ export const FluxionMemoryStore = Object.freeze({
       Cu.reportError(error);
     }
     return startedAt === revision
-      ? { lexical: lexical.map(row), semantic: semantic.map(row) }
+      ? { lexical: lexical.map(row).filter(page => FluxionMemoryPolicy.canIndexPage(page, excludedDomains())),
+          semantic: semantic.map(row).filter(page => FluxionMemoryPolicy.canIndexPage(page, excludedDomains())) }
       : { lexical: [], semantic: [] };
   },
 
   async get(url) {
+    if (!FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return null;
     const startedAt = revision;
     await historyDeletion;
     const db = await connection();
+    if (startedAt !== revision || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return null;
     const rows = await db.executeCached(
       "SELECT url,title,description,headings,content FROM pages WHERE url=:url",
       { url },
     );
-    if (startedAt !== revision || !rows.length) return null;
+    if (startedAt !== revision || !rows.length || !FluxionMemoryPolicy.canIndexPage({ url }, excludedDomains())) return null;
     return Object.fromEntries(["url", "title", "description", "headings", "content"]
       .map(name => [name, rows[0].getResultByName(name)]));
   },

@@ -79,6 +79,17 @@
     .fluxion-settings-button.danger { color: light-dark(#8e2f2b, #ef9690); }
     .fluxion-switch { justify-self: end; display: inline-flex; align-items: center; gap: 8px; color: var(--fluxion-muted); }
     .fluxion-switch input { width: 15px; height: 15px; accent-color: var(--fluxion-accent); }
+    .fluxion-memory-lists { min-width: 0; border-top: 1px solid var(--fluxion-line); padding-top: 14px; }
+    .fluxion-memory-list { border-bottom: 1px solid var(--fluxion-line); padding: 10px 0; }
+    .fluxion-memory-list summary { cursor: pointer; font-weight: 550; overflow-wrap: anywhere; }
+    .fluxion-memory-list-fields { display: grid; gap: 10px; padding-top: 12px; }
+    .fluxion-memory-list-fields label { display: grid; gap: 5px; min-width: 0; }
+    .fluxion-memory-list-fields input:not([type=checkbox]), .fluxion-memory-list-fields textarea { box-sizing: border-box; width: 100%; min-width: 0; }
+    .fluxion-memory-list-fields input[type=checkbox] { justify-self: start; width: 15px; height: 15px; accent-color: var(--fluxion-accent); }
+    .fluxion-memory-list-fields textarea { resize: vertical; min-height: 70px; font: inherit; color: inherit; background: var(--fluxion-bg); border: 1px solid var(--fluxion-line); padding: 7px; }
+    .fluxion-memory-list-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .fluxion-memory-list-actions button { width: auto; max-width: 100%; overflow-wrap: anywhere; }
+    .fluxion-memory-list :is(summary, textarea, input):focus-visible { outline: 2px solid var(--fluxion-accent); outline-offset: 1px; }
     .fluxion-shortcut { font-family: ui-monospace, monospace; font-size: 12px; color: var(--fluxion-muted); text-align: end; }
     .fluxion-shortcut-control { display: grid; grid-template-columns: 1fr 30px; gap: 5px; }
     .fluxion-shortcut-key, .fluxion-shortcut-reset {
@@ -625,7 +636,14 @@
   renderWorkspaces();
 
   const search = section("search", "Search & Memory", "Browser Memory is local, optional, and never runs in private windows.");
+  let exclusionEditor = null;
+  const readExclusionPolicy = () => window.FluxionMemory?.exclusionPolicy?.() || null;
+  const directDomains = () => readExclusionPolicy()?.directDomains || window.FluxionMemory?.excludedDomains() || [];
+  const policyLocked = () => { const policy = readExclusionPolicy(); return policy && (!policy.valid || policy.readOnly); };
+  let memoryPending = false, embeddingPending = false, domainsPending = false;
   const memoryToggle = toggle("Enabled", Boolean(window.FluxionMemory?.enabled()), async checked => {
+    if (policyLocked() || memoryPending) { syncMemorySettings(); return; }
+    memoryPending = true;
     memoryToggle.querySelector("input").disabled = true;
     try {
       const capability = checked ? await window.FluxionMemory.enable() : null;
@@ -642,7 +660,8 @@
       setNote(`Could not update Browser Memory: ${error.message}`, "search");
     } finally {
       memoryToggle.querySelector("input").checked = Boolean(window.FluxionMemory?.enabled());
-      memoryToggle.querySelector("input").disabled = false;
+      memoryPending = false;
+      syncMemorySettings();
     }
   });
   row(search, "Browser Memory", "Keep searchable non-private history and bounded page evidence on this Mac.", memoryToggle);
@@ -657,6 +676,8 @@
     embeddingChoiceTask.catch(Cu.reportError);
   });
   async function applyEmbeddingChoice(value) {
+    if (policyLocked() || embeddingPending) { syncMemorySettings(); return window.FluxionMemory?.embeddingProvider(); }
+    embeddingPending = true;
     embeddingChoice.disabled = true;
     try {
       const saved = await window.FluxionMemory.setEmbeddingProvider(value);
@@ -673,7 +694,7 @@
       setNote(`Could not change embedding mode: ${error.message}`, "search");
       throw error;
     } finally {
-      embeddingChoice.disabled = false;
+      embeddingPending = false;
       syncMemorySettings();
     }
   }
@@ -692,40 +713,60 @@
   domains.id = "fluxion-memory-excluded-domains";
   domains.type = "text";
   domains.placeholder = "example.com, private.example";
-  domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
+  domains.value = directDomains().join(", ");
+  let domainsRevision = readExclusionPolicy()?.revision;
   let domainsDirty = false;
   domains.addEventListener("input", () => { domainsDirty = true; });
   domains.addEventListener("change", async () => {
+    if (policyLocked() || domainsPending) return;
     const next = FluxionSettings.excludedDomains(domains.value);
+    domainsPending = true;
     domains.disabled = true;
     try {
-      const saved = await window.FluxionMemory.setExcludedDomains(next);
+      const saved = await window.FluxionMemory.setExcludedDomains(next, domainsRevision);
       domains.value = saved.join(", ");
+      domainsDirty = false;
       setNote("Browser Memory exclusions saved.", "search");
     } catch (error) {
-      domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
-      setNote(`Could not finish removing excluded data: ${error.message}`, "search");
+      domainsDirty = Boolean(readExclusionPolicy());
+      if (!domainsDirty) domains.value = directDomains().join(", ");
+      setNote(`Could not finish removing excluded data: ${error.message}${domainsDirty ? " The policy may already be saved even if cleanup did not finish. Your draft is retained. Cancel domain changes to reload saved exclusions." : ""}`, "search");
     } finally {
-      domainsDirty = false;
-      domains.disabled = false;
+      domainsPending = false;
       syncMemorySettings();
     }
   });
   domains.addEventListener("blur", () => {
     if (!domainsDirty) syncMemorySettings();
   });
-  const memoryPreferenceNames = ["fluxion.memory.enabled", "fluxion.memory.embeddingProvider", "fluxion.memory.excludedDomains"];
+  const memoryPreferenceNames = ["fluxion.memory.enabled", "fluxion.memory.embeddingProvider", "fluxion.memory.excludedDomains", "fluxion.memory.exclusionPolicy"];
   function syncMemorySettings() {
+    const locked = Boolean(policyLocked());
     memoryToggle.querySelector("input").checked = Boolean(window.FluxionMemory?.enabled());
-    if (!embeddingChoice.disabled) embeddingChoice.value = window.FluxionMemory?.embeddingProvider() || "gecko-local";
-    if (!domains.disabled && !domainsDirty) domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
+    memoryToggle.querySelector("input").disabled = locked || memoryPending;
+    embeddingChoice.disabled = locked || embeddingPending;
+    domains.disabled = locked || domainsPending;
+    if (!embeddingPending) embeddingChoice.value = window.FluxionMemory?.embeddingProvider() || "gecko-local";
+    if (!domainsPending && !domainsDirty) {
+      domains.value = directDomains().join(", ");
+      domainsRevision = readExclusionPolicy()?.revision;
+    }
+    exclusionEditor?.sync();
   }
   const memoryPreferenceObserver = { observe: syncMemorySettings };
   for (const name of memoryPreferenceNames) Services.prefs.addObserver(name, memoryPreferenceObserver);
-  row(search, "Excluded domains", "Exclude up to 200 domains, including their subdomains. Matching Browser Memory data is removed; ordinary history is kept.", domains);
+  row(search, "Excluded domains", "Direct exclusions include subdomains and share the 200-entry limit with all lists. Matching Browser Memory data is removed; ordinary history is kept.", domains);
+  if (window.FluxionMemory?.exclusionPolicy) {
+    const cancelDomains = create("button", "fluxion-settings-button", "Cancel domain changes");
+    cancelDomains.type = "button";
+    cancelDomains.addEventListener("click", () => { if (!domainsPending) { domainsDirty = false; syncMemorySettings(); } });
+    search.appendChild(cancelDomains);
+    exclusionEditor = createExclusionLists(search);
+  }
   const clearMemory = create("button", "fluxion-settings-button danger", "Clear Browser Memory");
   clearMemory.type = "button";
   clearMemory.addEventListener("click", async () => {
+    if (readExclusionPolicy()?.readOnly) return;
     if (!Services.prompt.confirm(window, "Clear Browser Memory", "Delete local Browser Memory evidence and vectors, then turn the feature off?")) return;
     clearMemory.disabled = true;
     try {
@@ -739,6 +780,160 @@
     }
   });
   row(search, "Delete Browser Memory data", "This does not delete ordinary Gecko browsing history.", clearMemory);
+  clearMemory.disabled = Boolean(readExclusionPolicy()?.readOnly);
+  syncMemorySettings();
+
+  function createExclusionLists(panel) {
+    const container = create("div", "fluxion-memory-lists");
+    container.id = "fluxion-memory-exclusion-lists";
+    const title = create("h3", "", "User-defined exclusion lists");
+    const help = create("p", "fluxion-settings-note",
+      "Name your own collections of domains. Enabled lists apply alongside direct exclusions. This is not automatic website classification. Up to 20 lists and 200 domain entries across direct exclusions and all lists, including disabled lists.");
+    const status = create("p", "fluxion-settings-note");
+    status.setAttribute("role", "status");
+    const list = create("div");
+    const add = create("button", "fluxion-settings-button", "New exclusion list");
+    const recover = create("button", "fluxion-settings-button danger", "Reset exclusion policy");
+    add.type = recover.type = "button";
+    container.append(title, help, status, list, add, recover);
+    panel.appendChild(container);
+    const records = new Map();
+    let busy = false, disposed = false, sequence = 0, recoveryError = "", lastPolicyValid = null;
+    const editable = snapshot => snapshot?.valid && !snapshot.readOnly && !busy && !disposed;
+    const controls = record => [record.name, record.domains, record.enabled, record.save, record.cancel, record.remove];
+    function makeRecord(key) {
+      const node = create("details", "fluxion-memory-list");
+      node.dataset.exclusionListId = key;
+      const summary = create("summary");
+      const fields = create("div", "fluxion-memory-list-fields");
+      const name = create("input", "fluxion-settings-control");
+      name.type = "text"; name.maxLength = 40;
+      const values = create("textarea");
+      values.rows = 3; values.maxLength = 64000;
+      const enabled = create("input"); enabled.type = "checkbox";
+      const note = create("p", "fluxion-settings-note"); note.setAttribute("role", "status");
+      note.id = `fluxion-exclusion-list-note-${++sequence}`;
+      for (const [caption, control] of [["List name", name], ["Domains (comma or line separated)", values], ["Enable this list", enabled]]) {
+        const label = create("label", "", caption);
+        control.setAttribute("aria-label", caption);
+        control.setAttribute("aria-describedby", note.id);
+        label.appendChild(control); fields.appendChild(label);
+      }
+      const actions = create("div", "fluxion-memory-list-actions");
+      const save = create("button", "fluxion-settings-button", "Save list");
+      const cancel = create("button", "fluxion-settings-button", "Cancel changes");
+      const remove = create("button", "fluxion-settings-button danger", "Remove list");
+      for (const button of [save, cancel, remove]) button.type = "button";
+      actions.append(save, cancel, remove); fields.append(note, actions); node.append(summary, fields);
+      const record = { node, summary, name, domains: values, enabled, note, save, cancel, remove,
+        id: key === "new" ? null : key, dirty: key === "new", revision: readExclusionPolicy().revision };
+      const markDirty = () => { if (!record.dirty) record.revision = readExclusionPolicy().revision; record.dirty = true; };
+      name.addEventListener("input", markDirty); values.addEventListener("input", markDirty); enabled.addEventListener("change", markDirty);
+      save.addEventListener("click", async () => {
+        if (!editable(readExclusionPolicy())) return;
+        if (record.id && !readExclusionPolicy().lists.some(item => item.id === record.id)) return;
+        if (!name.value.trim()) { note.textContent = "Enter a list name (1–40 characters)."; name.focus(); return; }
+        const previousIds = new Set(readExclusionPolicy().lists.map(item => item.id));
+        busy = true; sync();
+        try {
+          const result = await window.FluxionMemory.saveExclusionList({ ...(record.id ? { id: record.id } : {}),
+            name: name.value, enabled: enabled.checked, domains: FluxionSettings.excludedDomains(values.value) }, record.revision);
+          if (disposed) return;
+          record.dirty = false;
+          if (!record.id) {
+            const created = result.lists.find(item => !previousIds.has(item.id));
+            if (created) {
+              records.get(created.id)?.node.remove();
+              records.delete("new"); record.id = created.id;
+              node.dataset.exclusionListId = created.id; records.set(created.id, record);
+            }
+          }
+          status.textContent = "Exclusion list saved. Ordinary browsing history is unchanged.";
+          note.textContent = "Saved.";
+        } catch (error) { if (!disposed) note.textContent = `${error.message} The policy may already be saved even if cleanup did not finish. Your draft is retained; Cancel changes reloads the saved policy.`; }
+        finally { busy = false; if (!disposed) sync(); }
+      });
+      cancel.addEventListener("click", () => {
+        if (busy || disposed) return;
+        const ownsFocus = node.contains(document.activeElement);
+        record.dirty = false; note.textContent = "";
+        if (!record.id || !readExclusionPolicy().lists.some(item => item.id === record.id)) {
+          node.remove(); records.delete(record.id || "new"); if (ownsFocus) add.focus();
+        }
+        sync();
+      });
+      remove.addEventListener("click", async () => {
+        const snapshot = readExclusionPolicy();
+        if (!record.id || !editable(snapshot) || !snapshot.lists.some(item => item.id === record.id)) return;
+        if (!Services.prompt.confirm(window, "Remove exclusion list", `Remove “${name.value}”? These domains may enter Browser Memory again unless excluded elsewhere.`)) return;
+        busy = true; sync();
+        try {
+          await window.FluxionMemory.deleteExclusionList(record.id, record.revision);
+          if (disposed) return;
+          const ownsFocus = node.contains(document.activeElement);
+          node.remove(); records.delete(record.id); status.textContent = "Exclusion list removed.";
+          if (ownsFocus) add.focus();
+        } catch (error) { if (!disposed) status.textContent = `${error.message} The policy may already be saved even if cleanup did not finish. Reloaded lists reflect the saved policy.`; }
+        finally { busy = false; if (!disposed) sync(); }
+      });
+      records.set(key, record); list.appendChild(node); return record;
+    }
+    function sync() {
+      if (disposed) return;
+      const snapshot = readExclusionPolicy();
+      const canEdit = editable(snapshot);
+      if (!snapshot.valid) status.textContent = `${recoveryError ? `${recoveryError} ` : ""}Exclusion policy cannot be read: ${snapshot.error || "invalid data"}. Memory and page AI remain blocked. Reset explicitly to recover.`;
+      else if (snapshot.readOnly) status.textContent = "Exclusion lists are read-only in private windows.";
+      else if (lastPolicyValid === false) { status.textContent = "Saved exclusion policy reloaded."; recoveryError = ""; }
+      lastPolicyValid = snapshot.valid;
+      recover.hidden = snapshot.valid;
+      recover.disabled = snapshot.readOnly || busy;
+      add.disabled = !canEdit || snapshot.lists.length >= 20 || records.has("new");
+      for (const saved of snapshot.lists) {
+        const record = records.get(saved.id) || makeRecord(saved.id);
+        record.summary.textContent = `${saved.name} · ${saved.enabled ? "Enabled" : "Disabled"} · ${saved.domains.length} domains`;
+        if (!record.dirty) {
+          record.name.value = saved.name; record.domains.value = saved.domains.join(", ");
+          record.enabled.checked = saved.enabled; record.revision = snapshot.revision;
+        } else if (record.revision !== snapshot.revision && !busy) {
+          record.note.textContent = "The policy changed in another window. Your draft is retained; Cancel changes reloads the saved policy.";
+        }
+      }
+      for (const [key, record] of records) {
+        const exists = snapshot.lists.some(item => item.id === record.id);
+        if (record.id && !exists && !record.dirty) {
+          const ownsFocus = record.node.contains(document.activeElement);
+          record.node.remove(); records.delete(key);
+          if (ownsFocus) add.focus();
+          continue;
+        }
+        if (record.id && !exists) record.note.textContent = "This list was removed in another window. Cancel changes to dismiss your retained draft.";
+        for (const control of controls(record)) control.disabled = !canEdit;
+        record.cancel.disabled = busy;
+        record.remove.hidden = !record.id;
+        record.remove.disabled = !canEdit || !exists;
+        record.save.disabled = !canEdit || Boolean(record.id && !exists);
+      }
+    }
+    add.addEventListener("click", () => {
+      if (!editable(readExclusionPolicy()) || records.has("new") || readExclusionPolicy().lists.length >= 20) return;
+      const record = makeRecord("new"); record.summary.textContent = "New exclusion list";
+      record.name.value = ""; record.domains.value = ""; record.enabled.checked = true;
+      record.node.open = true; sync(); record.name.focus();
+    });
+    recover.addEventListener("click", async () => {
+      const snapshot = readExclusionPolicy();
+      if (snapshot.valid || snapshot.readOnly || busy) return;
+      if (!Services.prompt.confirm(window, "Reset exclusion policy", "Replace the unreadable exclusion policy with an empty policy? All saved direct exclusions and lists will be removed. Previously enabled Browser Memory and page AI can become available immediately, with no user-defined domain exclusions.")) return;
+      recoveryError = "";
+      busy = true; sync();
+      try { await window.FluxionMemory.resetExclusionPolicy(snapshot.revision); if (!disposed) status.textContent = "Exclusion policy reset to empty. Previously enabled Browser Memory and page AI can now resume with no user-defined domain exclusions."; }
+      catch (error) { if (!disposed) { recoveryError = `Could not finish resetting exclusion policy: ${error.message}. The empty policy may already be saved even if cleanup did not finish.`; status.textContent = recoveryError; } }
+      finally { busy = false; if (!disposed) sync(); }
+    });
+    sync();
+    return { sync, destroy() { disposed = true; } };
+  }
 
   const ai = section("ai", "AI", "Optional page tools. Ordinary browsing and Browser Memory remain fully functional when AI is disabled.");
   const initialAI = window.FluxionAI.config();
@@ -1217,6 +1412,7 @@
     livePreferencesDisposed = true;
     for (const name of livePreferenceNames) Services.prefs.removeObserver(name, livePreferenceObserver);
     workspaceEditor.destroy();
+    exclusionEditor?.destroy();
     aiDisposed = true;
     Services.prefs.removeObserver("fluxion.ai.", aiPreferenceObserver);
     updateDisposed = true;

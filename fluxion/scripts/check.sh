@@ -16,6 +16,8 @@ bash -n \
   scripts/verify-macos-sleep.sh \
   scripts/verify-macos-memory.sh \
   scripts/verify-macos-memory-privacy.sh \
+  scripts/verify-macos-memory-policy.sh \
+  scripts/verify-macos-memory-corruption.sh \
   scripts/verify-macos-updates.sh \
   scripts/verify-macos-external-open.sh \
   scripts/verify-macos-settings-accessibility.sh \
@@ -87,6 +89,8 @@ node --check chrome/fluxion-tab-transfer-verification.js
 node --check chrome/fluxion-shortcut-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
+node --check chrome/fluxion-memory-policy-verification.js
+node --check chrome/fluxion-memory-corruption-verification.js
 node --check chrome/fluxion-memory-migration-verification.js
 node --check chrome/fluxion-default-bookmarks-verification.js
 node --check chrome/fluxion-update-verification.js
@@ -119,6 +123,7 @@ node --check actors/FluxionTabTransferVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --check modules/FluxionMemorySearch.sys.mjs
 node --check modules/FluxionMemoryPolicy.sys.mjs
+node --check modules/FluxionExclusionPolicy.sys.mjs
 node --check chrome/fluxion-memory-policy-verification.js
 bash -n scripts/verify-macos-memory-policy.sh
 node --check modules/FluxionNativeMemory.sys.mjs

@@ -123,9 +123,7 @@
   }
 
   function excludedDomains() {
-    return FluxionMemoryPolicy.parseExcludedDomains(
-      Services.prefs.getStringPref("fluxion.memory.excludedDomains", "[]")
-    );
+    return FluxionMemoryPolicy.effectiveDomains(FluxionMemoryPolicy.readPolicy(Services.prefs));
   }
 
   async function extractPage(browser, maxText = 12000) {

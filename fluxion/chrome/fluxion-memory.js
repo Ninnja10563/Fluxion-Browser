@@ -5,7 +5,6 @@
   if (window.FluxionMemory) return;
 
   const PREF_ENABLED = "fluxion.memory.enabled";
-  const PREF_EXCLUDED = "fluxion.memory.excludedDomains";
   const PREF_EMBEDDING_PROVIDER = "fluxion.memory.embeddingProvider";
   const { PlacesUtils } = ChromeUtils.importESModule(
     "resource://gre/modules/PlacesUtils.sys.mjs"
@@ -18,6 +17,9 @@
   );
   const { FluxionNativeMemory } = ChromeUtils.importESModule(
     "resource://fluxion/modules/FluxionNativeMemory.sys.mjs"
+  );
+  const { FluxionExclusionPolicy } = ChromeUtils.importESModule(
+    "resource://fluxion/modules/FluxionExclusionPolicy.sys.mjs"
   );
   let manager = null;
   let exclusionSweep = null;
@@ -43,14 +45,19 @@
   }
 
   function embeddingsEnabled() {
-    return enabled() && embeddingProvider() === "gecko-local" && !FluxionNativeMemory.pending();
+    return FluxionMemoryPolicy.readPolicy(Services.prefs).valid && enabled() && embeddingProvider() === "gecko-local" && !FluxionNativeMemory.pending();
   }
 
   function applyEmbeddingFeaturePrefs(active = embeddingsEnabled()) {
-    active = active && !FluxionNativeMemory.pending();
+    const validPolicy = FluxionMemoryPolicy.readPolicy(Services.prefs).valid;
+    active = active && validPolicy && !FluxionNativeMemory.pending();
     Services.prefs.setBoolPref("browser.ml.enable", active);
     Services.prefs.setBoolPref("places.semanticHistory.featureGate", active);
-    Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", !active);
+    // Corruption blocks model access, not authorization to purge saved data.
+    // Preserve any previously requested opt-out cleanup rather than inventing
+    // or cancelling deletion intent solely because policy parsing failed.
+    if (validPolicy) Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", !active);
+    else Services.prefs.clearUserPref("places.semanticHistory.initialized");
   }
 
   function setLowPriorityTimer(callback, delay) {
@@ -108,9 +115,7 @@
   }
 
   function excludedDomains() {
-    return FluxionMemoryPolicy.parseExcludedDomains(
-      Services.prefs.getStringPref(PREF_EXCLUDED, "[]")
-    );
+    return FluxionMemoryPolicy.effectiveDomains(FluxionExclusionPolicy.snapshot());
   }
 
   function isAllowedResult(url) {
@@ -169,7 +174,9 @@
         FROM vec_history_mapping map
         JOIN places.moz_places places USING (url_hash)
       `);
-      const canIndex = FluxionMemoryPolicy.createPageFilter(excludedDomains());
+      const domains = excludedDomains();
+      if (domains === null) return;
+      const canIndex = FluxionMemoryPolicy.createPageFilter(domains);
       const blocked = rows.filter(row => !canIndex({ url: row.getResultByName("url") }));
       if (!blocked.length) return;
       // Array.isArray crosses chrome/module realms; Gecko's Float32Array
@@ -239,6 +246,9 @@
     const query = String(searchText || "").trim();
     if (PrivateBrowsingUtils.isWindowPrivate(window)) {
       return { results: [], state: "private", answer: FluxionMemoryGrounding.ground(query, []) };
+    }
+    if (!FluxionExclusionPolicy.snapshot().valid) {
+      return { results: [], state: "policy-error", answer: FluxionMemoryGrounding.ground(query, []) };
     }
     const keyword = keywordRows(query);
     if (!enabled() || query.length < 2) {
@@ -347,31 +357,36 @@
   }
 
   function excludeDomain(value) {
-    return FluxionNativeMemory.runControl(() => addExcludedDomain(value));
+    return updatePolicy(policy => ({ ...policy, directDomains: [...policy.directDomains, value] })).then(() => true);
   }
 
-  async function addExcludedDomain(value) {
-    const domain = FluxionMemoryPolicy.normaliseDomain(value);
-    if (!domain) return false;
-    const next = [...new Set([...excludedDomains(), domain])];
-    if (next.length > 200) throw new Error("Browser Memory supports up to 200 excluded domains. Remove a domain before adding another.");
-    Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
-    Services.prefs.savePrefFile(null);
-    await deleteExcludedEvidence(next);
-    return true;
+  function exclusionPolicy() {
+    return { ...FluxionExclusionPolicy.snapshot(), readOnly: PrivateBrowsingUtils.isWindowPrivate(window) };
   }
-
-  function setExcludedDomains(values) {
-    return FluxionNativeMemory.runControl(() => replaceExcludedDomains(values));
+  function updatePolicy(transform, expectedRevision, options) {
+    if (PrivateBrowsingUtils.isWindowPrivate(window)) return Promise.reject(new Error("Exclusion policy cannot be changed from a private window."));
+    return FluxionExclusionPolicy.update(transform, expectedRevision, deleteExcludedEvidence, options)
+      .then(policy => ({ ...policy, readOnly: false }));
   }
-
-  async function replaceExcludedDomains(values) {
-    const next = [...new Set(values.map(FluxionMemoryPolicy.normaliseDomain).filter(Boolean))];
-    if (next.length > 200) throw new Error("Browser Memory supports up to 200 excluded domains. Remove extra domains and try again.");
-    Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
-    Services.prefs.savePrefFile(null);
-    await deleteExcludedEvidence(next);
-    return next;
+  function setExcludedDomains(values, expectedRevision) {
+    return updatePolicy(policy => ({ ...policy, directDomains: values }), expectedRevision).then(policy => policy.directDomains);
+  }
+  function saveExclusionList(input, expectedRevision) {
+    return updatePolicy(policy => {
+      const id = input.id || Services.uuid.generateUUID().toString().replace(/[{}]/g, "");
+      if (input.id && !policy.lists.some(list => list.id === id)) throw new Error("Exclusion list no longer exists.");
+      const next = { id, name: input.name, enabled: input.enabled, domains: input.domains };
+      return { ...policy, lists: input.id ? policy.lists.map(list => list.id === id ? next : list) : [...policy.lists, next] };
+    }, expectedRevision);
+  }
+  function deleteExclusionList(id, expectedRevision) {
+    return updatePolicy(policy => {
+      if (!policy.lists.some(list => list.id === id)) throw new Error("Exclusion list no longer exists.");
+      return { ...policy, lists: policy.lists.filter(list => list.id !== id) };
+    }, expectedRevision);
+  }
+  function resetExclusionPolicy(expectedRevision) {
+    return updatePolicy(policy => policy, expectedRevision, { reset: true });
   }
 
   async function deleteExcludedEvidence(domains) {
@@ -458,6 +473,10 @@
   window.gBrowser.addTabsProgressListener(progressListener);
 
   const observer = () => { applyExclusions().catch(Cu.reportError); };
+  const stopPolicyObserver = FluxionExclusionPolicy.subscribe(() => {
+    indexScheduler?.clear(); indexedAt.clear();
+    if (!PrivateBrowsingUtils.isWindowPrivate(window)) applyEmbeddingFeaturePrefs();
+  });
   const embeddingPrefObserver = {
     observe() {
       applyEmbeddingFeaturePrefs();
@@ -484,6 +503,7 @@
     }).catch(Cu.reportError);
   }
   window.addEventListener("unload", () => {
+    stopPolicyObserver();
     window.gBrowser.removeTabsProgressListener(progressListener);
     Services.obs.removeObserver(observer, "places-semantichistorymanager-update-complete");
     Services.obs.removeObserver(memoryPressureObserver, "memory-pressure");
@@ -504,6 +524,7 @@
     enabled,
     excludeDomain,
     excludedDomains,
+    exclusionPolicy, saveExclusionList, deleteExclusionList, resetExclusionPolicy,
     setExcludedDomains,
     setEmbeddingProvider,
     search,

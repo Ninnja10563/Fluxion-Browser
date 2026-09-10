@@ -15,6 +15,8 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   const registeredManifests = [];
   const AboutNewTab = {};
   let startupObserver;
+  let profileObserver;
+  let managerCalls = 0;
   class File {
     constructor(filePath = "") { this.path = filePath; }
     initWithPath(filePath) { this.path = filePath; }
@@ -37,14 +39,20 @@ function startupFixture(selectedURL, saved = [], options = {}) {
       getStringPref: (key, fallback) => preferences.get(key) ?? defaults.get(key) ?? fallback,
       getBoolPref: (key, fallback) => preferences.get(key) ?? fallback,
       prefHasUserValue: key => preferences.has(key),
+      getPrefType: key => !preferences.has(key) ? 0 : typeof preferences.get(key) === "string" ? 32 : 128,
       getDefaultBranch: () => ({ setStringPref: (key, value) => defaults.set(key, value) }),
       clearUserPref: key => preferences.delete(key),
       savePrefFile() {},
     },
     scriptloader: { loadSubScript: uri => loadedScripts.push(uri) },
     obs: { addObserver(observer, topic) {
+      if (topic === "profile-after-change") { profileObserver = observer; return; }
       assert.equal(topic, "browser-delayed-startup-finished");
       startupObserver = observer;
+    }, removeObserver(observer, topic) {
+      assert.equal(topic, "profile-after-change");
+      assert.equal(observer, profileObserver);
+      profileObserver = undefined;
     } },
     scriptSecurityManager: { getSystemPrincipal: () => ({}) },
   };
@@ -56,7 +64,14 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     } }) } },
     Ci: {}, Cc: { "@mozilla.org/file/local;1": { createInstance: () => new File() } },
     Cu: { reportError: error => errors.push(error) },
-    ChromeUtils: { registerWindowActor() {}, importESModule: () => ({ AboutNewTab }) },
+    ChromeUtils: { registerWindowActor() {}, importESModule: uri => {
+      if (uri.endsWith("FluxionMemoryPolicy.sys.mjs")) return { FluxionMemoryPolicy: require("../chrome/core/memory-policy.js") };
+      if (uri.endsWith("FluxionNativeMemory.sys.mjs")) return { FluxionNativeMemory: { getManager() {
+        managerCalls++;
+        if (options.managerError) throw new Error("native manager unavailable");
+      } } };
+      return { AboutNewTab };
+    } },
   });
   const selectedBrowser = {
     currentURI: { spec: selectedURL },
@@ -69,8 +84,54 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     gBrowser: { selectedBrowser, selectedTab, tabs: [selectedTab], loadURI(...args) { navigations.push(args); } },
   };
   startupObserver.observe(window, "browser-delayed-startup-finished");
-  return { preferences, defaults, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser };
+  return { preferences, defaults, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser,
+    profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
+    get managerCalls() { return managerCalls; } };
 }
+
+for (const removal of [false, true]) {
+  test(`invalid startup policy blocks native construction and preserves removal=${removal}`, () => {
+    const h = startupFixture("about:blank", [
+      ["fluxion.memory.enabled", true], ["fluxion.memory.exclusionPolicy", "{"],
+      ["places.semanticHistory.removeOnStartup", removal],
+      ["places.semanticHistory.initialized", true],
+    ]);
+    assert.equal(h.preferences.get("browser.ml.enable"), false);
+    assert.equal(h.preferences.get("places.semanticHistory.featureGate"), false);
+    assert.equal(h.preferences.get("places.semanticHistory.removeOnStartup"), removal);
+    assert.equal(h.preferences.has("fluxion.memory.nativePendingRemoval"), false);
+    assert.equal(h.preferences.has("places.semanticHistory.initialized"), false);
+    assert.equal(h.profilePending, false);
+    assert.equal(h.managerCalls, 0);
+  });
+}
+
+test("policy becoming invalid before profile readiness blocks native construction without scheduling deletion", () => {
+  const h = startupFixture("about:blank", [["fluxion.memory.enabled", true]]);
+  assert.equal(h.profilePending, true);
+  h.preferences.set("fluxion.memory.exclusionPolicy", "{");
+  h.preferences.set("places.semanticHistory.initialized", true);
+  h.profileReady();
+  assert.equal(h.managerCalls, 0);
+  assert.equal(h.profilePending, false);
+  assert.equal(h.preferences.get("browser.ml.enable"), false);
+  assert.equal(h.preferences.get("places.semanticHistory.featureGate"), false);
+  assert.equal(h.preferences.get("places.semanticHistory.removeOnStartup"), false);
+  assert.equal(h.preferences.has("fluxion.memory.nativePendingRemoval"), false);
+  assert.equal(h.preferences.has("places.semanticHistory.initialized"), false);
+});
+
+test("valid startup initializes the write guard and genuine native failure remains quarantined", () => {
+  for (const managerError of [false, true]) {
+    const h = startupFixture("about:blank", [["fluxion.memory.enabled", true]], { managerError });
+    h.profileReady();
+    assert.equal(h.managerCalls, 1);
+    assert.equal(h.preferences.get("browser.ml.enable"), !managerError);
+    assert.equal(h.preferences.get("places.semanticHistory.removeOnStartup"), managerError);
+    assert.equal(h.preferences.get("fluxion.memory.nativePendingRemoval") ?? false, managerError);
+    assert.equal(h.errors.length, Number(managerError));
+  }
+});
 
 test("only the bundled default-bookmark resource registers before Places startup", () => {
   const h = startupFixture("about:blank");
