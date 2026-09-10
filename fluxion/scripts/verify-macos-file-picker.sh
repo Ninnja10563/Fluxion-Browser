@@ -119,7 +119,7 @@ for ((attempt=0; attempt<480; attempt++)); do
     fi
   fi
   driver_failed=false
-  for action in cancel accept; do
+  for action in cancel accept open; do
     if [[ -f "$driver_dir/$action.ready" && ! -f "$driver_dir/$action.sent" ]]; then
       owned_browser_pids | grep -Fxq "$browser_pid" || { printf 'Owned file-picker browser identity changed.\n' >&2; break 2; }
       if /usr/bin/osascript "$check_root/file-picker-driver.scpt" "$action" "$browser_pid" "$upload_path" "$check_root/file-picker-owner" >>"$driver_log" 2>&1; then
@@ -137,6 +137,7 @@ for ((attempt=0; attempt<480; attempt++)); do
     if grep -Fq 'user_pref("fluxion.filePicker.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.filePicker.health", "native-picker-cancel-and-multipart-upload-verified")' "$profile/prefs.js"; then
       [[ -f "$driver_dir/cancel.sent" && -f "$driver_dir/accept.sent" ]] || break
+      [[ ! -f "$driver_dir/open.ready" || -f "$driver_dir/open.sent" ]] || break
       printf 'Verified actual macOS picker cancellation and Unicode-path multipart upload.\n'
       grep 'fluxion\.filePicker\.report' "$profile/prefs.js"
       exit 0

@@ -32,10 +32,16 @@
     return response.json();
   };
   async function requestPicker(mode) {
-    assert(Services.focus.activeWindow === window && document.hasFocus(), "Owned picker window lost foreground focus");
-    tab.linkedBrowser.focus();
-    const focused = await command("Focus");
-    assert(focused.focused, "The actual file input did not receive content focus");
+    if (mode === "open") {
+      // The path sheet has closed, but NSOpenPanel may still need its Open key.
+      // Never refocus content here: that could steal focus from the native panel.
+      assert(!document.hasFocus(), "Refusing an extra Return after native picker focus was restored");
+    } else {
+      assert(Services.focus.activeWindow === window && document.hasFocus(), "Owned picker window lost foreground focus");
+      tab.linkedBrowser.focus();
+      const focused = await command("Focus");
+      assert(focused.focused, "The actual file input did not receive content focus");
+    }
     await IOUtils.writeUTF8(PathUtils.join(driver, `${mode}.ready`), "ready\n");
     await waitFor(() => IOUtils.exists(PathUtils.join(driver, `${mode}.sent`)), `Native ${mode} driver did not finish`, 45000);
   }
@@ -60,15 +66,34 @@
     assert(!canceled.events.change && !canceled.events.input && !canceled.events.untrusted && canceled.files.length === 0,
       "Canceling the native picker altered the file input");
     assert((await serverState()).filePickerUploads === 0, "Canceling the picker uploaded a file");
+    await waitFor(() => Services.focus.activeWindow === window && document.hasFocus(),
+      "Native picker cancellation did not restore browser focus");
     report.cancel = canceled;
     report.checks.push("owned-native-picker-cancel-with-trusted-event-and-no-upload");
     stage("choosing-file-in-native-picker");
     await requestPicker("accept");
+    // Return in Go to Folder can either select the file or return to NSOpenPanel.
+    // Observe the real input before authorizing a separate confirmation key.
+    const settleUntil = Date.now() + 2000;
+    let pending;
+    do {
+      pending = await command("Read");
+      if (pending.files.length || pending.events.change) break;
+      await new Promise(resolve => window.setTimeout(resolve, 100));
+    } while (Date.now() < settleUntil);
+    report.pathConfirmation = "selected-with-first-return";
+    if (!pending.files.length && !pending.events.change) {
+      assert(!document.hasFocus(), "Native path entry returned to content without selecting a file");
+      report.pathConfirmation = "separate-native-open-confirmation";
+      await requestPicker("open");
+    }
     const selected = await waitFor(async () => { const value = await command("Read"); return value.events.change === 1 ? value : null; },
       "Native picker selection did not produce a trusted change event");
     assert(selected.events.cancel === 1 && selected.events.input === 1 && !selected.events.untrusted &&
       selected.files.length === 1 && selected.files[0].name.normalize("NFC") === "Fluxion café upload.txt" &&
       selected.files[0].size === expectedSize, "Native picker returned an unexpected file or event sequence");
+    await waitFor(() => Services.focus.activeWindow === window && document.hasFocus(),
+      "Native picker selection did not restore browser focus");
     report.selection = selected;
     stage("submitting-real-multipart-upload");
     await command("Submit");
