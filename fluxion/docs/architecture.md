@@ -1038,6 +1038,11 @@ listeners and container nodes. Structural dirtiness always takes precedence;
 a workspace mismatch, disconnected selected row or changed collapsed-group
 active-page projection falls back to the full renderer.
 
+`TabMultiSelect` is observed on `gBrowser`, its actual Gecko dispatch target,
+not the descendant tab strip. Regression tests execute that subscription
+wiring with child-to-parent event propagation, including native changes that
+do not originate in a Fluxion row handler.
+
 Pinned and ordinary tab trees retain independent roving focus entries. The
 final requested or retained focus target is chosen before changing attributes,
 so an unrelated focused row is not temporarily deselected and reselected.
