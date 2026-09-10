@@ -20,7 +20,7 @@
   function isBrowserTab(tab, memberships = null) {
     try {
       return tab?.localName === "tab" && !tab.closing &&
-        Services.scriptSecurityManager.isSystemPrincipal(tab.nodePrincipal) &&
+        tab.nodePrincipal?.isSystemPrincipal === true &&
         (memberships ? memberships.get(ownerOf(tab))?.has(tab) :
           browserWindows().includes(ownerOf(tab)) && [...ownerOf(tab).gBrowser.tabs].includes(tab));
     } catch (_) { return false; }

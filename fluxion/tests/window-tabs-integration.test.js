@@ -51,7 +51,7 @@ function dataTransfer(tabs = []) {
 
 function fixture() {
   const windows = [], adoptions = [], alerts = [], errors = [], created = [];
-  const Services = { wm: { getEnumerator: () => windows }, scriptSecurityManager: { isSystemPrincipal: value => value === "system" },
+  const Services = { wm: { getEnumerator: () => windows },
     focus: { activeWindow: null }, prompt: { alert: (_window, _title, message) => alerts.push(message) }, prefs: { getStringPref: (_key, fallback) => fallback } };
   function createWindow(isPrivate = false) {
     const document = { createXULElement: name => new Node(name, document), getElementById: id => {
@@ -72,7 +72,7 @@ function fixture() {
     const reindex = () => window.gBrowser.tabs.forEach((tab, index) => { tab._tPos = index; });
     window.addTab = (label = "Page", workspace = "a") => {
       const tab = new Node("tab", document);
-      Object.assign(tab, { documentGlobal: window, nodePrincipal: "system", parentNode: {}, label, linkedBrowser: {
+      Object.assign(tab, { documentGlobal: window, nodePrincipal: { isSystemPrincipal: true }, parentNode: {}, label, linkedBrowser: {
         currentURI: { spec: label === "about:blank" ? label : `https://example.test/${label}` },
         browsingContext: { currentWindowGlobal: {}, sessionHistory: { count: 1 } },
       } });
@@ -145,7 +145,9 @@ test("foreign native tab payload uses the actual adapter with destination worksp
 
 test("private, stale and forged foreign payloads perform no adoption", async () => {
   for (const mutate of [f => { f.target.isPrivate = true; }, f => { f.sourceTab.closing = true; },
-    f => { f.sourceTab.nodePrincipal = "content"; }, f => { f.sourceWindow.gBrowser.tabs = []; }]) {
+    f => { f.sourceTab.nodePrincipal = { isSystemPrincipal: false }; },
+    f => { f.sourceTab.nodePrincipal = { isSystemPrincipal: "true" }; },
+    f => { f.sourceTab.nodePrincipal = null; }, f => { f.sourceWindow.gBrowser.tabs = []; }]) {
     const f = fixture(); mutate(f);
     fire(f.target.row(f.targetTab), "drop", { dataTransfer: dataTransfer([f.sourceTab]), clientX: 1, clientY: 100 }); await flush();
     assert.equal(f.adoptions.length, 0); assert.equal(f.created.length, 0);

@@ -209,7 +209,7 @@
       report.menuSource = {
         documentGlobalMatches: menuPage.tab.documentGlobal === window,
         legacyOwnerGlobalMatches: menuPage.tab.ownerGlobal === window,
-        systemPrincipal: Services.scriptSecurityManager.isSystemPrincipal(menuPage.tab.nodePrincipal),
+        systemPrincipal: menuPage.tab.nodePrincipal.isSystemPrincipal,
         labels: [...popup.children].map(child => child.getAttribute("label")),
       };
       write("report", JSON.stringify(report));
