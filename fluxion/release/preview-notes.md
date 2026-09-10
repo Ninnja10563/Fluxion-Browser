@@ -17,6 +17,8 @@ workflow before a DMG is published.
 - handle workspace membership, pins, native groups, and split-page state
   coherently during transfer;
 - reject transfers across normal/private window boundaries;
+- keep hidden workspace pages and their source window alive when moving its
+  last visible tab;
 - require a temporary Peek page to become a normal tab before it can move;
 - open detached pages in a clean native destination without an extra new-tab
   placeholder, while preserving any destination page the user has edited;

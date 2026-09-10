@@ -90,8 +90,10 @@ Both windows pause workspace-selection reconciliation during synchronous
 adoption. The returned native nodes receive explicit workspace state, pinned
 state, and split orientation before final selection/reconciliation. A window
 menu captures the destination workspace shown to the user; a new window keeps
-source workspace membership by default. Moving all tabs leaves a real new tab
-in the source window. Detachment explicitly requests a native blank destination
+source workspace membership by default. Moving all visible tabs leaves a real
+visible new tab in the source window: Gecko's last-tab check ignores hidden
+workspace pages, so merely counting total tabs would risk closing their window.
+Detachment explicitly requests a native blank destination
 instead of loading the user's homepage. It removes only that same untouched
 initial blank document with a known, unchanged zero- or one-entry history,
 never a navigated page, typed address draft, or replacement tab.

@@ -266,6 +266,33 @@
     "Native drop lost move/workspace/closed-history semantics");
     report.dragInput = "Native Gecko DataTransfer and DOM DragEvents; not physical OS drag or trusted dragend";
     report.checks.push("native-gecko-datatransfer-shipped-flow-dom-drop-retains-live-document");
+
+    write("stage", "last-visible-tab-with-hidden-workspace");
+    const workspaceSource = await newWindow();
+    workspaceSource.FluxionUI.switchWorkspace("focus");
+    const retained = await page(workspaceSource);
+    workspaceSource.FluxionUI.switchWorkspace("build");
+    const lastVisible = await page(workspaceSource);
+    workspaceSource.FluxionUI.setTabWorkspace(lastVisible.tab, "build");
+    workspaceSource.FluxionUI.selectTab(lastVisible.tab);
+    for (const tab of [...workspaceSource.gBrowser.tabs]) {
+      if (tab !== retained.tab && tab !== lastVisible.tab) {
+        workspaceSource.gBrowser.removeTab(tab, { animate: false, skipSessionStore: true });
+      }
+    }
+    assert(retained.tab.hidden && !lastVisible.tab.hidden,
+      "Last-visible fixture requires an actual hidden retained workspace page");
+    const retainedClosed = closedCount(workspaceSource);
+    const lastResult = await workspaceSource.FluxionTabTransfer.move([lastVisible.tab], destination,
+      { workspaceId: "build" });
+    ownedTabs.push(...lastResult.tabs);
+    assert(lastResult.complete && lastResult.tabs.length === 1 && !workspaceSource.closed &&
+      workspaceSource.gBrowser.tabs.includes(retained.tab) && closedCount(workspaceSource) === retainedClosed,
+    "Moving the last visible tab closed the source window or lost a hidden workspace page");
+    sameDocument(lastVisible.state, await read(lastResult.tabs[0]));
+    workspaceSource.FluxionUI.selectTab(retained.tab);
+    sameDocument(retained.state, await read(retained.tab));
+    report.checks.push("last-visible-transfer-preserves-hidden-workspace-live-document-and-source-window");
   }
   run().then(() => write("health", "native-adoption-live-state-privacy-and-detach-verified"))
     .catch(error => { write("error", `${error?.message || error}\n${error?.stack || ""}`); Cu.reportError(error); })

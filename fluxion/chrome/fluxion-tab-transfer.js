@@ -88,9 +88,14 @@
       source.FluxionUI.withWorkspaceReconciliationPaused(() => target.FluxionUI.withWorkspaceReconciliationPaused(() => {
         const rechecked = eligibility(moving, target, options);
         if (!rechecked.allowed) throw new Error(rechecked.reason);
-        if ([...source.gBrowser.tabs].every(tab => members.has(tab))) {
-          const anchor = source.gBrowser.addTrustedTab(Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab"));
+        // Gecko's last-tab check ignores hidden tabs, including tabs in other
+        // Fluxion workspaces. Those pages must not disappear with their window.
+        if (![...source.gBrowser.tabs].some(tab => !members.has(tab) && tab.isOpen && !tab.hidden)) {
+          const anchor = source.gBrowser.addTrustedTab(Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab"),
+            { tabIndex: 0, skipAnimation: true });
           source.FluxionUI.setTabWorkspace(anchor, source.FluxionUI.currentWorkspace());
+          if (anchor.hidden) source.gBrowser.showTab(anchor);
+          if (!anchor.isOpen || anchor.hidden) throw new Error("The source window could not retain an open tab.");
         }
         let index = options.targetTab ? options.targetTab._tPos + (options.position === "before" ? 0 : 1) : target.gBrowser.tabs.length;
         for (const unit of units) {

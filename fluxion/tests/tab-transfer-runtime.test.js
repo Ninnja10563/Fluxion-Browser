@@ -16,7 +16,8 @@ function fixture({ newTabURL = "about:newtab" } = {}) {
     const reindex = () => window.gBrowser.tabs.forEach((tab, index) => { tab._tPos = index; });
     function addTab(url = "https://example.test/") {
       const attrs = new Map([["fluxion-workspace", "a"]]);
-      const tab = { ownerGlobal: window, parentNode: {}, pinned: false, linkedBrowser: {
+      const tab = { ownerGlobal: window, parentNode: {}, pinned: false,
+        get isOpen() { return !!this.parentNode && !this.closing; }, hidden: false, linkedBrowser: {
         currentURI: { spec: url }, browsingContext: { currentWindowGlobal: { nonce: {} }, sessionHistory: { count: 1 } },
       }, setAttribute: (key, value) => attrs.set(key, value), getAttribute: key => attrs.get(key) || "",
       hasAttribute: key => attrs.has(key), removeAttribute: key => attrs.delete(key) };
@@ -26,7 +27,11 @@ function fixture({ newTabURL = "about:newtab" } = {}) {
     }
     window.gBrowser = { tabs: [], tabContainer: { addEventListener: (_type, fn) => listeners.add(fn), removeEventListener: (_type, fn) => listeners.delete(fn) },
       get pinnedTabCount() { return this.tabs.filter(tab => tab.pinned).length; },
-      addTrustedTab(url) { calls.push(["blank", window, url]); return addTab(url); },
+      addTrustedTab(url, options) {
+        calls.push(["blank", window, url, options]);
+        const tab = addTab(url); tab.hidden = !!window.hideAddedAnchor; return tab;
+      },
+      showTab(tab) { tab.hidden = false; calls.push(["show", tab]); },
       removeTab(tab, options) {
         calls.push(["remove", tab, options]); this.tabs = this.tabs.filter(item => item !== tab); tab.parentNode = null; reindex();
       },
@@ -41,6 +46,8 @@ function fixture({ newTabURL = "about:newtab" } = {}) {
         tab.linkedBrowser = old.linkedBrowser;
         tab.setAttribute("fluxion-workspace", old.getAttribute("fluxion-workspace"));
         tab.setAttribute("fluxion-workspace-active", "true");
+        if (old.ownerGlobal.closeOnLastVisible && !old.ownerGlobal.gBrowser.tabs.some(other =>
+          other !== old && other.isOpen && !other.hidden)) old.ownerGlobal.closed = true;
         old.ownerGlobal.gBrowser.tabs = old.ownerGlobal.gBrowser.tabs.filter(item => item !== old);
         old.parentNode = null;
         window.afterAdopt?.(old, tab);
@@ -193,6 +200,21 @@ test("partial selection leaves the source group intact and preserves original wo
   assert.equal(result.complete, true); assert.equal(result.tabs[0].getAttribute("fluxion-workspace"), "b");
   assert.ok(!result.tabs[0].group); assert.ok(b.group === group);
   assert.equal(f.calls.some(([kind]) => kind === "group" || kind === "blank"), false);
+});
+
+test("moving the last visible tab retains a real source anchor and hidden workspace pages", async () => {
+  const f = fixture(), moving = f.source.gBrowser.tabs[0], hidden = f.source.addTab("https://keep-hidden.example/");
+  hidden.hidden = true; hidden.setAttribute("fluxion-workspace", "b");
+  f.source.closeOnLastVisible = true;
+  f.source.hideAddedAnchor = true;
+  const result = await f.api.move([moving], f.target);
+  assert.equal(result.complete, true); assert.equal(f.source.closed, false);
+  assert.ok(f.source.gBrowser.tabs.includes(hidden));
+  assert.equal(hidden.linkedBrowser.currentURI.spec, "https://keep-hidden.example/");
+  const anchor = f.calls.find(([kind]) => kind === "blank");
+  assert.ok(anchor); assert.equal(anchor[3].tabIndex, 0); assert.equal(anchor[3].skipAnimation, true);
+  assert.equal(f.calls.filter(([kind]) => kind === "show").length, 1);
+  assert.equal(f.source.gBrowser.tabs.filter(tab => tab.isOpen && !tab.hidden).length, 1);
 });
 
 test("a destination closed during adoption returns surviving results without selecting a dead node", async () => {

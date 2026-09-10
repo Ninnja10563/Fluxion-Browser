@@ -76,6 +76,8 @@ function fixture() {
         currentURI: { spec: label === "about:blank" ? label : `https://example.test/${label}` },
         browsingContext: { currentWindowGlobal: {}, sessionHistory: { count: 1 } },
       } });
+      Object.defineProperty(tab, "isOpen", { get: () => Boolean(tab.parentNode && !tab.closing) });
+      tab.hidden = false;
       tab.setAttribute("fluxion-workspace", workspace);
       window.gBrowser.tabs.push(tab); reindex(); window.gBrowser.selectedTab ||= tab;
       return tab;

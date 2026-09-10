@@ -171,6 +171,11 @@
       browserWindow.FluxionUI.setTabWorkspace(tab, workspace);
       return tab;
     };
+    // These real retained pages are part of the intended two-window checkpoint.
+    // Seed them before adoption: Gecko may close an otherwise empty source
+    // window after consuming its disposable startup placeholder.
+    const companionBuild = makeTab(companion, urls.companionBuild, "build");
+    const companionLife = makeTab(companion, urls.companionLife, "life");
     let groupTabs = [makeTab(companion, urls.groupA), makeTab(companion, urls.groupB)];
     let splitTabs = [makeTab(companion, urls.splitA), makeTab(companion, urls.splitB)];
     let pinned = makeTab(companion, urls.pinned, "build", 1);
@@ -189,13 +194,19 @@
     companion.gBrowser.pinTab(pinned);
     group.collapsed = true;
     const originals = [...groupTabs, ...splitTabs, pinned];
-    const sourceReady = await waitFor(() => ({ ok: originals.every(tab =>
-      !tab.hasAttribute("busy") && [urls.groupA, urls.groupB, urls.splitA, urls.splitB, urls.pinned].includes(tabURL(tab))) }));
+    const sourceReady = await waitFor(() => ({ ok: [...originals, companionBuild, companionLife].every(tab =>
+      !tab.hasAttribute("busy") && [urls.groupA, urls.groupB, urls.splitA, urls.splitB, urls.pinned,
+        urls.companionBuild, urls.companionLife].includes(tabURL(tab))) }));
     if (!sourceReady.ok) throw new Error("source recovery pages did not finish loading before adoption");
     const transferred = await companion.FluxionTabTransfer.move(originals, window, {
       workspaceId: "build", selectTab: splitTabs[0],
     });
-    if (!transferred.complete || transferred.tabs.length !== originals.length ||
+    write("fluxion.recovery.seed.transferResult", JSON.stringify({
+      complete: transferred.complete, count: transferred.tabs.length, sourceClosed: companion.closed,
+      originalMembership: originals.map(tab => companion.gBrowser.tabs.includes(tab)),
+      error: transferred.error || null,
+    }));
+    if (companion.closed || !transferred.complete || transferred.tabs.length !== originals.length ||
         originals.some(tab => companion.gBrowser.tabs.includes(tab))) {
       throw new Error(`recovery fixtures were not natively adopted: ${transferred.error || "incomplete ownership"}`);
     }
@@ -216,8 +227,6 @@
     window.FluxionUI.switchWorkspace("build");
     window.gBrowser.selectedTab = splitTabs[0];
     await wait(100);
-    const companionBuild = makeTab(companion, urls.companionBuild, "build");
-    const companionLife = makeTab(companion, urls.companionLife, "life");
     companion.FluxionUI.switchWorkspace("build");
     companion.gBrowser.selectedTab = companionBuild;
     await wait(100);
