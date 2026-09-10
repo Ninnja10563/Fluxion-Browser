@@ -25,8 +25,14 @@
         if (!matches && url === fileURL && browser?.currentURI?.scheme === "file") {
           // LaunchServices may canonicalize /var symlinks or filesystem Unicode
           // spelling. Compare actual local-file identity, not cosmetic URI text.
-          try { matches = browser.currentURI.QueryInterface(Ci.nsIFileURL).file.equals(
-            Services.io.newURI(fileURL).QueryInterface(Ci.nsIFileURL).file); } catch (_) {}
+          const actualFile = browser.currentURI.QueryInterface(Ci.nsIFileURL).file;
+          const expectedFile = Services.io.newURI(fileURL).QueryInterface(Ci.nsIFileURL).file;
+          actualFile.normalize();
+          expectedFile.normalize();
+          // APFS resolves composed and decomposed Unicode names to the same
+          // file, but nsIFile.equals can still compare their path spellings.
+          matches = actualFile.exists() && expectedFile.exists() &&
+            actualFile.path.normalize("NFC") === expectedFile.path.normalize("NFC");
         }
         // Only observe actual Gecko state. Never navigate or manufacture tabs
         // here: the shell must deliver every URL/file through LaunchServices.
