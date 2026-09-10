@@ -77,6 +77,10 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    screenshot is preserved.
    A separate native Memory privacy gate inserts explicit valid tensors tied
    to actual Places visits and reads both native vector and mapping tables
+   after the real Places startup-completion boundary. It verifies seeded visits
+   through canonical history and the attached database before inserting vectors;
+   an insert completion callback alone is not accepted as persistence evidence.
+   It checks the native tables
    across provider disable/re-enable and clearing from a second window. It
    retains the real storage connection while disabled, so a null feature-gated
    accessor cannot masquerade as successful deletion. This is a cleanup test,

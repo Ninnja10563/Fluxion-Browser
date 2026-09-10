@@ -36,6 +36,16 @@
   async function run() {
     await SessionStore.promiseAllWindowsRestored;
     assert(window.FluxionMemory && !window.FluxionMemory.enabled(), "Privacy gate requires a fresh Memory-disabled profile");
+    const { PlacesBrowserStartup } = ChromeUtils.importESModule(
+      "moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs"
+    );
+    stage("waiting-for-places-startup");
+    // Session restoration does not finish fresh-profile Places initialization.
+    // Establish the fixture only after those startup database/import tasks,
+    // before opening another window or attaching the semantic database.
+    await waitFor(() => PlacesBrowserStartup._placesBrowserInitComplete,
+      "Firefox Places startup did not finish before native privacy seeding");
+    report.placesStartupComplete = true;
     Services.prefs.setStringPref("browser.search.region", "US");
     // This window starts with no enabled Memory manager. Enabling the main
     // window later must not be necessary for this window to delete shared data.
@@ -67,12 +77,14 @@
     async function seed(label, id, seededVector = vector) {
       stage(label);
       const url = `https://memory-privacy-fixture.invalid/evidence/${id}`;
-      await PlacesUtils.history.insert({ url, title: `Fluxion privacy verification evidence ${id}`,
+      const inserted = await PlacesUtils.history.insert({ url, title: `Fluxion privacy verification evidence ${id}`,
         visits: [{ date: new Date(), transition: PlacesUtils.history.TRANSITIONS.TYPED }] });
       const canonical = await PlacesUtils.history.fetch(url, { includeVisits: true });
       const attached = await connection.execute(`SELECT id, url, url_hash, last_visit_date
         FROM places.moz_places WHERE url = :url`, { url });
-      report.seedDiagnostics = { url, canonicalURL: canonical?.url?.href,
+      report.seedDiagnostics = { url, insertedURL: inserted?.url?.href, insertedGuid: inserted?.guid,
+        insertedVisits: inserted?.visits?.length || 0,
+        historyEnabled: Services.prefs.getBoolPref("places.history.enabled", true), canonicalURL: canonical?.url?.href,
         canonicalVisits: canonical?.visits?.length || 0, attachedRows: attached.length,
         nativeTransactionOpen: connection.transactionInProgress };
       if (attached.length !== 1) {
