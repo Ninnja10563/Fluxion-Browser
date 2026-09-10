@@ -12,7 +12,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function fixture(persistedPrefs = new Map()) {
+function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDimension = 2) {
   const embedding = deferred();
   const embeddingStarted = deferred();
   const writes = [];
@@ -28,21 +28,27 @@ function fixture(persistedPrefs = new Map()) {
     async executeCached(sql, parameters) {
       writes.push(sql);
       operations.push({ sql, parameters });
+      if (sql.startsWith("SELECT sql FROM sqlite_master")) {
+        return [{ getResultByName: () => `CREATE VIRTUAL TABLE page_vectors USING vec0(embedding FLOAT[${storedDimension}] distance_metric=cosine)` }];
+      }
       if (sql.startsWith("SELECT id")) return [{ getResultByName: () => 1 }];
       return [];
     },
     async executeTransaction(callback) { await callback(); },
     async close() {},
   };
+  const createEngine = () => ({
+    embeddingSize: 2,
+    embed() { embeddingStarted.resolve(); return embedding.promise; },
+  });
   const context = vm.createContext({
     Sqlite: { openConnection: async () => db },
     AsyncShutdown: { profileBeforeChange: { addBlocker() {} } },
     PathUtils: { profileDir: "/profile", join: (...parts) => parts.join("/") },
     PlacesUtils: { tensorToSQLBindable: vector => vector },
-    EmbeddingsGenerator: { forPlaces: () => ({
-      embeddingSize: 2,
-      embed() { embeddingStarted.resolve(); return embedding.promise; },
-    }) },
+    GeckoEmbeddings: factoryStyle === "current"
+      ? { embeddingsGeneratorFactory: { forPlaces: createEngine }, EmbeddingsGenerator: {} }
+      : { EmbeddingsGenerator: { forPlaces: createEngine } },
     Cu: { reportError: error => errors.push(error) },
     setTimeout,
     Services: { prefs: {
@@ -85,10 +91,39 @@ test("a page extracted before a privacy change cannot be inserted afterwards", a
   assert.equal(writes.filter(sql => sql.startsWith("INSERT INTO pages")).length, 1);
 });
 
+test("current Gecko singleton factory routes its generated vector into storage", async () => {
+  const { store, embeddingStarted, embedding, operations } = fixture(new Map(), "current");
+  const pending = store.embed("https://example.com/", "Remember this page");
+  await embeddingStarted.promise;
+  embedding.resolve([0.25, 0.75]);
+  await pending;
+  const insertion = operations.find(operation => operation.sql.startsWith("INSERT INTO page_vectors"));
+  assert.ok(insertion);
+  assert.deepEqual(Array.from(insertion.parameters.vector), [0.25, 0.75]);
+});
+
+test("Gecko dimension changes rebuild only vectors and retain lexical page evidence", async () => {
+  const { store, writes } = fixture(new Map(), "current", 512);
+  await store.get("https://example.com/");
+  assert.ok(writes.includes("DROP TABLE page_vectors"));
+  assert.ok(writes.some(sql => sql.includes("embedding FLOAT[2]")));
+  assert.equal(writes.some(sql => /(?:DROP TABLE|DELETE FROM) pages/.test(sql)), false);
+});
+
+test("unchanged Gecko dimension preserves existing vectors", async () => {
+  const { store, writes } = fixture(new Map(), "current");
+  await store.get("https://example.com/");
+  assert.equal(writes.some(sql => sql.startsWith("DROP TABLE")), false);
+});
+
 test("failed removal remains quarantined across restart until startup recovery deletes evidence", async () => {
   const persistedPrefs = new Map();
   const first = fixture(persistedPrefs);
-  first.db.executeCached = async () => { throw new Error("disk error"); };
+  const execute = first.db.executeCached;
+  first.db.executeCached = async sql => {
+    if (sql.startsWith("DELETE")) throw new Error("disk error");
+    return execute(sql);
+  };
   await assert.rejects(first.store.deleteURLs(["https://example.com/"]), /disk error/);
   assert.equal(persistedPrefs.get("fluxion.memory.pendingRemoval"), true);
   const restarted = fixture(persistedPrefs);
@@ -103,7 +138,10 @@ test("later targeted deletion cannot clear quarantine from an earlier failure", 
   const persistedPrefs = new Map();
   const { store, db } = fixture(persistedPrefs);
   const execute = db.executeCached;
-  db.executeCached = async () => { throw new Error("disk error"); };
+  db.executeCached = async sql => {
+    if (sql.startsWith("DELETE")) throw new Error("disk error");
+    return execute(sql);
+  };
   await assert.rejects(store.deleteURLs(["https://example.com/"]), /disk error/);
   db.executeCached = execute;
   await assert.rejects(store.deleteBlocked(["other.example"]), /disk error/);
@@ -164,8 +202,9 @@ test("search discards a lexical snapshot if Memory is cleared before it returns"
   const { store, db } = fixture();
   const reading = deferred();
   const read = deferred();
+  const execute = db.executeCached;
   db.executeCached = async sql => {
-    if (!sql.startsWith("SELECT *,")) return [];
+    if (!sql.startsWith("SELECT *,")) return execute(sql);
     reading.resolve();
     return read.promise;
   };

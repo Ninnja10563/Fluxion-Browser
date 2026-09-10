@@ -334,6 +334,11 @@ bounded page evidence lives separately in `fluxion_memory.sqlite`. A narrow
 article/main text in the content process. It never reads form values and only
 returns a bounded plain-data record to privileged browser code. No history or
 page evidence is sent to a network AI provider.
+The embedding adapter uses Gecko's current singleton factory and supports the
+earlier class factory. When an upstream model changes vector dimensions, the
+store rebuilds only its vector table; extracted page evidence remains available
+for keyword recall, and subsequent visits can generate compatible vectors.
+
 Gecko generates and queries embeddings on-device and disables the model path
 when hardware requirements are not met. Fluxion commits bounded lexical
 evidence before starting embedding work and applies a short timeout to semantic

@@ -1,7 +1,7 @@
 import { Sqlite } from "resource://gre/modules/Sqlite.sys.mjs";
 import { AsyncShutdown } from "resource://gre/modules/AsyncShutdown.sys.mjs";
 import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
-import { EmbeddingsGenerator } from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
+import * as GeckoEmbeddings from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
 import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
 
 const FILE_NAME = "fluxion_memory.sqlite";
@@ -66,7 +66,7 @@ async function connection() {
         const version = await db.getSchemaVersion();
         if (version > SCHEMA_VERSION) throw new Error("Fluxion Memory database is newer than this build");
         if (version < 1) {
-          const generator = EmbeddingsGenerator.forPlaces();
+          const engine = generator();
           await db.executeTransaction(async () => {
             await db.execute(`CREATE TABLE pages (
               id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
@@ -75,10 +75,31 @@ async function connection() {
               visit_count INTEGER NOT NULL DEFAULT 1, indexed_at INTEGER NOT NULL
             )`);
             await db.execute(`CREATE VIRTUAL TABLE page_vectors USING vec0(
-              embedding FLOAT[${generator.embeddingSize}] distance_metric=cosine
+              embedding FLOAT[${engine.embeddingSize}] distance_metric=cosine
             )`);
             await db.setSchemaVersion(SCHEMA_VERSION);
           });
+        } else {
+          const definition = await db.executeCached(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name='page_vectors'",
+          );
+          const storedSize = Number(definition[0]?.getResultByName("sql")
+            ?.match(/embedding\s+FLOAT\s*\[\s*(\d+)\s*\]/i)?.[1]);
+          if (!Number.isInteger(storedSize) || storedSize < 1) {
+            throw new Error("Fluxion Memory vector schema has no valid embedding dimension");
+          }
+          const engine = generator();
+          if (storedSize !== engine.embeddingSize) {
+            // Gecko may choose a different regional model after an upgrade.
+            // Old vectors cannot be compared in its new dimensional space;
+            // retain page evidence and regenerate vectors on subsequent visits.
+            await db.executeTransaction(async () => {
+              await db.execute("DROP TABLE page_vectors");
+              await db.execute(`CREATE VIRTUAL TABLE page_vectors USING vec0(
+                embedding FLOAT[${engine.embeddingSize}] distance_metric=cosine
+              )`);
+            });
+          }
         }
         if (recoverOnOpen) {
           // A crash or failed removal may leave evidence whose Places visits
@@ -147,7 +168,20 @@ function ensureShutdownBlocker() {
 }
 
 function generator() {
-  embedder ||= EmbeddingsGenerator.forPlaces();
+  if (!embedder) {
+    // Firefox 155 moved the production factory off the class; preserve its
+    // region/model policy and support the earlier factory during upgrades.
+    const factory = GeckoEmbeddings.embeddingsGeneratorFactory || GeckoEmbeddings.EmbeddingsGenerator;
+    if (typeof factory?.forPlaces !== "function") {
+      throw new Error("This Gecko runtime does not expose its Places embedding factory");
+    }
+    embedder = factory.forPlaces();
+    if (!Number.isInteger(embedder.embeddingSize) || embedder.embeddingSize < 1 ||
+        typeof embedder.embed !== "function") {
+      embedder = undefined;
+      throw new Error("Gecko returned an invalid Places embedding engine");
+    }
+  }
   return embedder;
 }
 
