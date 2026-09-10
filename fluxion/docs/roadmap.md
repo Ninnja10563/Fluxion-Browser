@@ -32,6 +32,8 @@ controls work and its failure paths have been tested.
 - signed macOS application bundle and native application menus (custom Flow
   menu, distinct trailing toolbar menu, and About route implemented; Developer
   ID signing remains)
+- native macOS external URL/file delivery and same-profile command-line
+  forwarding, with product-specific remoting identity and packaged native gates
 
 ## Phase 3 — interaction model
 

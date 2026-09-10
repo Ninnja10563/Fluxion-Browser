@@ -74,21 +74,22 @@ int main(int argc, char **argv) {
     perror("Fluxion profile");
     return 73;
   }
-  if (setenv("FLUXION_ROOT", root, 1) != 0) {
+  // Keep Gecko's native URL forwarding, in a product-specific IPC namespace.
+  if (setenv("FLUXION_ROOT", root, 1) != 0 ||
+      setenv("MOZ_APP_REMOTINGNAME", "fluxion", 1) != 0) {
     perror("Fluxion environment");
     return 69;
   }
 
-  char **child_arguments = calloc((size_t)argc + 4, sizeof(char *));
+  char **child_arguments = calloc((size_t)argc + 3, sizeof(char *));
   if (!child_arguments) return 71;
   child_arguments[0] = firefox;
-  child_arguments[1] = "--no-remote";
-  child_arguments[2] = "--profile";
-  child_arguments[3] = (char *)profile;
+  child_arguments[1] = "--profile";
+  child_arguments[2] = (char *)profile;
   for (int index = 1; index < argc; index++) {
-    child_arguments[index + 3] = argv[index];
+    child_arguments[index + 2] = argv[index];
   }
-  child_arguments[argc + 3] = NULL;
+  child_arguments[argc + 2] = NULL;
 
   execv(firefox, child_arguments);
   perror("Fluxion Firefox runtime");

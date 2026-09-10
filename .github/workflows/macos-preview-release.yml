@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.49.0-preview.1
+        default: 0.50.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.49.0-preview.1
+        default: v0.50.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -88,6 +88,10 @@ jobs:
           grep -q "const PRODUCT_VERSION = \"${app_version}\";" \
             "$resources/fluxion/chrome/fluxion-settings.js"
           [[ ! -e "$resources/Assets.car" ]]
+          for icon in firefox.icns document.icns fileBookmark.icns; do
+            cmp "$resources/fluxion.icns" "$resources/$icon"
+          done
+          python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],"rb")); assert "org.mozilla.updater" not in p.get("SMPrivilegedExecutables",{})' "$info"
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
           locked_version="$(node -p "require('./fluxion/runtime/gecko-lock.json').version")"
@@ -140,6 +144,11 @@ jobs:
         env:
           FLUXION_UPDATES_SCREENSHOT: ${{ runner.temp }}/fluxion-updates.png
         run: ./fluxion/scripts/verify-macos-updates.sh '.runtime/Fluxion.app'
+
+      - name: Verify native macOS external URL and file delivery
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-external-open.sh '.runtime/Fluxion.app'
 
       - name: Preserve update inspection snapshot
         if: ${{ always() }}

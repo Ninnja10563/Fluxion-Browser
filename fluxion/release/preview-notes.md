@@ -8,6 +8,17 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.50 strengthens native macOS integration:
+
+- give Fluxion its own Gecko process-routing namespace while preserving native
+  macOS URL/file events and same-profile command-line forwarding;
+- verify cold-launch links, links opened while running, local HTML files with
+  spaces and Unicode names, and command-line forwarding in the packaged app;
+- derive local application versions from the repository's package version and
+  rebuild cached bundles when that version changes;
+- replace inherited document icons with Fluxion branding and remove the unused
+  Mozilla privileged-updater registration.
+
 Version 0.49 adds explicit Fluxion update discovery:
 
 - check for newer compatible releases from About without leaving the browser;

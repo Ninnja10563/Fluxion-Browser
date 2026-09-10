@@ -11,6 +11,8 @@ support, then replaces the primary tab interaction with Fluxion's compact
 The current preview is runnable and includes:
 
 - arbitrary website rendering through Firefox/Gecko;
+- native macOS external link/file delivery, product-isolated process routing,
+  and same-profile command-line URL forwarding;
 - URL/search navigation, back, forward, reload, stop, and security identity;
 - compact vertical tabs with favicons, titles, geometric loading, attention,
   picture-in-picture, camera/microphone/screen-sharing, crash, sleep, and audio

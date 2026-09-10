@@ -19,12 +19,6 @@ case "$target_arch" in
     exit 64
     ;;
 esac
-app_version="${FLUXION_APP_VERSION:-0.1.0}"
-if [[ ! "$app_version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
-  printf 'Invalid FLUXION_APP_VERSION: %s\n' "$app_version" >&2
-  exit 64
-fi
-
 fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 requested="$1"
 case "$requested" in
@@ -75,6 +69,68 @@ runtime_file_digest() {
   shasum -a 256 "$1" | awk '{print $1}'
 }
 
+runtime_app_version() {
+  local package_file="$1"
+  local selected_version="${2:-}"
+  if [[ -z "$selected_version" ]]; then
+    selected_version="$(python3 - "$package_file" <<'PY'
+import json
+import re
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as package:
+        version = json.load(package)["version"]
+    if not isinstance(version, str) or not re.fullmatch(r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)(?:-preview\.(?:0|[1-9]\d*))?", version):
+        raise ValueError("unsupported package version")
+    print(version.split("-", 1)[0])
+except (OSError, ValueError, KeyError, TypeError) as error:
+    print(f"Could not read Fluxion package version: {error}", file=sys.stderr)
+    sys.exit(64)
+PY
+)" || return 64
+  fi
+  if [[ ! "$selected_version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
+    printf 'Invalid FLUXION_APP_VERSION: %s\n' "$selected_version" >&2
+    return 64
+  fi
+  printf '%s\n' "$selected_version"
+}
+
+runtime_product_identity() {
+  local package_digest
+  package_digest="$(runtime_file_digest "$1")" || return 69
+  printf '%s|%s' "$2" "$package_digest"
+}
+
+runtime_brand_associations() {
+  local info_file="$1"
+  local resource_directory="$2"
+  # Retain every document type and URL scheme; replace only inherited artwork.
+  for icon_name in firefox.icns document.icns fileBookmark.icns; do
+    ditto "$resource_directory/fluxion.icns" "$resource_directory/$icon_name"
+  done
+  python3 - "$info_file" "$resource_directory/distribution/policies.json" <<'PY'
+import json
+import plistlib
+import sys
+
+with open(sys.argv[2], encoding="utf-8") as policies:
+    updates_disabled = json.load(policies).get("policies", {}).get("DisableAppUpdate") is True
+with open(sys.argv[1], "rb") as source:
+    info = plistlib.load(source)
+helpers = info.get("SMPrivilegedExecutables", {})
+# Fluxion's enforced manual-update policy makes Mozilla's privileged updater
+# registration obsolete. Never remove unrelated helpers or browser handlers.
+if updates_disabled and isinstance(helpers, dict) and "org.mozilla.updater" in helpers:
+    del helpers["org.mozilla.updater"]
+    if not helpers:
+        del info["SMPrivilegedExecutables"]
+    with open(sys.argv[1], "wb") as target:
+        plistlib.dump(info, target, sort_keys=False)
+PY
+}
+
 runtime_source_identity() {
   local source="$1"
   local executable="$2"
@@ -112,6 +168,7 @@ runtime_ini_value() {
 }
 
 upstream_identity="$(runtime_source_identity "$source_app" "$requested")"
+app_version="$(runtime_app_version "$fluxion_root/package.json" "${FLUXION_APP_VERSION:-}")"
 upstream_resources="$source_app/Contents/Resources"
 upstream_version="$(runtime_ini_value "$upstream_resources/application.ini" App Version)"
 upstream_build_id="$(runtime_ini_value "$upstream_resources/application.ini" App BuildID)"
@@ -125,7 +182,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$app_version|$requested|$upstream_identity|$(runtime_file_digest "${BASH_SOURCE[0]}")|$(runtime_file_digest "$fluxion_root/scripts/install-update-policy.py")|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
+signature="$target_arch|$(runtime_product_identity "$fluxion_root/package.json" "$app_version")|$requested|$upstream_identity|$(runtime_file_digest "${BASH_SOURCE[0]}")|$(runtime_file_digest "$fluxion_root/scripts/install-update-policy.py")|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
 
 if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -255,9 +312,7 @@ if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp
     done
     iconutil -c icns "$iconset" -o "$resources/fluxion.icns"
     plutil -replace CFBundleIconFile -string fluxion.icns "$info"
-    # Replace the inherited icon too so no legacy Launch Services path can
-    # display Firefox branding while caches refresh.
-    ditto "$resources/fluxion.icns" "$resources/firefox.icns"
+    runtime_brand_associations "$info" "$resources"
   else
     printf 'macOS could not render the Fluxion icon; refusing a Firefox-branded build.\n' >&2
     exit 1

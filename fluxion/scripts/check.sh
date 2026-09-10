@@ -17,6 +17,7 @@ bash -n \
   scripts/verify-macos-memory.sh \
   scripts/verify-macos-memory-privacy.sh \
   scripts/verify-macos-updates.sh \
+  scripts/verify-macos-external-open.sh \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-library.sh \
@@ -60,6 +61,7 @@ node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
 node --check chrome/fluxion-update-verification.js
+node --check chrome/fluxion-external-open-verification.js
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-shortcuts.js

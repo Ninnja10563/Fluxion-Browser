@@ -26,6 +26,32 @@ pages retain Firefox's process, principal, and sandbox boundaries.
 
 ## Reused Firefox/Gecko components
 
+### macOS process and external-open integration
+
+The native launcher uses `execv` to preserve the application process that
+LaunchServices started. Gecko's `MacApplicationDelegate` receives cold-start
+and running-app URL/file AppleEvents; Fluxion does not add a parallel URL
+handler or privileged content bridge. `MOZ_APP_REMOTINGNAME=fluxion` gives the
+native remote service a product-specific namespace. The explicit Fluxion
+profile path remains part of Gecko's command-line remote endpoint identity, so
+another direct invocation can forward URLs to that profile's running process.
+The obsolete `--no-remote` argument is removed: pinned Gecko 155 ignores it.
+Replacing it with `--new-instance` would suppress useful native forwarding.
+
+These integration points were audited in the pinned runtime's
+`toolkit/xre/nsAppRunner.cpp`, `toolkit/components/remote/RemoteUtils.h`,
+`nsMacRemoteClient.mm`, and `widget/cocoa/MacApplicationDelegate.mm`. Future
+upstream upgrades must retain or re-audit them. The packaged native gate uses
+real `/usr/bin/open` cold/warm events, a Unicode/spaced local HTML file whose
+JavaScript changes its title, and a second direct invocation; it only observes
+Gecko's selected page, without substituting programmatic tab creation.
+The fixture uses a temporary profile and never changes default-app settings.
+LaunchServices selects an application instance, not a deterministic profile
+among multiple running instances; direct CLI profile routing remains the
+explicit multi-profile path.
+
+### Retained browser services
+
 - Gecko layout, JavaScript, CSS, WebAssembly, media, networking, cache, and
   cookie implementations;
 - Firefox multi-process isolation, principals, permission prompts, certificate

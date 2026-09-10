@@ -89,6 +89,31 @@ The `file` result should identify an `arm64` Mach-O executable on an M3 Mac.
 
 ## Troubleshooting
 
+Fluxion accepts links and local files through macOS **Open With**. To target a
+particular application bundle without changing your default browser:
+
+```sh
+open -a /Applications/Fluxion.app 'https://example.com'
+open -a /Applications/Fluxion.app '/path/to/Local document.html'
+```
+
+When Fluxion is already running, macOS delivers these to the running application.
+LaunchServices does not reliably select a profile if several Fluxion profiles
+are open. For deterministic profile routing, use the native executable with
+`FLUXION_PROFILE` set to the same absolute profile directory used at launch.
+Keep profile directories separate from Firefox.
+
+The release gate tests cold and warm external links, Unicode/spaced local file
+names with actual JavaScript rendering, and same-profile CLI forwarding:
+
+```sh
+./scripts/verify-macos-external-open.sh ../.runtime/Fluxion.app
+```
+
+Local bundle versions follow `package.json` (the numeric base version required
+by macOS). `FLUXION_APP_VERSION` remains available for explicit build overrides;
+changes to the package version invalidate the cached application bundle.
+
 If Firefox is installed elsewhere:
 
 ```sh
