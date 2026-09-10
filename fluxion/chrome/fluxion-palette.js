@@ -1313,7 +1313,7 @@
     }, 1200);
   }
   if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1") {
-    on(window, "FluxionMemoryVisualReady", () => {
+    const runGroundingVisualGate = () => {
       open("memory");
       input.value = "example";
       renderMemory().catch(error => {
@@ -1321,7 +1321,14 @@
         Services.prefs.savePrefFile(null);
         Cu.reportError(error);
       });
-    }, { once: true });
+    };
+    // Changing embedding providers removes vectors and invalidates searches.
+    // Wait for that fixture's restoration before evaluating grounded results.
+    if (Services.env.get("FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST") === "1") {
+      on(window, "FluxionMemoryEmbeddingSettingsVisualReady", runGroundingVisualGate, { once: true });
+    } else {
+      on(window, "FluxionMemoryVisualReady", runGroundingVisualGate, { once: true });
+    }
   }
   if (Services.env.get("FLUXION_VISUAL_AI_TEST") === "1") {
     window.setTimeout(() => {

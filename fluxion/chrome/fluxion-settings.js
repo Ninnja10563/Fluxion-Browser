@@ -944,6 +944,7 @@
   if (Services.env.get("FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST") === "1") {
     window.addEventListener("FluxionMemoryVisualReady", async () => {
       const original = window.FluxionMemory.embeddingProvider();
+      let verified = false;
       const choose = async provider => {
         embeddingChoice.value = provider;
         embeddingChoice.dispatchEvent(new window.Event("change", { bubbles: true }));
@@ -974,6 +975,7 @@
             "fluxion.memory.embeddingSettings.health",
             "keyword-mode-retained-recall-and-local-mode-restored",
           );
+          verified = true;
         } else {
           throw new Error(
             `embedding settings gate failed lexical=${lexicalRecall} ` +
@@ -986,9 +988,12 @@
         Cu.reportError(error);
       } finally {
         if (window.FluxionMemory.embeddingProvider() !== original) {
-          try { await choose(original); } catch (_) {}
+          try { await choose(original); } catch (_) { verified = false; }
         }
         Services.prefs.savePrefFile(null);
+        if (verified) {
+          window.dispatchEvent(new window.CustomEvent("FluxionMemoryEmbeddingSettingsVisualReady"));
+        }
       }
     }, { once: true });
     window.addEventListener("FluxionScaleVisualReady", () => {
@@ -1097,6 +1102,7 @@
         const settingsTab = [...gBrowser.tabs].find(candidate =>
           candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
         if (settingsTab) gBrowser.selectedTab = settingsTab;
+        syncVisibility();
         showSection("workspaces");
         const originalIds = window.FluxionUI.workspaces().map(workspace => workspace.id);
         workspaceName.value = "Reference Lab";

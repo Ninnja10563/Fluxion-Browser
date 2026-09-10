@@ -8,7 +8,7 @@ const vm = require("node:vm");
 
 // Exercise the shipped chrome script with controlled provider completion order.
 // The DOM stand-in only supplies the browser operations used by this dialog.
-function harness() {
+function harness(environment = {}) {
   const elements = [];
   let document;
   class Element {
@@ -74,7 +74,7 @@ function harness() {
     gBrowser: { selectedBrowser: {}, addTrustedTab(url) { opened.push(url); return {}; } },
     ChromeUtils: { importESModule: () => ({}) },
     Cu: { reportError: error => errors.push(error) },
-    Services: { env: { get: () => "" }, prefs: { setStringPref() {}, savePrefFile() {} } },
+    Services: { env: { get: name => environment[name] || "" }, prefs: { setStringPref() {}, savePrefFile() {} } },
   });
   const input = document.getElementById("fluxion-palette-input");
   const results = document.getElementById("fluxion-palette-results");
@@ -188,4 +188,22 @@ test("opening another AI page invalidates the former page's request", async () =
   h.ai[0].reject(new Error("obsolete failure")); await settle();
   assert.match(h.text(), /Type a question/);
   assert.doesNotMatch(h.text(), /obsolete failure/);
+});
+
+test("packaged grounding waits until the embedding settings fixture restores its provider", () => {
+  const h = harness({
+    FLUXION_VISUAL_GROUNDING_TEST: "1",
+    FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST: "1",
+  });
+  h.window.dispatch("FluxionMemoryVisualReady");
+  assert.equal(h.memory.length, 0);
+  h.window.dispatch("FluxionMemoryEmbeddingSettingsVisualReady");
+  assert.equal(h.memory.length, 1);
+  assert.equal(h.memory[0].args[0], "example");
+});
+
+test("packaged grounding runs directly after extraction when embedding settings are not exercised", () => {
+  const h = harness({ FLUXION_VISUAL_GROUNDING_TEST: "1" });
+  h.window.dispatch("FluxionMemoryVisualReady");
+  assert.equal(h.memory.length, 1);
 });
