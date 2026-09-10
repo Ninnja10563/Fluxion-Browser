@@ -58,12 +58,16 @@
     }
     async function operation(name, affected, action, focusControl, movable = affected) {
       write("stage", name);
-      // Selection intentionally retains an existing focused Flow row. Establish
-      // the intended owner BEFORE selecting, so that prior fixture focus cannot
-      // defer a legitimate roving-entry change into the measured operation.
+      // Use Flow's real Enter activation to establish the keyboard owner after
+      // Gecko's native tab switch. Exact child-control focus belongs to setup,
+      // not the subsequent structural operation being measured.
       const focusRow = focusControl.closest(".fluxion-tab");
+      focusRow.focus({ preventScroll: true });
+      focusRow.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await settle();
+      assert(gBrowser.selectedTab === focusRow._fluxionTab && focusRow.tabIndex === 0,
+        "Flow Enter did not establish the selected keyboard owner");
       focusControl.focus({ preventScroll: true });
-      ui.selectTab(focusRow._fluxionTab);
       await settle();
       const baseline = { operation: name, owner: fixtures.indexOf(focusRow._fluxionTab),
         selected: fixtures.indexOf(gBrowser.selectedTab), focused: document.activeElement === focusControl,

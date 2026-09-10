@@ -481,3 +481,30 @@ test("structural measurements must establish focused-owner roving state before c
   }
   assert.equal(ready.document.activeElement, control);
 });
+
+test("shipped Enter establishes requested row focus despite Gecko moving focus during native selection", () => {
+  const f = fixture(30);
+  f.gBrowser.selectedTab = f.tabs[13]; f.flush();
+  f.row(f.tabs[13])._fluxionParts.close.focus();
+  const owner = f.tabs[2], row = f.row(owner), close = row._fluxionParts.close;
+  row.focus();
+  row.emit("keydown", { key: "Enter" });
+  // Native gBrowser may focus the selected browser synchronously. The shipped
+  // keyboard request must survive that focus movement until its render frame.
+  const browserFocus = new f.Element(); browserFocus.root = true; browserFocus.focus();
+  f.flush();
+  assert.equal(f.gBrowser.selectedTab, owner);
+  assert.equal(f.document.activeElement, row);
+  assert.equal(row.tabIndex, 0);
+  assert.equal(f.row(f.tabs[13]).tabIndex, -1);
+  close.focus(); f.flush();
+  assert.equal(f.document.activeElement, close); assert.equal(row.tabIndex, 0);
+  const before = f.nodes().map(item => [item, item.writes]);
+  f.tabs[20].pinned = true;
+  f.context.scheduleRender({ type: "TabPinned", target: f.tabs[20] }); f.flush();
+  for (const [item, writes] of before) {
+    if (item._fluxionTab === f.tabs[20]) continue;
+    assert.equal(f.row(item._fluxionTab), item); assert.equal(item.writes, writes);
+  }
+  assert.equal(f.document.activeElement, close);
+});
