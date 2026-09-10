@@ -8,6 +8,21 @@ end requireFrontmost
 on ownedSheet(ownedPID)
   tell application "System Events"
     tell first application process whose unix id is ownedPID
+      -- AppKit may host NSOpenPanel remotely. Follow only focus references
+      -- supplied by this owned application, never enumerate other processes.
+      repeat with focusAttribute in {"AXFocusedWindow", "AXFocusedUIElement"}
+        try
+          set focusNode to value of attribute (contents of focusAttribute)
+          repeat 12 times
+            set focusRole to value of attribute "AXRole" of focusNode
+            if focusRole is "AXSheet" then return focusNode
+            if focusRole is "AXWindow" then
+              if (value of attribute "AXSubrole" of focusNode) is "AXDialog" then return focusNode
+            end if
+            set focusNode to value of attribute "AXParent" of focusNode
+          end repeat
+        end try
+      end repeat
       repeat with candidateWindow in windows
         if (count of sheets of candidateWindow) > 0 then return sheet 1 of candidateWindow
         -- AppKit can expose a sheet below intermediary accessibility groups,
@@ -27,6 +42,18 @@ on ownedWindowSummary(ownedPID)
   tell application "System Events"
     tell first application process whose unix id is ownedPID
       set summary to "windows=" & (count of windows)
+      repeat with focusAttribute in {"AXFocusedWindow", "AXFocusedUIElement"}
+        try
+          set focusNode to value of attribute (contents of focusAttribute)
+          set summary to summary & "; " & (contents of focusAttribute) & " lineage="
+          repeat 8 times
+            set summary to summary & (value of attribute "AXRole" of focusNode) & "/"
+            set focusNode to value of attribute "AXParent" of focusNode
+          end repeat
+        on error errorText number errorNumber
+          set summary to summary & " stop=" & errorNumber & ":" & errorText
+        end try
+      end repeat
       repeat with candidateWindow in windows
         set summary to summary & "; sheets=" & (count of sheets of candidateWindow)
         try
@@ -88,9 +115,11 @@ on run arguments
     set pathControl to missing value
     repeat 100 times
       my requireFrontmost(ownedPID)
+      set pickerSheet to my ownedSheet(ownedPID)
+      if pickerSheet is missing value then error "Owned native panel lost its accessibility focus relationship during Go to Folder"
       tell application "System Events"
         tell first application process whose unix id is ownedPID
-          set candidates to entire contents of window 1
+          set candidates to entire contents of pickerSheet
           repeat with candidate in candidates
             try
               set candidateRole to value of attribute "AXRole" of candidate
