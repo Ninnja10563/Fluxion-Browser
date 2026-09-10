@@ -8,8 +8,8 @@ require(path.resolve(__dirname, "../chrome/core/shortcuts.js"));
 const policy = globalThis.FluxionShortcutPolicy;
 
 test("shortcut maps retain valid custom chords and repair invalid values", () => {
-  const map = policy.normaliseMap({ palette: "Accel+Alt+KeyK", tabSearch: "nope" });
-  assert.equal(map.palette, "Accel+Alt+KeyK");
+  const map = policy.normaliseMap({ palette: "Accel+Alt+Shift+KeyK", tabSearch: "nope" });
+  assert.equal(map.palette, "Accel+Alt+Shift+KeyK");
   assert.equal(map.tabSearch, policy.ACTIONS.tabSearch.defaultChord);
 });
 
@@ -26,5 +26,22 @@ test("shortcut validation rejects browser-reserved and conflicting chords", () =
   const conflict = policy.validate("palette", current.tabSearch, current);
   assert.equal(conflict.ok, false);
   assert.match(conflict.reason, /Search open tabs/);
-  assert.equal(policy.validate("palette", "Accel+Alt+KeyK", current).ok, true);
+  assert.equal(policy.validate("palette", "Accel+Alt+Shift+KeyK", current).ok, true);
+});
+
+test("shortcut matching preserves extra modifiers and composed text", () => {
+  const chord = { code: "KeyK", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
+  assert.equal(policy.eventChord({ ...chord, ctrlKey: true }, true), "");
+  assert.equal(policy.eventChord({ ...chord, ctrlKey: true }, false), "");
+  assert.equal(policy.eventChord({ ...chord, isComposing: true }, true), "");
+  assert.equal(policy.eventChord({ ...chord, getModifierState: key => key === "AltGraph" }, true), "");
+});
+
+test("custom shortcuts cannot displace native browsing, editing or Option text entry", () => {
+  const current = policy.normaliseMap({});
+  for (const chord of ["Accel+Shift+KeyT", "Accel+Shift+KeyP", "Accel+KeyD", "Accel+KeyV",
+    "Accel+Digit2", "Accel+Alt+KeyK", "Alt+KeyQ", "Shift+KeyA"]) {
+    assert.equal(policy.validate("palette", chord, current).ok, false, chord);
+    assert.equal(policy.normaliseMap({ palette: chord }).palette, current.palette, chord);
+  }
 });

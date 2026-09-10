@@ -106,4 +106,22 @@ run_stage \
   FLUXION_PRIVATE_ABSENCE_TEST \
   'user_pref("fluxion.recovery.absence.health", "private-tabs-history-memory-excluded")'
 
+run_stage \
+  'custom startup preferences seed' \
+  FLUXION_STARTUP_PREFERENCES_SEED_TEST \
+  'user_pref("fluxion.recovery.preferencesSeed.health", "custom-homepage-startup-and-toolbar-seeded")'
+run_stage \
+  'saved homepage startup' \
+  FLUXION_STARTUP_HOMEPAGE_TEST \
+  'user_pref("fluxion.recovery.homepage.health", "saved-homepage-opened-by-gecko-startup")'
+run_stage \
+  'blank startup seed' \
+  FLUXION_STARTUP_BLANK_SEED_TEST \
+  'user_pref("fluxion.recovery.blankSeed.health", "blank-startup-seeded-with-homepage-retained")'
+run_stage \
+  'saved blank startup' \
+  FLUXION_STARTUP_BLANK_TEST \
+  'user_pref("fluxion.recovery.blank.health", "blank-startup-honored-with-homepage-retained")'
+
 printf 'Verified: two normal windows retained distinct SessionStore-owned workspaces and active pages with native tabs, pins, groups, stacked split orientation, workspace metadata, and keyword-only Browser Memory startup state restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2
+printf 'Verified: custom homepage and blank startup choices were honored by Gecko on separate launches; the homepage preference survived both startup modes, and the native bookmarks toolbar visibly rendered its saved bookmark in both.\n' >&2

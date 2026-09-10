@@ -7,7 +7,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences") {
+function settingsFixture(initialURL = "about:preferences", saved = []) {
+  const preferences = new Map(saved);
   const elements = [];
   class Element {
     constructor() {
@@ -55,7 +56,8 @@ function settingsFixture(initialURL = "about:preferences") {
   const errors = [];
   const prefs = {
     getBoolPref: (_, fallback) => fallback, getIntPref: (_, fallback) => fallback,
-    getStringPref: (_, fallback) => fallback, setStringPref() {}, savePrefFile() {},
+    getStringPref: (key, fallback) => preferences.get(key) ?? fallback,
+    setStringPref: (key, value) => preferences.set(key, value), savePrefFile() {},
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,
@@ -69,7 +71,8 @@ function settingsFixture(initialURL = "about:preferences") {
   });
   const root = document.getElementById("fluxion-settings");
   return {
-    gBrowser, firstBrowser, root, deck, errors,
+    gBrowser, firstBrowser, root, deck, errors, preferences,
+    homepage: elements.find(element => element.type === "text" && element.spellcheck === false),
     section: () => elements.find(element => element.dataset.section && !element.hidden)?.dataset.section,
     choose(label) {
       const nav = elements.find(element => element.className === "fluxion-settings-nav");
@@ -84,6 +87,17 @@ function settingsFixture(initialURL = "about:preferences") {
     location(browser, isTopLevel = true) { progress.onLocationChange(browser, { isTopLevel }); },
   };
 }
+
+test("home setting maps new-tab choice to Fluxion and preserves explicit custom addresses", () => {
+  const url = "file:///Applications/Fluxion.app/Contents/Resources/fluxion/newtab/index.html";
+  const h = settingsFixture("about:preferences", [["fluxion.newtab.url", url]]);
+  for (const value of ["about:newtab", "https://example.com/home", "about:blank", "file:///Users/test/home.html"]) {
+    h.homepage.value = value;
+    h.homepage.dispatchEvent({ type: "change" });
+    assert.equal(h.preferences.get("browser.startup.homepage"), value === "about:newtab" ? url : value);
+    assert.equal(h.homepage.value, value);
+  }
+});
 
 test("settings respects the initial query and hash deep links", () => {
   assert.equal(settingsFixture("about:preferences?fluxion=search").section(), "search");

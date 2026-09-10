@@ -8,6 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.43 improves everyday preferences and local recall:
+
+- preserve custom web, local-file, and blank homepages across launches, and
+  migrate Fluxion's managed homepage when the application moves;
+- honor the native bookmarks toolbar visibility choice instead of hiding it
+  unconditionally;
+- synchronize custom shortcuts across windows, protect native browsing and
+  editing shortcuts, and require exact modifier matches;
+- retrieve Memory evidence when remembered words occur in different page
+  fields, including the URL and description, while prioritizing exact phrases;
+- bound local embedding waits and keep at most one model request in flight so
+  a slow model does not indefinitely stop page extraction;
+- require a dedicated native semantic retrieval test using real Gecko-generated
+  vectors, separately from keyword-fallback and privacy checks.
+
 Version 0.42 improves privacy and search correctness:
 
 - restore startup compatibility with Gecko's trusted script-loading policy by

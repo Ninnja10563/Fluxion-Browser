@@ -92,7 +92,7 @@
       --fluxion-accent: light-dark(#3f596e, #8ba9bd);
       --fluxion-fast: 140ms cubic-bezier(.2,.7,.2,1);
     }
-    #toolbar-menubar, #TabsToolbar, #PersonalToolbar { visibility: collapse !important; }
+    #toolbar-menubar, #TabsToolbar { visibility: collapse !important; }
     #navigator-toolbox {
       appearance: none !important; background: var(--fluxion-bg) !important;
       border: 0 !important; border-bottom: 1px solid var(--fluxion-line) !important;

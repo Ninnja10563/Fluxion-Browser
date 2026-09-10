@@ -6,16 +6,26 @@
   const PREF = "fluxion.shortcuts";
   const isMac = window.navigator.platform.includes("Mac");
   let shortcuts;
-  try {
-    shortcuts = FluxionShortcutPolicy.normaliseMap(JSON.parse(Services.prefs.getStringPref(PREF, "{}")));
-  } catch (_) {
-    shortcuts = FluxionShortcutPolicy.normaliseMap({});
+  function reload() {
+    try {
+      shortcuts = FluxionShortcutPolicy.normaliseMap(JSON.parse(Services.prefs.getStringPref(PREF, "{}")));
+    } catch (_) {
+      shortcuts = FluxionShortcutPolicy.normaliseMap({});
+    }
+    window.dispatchEvent(new window.CustomEvent("FluxionShortcutsChanged"));
   }
+  reload();
+  const preferenceObserver = {
+    observe(_subject, _topic, name) { if (name === PREF) reload(); },
+  };
+  Services.prefs.addObserver(PREF, preferenceObserver);
+  window.addEventListener("unload", () => {
+    Services.prefs.removeObserver(PREF, preferenceObserver);
+  }, { once: true });
 
   function save() {
     Services.prefs.setStringPref(PREF, JSON.stringify(shortcuts));
     Services.prefs.savePrefFile(null);
-    window.dispatchEvent(new CustomEvent("FluxionShortcutsChanged"));
   }
 
   function set(id, chord) {

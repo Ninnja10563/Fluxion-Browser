@@ -286,6 +286,7 @@
       const enriched = await FluxionMemoryStore.search(query, 18, useEmbeddings);
       enrichedKeyword = enriched.lexical.filter(row => isAllowedResult(row.url));
       semantic.push(...enriched.semantic.filter(row => isAllowedResult(row.url)));
+      if (enriched.semantic.length) state = "ready";
     } catch (error) {
       Cu.reportError(error);
     }
@@ -592,6 +593,67 @@
         Services.prefs.savePrefFile(null);
         Cu.reportError(error);
       });
+  }
+  if (Services.env.get("FLUXION_SEMANTIC_MODEL_TEST") === "1") {
+    const stage = value => {
+      Services.prefs.setStringPref("fluxion.memory.semantic.stage", value);
+      Services.prefs.savePrefFile(null);
+    };
+    (async () => {
+      const deadline = Date.now() + 240000;
+      stage("enabling-local-model");
+      await enable();
+      const pages = [
+        {
+          url: "https://example.com/fluxion-plant-evidence", title: "How green plants make food",
+          text: "Green plants use sunlight to convert water and carbon dioxide into sugar. Chlorophyll in leaves captures light energy. This process releases oxygen and supplies energy for plant growth.",
+        },
+        {
+          url: "https://example.com/fluxion-railway-evidence", title: "Railway station timetable",
+          text: "Passenger trains arrive at railway platforms according to a timetable. Travelers buy tickets, check departure times and board carriages. Express services connect cities by rail.",
+        },
+      ];
+      for (let index = 0; index < pages.length; index += 1) {
+        const page = pages[index];
+        await FluxionMemoryStore.upsert({ ...page, description: "", headings: "",
+          workspace: "", tabGroup: "", lastVisit: Date.now(), indexedAt: Date.now() });
+        let lastError = "No vector stored";
+        let stored = false;
+        while (Date.now() < deadline) {
+          stage(`embedding-page-${index + 1}`);
+          try {
+            await FluxionMemoryStore.embed(page.url, `${page.title}\n${page.text}`);
+            if (await FluxionMemoryStore.vectorCount() >= index + 1) {
+              stored = true;
+              break;
+            }
+          } catch (error) {
+            lastError = String(error);
+            stage(`waiting-for-local-model: ${lastError}`);
+          }
+          await new Promise(resolve => window.setTimeout(resolve, 1000));
+        }
+        if (!stored) throw new Error(`Local model did not store page ${index + 1}: ${lastError}`);
+      }
+      stage("querying-semantic-only-concept");
+      while (Date.now() < deadline) {
+        const result = await FluxionMemoryStore.search("photosynthesis", 6, true);
+        if (result.lexical.length) throw new Error("Semantic fixture unexpectedly has a lexical match");
+        const plant = result.semantic.find(row => row.url === pages[0].url);
+        const railway = result.semantic.find(row => row.url === pages[1].url);
+        if (plant && Number.isFinite(plant.distance) && (!railway || plant.distance < railway.distance)) {
+          Services.prefs.setStringPref("fluxion.memory.semantic.health", "gecko-model-generated-vectors-and-recalled-nonliteral-evidence");
+          Services.prefs.savePrefFile(null);
+          return;
+        }
+        await new Promise(resolve => window.setTimeout(resolve, 1000));
+      }
+      throw new Error("Real local embeddings did not recall the plant evidence for photosynthesis");
+    })().catch(error => {
+      Services.prefs.setStringPref("fluxion.memory.semantic.error", String(error));
+      Services.prefs.savePrefFile(null);
+      Cu.reportError(error);
+    });
   }
   Services.prefs.setStringPref("fluxion.memory.health", "local-memory-controls-loaded");
   Services.prefs.savePrefFile(null);

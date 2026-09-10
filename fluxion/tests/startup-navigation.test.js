@@ -6,8 +6,9 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function startupFixture(selectedURL) {
-  const preferences = new Map();
+function startupFixture(selectedURL, saved = []) {
+  const preferences = new Map(saved);
+  const defaults = new Map();
   const loadedScripts = [];
   const navigations = [];
   const errors = [];
@@ -31,8 +32,10 @@ function startupFixture(selectedURL) {
     prefs: {
       setStringPref: (key, value) => preferences.set(key, value),
       setBoolPref: (key, value) => preferences.set(key, value),
-      getStringPref: (key, fallback) => preferences.get(key) ?? fallback,
+      getStringPref: (key, fallback) => preferences.get(key) ?? defaults.get(key) ?? fallback,
       getBoolPref: (key, fallback) => preferences.get(key) ?? fallback,
+      prefHasUserValue: key => preferences.has(key),
+      getDefaultBranch: () => ({ setStringPref: (key, value) => defaults.set(key, value) }),
       clearUserPref: key => preferences.delete(key),
       savePrefFile() {},
     },
@@ -60,7 +63,34 @@ function startupFixture(selectedURL) {
     gBrowser: { selectedBrowser, selectedTab, tabs: [selectedTab], loadURI(...args) { navigations.push(args); } },
   };
   startupObserver.observe(window, "browser-delayed-startup-finished");
-  return { preferences, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser };
+  return { preferences, defaults, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser };
+}
+
+for (const homepage of ["https://example.com/home", "about:blank", "file:///Users/test/home.html"]) {
+  test(`startup retains the user's homepage ${homepage} and bookmarks choice`, () => {
+    const h = startupFixture("about:blank", [
+      ["browser.startup.homepage", homepage],
+      ["browser.toolbars.bookmarks.visibility", "always"],
+      ["browser.startup.page", 0],
+    ]);
+    assert.deepEqual(h.errors, []);
+    assert.equal(h.preferences.get("browser.startup.homepage"), homepage);
+    assert.equal(h.preferences.get("browser.toolbars.bookmarks.visibility"), "always");
+    assert.equal(h.preferences.get("browser.startup.page"), 0);
+    assert.equal(h.defaults.get("browser.startup.homepage"), h.AboutNewTab.newTabURL);
+  });
+}
+
+for (const savedHomepage of ["file:///old/Fluxion.app/fluxion/newtab/index.html", "about:newtab"]) {
+  test(`managed homepage ${savedHomepage} follows the installed bundle location`, () => {
+    const h = startupFixture("about:blank", [
+      ["fluxion.newtab.url", "file:///old/Fluxion.app/fluxion/newtab/index.html"],
+      ["browser.startup.homepage", savedHomepage],
+    ]);
+    assert.deepEqual(h.errors, []);
+    assert.equal(h.preferences.has("browser.startup.homepage"), false);
+    assert.equal(h.defaults.get("browser.startup.homepage"), "file:///app/fluxion/newtab/index.html");
+  });
 }
 
 for (const selectedURL of [

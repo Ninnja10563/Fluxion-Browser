@@ -586,7 +586,7 @@ test("enriched Browser Memory crosses the content boundary through a narrow Geck
   assert.doesNotMatch(child, /Services\.|Sqlite|fetch\(/);
   assert.match(store, /async embed\(url, text\)/);
   assert.doesNotMatch(store, /setTimeout\(\(\) => \{[\s\S]*embedAndStore/);
-  assert.match(store, /withTimeout\(engine\.embed\(query\), 1500\)/);
+  assert.match(store, /embedText\(query, 1500\)/);
   assert.match(store, /SELECT count\(\*\) AS count FROM page_vectors/);
 });
 

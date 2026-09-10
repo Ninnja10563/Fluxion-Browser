@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.42.0-preview.1
+        default: 0.43.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.42.0-preview.1
+        default: v0.43.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -79,6 +79,10 @@ jobs:
           [[ ! -e "$resources/Assets.car" ]]
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
+
+      - name: Verify real local semantic retrieval
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-memory.sh '.runtime/Fluxion.app'
 
       - name: Verify session recovery and private isolation
         shell: bash

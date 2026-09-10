@@ -5,7 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.42.0";
+  const PRODUCT_VERSION = "0.43.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -276,7 +276,8 @@
   homepage.spellcheck = false;
   homepage.addEventListener("change", () => {
     homepage.value = FluxionSettings.homepage(homepage.value);
-    pref.setString("browser.startup.homepage", homepage.value);
+    pref.setString("browser.startup.homepage", homepage.value === "about:newtab"
+      ? pref.string("fluxion.newtab.url", "about:newtab") : homepage.value);
   });
   row(general, "Home page", "Use a web address, about:newtab, or about:blank.", homepage);
   row(general, "Open links in tabs", "Keep links from other applications in the current Fluxion window.", toggle("Enabled", pref.int("browser.link.open_newwindow", 3) !== 2, checked => {
@@ -804,8 +805,11 @@
   const keyboard = section("keyboard", "Keyboard", "Change Fluxion commands without overriding protected browser or macOS shortcuts.");
   const shortcutButtons = new Map();
   function refreshShortcutButtons() {
-    for (const [id, button] of shortcutButtons) button.textContent = window.FluxionShortcuts.format(id);
+    for (const [id, button] of shortcutButtons) {
+      if (button.dataset.capturing !== "true") button.textContent = window.FluxionShortcuts.format(id);
+    }
   }
+  window.addEventListener("FluxionShortcutsChanged", refreshShortcutButtons);
   for (const action of window.FluxionShortcuts.actions()) {
     const control = create("div", "fluxion-shortcut-control");
     const key = create("button", "fluxion-shortcut-key", window.FluxionShortcuts.format(action.id));
@@ -942,6 +946,7 @@
     window.removeEventListener("FluxionThemeChanged", syncThemeChoice);
     window.removeEventListener("FluxionWorkspacesChanged", syncWorkspaceSettings);
     window.removeEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
+    window.removeEventListener("FluxionShortcutsChanged", refreshShortcutButtons);
     unsubscribePermissions?.();
   }, { once: true });
   showSection("general", { remember: false });
@@ -1228,9 +1233,9 @@
       const tab = [...gBrowser.tabs].find(candidate => candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
       if (tab) gBrowser.selectedTab = tab;
       showSection("keyboard");
-      const result = window.FluxionShortcuts.set("palette", "Accel+Alt+KeyK");
+      const result = window.FluxionShortcuts.set("palette", "Accel+Alt+Shift+KeyK");
       refreshShortcutButtons();
-      if (result.ok && window.FluxionShortcuts.get("palette") === "Accel+Alt+KeyK") {
+      if (result.ok && window.FluxionShortcuts.get("palette") === "Accel+Alt+Shift+KeyK") {
         Services.prefs.setStringPref("fluxion.shortcuts.visual.health", "custom-shortcut-persisted");
         Services.prefs.savePrefFile(null);
       }

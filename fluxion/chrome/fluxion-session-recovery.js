@@ -7,6 +7,10 @@
     ["restore", "FLUXION_SESSION_RESTORE_TEST"],
     ["private", "FLUXION_PRIVATE_ISOLATION_TEST"],
     ["absence", "FLUXION_PRIVATE_ABSENCE_TEST"],
+    ["preferencesSeed", "FLUXION_STARTUP_PREFERENCES_SEED_TEST"],
+    ["homepage", "FLUXION_STARTUP_HOMEPAGE_TEST"],
+    ["blankSeed", "FLUXION_STARTUP_BLANK_SEED_TEST"],
+    ["blank", "FLUXION_STARTUP_BLANK_TEST"],
   ].find(([, environment]) => Services.env.get(environment) === "1")?.[0];
   if (!mode || !window.FluxionUI || !window.FluxionMemory) return;
 
@@ -320,13 +324,106 @@
     await quit();
   }
 
+  const startupHomepage = "https://example.com/?fluxion-startup=custom-homepage";
+  const startupBookmarkTitle = "Fluxion startup reference";
+  function validateStartupPreferences(expectedPage) {
+    if (Services.prefs.getStringPref("browser.startup.homepage", "") !== startupHomepage) {
+      throw new Error("custom homepage preference was overwritten during startup");
+    }
+    if (Services.prefs.getIntPref("browser.startup.page", -1) !== expectedPage) {
+      throw new Error(`startup mode ${expectedPage} was not preserved`);
+    }
+    if (Services.prefs.getStringPref("browser.toolbars.bookmarks.visibility", "") !== "always") {
+      throw new Error("the chosen bookmarks toolbar preference was overwritten during startup");
+    }
+  }
+
+  async function validateVisibleBookmarksToolbar() {
+    const visible = await waitFor(() => {
+      const toolbar = window.document.getElementById("PersonalToolbar");
+      const style = toolbar ? window.getComputedStyle(toolbar) : null;
+      const height = toolbar?.getBoundingClientRect().height || 0;
+      const bookmark = toolbar ? [...toolbar.querySelectorAll(".bookmark-item")].find(item =>
+        item.getAttribute("label") === startupBookmarkTitle
+      ) : null;
+      return {
+        ok: height > 0 && style?.visibility === "visible" && style.display !== "none" &&
+          Boolean(bookmark?.getBoundingClientRect().width > 0),
+        details: `height=${height} visibility=${style?.visibility || "missing"} ` +
+          `display=${style?.display || "missing"} bookmarkVisible=${Boolean(bookmark?.getBoundingClientRect().width > 0)}`,
+      };
+    });
+    if (!visible.ok) throw new Error(`Saved bookmarks toolbar was not visible: ${visible.details}`);
+  }
+
+  async function seedStartupPreferences() {
+    await SessionStore.promiseAllWindowsRestored;
+    await PlacesUtils.bookmarks.insert({
+      parentGuid: PlacesUtils.bookmarks.toolbarGuid,
+      title: startupBookmarkTitle,
+      url: startupHomepage,
+    });
+    Services.prefs.setStringPref("browser.startup.homepage", startupHomepage);
+    Services.prefs.setIntPref("browser.startup.page", 1);
+    Services.prefs.setStringPref("browser.toolbars.bookmarks.visibility", "always");
+    Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", false);
+    validateStartupPreferences(1);
+    write("fluxion.recovery.preferencesSeed.health", "custom-homepage-startup-and-toolbar-seeded");
+    await quit();
+  }
+
+  async function validateHomepageStartup() {
+    await SessionStore.promiseAllWindowsRestored;
+    validateStartupPreferences(1);
+    const loaded = await waitFor(() => ({
+      ok: tabURL(window.gBrowser.selectedTab) === startupHomepage,
+    }));
+    if (!loaded.ok) {
+      throw new Error(`Gecko did not open the saved homepage: ${tabURL(window.gBrowser.selectedTab)}`);
+    }
+    await validateVisibleBookmarksToolbar();
+    write("fluxion.recovery.homepage.health", "saved-homepage-opened-by-gecko-startup");
+    await quit();
+  }
+
+  async function seedBlankStartup() {
+    await SessionStore.promiseAllWindowsRestored;
+    validateStartupPreferences(1);
+    Services.prefs.setIntPref("browser.startup.page", 0);
+    Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", false);
+    validateStartupPreferences(0);
+    write("fluxion.recovery.blankSeed.health", "blank-startup-seeded-with-homepage-retained");
+    await quit();
+  }
+
+  async function validateBlankStartup() {
+    await SessionStore.promiseAllWindowsRestored;
+    validateStartupPreferences(0);
+    const blank = await waitFor(() => ({
+      ok: tabURL(window.gBrowser.selectedTab) === "about:blank",
+    }));
+    if (!blank.ok) {
+      throw new Error(`Gecko did not honor blank startup: ${tabURL(window.gBrowser.selectedTab)}`);
+    }
+    await validateVisibleBookmarksToolbar();
+    write("fluxion.recovery.blank.health", "blank-startup-honored-with-homepage-retained");
+    await quit();
+  }
+
   Services.prefs.setStringPref("fluxion.recovery.health", "multi-launch-gate-loaded");
   Services.prefs.savePrefFile(null);
   window.setTimeout(() => {
-    const task = mode === "seed" ? seedNormalSession()
-      : mode === "restore" ? validateRestoredSession()
-        : mode === "private" ? validatePrivateWindow()
-          : validatePrivateAbsence();
+    const tasks = {
+      seed: seedNormalSession,
+      restore: validateRestoredSession,
+      private: validatePrivateWindow,
+      absence: validatePrivateAbsence,
+      preferencesSeed: seedStartupPreferences,
+      homepage: validateHomepageStartup,
+      blankSeed: seedBlankStartup,
+      blank: validateBlankStartup,
+    };
+    const task = tasks[mode]();
     task.catch(fail);
   }, 700);
 })(window);

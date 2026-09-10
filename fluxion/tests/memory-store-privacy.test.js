@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
+const { spawnSync } = require("node:child_process");
 
 function deferred() {
   let resolve;
@@ -18,6 +19,9 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   const writes = [];
   const operations = [];
   const errors = [];
+  const timers = new Map();
+  let timerID = 0;
+  let embeddingCalls = 0;
   let historyObserver;
   const db = {
     async getSchemaVersion() { return 1; },
@@ -39,7 +43,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   };
   const createEngine = () => ({
     embeddingSize: 2,
-    embed() { embeddingStarted.resolve(); return embedding.promise; },
+    embed() { embeddingCalls += 1; embeddingStarted.resolve(); return embedding.promise; },
   });
   const context = vm.createContext({
     Sqlite: { openConnection: async () => db },
@@ -50,7 +54,8 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
       ? { embeddingsGeneratorFactory: { forPlaces: createEngine }, EmbeddingsGenerator: {} }
       : { EmbeddingsGenerator: { forPlaces: createEngine } },
     Cu: { reportError: error => errors.push(error) },
-    setTimeout,
+    setTimeout(callback) { timers.set(++timerID, callback); return timerID; },
+    clearTimeout(id) { timers.delete(id); },
     Services: { prefs: {
       getBoolPref: (key, fallback) => persistedPrefs.get(key) ?? fallback,
       setBoolPref: (key, value) => persistedPrefs.set(key, value),
@@ -66,8 +71,69 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     .replace("export const FluxionMemoryStore", "globalThis.FluxionMemoryStore");
   vm.runInContext(source, context);
   return { store: context.FluxionMemoryStore, embedding, embeddingStarted, writes, db, operations, errors,
+    embeddingCalls: () => embeddingCalls,
+    expireEmbeddingWait: () => { for (const callback of timers.values()) callback(); },
     notifyHistory: events => historyObserver(events) };
 }
+
+async function lexicalURLs(query, pages, limit = 12) {
+  const { store, operations } = fixture();
+  await store.search(query, limit, false);
+  const statement = operations.find(operation => operation.sql.startsWith("SELECT *,"));
+  // Execute the production SQL with SQLite itself, not a LIKE reimplementation.
+  const result = spawnSync("python3", ["-c", `
+import json, sqlite3, sys
+data = json.load(sys.stdin)
+db = sqlite3.connect(':memory:')
+db.row_factory = sqlite3.Row
+db.execute('CREATE TABLE pages (url TEXT, title TEXT, description TEXT, headings TEXT, content TEXT, last_visit INTEGER)')
+for page in data['pages']:
+    db.execute('INSERT INTO pages VALUES (?,?,?,?,?,?)', [page.get(key, 0 if key == 'last_visit' else '') for key in ['url','title','description','headings','content','last_visit']])
+rows = db.execute(data['statement']['sql'], data['statement']['parameters'])
+print(json.dumps([row['url'] for row in rows]))
+`], { input: JSON.stringify({ statement, pages }), encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+  return JSON.parse(result.stdout);
+}
+
+test("lexical retrieval finds terms distributed across URL, description, title, headings, and content", async () => {
+  assert.deepEqual(await lexicalURLs("godot websocket authentication", [
+    { url: "https://docs.example.com/godot", title: "Networking", description: "Websocket setup", content: "Authentication examples" },
+    { url: "https://unrelated.example/", title: "Godot networking", content: "Websocket basics" },
+  ]), ["https://docs.example.com/godot"]);
+  assert.deepEqual(await lexicalURLs("timer godot", [
+    { url: "https://docs.example.com/", title: "Godot guides", headings: "Using the timer node" },
+  ]), ["https://docs.example.com/"]);
+});
+
+test("exact phrases remain ahead of newer distributed-term candidates before the result limit", async () => {
+  assert.deepEqual(await lexicalURLs("godot timer", [
+    { url: "https://exact.example/", title: "Godot timer reference", last_visit: 1 },
+    { url: "https://recent.example/", title: "Godot", description: "Timer guide", last_visit: 999 },
+  ], 1), ["https://exact.example/"]);
+});
+
+test("lexical query wildcard characters remain literal", async () => {
+  assert.deepEqual(await lexicalURLs("50% a_b", [
+    { url: "https://exact.example/", title: "50%", description: "a_b" },
+    { url: "https://wrong.example/", title: "500", description: "axb" },
+  ]), ["https://exact.example/"]);
+});
+
+test("embedding timeout releases indexing, prevents request buildup, and discards late vectors", async () => {
+  const { store, embedding, embeddingStarted, writes, expireEmbeddingWait, embeddingCalls } = fixture();
+  const pending = store.embed("https://stalled.example/", "Slow embedding");
+  await embeddingStarted.promise;
+  expireEmbeddingWait();
+  await assert.rejects(pending, /timed out/);
+  assert.equal(await store.upsert({ url: "https://next.example/" }), true);
+  await assert.rejects(store.embed("https://next.example/", "New page"), /still busy/);
+  assert.equal(embeddingCalls(), 1);
+  embedding.resolve([0.1, 0.9]);
+  await Promise.resolve();
+  await Promise.resolve();
+  assert.equal(writes.some(sql => sql.startsWith("INSERT INTO page_vectors")), false);
+});
 
 for (const operation of ["clear", "clearVectors", "deleteBlocked", "deleteURLs"]) {
   test(`${operation} prevents an in-flight embedding from restoring deleted vectors`, async () => {

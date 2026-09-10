@@ -2,12 +2,13 @@ import { Sqlite } from "resource://gre/modules/Sqlite.sys.mjs";
 import { AsyncShutdown } from "resource://gre/modules/AsyncShutdown.sys.mjs";
 import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
 import * as GeckoEmbeddings from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
-import { setTimeout } from "resource://gre/modules/Timer.sys.mjs";
+import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
 
 const FILE_NAME = "fluxion_memory.sqlite";
 const SCHEMA_VERSION = 1;
 let connectionPromise;
 let embedder;
+let pendingEmbedding;
 let shutdownStarted = false;
 let shutdownBlockerRegistered = false;
 let shutdownPromise;
@@ -191,7 +192,7 @@ async function embedAndStore(url, text) {
   const db = await connection();
   if (startedAt !== revision) return;
   const engine = generator();
-  const result = await engine.embed(text);
+  const result = await embedText(text, 10000);
   if (startedAt !== revision) return;
   const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
   const rows = await db.executeCached("SELECT id FROM pages WHERE url=:url", { url });
@@ -204,11 +205,29 @@ async function embedAndStore(url, text) {
   });
 }
 
-function withTimeout(promise, milliseconds) {
-  return Promise.race([
-    promise,
-    new Promise((_, reject) => setTimeout(() => reject(new Error("Fluxion local embedding timed out")), milliseconds)),
-  ]);
+async function withTimeout(promise, milliseconds) {
+  let timer;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error("Fluxion local embedding timed out")), milliseconds);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function embedText(text, timeout) {
+  // Gecko does not expose per-request cancellation. Keep at most one model
+  // request alive after a timeout, while allowing lexical indexing to continue.
+  if (pendingEmbedding) throw new Error("Fluxion local embedding engine is still busy");
+  const task = Promise.resolve().then(() => generator().embed(text));
+  pendingEmbedding = task;
+  const release = () => { if (pendingEmbedding === task) pendingEmbedding = undefined; };
+  task.then(release, release);
+  return withTimeout(task, timeout);
 }
 
 export const FluxionMemoryStore = Object.freeze({
@@ -244,19 +263,31 @@ export const FluxionMemoryStore = Object.freeze({
   },
 
   async search(query, limit = 12, includeSemantic = true) {
+    const terms = [...new Set(String(query || "").trim().split(/\s+/).filter(Boolean))].slice(0, 16);
+    if (!terms.length) return { lexical: [], semantic: [] };
     const startedAt = revision;
     await historyDeletion;
     const db = await connection();
-    const pattern = `%${query.replace(/[\\%_]/g, value => `\\${value}`)}%`;
+    const escapeLike = text => `%${text.replace(/[\\%_]/g, value => `\\${value}`)}%`;
+    const parameters = { pattern: escapeLike(String(query).trim()), limit };
+    const fields = ["title", "url", "description", "headings", "content"];
+    const matches = terms.map((term, index) => {
+      parameters[`term${index}`] = escapeLike(term);
+      return `(${fields.map(field => `${field} LIKE :term${index} ESCAPE '\\'`).join(" OR ")})`;
+    });
     const lexical = await db.executeCached(`SELECT *, 0.0 AS distance FROM pages
-      WHERE title LIKE :pattern ESCAPE '\\' OR headings LIKE :pattern ESCAPE '\\'
-      OR content LIKE :pattern ESCAPE '\\' ORDER BY last_visit DESC LIMIT :limit`, { pattern, limit });
+      WHERE ${matches.join(" AND ")}
+      ORDER BY CASE
+        WHEN title LIKE :pattern ESCAPE '\\' OR url LIKE :pattern ESCAPE '\\' THEN 0
+        WHEN headings LIKE :pattern ESCAPE '\\' OR description LIKE :pattern ESCAPE '\\' THEN 1
+        WHEN content LIKE :pattern ESCAPE '\\' THEN 2 ELSE 3 END,
+        last_visit DESC LIMIT :limit`, parameters);
     let semantic = [];
     try {
       const counts = await db.execute("SELECT count(*) AS count FROM page_vectors");
       if (includeSemantic && counts[0].getResultByName("count") > 0) {
         const engine = generator();
-        const result = await withTimeout(engine.embed(query), 1500);
+        const result = await embedText(query, 1500);
         const vector = PlacesUtils.tensorToSQLBindable(vectorFrom(result, engine.embeddingSize));
         semantic = await db.executeCached(`SELECT pages.*, matches.distance FROM
           (SELECT rowid,distance FROM page_vectors WHERE embedding MATCH :vector AND k=:limit) matches

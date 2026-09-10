@@ -129,7 +129,12 @@ absent from tabs, Places history, and Browser Memory. This exercises the same
 SessionStore and private-origin boundaries users rely on; Fluxion does not
 maintain a shadow session database.
 
-`fluxion.cfg` supplies Fluxion's blank homepage but deliberately does not write
+`fluxion.cfg` supplies Fluxion's blank homepage on Gecko's default preference
+branch, preserving explicit web, local-file, and blank user homepages. Earlier
+previews' managed bundle-path homepages migrate to that default so moving the
+app doesn't leave a stale path. The native bookmarks-toolbar choice is likewise
+a default, not a forced setting, and its visibility remains owned by Gecko.
+Startup deliberately does not write
 `browser.startup.page`. The value selected in General settings therefore
 survives the next privileged startup and Gecko, rather than Fluxion, decides
 whether to reopen the previous windows and tabs. The recovery gate keeps that
@@ -327,6 +332,14 @@ The command palette invalidates pending requests whenever its query, mode, or
 open state changes. Editing a query immediately removes the previous executable
 results; delayed successes and failures cannot replace the current results.
 Editing a page question also aborts the previous provider request.
+
+Enriched keyword retrieval matches each query term across title, URL,
+description, headings, and body before hybrid ranking. Whole-phrase title/URL
+matches take priority when bounding candidates. Embedding calls are single-flight
+with a 10-second indexing wait and a 1.5-second query wait. Gecko has no
+per-request cancellation here: a timed-out model request may finish internally,
+but cannot write a late vector or accumulate more model requests. Other pages
+can still save lexical evidence while that request is pending.
 
 Browser Memory is opt-in and uses Gecko's packaged
 `PlacesSemanticHistoryManager`, `EmbeddingsGenerator`, and SQLite `vec0`
