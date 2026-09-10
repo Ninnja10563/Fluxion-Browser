@@ -35,6 +35,22 @@ function fixture(size = 1000) {
     removeAttribute(key) { this.attrs.delete(key); }
     append(...children) { for (const child of children) { child.parentNode = this; this.children.push(child); } }
     appendChild(child) { this.append(child); return child; }
+    contains(node) { for (; node; node = node.parentNode) if (node === this) return true; return false; }
+    remove() {
+      if (!this.parentNode) return;
+      this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1);
+      this.parentNode = null;
+    }
+    insertBefore(child, before) {
+      if (child.parentNode && child.contains(document.activeElement)) document.activeElement = null;
+      this.moveBefore(child, before);
+    }
+    moveBefore(child, before) {
+      child.remove();
+      const index = before ? this.children.indexOf(before) : this.children.length;
+      this.children.splice(index, 0, child); child.parentNode = this;
+      this.moves = (this.moves || 0) + 1;
+    }
     replaceChildren(...children) {
       this.replacements++; for (const child of this.children) child.parentNode = null;
       this.children = []; this.append(...children);
@@ -90,7 +106,7 @@ function fixture(size = 1000) {
     },
     tabElements: new Map(), groupElements: new Map(), workspaceElements: new Map(),
     dirtyTabs: new Set(), rovingElements: new Map(), renderedMultiSelected: new Set(),
-    renderedSelectedTab: null, renderedWorkspace: null, selectionDirty: false,
+    renderedSelectedTab: null, renderedWorkspace: null, renderedFlat: false, selectionDirty: false,
     currentWorkspace: "focus", structureDirty: true, renderQueued: false,
     pointerCloseHold: null, renderDeferredForClose: false, flowMenuSession: null, closingTabs: new Set(),
     focusTabAfterRender: null, focusGroupAfterRender: null, focusWorkspaceAfterRender: null,
@@ -108,7 +124,7 @@ function fixture(size = 1000) {
   vm.runInContext(block("  function renderedTreeItems()", "  function clearTabDropFeedback()") +
     block("  function refreshTabElement(", "  function workspaceSymbol(") +
     block("  function createGroupElement(", "  function renderWorkspaces()") +
-    block("  function render()", "  const popupSet =") +
+    block("  function stableFlatRowIndices(", "  const popupSet =") +
     block('  for (const eventName of [\n    "TabOpen",', '  on(gBrowser.tabContainer, "TabSelect", () => {'), context);
   const flush = () => { while (frames.length) frames.shift()(); };
   context.render();
@@ -182,7 +198,7 @@ test("collapsed projections and pending topology changes retain structural fallb
   const old = f.row(f.tabs[7]);
   f.context.scheduleRender({ type: "TabMove" });
   f.gBrowser.selectedTab = f.tabs[6]; f.flush();
-  assert.notEqual(f.row(f.tabs[7]), old);
+  assert.notEqual(f.row(f.tabs[7]), old, "grouped workspace still uses full structural fallback");
 });
 
 test("pinned and ordinary trees keep independent roving stops; external focus is retained", () => {
@@ -257,10 +273,125 @@ test("workspace and pin topology changes win over pending selection", () => {
   f.tabs[2].pinned = true;
   f.gBrowser.selectedTab = f.tabs[2];
   f.context.scheduleRender({ type: "TabPinned" }); f.flush();
-  assert.notEqual(f.row(f.tabs[0]), original);
+  assert.equal(f.row(f.tabs[0]), original, "unaffected flat row survives pinning another tab");
   assert.equal(f.row(f.tabs[2]).closest(".fluxion-pinned-tabs"), f.pinnedTabs);
   f.tabs[7].workspace = "build"; f.context.currentWorkspace = "build";
   f.gBrowser.selectedTab = f.tabs[7]; f.flush();
   assert.equal(f.nodes().length, 1);
   assert.equal(f.nodes()[0]._fluxionTab, f.tabs[7]);
+});
+
+test("1000 flat tabs retain rows and close controls across native open, close and reorder", () => {
+  const f = fixture(), original = f.nodes(), closes = original.map(row => row._fluxionParts.close);
+  const originalWrites = original.map(row => row.writes);
+  const added = { ...f.tabs[9], label: "Added", linkedBrowser: { currentURI: { displaySpec: "https://new.example/" } } };
+  f.tabs.push(added); f.context.scheduleRender({ type: "TabOpen", target: added }); f.flush();
+  for (let index = 0; index < original.length; index++) {
+    assert.equal(f.row(f.tabs[index]), original[index]);
+    assert.equal(original[index]._fluxionParts.close, closes[index]);
+    assert.equal(original[index].writes, originalWrites[index]);
+  }
+  const addedRow = f.row(added); f.tabs.splice(f.tabs.indexOf(added), 1); added.parentNode = null;
+  f.context.scheduleRender({ type: "TabClose", target: added }); f.flush();
+  assert.equal(addedRow.isConnected, false); assert.deepEqual(f.nodes(), original);
+  const moved = f.tabs.splice(800, 1)[0]; f.tabs.splice(4, 0, moved);
+  const beforeMoves = f.tabsList.moves || 0;
+  f.context.scheduleRender({ type: "TabMove", target: moved }); f.flush();
+  assert.equal(f.nodes()[4], original[800]);
+  assert.equal((f.tabsList.moves || 0) - beforeMoves, 1);
+  for (const row of original) assert.equal(f.row(row._fluxionTab), row);
+  f.tabs.splice(4, 1); f.tabs.splice(950, 0, moved);
+  const beforeForward = f.tabsList.moves;
+  f.context.scheduleRender({ type: "TabMove", target: moved }); f.flush();
+  assert.equal(f.nodes()[950], original[800]);
+  assert.equal(f.tabsList.moves - beforeForward, 1, "moving toward the end must not relocate unaffected siblings");
+});
+
+test("flat structural updates preserve exact focused close/audio controls and fallback insertion focus", () => {
+  const f = fixture(20), row = f.row(f.tabs[8]);
+  row._fluxionParts.close.focus();
+  const moved = f.tabs.splice(8, 1)[0]; f.tabs.splice(2, 0, moved);
+  f.context.scheduleRender({ type: "TabMove", target: moved }); f.flush();
+  assert.equal(f.document.activeElement, row._fluxionParts.close);
+  // Model an older Gecko without state-preserving moveBefore.
+  const nativeMove = f.tabsList.moveBefore.bind(f.tabsList);
+  f.tabsList.moveBefore = undefined;
+  f.tabsList.insertBefore = (child, before) => {
+    if (child.contains(f.document.activeElement)) f.document.activeElement = null;
+    nativeMove(child, before);
+  };
+  const audio = row._fluxionParts.audio;
+  f.context.describeTab = () => ({ labels: [], indicators: [], audio: { kind: "playing", action: "Mute tab" } });
+  f.context.refreshTabElement(moved, row); audio.focus();
+  f.tabs.splice(2, 1); f.tabs.unshift(moved);
+  f.context.scheduleRender({ type: "TabMove", target: moved }); f.flush();
+  assert.equal(f.document.activeElement, audio);
+  assert.equal(f.row(moved), row);
+});
+
+test("pin role changes replace only affected row and retain independent tree tab stops", () => {
+  const f = fixture(10), original = f.nodes();
+  f.tabs[4].pinned = true;
+  f.context.scheduleRender({ type: "TabPinned", target: f.tabs[4] }); f.flush();
+  assert.notEqual(f.row(f.tabs[4]), original[4]);
+  assert.equal(f.row(f.tabs[4]).getAttribute("role"), "tab");
+  for (let index = 0; index < 10; index++) if (index !== 4) assert.equal(f.row(f.tabs[index]), original[index]);
+  for (const container of [f.pinnedTabs, f.tabsList]) assert.equal(container.children.filter(row => row.tabIndex === 0).length, 1);
+  const pinned = f.row(f.tabs[4]); f.tabs[4].pinned = false;
+  f.context.scheduleRender({ type: "TabUnpinned", target: f.tabs[4] }); f.flush();
+  assert.notEqual(f.row(f.tabs[4]), pinned);
+  assert.equal(f.row(f.tabs[4]).getAttribute("role"), "treeitem");
+  assert.equal(f.tabsList.children.filter(row => row.tabIndex === 0).length, 1);
+});
+
+test("native split creation and removal retain full fallback before resuming flat reconciliation", () => {
+  const f = fixture(12), original = f.row(f.tabs[8]);
+  const split = { tabs: [f.tabs[2], f.tabs[3]], orientation: "side-by-side", hasActiveTab: false };
+  for (const tab of split.tabs) tab.splitview = split;
+  f.context.scheduleRender({ type: "SplitViewCreated" }); f.flush();
+  assert.notEqual(f.row(f.tabs[8]), original);
+  assert.ok(f.row(f.tabs[2]).closest(".fluxion-split"));
+  const grouped = f.row(f.tabs[8]);
+  f.context.scheduleRender({ type: "TabMove" }); f.flush();
+  assert.notEqual(f.row(f.tabs[8]), grouped);
+  for (const tab of split.tabs) delete tab.splitview;
+  const beforeRemoval = f.row(f.tabs[8]);
+  f.context.scheduleRender({ type: "SplitViewRemoved" }); f.flush();
+  assert.notEqual(f.row(f.tabs[8]), beforeRemoval);
+  const flat = f.row(f.tabs[8]);
+  f.context.scheduleRender({ type: "TabMove" }); f.flush();
+  assert.equal(f.row(f.tabs[8]), flat);
+});
+
+test("arbitrary flat reorder batches produce native order without losing row identity", () => {
+  const f = fixture(50), original = new Map(f.tabs.map(tab => [tab, f.row(tab)]));
+  f.tabs.reverse(); f.context.scheduleRender({ type: "TabMove" }); f.flush();
+  assert.deepEqual(f.nodes().map(row => row._fluxionTab), f.tabs);
+  const evens = f.tabs.filter((_, index) => index % 2 === 0), odds = f.tabs.filter((_, index) => index % 2 !== 0);
+  f.tabs.splice(0, f.tabs.length, ...odds, ...evens);
+  f.context.scheduleRender({ type: "TabMove" }); f.flush();
+  assert.deepEqual(f.nodes().map(row => row._fluxionTab), f.tabs);
+  for (const tab of f.tabs) assert.equal(f.row(tab), original.get(tab));
+});
+
+test("adjacent forward LIS ties may move the equivalent neighbor while preserving identity and focus", () => {
+  const f = fixture(8), moved = f.tabs[2], neighbor = f.tabs[3];
+  const movedRow = f.row(moved), neighborRow = f.row(neighbor);
+  f.gBrowser.selectedTab = neighbor; f.flush();
+  neighborRow._fluxionParts.close.focus();
+  const rows = f.nodes(), writes = rows.map(row => row.writes), relocations = [];
+  const moveBefore = f.tabsList.moveBefore.bind(f.tabsList);
+  f.tabsList.moveBefore = (row, before) => { relocations.push(row); moveBefore(row, before); };
+  f.tabs.splice(2, 2, neighbor, moved);
+  f.context.scheduleRender({ type: "TabMove", target: moved }); f.flush();
+  // Both one-node edits are minimal. The deterministic LIS keeps A and moves
+  // B before it, rather than promising that only native event.target is moved.
+  assert.deepEqual(relocations, [neighborRow]);
+  assert.equal(f.nodes()[2], neighborRow); assert.equal(f.nodes()[3], movedRow);
+  assert.equal(f.document.activeElement, neighborRow._fluxionParts.close);
+  for (let index = 0; index < rows.length; index++) {
+    assert.equal(f.row(rows[index]._fluxionTab), rows[index]);
+    assert.equal(rows[index].writes, writes[index]);
+  }
+  assert.equal(f.gBrowser.selectedTab, neighbor);
 });

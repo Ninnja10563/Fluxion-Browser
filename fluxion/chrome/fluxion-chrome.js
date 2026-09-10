@@ -36,6 +36,7 @@
   let renderedSelectedTab = null;
   let renderedMultiSelected = new Set();
   let renderedWorkspace = null;
+  let renderedFlat = false;
   const rovingElements = new Map();
   let workspaceRenderSignature = "";
   let pointerCloseHold = null;
@@ -2427,6 +2428,55 @@
     addWorkspaceButton.disabled = workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES;
   }
 
+  function stableFlatRowIndices(container, items) {
+    const positions = new Map([...container.children].map((child, index) => [child, index]));
+    const tails = [], previous = new Map();
+    // Keep the longest already-ordered subsequence connected and unmoved.
+    // A single native reorder then moves one row in either direction.
+    for (let index = 0; index < items.length; index++) {
+      const position = positions.get(items[index]);
+      if (position === undefined) continue;
+      let low = 0, high = tails.length;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        if (positions.get(items[tails[middle]]) < position) low = middle + 1;
+        else high = middle;
+      }
+      previous.set(index, low ? tails[low - 1] : -1);
+      tails[low] = index;
+    }
+    const stable = new Set();
+    for (let index = tails.at(-1); index !== undefined && index !== -1; index = previous.get(index)) stable.add(index);
+    return stable;
+  }
+
+  function reconcileFlatTabs(visible) {
+    const wanted = new Set();
+    const pinned = [], regular = [];
+    for (const tab of visible) {
+      const role = tab.pinned ? "tab" : "treeitem";
+      let item = tabElements.get(tab);
+      if (!item?.isConnected || item.getAttribute("role") !== role) item = createTabElement(tab, { role });
+      else refreshTabElement(tab, item);
+      wanted.add(item);
+      (tab.pinned ? pinned : regular).push(item);
+    }
+    for (const [tab, item] of tabElements) {
+      if (!wanted.has(item)) tabElements.delete(tab);
+    }
+    for (const [container, items] of [[pinnedTabs, pinned], [tabsList, regular]]) {
+      for (const child of [...container.children]) if (!wanted.has(child)) child.remove();
+      const stable = stableFlatRowIndices(container, items);
+      for (let index = items.length - 1; index >= 0; index--) {
+        if (stable.has(index)) continue;
+        const item = items[index], before = items[index + 1] || null;
+        if (item.parentNode === container && typeof container.moveBefore === "function") {
+          container.moveBefore(item, before);
+        } else container.insertBefore(item, before);
+      }
+    }
+  }
+
   function render() {
     if (pointerCloseHold) {
       renderQueued = false;
@@ -2436,6 +2486,7 @@
       return;
     }
     flowMenuSession?.reconcile();
+    const focusedElementBeforeRender = document.activeElement;
     const focusedTabBeforeRender = document.activeElement
       ?.closest?.(".fluxion-tab")?._fluxionTab || null;
     const focusedGroupBeforeRender = document.activeElement
@@ -2444,57 +2495,67 @@
     structureDirty = false;
     dirtyTabs.clear();
     renderWorkspaces();
-    groupElements.clear();
-    tabElements.clear();
-    groupRenderSequence = 0;
-    pinnedTabs.replaceChildren();
-    tabsList.replaceChildren();
     const visible = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === currentWorkspace);
-    const visibleSet = new Set(visible);
-    for (const tab of visible.filter(tab => tab.pinned)) {
-      pinnedTabs.appendChild(createTabElement(tab, { role: "tab" }));
-    }
-    const rows = FluxionTabGroups.projectTabRows(
-      visible.filter(tab => !tab.pinned),
-      currentWorkspace,
-      { workspaceOf: tabWorkspace, groupOf: tab => tab.group },
-    );
-    const seenSplitViews = new Set();
-    for (const row of rows) {
-      if (row.kind === "group") {
-        tabsList.appendChild(createGroupElement(row.group, row.tabs));
-        continue;
+    const flat = !visible.some(tab => tab.group || tab.splitview);
+    if (flat && renderedFlat && renderedWorkspace === currentWorkspace) {
+      reconcileFlatTabs(visible);
+    } else {
+      groupElements.clear();
+      tabElements.clear();
+      groupRenderSequence = 0;
+      pinnedTabs.replaceChildren();
+      tabsList.replaceChildren();
+      const visibleSet = new Set(visible);
+      for (const tab of visible.filter(tab => tab.pinned)) {
+        pinnedTabs.appendChild(createTabElement(tab, { role: "tab" }));
       }
-      const splitView = row.tab.splitview;
-      if (!splitView) {
-        tabsList.appendChild(createTabElement(row.tab));
-        continue;
+      const rows = FluxionTabGroups.projectTabRows(
+        visible.filter(tab => !tab.pinned),
+        currentWorkspace,
+        { workspaceOf: tabWorkspace, groupOf: tab => tab.group },
+      );
+      const seenSplitViews = new Set();
+      for (const row of rows) {
+        if (row.kind === "group") {
+          tabsList.appendChild(createGroupElement(row.group, row.tabs));
+          continue;
+        }
+        const splitView = row.tab.splitview;
+        if (!splitView) {
+          tabsList.appendChild(createTabElement(row.tab));
+          continue;
+        }
+        if (seenSplitViews.has(splitView)) continue;
+        seenSplitViews.add(splitView);
+        const splitTabs = splitView.tabs.filter(tab =>
+          visibleSet.has(tab) && !tab.pinned && !tab.group
+        );
+        tabsList.appendChild(
+          splitTabs.length > 1
+            ? createSplitElement(splitView, splitTabs)
+            : createTabElement(row.tab),
+        );
       }
-      if (seenSplitViews.has(splitView)) continue;
-      seenSplitViews.add(splitView);
-      const splitTabs = splitView.tabs.filter(tab =>
-        visibleSet.has(tab) && !tab.pinned && !tab.group
-      );
-      tabsList.appendChild(
-        splitTabs.length > 1
-          ? createSplitElement(splitView, splitTabs)
-          : createTabElement(row.tab),
-      );
     }
-    pinnedLabel.hidden = pinnedTabs.childElementCount === 0;
-    pinnedTabs.hidden = pinnedTabs.childElementCount === 0;
-    count.textContent = String(visible.length);
+    renderedFlat = flat;
+    const noPinnedTabs = pinnedTabs.childElementCount === 0;
+    if (pinnedLabel.hidden !== noPinnedTabs) pinnedLabel.hidden = noPinnedTabs;
+    if (pinnedTabs.hidden !== noPinnedTabs) pinnedTabs.hidden = noPinnedTabs;
+    if (count.textContent !== String(visible.length)) count.textContent = String(visible.length);
     const pinnedRendered = renderedPinnedTabElements();
     pinnedRendered.forEach((element, index) => {
-      element.setAttribute("aria-posinset", String(index + 1));
-      element.setAttribute("aria-setsize", String(pinnedRendered.length));
+      if (element.getAttribute("aria-posinset") !== String(index + 1)) element.setAttribute("aria-posinset", String(index + 1));
+      if (element.getAttribute("aria-setsize") !== String(pinnedRendered.length)) element.setAttribute("aria-setsize", String(pinnedRendered.length));
     });
-    if (pinnedRendered.length && !pinnedRendered.some(element => element.tabIndex === 0)) {
-      pinnedRendered[0].tabIndex = 0;
-    }
     const treeItems = renderedTreeItems();
-    if (treeItems.length && !treeItems.some(element => element.tabIndex === 0)) {
-      treeItems[0].tabIndex = 0;
+    for (const items of [pinnedRendered, treeItems]) {
+      const selected = items.find(item => item._fluxionTab === gBrowser.selectedTab);
+      const focused = items.find(item => item === focusedElementBeforeRender || item.contains(focusedElementBeforeRender));
+      const target = focused || selected || items.find(item => item.tabIndex === 0) || items[0];
+      for (const item of items) {
+        const tabIndex = item === target ? 0 : -1;
+        if (item.tabIndex !== tabIndex) item.tabIndex = tabIndex;
+      }
     }
     rovingElements.clear();
     rovingElements.set("pinned", pinnedRendered.find(element => element.tabIndex === 0));
@@ -2514,7 +2575,13 @@
     if (tabToRefocus) {
       const element = tabElements.get(tabToRefocus);
       if (element && !element.closest(".fluxion-group-tabs[hidden]")) {
-        focusFlowItem(element);
+        if (!requestedTabFocus && focusedElementBeforeRender?.isConnected && element.contains(focusedElementBeforeRender)) {
+          setFlowRovingElement(element);
+          if (document.activeElement !== focusedElementBeforeRender &&
+              [document.body, document.documentElement, null].includes(document.activeElement)) {
+            focusedElementBeforeRender.focus({ preventScroll: true });
+          }
+        } else focusFlowItem(element);
       }
     } else if (groupToRefocus) {
       focusFlowItem(groupElements.get(groupToRefocus));
