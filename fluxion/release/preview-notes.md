@@ -8,7 +8,7 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
-Version 0.55 is an interaction-quality candidate in development:
+Version 0.55 is a published interaction-quality preview:
 
 - retain the original tab selection for a menu command, refusing stale tabs,
   groups, or workspaces instead of operating on changed targets;
@@ -26,8 +26,10 @@ Version 0.55 is an interaction-quality candidate in development:
   palette before executing its selected result;
 - extend native keyboard/menu and 1,000-tab search verification.
 
-It has not passed release validation and has no published DMG. Local CPU-only
-benchmark results are not claims of native input-to-paint latency.
+It passed all 582 regression tests and every required native macOS release
+gate. [Release provenance](https://github.com/Ninnja10563/Fluxion-Browser/blob/main/fluxion/release/provenance/v0.55.0-preview.1.md)
+records the exact built source and assets. Local CPU-only benchmark results
+are not claims of native input-to-paint latency.
 
 Version 0.54 was published after successful complete macOS staging. Its
 [verified provenance](https://github.com/Ninnja10563/Fluxion-Browser/blob/main/fluxion/release/provenance/v0.54.0-preview.1.md)

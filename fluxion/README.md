@@ -8,13 +8,18 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.55 candidate focuses on keyboard/menu continuity and many-tab search.
+[Fluxion 0.55](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.55.0-preview.1)
+is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 Menu commands retain their original targets and refuse stale ones; tab search
-reuses unchanged normalized fields while retaining the existing ranking rules.
-Native keyboard-menu and 1,000-tab search validation is in progress.
-The frozen 0.54 candidate passed its native browser checks but is still waiting
-for successful live update discovery before release.
-Only candidates that pass the full release workflow are published as DMGs.
+reuses prepared fields and finds current workspace names; Settings reflect
+cross-window changes without replacing unsaved homepage drafts. It includes
+0.54's live cross-window tab transfers and recovery improvements.
+
+All 582 regression tests and every native release gate passed, including
+OS-keyboard menus, 1,000-tab search and two-window Settings editing. See
+[verified release provenance](release/provenance/v0.55.0-preview.1.md).
+This remains an ad-hoc-signed development preview, not Apple-notarized; the
+full [roadmap](docs/roadmap.md) is not complete.
 
 The current preview is runnable and includes:
 
@@ -275,7 +280,7 @@ workspace name or symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
 
-In the 0.54 candidate, right-click a Flow tab or group heading and choose
+Right-click a Flow tab or group heading and choose
 **Move to Window**. Choose an existing window or **New Window**; the existing
 window's workspace is shown in the menu. Command-click (Ctrl-click on
 Windows/Linux) to select several tabs first. Keyboard users can focus a tab or
@@ -285,10 +290,11 @@ Tabs can also be dragged onto another window's Flow tab edge, workspace button,
 or empty tab-list area. Dragging outside browser windows opens a new window;
 Escape cancels the drag. Split panes move together, and a complete selected
 group retains its heading. Private tabs can only move to private windows.
-Choose **Keep Peek as Tab** for a temporary Peek before moving it. This candidate's
-release verification is still pending; see GitHub Releases for available DMGs.
-The [0.54 validation record](docs/validation/0.54-candidate.md) distinguishes
-passing native browser checks from the rate-limited release check.
+Choose **Keep Peek as Tab** for a temporary Peek before moving it. These features
+passed native release verification; physical OS drag auditing and exhaustive
+website-state compatibility checks remain. The
+[0.54 provenance](release/provenance/v0.54.0-preview.1.md) records the successful
+release separately from earlier failed candidate checks.
 
 Collapsing a native tab group keeps its currently selected page visible as one
 compact row and labels the remaining hidden members as `+N`. Arrow navigation
