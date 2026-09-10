@@ -20,6 +20,17 @@ function mayIndex() {
 }
 
 function getManager() {
+  if (mayIndex()) {
+    try {
+      const { FluxionUrlbarMemory } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionUrlbarMemory.sys.mjs");
+      FluxionUrlbarMemory.ensurePolicyBoundary();
+    } catch (error) {
+      Services.prefs.setBoolPref("browser.ml.enable", false);
+      Services.prefs.setBoolPref("places.semanticHistory.featureGate", false);
+      Services.prefs.clearUserPref("places.semanticHistory.initialized");
+      throw error;
+    }
+  }
   if (!manager) {
     // A newly constructed disabled Gecko manager may remove an initialized
     // database even without removeOnStartup. Corrupt policy is not deletion
@@ -40,11 +51,63 @@ function getManager() {
     // Install before Fluxion opens the manager connection and arms native
     // background indexing. Track the whole embed→transaction operation, not
     // just its SQLite write, so deleting cannot race a late model response.
-    manager.updateVectorDB = function (...args) {
-      return runMutation(() => update.apply(this, args));
+    manager.updateVectorDB = function (connection, additions = [], deletions = []) {
+      return runMutation(() => updateAllowedCandidates(this, update, connection, additions, deletions));
     };
   }
   return manager;
+}
+
+async function updateAllowedCandidates(native, update, connection, additions, deletions) {
+  if (!Array.isArray(additions) || additions.length > 1000) throw new Error("Unsupported native Memory candidate batch");
+  if (!additions.length) return update.call(native, connection, additions, deletions);
+  const hashes = [...new Set(additions.map(row => row.url_hash).filter(value =>
+    (typeof value === "number" && Number.isSafeInteger(value)) ||
+    (typeof value === "string" && /^-?\d{1,20}$/.test(value))))];
+  if (!hashes.length) return deletions.length ? update.call(native, connection, [], deletions) : undefined;
+  const params = Object.fromEntries(hashes.map((value, index) => [`hash${index}`, value]));
+  const rows = await connection.execute(`SELECT url_hash, url FROM places.moz_places
+    WHERE url_hash IN (${hashes.map((_, index) => `:hash${index}`).join(",")})`, params);
+  if (!mayIndex()) return;
+  const urlsByHash = new Map();
+  for (const row of rows) {
+    const key = String(row.getResultByName("url_hash"));
+    if (!urlsByHash.has(key)) urlsByHash.set(key, []);
+    urlsByHash.get(key).push(row.getResultByName("url"));
+  }
+  let filter = FluxionMemoryPolicy.createPageFilter(
+    FluxionMemoryPolicy.effectiveDomains(FluxionMemoryPolicy.readPolicy(Services.prefs)));
+  const allowed = candidate => {
+    const urls = urlsByHash.get(String(candidate.url_hash));
+    // URL hashes are not unique: every matching real URL must be safe. Unknown
+    // hashes cannot establish consent and never reach the native embedder.
+    return urls?.length && urls.every(url => filter({ url }));
+  };
+  const blocked = hashes.filter(hash => urlsByHash.has(String(hash)) && !allowed({ url_hash: hash }));
+  if (blocked.length) {
+    const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
+    const sentinel = new Array(native.getEmbeddingSize()).fill(0);
+    sentinel[0] = 1;
+    const vector = PlacesUtils.tensorToSQLBindable(sentinel);
+    await connection.executeTransaction(async () => {
+      for (const hash of blocked) {
+        if (!mayIndex()) throw new Error("Memory policy changed during candidate exclusion");
+        const mappings = await connection.executeCached(`INSERT INTO vec_history_mapping(url_hash) VALUES(:hash)
+          ON CONFLICT(url_hash) DO UPDATE SET url_hash=:hash RETURNING rowid`, { hash });
+        if (!mayIndex()) throw new Error("Memory policy changed during candidate exclusion");
+        await connection.executeCached("INSERT OR REPLACE INTO vec_history(rowid,embedding) VALUES(:id,:vector)",
+          { id: mappings[0].getResultByName("rowid"), vector });
+        if (!mayIndex()) throw new Error("Memory policy changed during candidate exclusion");
+      }
+    });
+  }
+  if (!mayIndex()) return;
+  filter = FluxionMemoryPolicy.createPageFilter(
+    FluxionMemoryPolicy.effectiveDomains(FluxionMemoryPolicy.readPolicy(Services.prefs)));
+  const safe = additions.filter(allowed);
+  // Keep Gecko's candidate counts unchanged. Content-free mappings prevent
+  // excluded candidates from starving subsequent batches without embedding them.
+  if (safe.length || deletions.length) return update.call(native, connection, safe, deletions);
 }
 
 function runMutation(operation) {
@@ -98,6 +161,10 @@ async function bounded(task) {
       timer = setTimeout(() => reject(new Error("Native Memory cleanup is still waiting for background work; try clearing again.")), 15000);
     })]);
   } finally { clearTimeout(timer); }
+}
+
+async function drainWrites() {
+  await bounded(Promise.all([...activeWrites]));
 }
 
 function storageConnection() {
@@ -157,6 +224,7 @@ export const FluxionNativeMemory = Object.freeze({
   purge,
   runControl,
   runMutation,
+  drainWrites,
   search,
   async recover() { if (pending()) await purge(); },
   async vectorCount() {

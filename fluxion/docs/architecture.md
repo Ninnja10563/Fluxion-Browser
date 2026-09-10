@@ -651,6 +651,31 @@ window-owned typed array fails its realm-specific `instanceof` check. Cleanup
 attempts both native scrubbing and enriched-evidence deletion, and reports
 failures rather than silently claiming success.
 
+Native additions now pass a pre-embedding candidate boundary in the shared
+manager adapter. Each bounded batch resolves its hashes against actual Places
+URLs; any excluded/sensitive URL sharing a hash blocks that hash, and unknown
+or imprecise hashes cannot reach the model. Blocked known candidates receive
+content-free sentinel mappings/vectors. Gecko's original batch counts and
+remaining-work scheduling are retained, so excluded entries cannot keep
+occupying the first batch indefinitely. Allowed candidates still use Gecko's
+own embedding and vector-write implementation.
+
+An exclusion save drains native writes that already started before performing
+its final scrub. A previously permitted in-flight model result can briefly
+finish during this asynchronous operation; success is not reported until those
+writes and cleanup finish. A timeout/failure is reported, not represented as a
+completed deletion. This is not atomic or forensic erasure across a crash.
+
+`FluxionUrlbarMemory.sys.mjs` unregisters only Gecko's experimental
+`SemanticHistorySearch` provider from native URL-bar/smart-bar registries at
+profile readiness. Ordinary Places, autofill and search providers remain.
+Semantic recall is exposed through Fluxion's policy-filtered Memory interface,
+not a second native provider that bypasses its exclusions. Native indexing
+also requires this boundary before accessing its manager; incompatibility
+closes model gates without creating new deletion intent. This uses pinned
+provider-object deregistration and supports the known ESR singleton export;
+unknown registry APIs fail explicitly and require an upstream re-audit.
+
 Sensitive-path classification decodes percent escapes locally, checking each
 layer for sensitive segments and treating decoded slash/backslash characters
 as separators. It never rewrites the stored or navigated URL. Four decoding

@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
-function fixture() {
+function fixture({ semanticRegistered = false, missingPlaces = false } = {}) {
   const startup = { _placesBrowserInitComplete: false };
   const prefs = new Map(), timers = [], imports = [];
   let opened = 0, now = 0;
@@ -28,6 +28,9 @@ function fixture() {
     } },
     ChromeUtils: { importESModule(name) {
       imports.push(name);
+      if (name.endsWith("UrlbarProvidersManager.sys.mjs")) return { ProvidersManager: { getInstanceForSap() {
+        return { getProvider: provider => provider === "Places" ? !missingPlaces : semanticRegistered };
+      } } };
       assert.match(name, /PlacesBrowserStartup/);
       return { PlacesBrowserStartup: startup };
     } },
@@ -44,7 +47,8 @@ test("native privacy verification waits for Places startup before companion or s
   assert.equal(f.prefs.get("fluxion.memory.privacy.stage"), "waiting-for-places-startup");
   f.tick(); await settle();
   assert.equal(f.opened(), 0);
-  assert.equal(f.imports.length, 1);
+  assert.equal(f.imports.length, 2);
+  assert.ok(f.imports.every(name => !name.includes("SemanticHistoryManager")));
   f.startup._placesBrowserInitComplete = true;
   f.tick(); await settle();
   assert.equal(f.opened(), 1);
@@ -52,6 +56,15 @@ test("native privacy verification waits for Places startup before companion or s
   assert.equal(report.placesStartupComplete, true);
   assert.match(f.prefs.get("fluxion.memory.privacy.error"), /test stopped after verified startup barrier/);
   assert.equal(f.prefs.has("fluxion.memory.privacy.health"), false);
+});
+
+test("privacy gate rejects unfiltered semantic providers or missing ordinary Places before any storage or companion", async () => {
+  for (const option of ["semanticRegistered", "missingPlaces"]) {
+    const f = fixture({ [option]: true }); await settle();
+    assert.equal(f.opened(), 0);
+    assert.match(f.prefs.get("fluxion.memory.privacy.error"), /native semantic provider was not isolated/);
+    assert.equal(f.prefs.has("fluxion.memory.privacy.health"), false);
+  }
 });
 
 test("unfinished Places startup fails the privacy gate without opening another window", async () => {

@@ -5,7 +5,7 @@
   const prefix = "fluxion.memory.privacy";
   if (Services.prefs.getBoolPref(`${prefix}.claimed`, false)) return;
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
-  const report = { fixture: "explicit-native-tensors-not-model-inference", checks: [] };
+  const report = { fixture: "synthetic storage tensors plus separately observed real cold-candidate embedding", checks: [] };
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const pause = ms => new Promise(resolve => window.setTimeout(resolve, ms));
   const waitFor = async (check, message) => {
@@ -52,6 +52,15 @@
       "moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs"
     );
     stage("waiting-for-places-startup");
+    const { ProvidersManager } = ChromeUtils.importESModule(
+      "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs"
+    );
+    for (const sap of ["urlbar", "smartbar"]) {
+      const registry = ProvidersManager.getInstanceForSap(sap);
+      assert(!registry.getProvider("SemanticHistorySearch") && registry.getProvider("Places"),
+        `${sap}: native semantic provider was not isolated while retaining ordinary Places`);
+    }
+    report.checks.push({ label: "native-semantic-provider-isolated-before-memory-enable", ordinaryPlacesRetained: true });
     // Session restoration does not finish fresh-profile Places initialization.
     // Establish the fixture only after those startup database/import tasks,
     // before opening another window or attaching the semantic database.
@@ -239,6 +248,9 @@
       }
       assert((await rawCounts(91047011)).pages === 1 && (await rawCounts(91047011)).vectors === 1 &&
         (await storedVector(safeURL)).every((value, i) => value === nonSentinel[i]), "List cleanup changed safe evidence");
+      stage("checking-cold-native-candidate-boundary");
+      report.checks.push(await window.FluxionMemoryCandidateVerification.run({ manager, connection, PlacesUtils,
+        storedVector, sentinel: tensor, drain: () => FluxionNativeMemory.drainWrites() }));
       for (const target of [window, companion]) {
         const results = (await target.FluxionMemory.search("privacy verification")).results;
         assert(!results.some(item => listed.includes(item.url)) && results.some(item => item.url === safeURL),

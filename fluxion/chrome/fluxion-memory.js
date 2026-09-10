@@ -394,7 +394,10 @@
     // before this preference edit. Wait for it, then scan the current policy.
     if (exclusionSweep) await exclusionSweep.catch(() => {});
     let nativeError = null;
-    try { await applyExclusions(); }
+    try {
+      await FluxionNativeMemory.drainWrites();
+      await applyExclusions();
+    }
     catch (error) { nativeError = error; }
     // A native database failure must not prevent deletion of extracted text
     // and vectors in Fluxion's independent evidence store.

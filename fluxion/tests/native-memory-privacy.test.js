@@ -20,7 +20,8 @@ function fixture(saved = new Map()) {
     exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null,
     beforeStorage: null, beforeExclusionQuery: null, failStorage: false, storageOpens: 0, storageReady: false,
     beforeInference: null, inferenceCalls: 0, searchCalls: 0, beforeEnriched: null,
-    nativeResults: [], keywords: [], windows: [], upserts: [], pruneCalls: 0, enrichedResults: { lexical: [], semantic: [] } };
+    nativeResults: [], keywords: [], windows: [], upserts: [], pruneCalls: 0, candidateURLs: [], beforeCandidates: null,
+    embeddedCandidates: [], boundaryFailure: false, boundaryCalls: 0, enrichedResults: { lexical: [], semantic: [] } };
   // Model the relevant native converter contract in a separate ESM-like
   // realm: Array.isArray crosses realms, instanceof Float32Array does not.
   const tensorToSQLBindable = vm.runInNewContext(`value => {
@@ -41,6 +42,10 @@ function fixture(saved = new Map()) {
   const db = {
     async execute(sql) {
       operations.push(sql);
+      if (sql.includes("SELECT url_hash, url FROM places.moz_places")) {
+        if (state.beforeCandidates) await state.beforeCandidates;
+        return state.candidateURLs.map(value => ({ getResultByName: key => value[key] }));
+      }
       if (sql.startsWith("DELETE")) {
         assert.equal(prefs.get("browser.ml.enable"), false, "cleanup reopened the model gate");
         if (state.failDelete) throw new Error("native disk unavailable");
@@ -58,6 +63,7 @@ function fixture(saved = new Map()) {
       if (state.beforeCached) await state.beforeCached;
       if (state.failExclusion) throw new Error("native exclusion disk unavailable");
       state.cachedWrites.push({ sql, parameters });
+      return [{ getResultByName: () => 77 }];
     },
     async executeTransaction(callback) { return callback(); },
   };
@@ -77,7 +83,8 @@ function fixture(saved = new Map()) {
       operations.push("storage opened");
       return db;
     } },
-    async updateVectorDB() {
+    async updateVectorDB(connection, additions = []) {
+      state.embeddedCandidates.push(...additions);
       state.writes++;
       if (state.beforeWrite) await state.beforeWrite;
       state.vectors++; state.mapping++;
@@ -97,7 +104,11 @@ function fixture(saved = new Map()) {
   };
   const context = vm.createContext({ Services, Cu: { reportError: error => errors.push(error) }, ...timerTools,
     FluxionMemoryPolicy: require("../chrome/core/memory-policy.js"),
-    ChromeUtils: { importESModule: () => ({ getPlacesSemanticHistoryManager() { factoryCalls++; return native; } }) },
+    ChromeUtils: { importESModule: uri => uri.includes("PlacesUtils") ? { PlacesUtils: { tensorToSQLBindable } } :
+      uri.includes("FluxionUrlbarMemory") ? { FluxionUrlbarMemory: { ensurePolicyBoundary() {
+        state.boundaryCalls++;
+        if (state.boundaryFailure) throw new Error("native provider boundary unavailable");
+      } } } : ({ getPlacesSemanticHistoryManager() { factoryCalls++; return native; } }) },
   });
   // Only adapt ES-module linkage for Node20's VM; execute the complete shipped
   // module body, not extracted/reimplemented privacy methods.
@@ -154,6 +165,89 @@ function fixture(saved = new Map()) {
     expireTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
   };
 }
+
+test("native provider boundary failure closes model gates before constructing a manager without changing deletion intent", () => {
+  const f = fixture(new Map([["fluxion.memory.enabled", true], ["browser.ml.enable", true],
+    ["places.semanticHistory.featureGate", true], ["places.semanticHistory.initialized", true],
+    ["places.semanticHistory.removeOnStartup", false]]));
+  f.state.boundaryFailure = true;
+  assert.throws(() => f.adapter.getManager(), /boundary unavailable/);
+  assert.equal(f.factoryCalls(), 0);
+  assert.equal(f.prefs.get("browser.ml.enable"), false);
+  assert.equal(f.prefs.get("places.semanticHistory.featureGate"), false);
+  assert.equal(f.prefs.has("places.semanticHistory.initialized"), false);
+  assert.equal(f.prefs.get("places.semanticHistory.removeOnStartup"), false);
+  assert.equal(f.adapter.pending(), false);
+});
+
+test("provider boundary is rechecked on existing manager but cannot prevent explicit pending purge", async () => {
+  const f = fixture(new Map([["fluxion.memory.enabled", true]]));
+  f.adapter.getManager();
+  f.state.boundaryFailure = true;
+  assert.throws(() => f.adapter.getManager(), /boundary unavailable/);
+  assert.equal(f.factoryCalls(), 1);
+  await f.adapter.purge();
+  assert.equal(f.state.vectors, 0);
+  assert.equal(f.state.mapping, 0);
+});
+
+test("cold excluded native candidates and unsafe hash collisions get only sentinels while safe neighbors reach the embedder", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  await api.enable(); await api.setExcludedDomains(["excluded.invalid"]);
+  f.state.candidateURLs = [{ url_hash: 1, url: "https://excluded.invalid/new" },
+    { url_hash: 2, url: "https://safe.invalid/article" }, { url_hash: 3, url: "https://safe.invalid/collision" },
+    { url_hash: 3, url: "https://excluded.invalid/collision" }, { url_hash: 4, url: "https://safe.invalid/%61ccount" }];
+  const candidates = [1, 2, 3, 4, 5].map(url_hash => ({ url_hash, content: `candidate ${url_hash}` }));
+  await f.native.updateVectorDB(await f.native.getConnection(), candidates, []);
+  assert.deepEqual(f.state.embeddedCandidates.map(row => row.url_hash), [2]);
+  const sentinelWrites = f.state.cachedWrites.filter(write => write.sql.includes("INSERT OR REPLACE INTO vec_history"));
+  assert.equal(sentinelWrites.length, 3);
+  for (const write of sentinelWrites) assert.deepEqual(Array.from(write.parameters.vector), [1, 0, 0]);
+  assert.deepEqual(candidates.map(row => row.url_hash), [1, 2, 3, 4, 5], "Do not mutate Gecko's source batch");
+});
+
+test("candidate lookup rechecks latest exclusions and malformed policy never reaches model or sentinel writes", async () => {
+  for (const invalid of [false, true]) {
+    const f = fixture(), api = f.chromeWindow(); await api.enable();
+    f.state.candidateURLs = [{ url_hash: 1, url: "https://excluded.invalid/new" }];
+    const wait = deferred(); f.state.beforeCandidates = wait.promise;
+    const operation = f.native.updateVectorDB(await f.native.getConnection(), [{ url_hash: 1, content: "private words" }], []);
+    await settle();
+    f.prefs.set("fluxion.memory.exclusionPolicy", invalid ? "{" : JSON.stringify({ version: 1, directDomains: ["excluded.invalid"], lists: [] }));
+    wait.resolve(); await operation;
+    assert.equal(f.state.embeddedCandidates.length, 0);
+    assert.equal(f.state.cachedWrites.length, invalid ? 0 : 2);
+  }
+});
+
+test("committed exclusion waits for already-running native embedding before its final scrub and success", async () => {
+  const f = fixture(), api = f.chromeWindow(); await api.enable(); await settle();
+  f.state.candidateURLs = [{ url_hash: 1, url: "https://later-excluded.invalid/article" }];
+  const wait = deferred(); f.state.beforeWrite = wait.promise;
+  const writing = f.native.updateVectorDB(await f.native.getConnection(), [{ url_hash: 1, content: "previously permitted" }], []);
+  await settle();
+  let completed = false;
+  const saving = api.setExcludedDomains(["later-excluded.invalid"]).then(() => { completed = true; });
+  await settle();
+  assert.equal(completed, false);
+  assert.equal(f.state.ownedExclusions.length, 0);
+  f.state.exclusionRows = [{ rowid: 77, url: "https://later-excluded.invalid/article" }];
+  wait.resolve(); await writing; await saving;
+  assert.equal(completed, true);
+  assert.equal(f.state.cachedWrites.filter(write => write.sql.includes("INSERT INTO vec_history")).length, 1);
+  assert.deepEqual(f.state.ownedExclusions, [["later-excluded.invalid"]]);
+});
+
+test("a stalled native write makes exclusion save fail truthfully while still deleting owned evidence", async () => {
+  const f = fixture(), api = f.chromeWindow(); await api.enable(); await settle();
+  const wait = deferred(); f.state.beforeWrite = wait.promise;
+  const writing = f.native.updateVectorDB(); await settle();
+  const saving = api.setExcludedDomains(["excluded.invalid"]);
+  const rejected = assert.rejects(saving, /waiting for background work/);
+  await settle(); f.expireTimers(); await rejected;
+  assert.deepEqual(f.state.ownedExclusions, [["excluded.invalid"]]);
+  wait.resolve(); await writing;
+});
 
 test("policy corruption while a native exclusion query waits never scrubs every vector or invents startup deletion", async () => {
   const f = fixture(), api = f.chromeWindow();

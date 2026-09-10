@@ -17,6 +17,7 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   let startupObserver;
   let profileObserver;
   let managerCalls = 0;
+  const boundaryEvents = [];
   class File {
     constructor(filePath = "") { this.path = filePath; }
     initWithPath(filePath) { this.path = filePath; }
@@ -66,7 +67,12 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     Cu: { reportError: error => errors.push(error) },
     ChromeUtils: { registerWindowActor() {}, importESModule: uri => {
       if (uri.endsWith("FluxionMemoryPolicy.sys.mjs")) return { FluxionMemoryPolicy: require("../chrome/core/memory-policy.js") };
+      if (uri.endsWith("FluxionUrlbarMemory.sys.mjs")) return { FluxionUrlbarMemory: { ensurePolicyBoundary() {
+        boundaryEvents.push("urlbar");
+        if (options.boundaryError) throw new Error("URL-bar boundary unavailable");
+      } } };
       if (uri.endsWith("FluxionNativeMemory.sys.mjs")) return { FluxionNativeMemory: { getManager() {
+        boundaryEvents.push("native");
         managerCalls++;
         if (options.managerError) throw new Error("native manager unavailable");
       } } };
@@ -86,7 +92,7 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   startupObserver.observe(window, "browser-delayed-startup-finished");
   return { preferences, defaults, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser,
     profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
-    get managerCalls() { return managerCalls; } };
+    get managerCalls() { return managerCalls; }, boundaryEvents };
 }
 
 for (const removal of [false, true]) {
@@ -101,6 +107,7 @@ for (const removal of [false, true]) {
     assert.equal(h.preferences.get("places.semanticHistory.removeOnStartup"), removal);
     assert.equal(h.preferences.has("fluxion.memory.nativePendingRemoval"), false);
     assert.equal(h.preferences.has("places.semanticHistory.initialized"), false);
+    h.profileReady();
     assert.equal(h.profilePending, false);
     assert.equal(h.managerCalls, 0);
   });
@@ -125,12 +132,25 @@ test("valid startup initializes the write guard and genuine native failure remai
   for (const managerError of [false, true]) {
     const h = startupFixture("about:blank", [["fluxion.memory.enabled", true]], { managerError });
     h.profileReady();
+    assert.deepEqual(h.boundaryEvents, ["urlbar", "native"]);
     assert.equal(h.managerCalls, 1);
     assert.equal(h.preferences.get("browser.ml.enable"), !managerError);
     assert.equal(h.preferences.get("places.semanticHistory.removeOnStartup"), managerError);
     assert.equal(h.preferences.get("fluxion.memory.nativePendingRemoval") ?? false, managerError);
     assert.equal(h.errors.length, Number(managerError));
   }
+});
+
+test("unavailable URL-bar policy boundary disables models without scheduling data deletion", () => {
+  const h = startupFixture("about:blank", [["fluxion.memory.enabled", true]], { boundaryError: true });
+  h.profileReady();
+  assert.deepEqual(h.boundaryEvents, ["urlbar"]);
+  assert.equal(h.managerCalls, 0);
+  assert.equal(h.preferences.get("browser.ml.enable"), false);
+  assert.equal(h.preferences.get("places.semanticHistory.featureGate"), false);
+  assert.equal(h.preferences.get("places.semanticHistory.removeOnStartup"), false);
+  assert.equal(h.preferences.has("fluxion.memory.nativePendingRemoval"), false);
+  assert.match(h.preferences.get("fluxion.memory.urlbarBoundary.error"), /unavailable/);
 });
 
 test("only the bundled default-bookmark resource registers before Places startup", () => {
