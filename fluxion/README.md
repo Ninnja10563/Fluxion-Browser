@@ -285,6 +285,8 @@ Escape cancels the drag. Split panes move together, and a complete selected
 group retains its heading. Private tabs can only move to private windows.
 Choose **Keep Peek as Tab** for a temporary Peek before moving it. This candidate's
 release verification is still pending; see GitHub Releases for available DMGs.
+The [0.54 validation record](docs/validation/0.54-candidate.md) distinguishes
+passing native browser checks from the rate-limited release check.
 
 Collapsing a native tab group keeps its currently selected page visible as one
 compact row and labels the remaining hidden members as `+N`. Arrow navigation
