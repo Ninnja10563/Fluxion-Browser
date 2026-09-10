@@ -16,6 +16,7 @@ bash -n \
   scripts/verify-macos-memory.sh \
   scripts/verify-macos-session.sh
 node --check < runtime/fluxion.cfg
+node --check scripts/download-gecko.mjs
 node --check chrome/core/url.js
 node --check chrome/core/search.js
 node --check chrome/core/flow-navigation.js

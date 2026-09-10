@@ -3,13 +3,30 @@
 macOS milestone builds use `.github/workflows/macos-preview-release.yml` in two
 passes:
 
+Release inputs are locked in `fluxion/runtime/gecko-lock.json`. The downloader
+accepts only the exact versioned Mozilla archive URL, verifies SHA-256 before
+making a DMG available, and never overwrites an existing destination. The
+workflow verifies Mozilla's original app signature before modifying the copy.
+Both passes use the same reviewed Gecko bytes, though signing and packaging
+metadata need not be byte-for-byte reproducible.
+
+`Gecko security update watch` checks Mozilla's stable version daily and fails
+when it differs from the lock. Review Mozilla's release/security notes, update
+the version/URL/digest together using that release's official `SHA256SUMS`, run
+the full native gates, and publish a new Fluxion DMG promptly. This check does
+not install updates or claim users have the latest version. Preview application
+updates are manual; Firefox's updater is blocked by `DisableAppUpdate` so it
+cannot replace Fluxion with Firefox. Extension updates remain independent.
+
 1. Run with `publish=false`. GitHub builds and ad-hoc signs the universal app,
    launches Gecko with an isolated profile, requires Flow, command palette,
    live Fluxion Settings, Browser Memory service, native tab-group, native split-view,
    and AI-provider health markers, validates application branding, packages the
    DMG, and preserves a chrome-inspection screenshot when the runner permits it.
-   The hosted runner also opens either Gecko's semantic vector connection or
-   its intentional low-spec lexical fallback. A loopback-only Ollama-compatible
+   The UI suite exercises Gecko's semantic capability or its intentional
+   low-spec lexical fallback. A separate fresh-profile gate must generate real
+   Gecko embeddings and retrieve plant evidence for a nonliteral query;
+   lexical fallback cannot pass that semantic gate. A loopback-only Ollama-compatible
    fixture must receive a grounded page payload from the packaged app and the
    resulting cited answer must be visible before packaging can proceed. The
    fixture then requires a second request containing two explicitly selected

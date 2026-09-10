@@ -8,6 +8,19 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.44 improves runtime safety and development browsing:
+
+- package a reviewed Gecko version from Mozilla's versioned archive and verify
+  its SHA-256 before mounting; daily upstream checks flag newer stable versions;
+- record the source Gecko version/build and digests in the app, and rebuild
+  development bundles when Firefox changes at the same installation path;
+- block Firefox's automatic and manual application updater using Mozilla's
+  supported policy, preserving extension updates and inherited enterprise policies;
+- show actual Gecko version/build information and a working Fluxion releases
+  button in About; preview updates still require installing a new Fluxion DMG;
+- open bare localhost, private IP, and local IPv6 addresses as navigation from
+  the palette, while keeping public sites HTTPS-first.
+
 Version 0.43 improves everyday preferences and local recall:
 
 - preserve custom web, local-file, and blank homepages across launches, and

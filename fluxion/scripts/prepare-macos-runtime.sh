@@ -58,7 +58,7 @@ for required_architecture in "${required_architectures[@]}"; do
     exit 69
   fi
 done
-for system_tool in ditto plutil lipo codesign; do
+for system_tool in ditto plutil lipo codesign python3; do
   if ! command -v "$system_tool" >/dev/null 2>&1; then
     printf 'Required macOS system tool is unavailable: %s\n' "$system_tool" >&2
     exit 69
@@ -71,12 +71,63 @@ if ! command -v xcrun >/dev/null 2>&1 || ! xcrun --find clang >/dev/null 2>&1; t
   exit 69
 fi
 
+runtime_file_digest() {
+  shasum -a 256 "$1" | awk '{print $1}'
+}
+
+runtime_source_identity() {
+  local source="$1"
+  local executable="$2"
+  local file
+  for file in "$executable" \
+      "$source/Contents/Info.plist" \
+      "$source/Contents/Resources/application.ini" \
+      "$source/Contents/Resources/platform.ini" \
+      "$source/Contents/_CodeSignature/CodeResources"; do
+    if [[ ! -f "$file" ]]; then
+      printf 'Required upstream runtime identity file is missing: %s\n' "$file" >&2
+      return 69
+    fi
+  done
+  # Hash the small signed identity files, then inspect metadata for every runtime
+  # file. ctime/inode detect same-path replacements and in-place library changes
+  # without rereading the large Gecko libraries on each development launch.
+  {
+    shasum -a 256 "$executable" \
+      "$source/Contents/Info.plist" \
+      "$source/Contents/Resources/application.ini" \
+      "$source/Contents/Resources/platform.ini" \
+      "$source/Contents/_CodeSignature/CodeResources" | awk '{print $1}' || return
+    find "$source" \( -type f -o -type l \) -exec stat -f '%N:%i:%.9Fm:%.9Fc:%z' {} + | LC_ALL=C sort || return
+  } | shasum -a 256 | awk '{print $1}'
+}
+
+runtime_ini_value() {
+  local file="$1" section="$2" key="$3"
+  awk -F= -v section="$section" -v key="$key" '
+    { sub(/\r$/, "") }
+    /^\[/ { active = $0 == "[" section "]"; next }
+    active && $1 == key { print substr($0, index($0, "=") + 1); exit }
+  ' "$file"
+}
+
+upstream_identity="$(runtime_source_identity "$source_app" "$requested")"
+upstream_resources="$source_app/Contents/Resources"
+upstream_version="$(runtime_ini_value "$upstream_resources/application.ini" App Version)"
+upstream_build_id="$(runtime_ini_value "$upstream_resources/application.ini" App BuildID)"
+upstream_platform_version="$(runtime_ini_value "$upstream_resources/platform.ini" Build Milestone)"
+upstream_platform_build_id="$(runtime_ini_value "$upstream_resources/platform.ini" Build BuildID)"
+if [[ -z "$upstream_version" || -z "$upstream_build_id" || -z "$upstream_platform_version" || -z "$upstream_platform_build_id" ]]; then
+  printf 'The upstream runtime does not identify its application and platform builds.\n' >&2
+  exit 69
+fi
+
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$app_version|$requested|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
+signature="$target_arch|$app_version|$requested|$upstream_identity|$(runtime_file_digest "${BASH_SOURCE[0]}")|$(runtime_file_digest "$fluxion_root/scripts/install-update-policy.py")|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
 
-if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
+if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
     "$fluxion_root"/../.runtime/Fluxion.app) ;;
     *) printf 'Refusing unsafe application path: %s\n' "$runtime_app" >&2; exit 70 ;;
@@ -102,6 +153,8 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   cp "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" \
     "$resources/defaults/pref/fluxion-autoconfig.js"
   cp "$fluxion_root/runtime/fluxion.cfg" "$resources/fluxion.cfg"
+  python3 "$fluxion_root/scripts/install-update-policy.py" "$resources/distribution" \
+    "$fluxion_root/runtime/distribution/policies.json"
 
   bundled_root="$resources/fluxion"
   mkdir -p "$bundled_root"
@@ -110,6 +163,20 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   ditto "$fluxion_root/modules" "$bundled_root/modules"
   ditto "$fluxion_root/newtab" "$bundled_root/newtab"
   ditto "$fluxion_root/assets" "$bundled_root/assets"
+
+  provenance="$bundled_root/runtime-provenance.json"
+  plutil -create xml1 "$provenance"
+  plutil -insert schemaVersion -integer 1 "$provenance"
+  plutil -insert upstreamVersion -string "$upstream_version" "$provenance"
+  plutil -insert upstreamBuildID -string "$upstream_build_id" "$provenance"
+  plutil -insert platformVersion -string "$upstream_platform_version" "$provenance"
+  plutil -insert platformBuildID -string "$upstream_platform_build_id" "$provenance"
+  plutil -insert architectures -string "$firefox_architectures" "$provenance"
+  plutil -insert executableSHA256 -string "$(runtime_file_digest "$requested")" "$provenance"
+  plutil -insert signatureManifestSHA256 -string \
+    "$(runtime_file_digest "$source_app/Contents/_CodeSignature/CodeResources")" "$provenance"
+  plutil -insert sourceIdentity -string "$upstream_identity" "$provenance"
+  plutil -convert json "$provenance"
 
   launcher_arch_flags=(-arch "$target_arch")
   if [[ "$target_arch" == "universal2" ]]; then

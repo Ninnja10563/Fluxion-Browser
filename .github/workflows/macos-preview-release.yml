@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.43.0-preview.1
+        default: 0.44.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.43.0-preview.1
+        default: v0.44.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -38,9 +38,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --location --retry 3 \
-            'https://download.mozilla.org/?product=firefox-latest-ssl&os=osx&lang=en-US' \
-            --output "$RUNNER_TEMP/firefox.dmg"
+          node ./fluxion/scripts/download-gecko.mjs "$RUNNER_TEMP/firefox.dmg"
           mkdir -p "$RUNNER_TEMP/firefox-volume" "$RUNNER_TEMP/firefox-source"
           hdiutil attach "$RUNNER_TEMP/firefox.dmg" \
             -mountpoint "$RUNNER_TEMP/firefox-volume" \
@@ -48,6 +46,10 @@ jobs:
           ditto "$RUNNER_TEMP/firefox-volume/Firefox.app" \
             "$RUNNER_TEMP/firefox-source/Firefox.app"
           hdiutil detach "$RUNNER_TEMP/firefox-volume"
+          codesign --verify --deep --strict "$RUNNER_TEMP/firefox-source/Firefox.app"
+          locked_version="$(node -p "require('./fluxion/runtime/gecko-lock.json').version")"
+          source_version="$(plutil -extract CFBundleShortVersionString raw "$RUNNER_TEMP/firefox-source/Firefox.app/Contents/Info.plist")"
+          [[ "$source_version" == "$locked_version" ]]
 
       - name: Build Fluxion application
         shell: bash
@@ -79,6 +81,9 @@ jobs:
           [[ ! -e "$resources/Assets.car" ]]
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
+          locked_version="$(node -p "require('./fluxion/runtime/gecko-lock.json').version")"
+          [[ "$(plutil -extract upstreamVersion raw "$resources/fluxion/runtime-provenance.json")" == "$locked_version" ]]
+          [[ "$(plutil -extract policies.DisableAppUpdate raw "$resources/distribution/policies.json")" == 'true' ]]
 
       - name: Verify real local semantic retrieval
         shell: bash

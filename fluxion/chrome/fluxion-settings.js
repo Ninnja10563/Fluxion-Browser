@@ -5,7 +5,7 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.43.0";
+  const PRODUCT_VERSION = "0.44.0";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -875,7 +875,9 @@
   );
   aboutMark.append(aboutLogo, aboutCopy);
   about.appendChild(aboutMark);
-  row(about, "Engine", "Mozilla Gecko", create("div", "fluxion-shortcut", "Standards-compatible"));
+  const geckoVersion = Services.appinfo.platformVersion;
+  const geckoBuildID = Services.appinfo.platformBuildID;
+  row(about, "Engine", `Mozilla Gecko ${geckoVersion}`, create("div", "fluxion-shortcut", `Build ${geckoBuildID}`));
   row(
     about, "Privacy",
     "Browser Memory is optional, local, and unavailable in private windows.",
@@ -892,6 +894,12 @@
     "https://github.com/Ninnja10563/Fluxion-Browser",
   ));
   row(about, "Source", "Fluxion is developed in public and Gecko components retain their original licenses.", source);
+  const releases = create("button", "fluxion-settings-button", "Open Fluxion releases");
+  releases.type = "button";
+  releases.addEventListener("click", () => openAboutDestination(
+    "https://github.com/Ninnja10563/Fluxion-Browser/releases",
+  ));
+  row(about, "Updates", "Install new versions from Fluxion’s GitHub releases. Automatic app updates are not available in this preview.", releases);
   const licenses = create("button", "fluxion-settings-button", "Open third-party licenses");
   licenses.type = "button";
   licenses.addEventListener("click", () => openAboutDestination("about:license"));
@@ -1265,10 +1273,34 @@
       const tab = gBrowser.addTrustedTab("about:preferences?fluxion=about");
       window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
       gBrowser.selectedTab = tab;
-      window.setTimeout(() => {
+      window.setTimeout(async () => {
         syncVisibility();
         showSection("about");
         window.FluxionUI.refresh();
+        try {
+          const policy = Services.policies;
+          const updater = Cc["@mozilla.org/updates/update-service;1"].getService(Ci.nsIApplicationUpdateService);
+          if (policy.getActivePolicies().DisableAppUpdate !== true || policy.isAllowed("appUpdate") || !updater.disabled) {
+            throw new Error("The Firefox application updater is not disabled by Fluxion’s package policy");
+          }
+          const checker = Cc["@mozilla.org/updates/update-checker;1"].getService(Ci.nsIUpdateChecker);
+          const result = await checker.checkForUpdates(Ci.nsIUpdateChecker.FOREGROUND_CHECK).result;
+          if (result.checksAllowed !== false || result.request !== null) {
+            throw new Error("A foreground Firefox update check was not blocked");
+          }
+          if (!about.textContent.includes(`Mozilla Gecko ${geckoVersion}`) ||
+              !about.textContent.includes(`Build ${geckoBuildID}`) ||
+              !about.textContent.includes("Open Fluxion releases")) {
+            throw new Error("About did not expose engine provenance and manual Fluxion releases");
+          }
+          Services.prefs.setStringPref("fluxion.updates.health", "package-policy-blocked-foreground-firefox-update");
+          Services.prefs.savePrefFile(null);
+        } catch (error) {
+          Services.prefs.setStringPref("fluxion.updates.error", String(error));
+          Services.prefs.savePrefFile(null);
+          Cu.reportError(error);
+          return;
+        }
         if (
           about.textContent.includes(`Gecko Foundation Preview ${PRODUCT_VERSION}`) &&
           about.textContent.includes("Mozilla Gecko") &&

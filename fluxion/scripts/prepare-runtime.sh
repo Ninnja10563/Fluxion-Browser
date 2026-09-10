@@ -23,7 +23,7 @@ fi
 source_dir="$(dirname -- "$resolved")"
 runtime_dir="$fluxion_root/../.runtime/firefox"
 stamp="$runtime_dir/.fluxion-stamp"
-signature="$resolved|$(stat -c '%Y:%s' "$resolved")|$(stat -c '%Y:%s' "$fluxion_root/runtime/fluxion.cfg")|$(stat -c '%Y:%s' "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js")"
+signature="$resolved|$(stat -c '%Y:%s' "$resolved")|$(sha256sum "$fluxion_root/runtime/fluxion.cfg" "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" "$fluxion_root/runtime/distribution/policies.json" "$fluxion_root/scripts/install-update-policy.py" "$0")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_dir" in
@@ -58,6 +58,13 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   cp -- "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" \
     "$runtime_dir/defaults/pref/fluxion-autoconfig.js"
   cp -- "$fluxion_root/runtime/fluxion.cfg" "$runtime_dir/fluxion.cfg"
+  if [[ -L "$runtime_dir/distribution" ]]; then
+    rm -- "$runtime_dir/distribution"
+    mkdir -p "$runtime_dir/distribution"
+    cp -as "$source_dir/distribution"/. "$runtime_dir/distribution"/
+  fi
+  python3 "$fluxion_root/scripts/install-update-policy.py" "$runtime_dir/distribution" \
+    "$fluxion_root/runtime/distribution/policies.json"
   printf '%s' "$signature" > "$stamp"
 fi
 

@@ -1,0 +1,35 @@
+name: Gecko security update watch
+
+on:
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check Mozilla stable version against reviewed runtime
+        shell: bash
+        run: |
+          node --input-type=module <<'JS'
+          import { readFile } from 'node:fs/promises';
+          import { validateLock } from './fluxion/scripts/download-gecko.mjs';
+          const lock = validateLock(JSON.parse(await readFile('./fluxion/runtime/gecko-lock.json', 'utf8')));
+          const response = await fetch('https://product-details.mozilla.org/1.0/firefox_versions.json', {
+            redirect: 'error', signal: AbortSignal.timeout(30000),
+          });
+          if (!response.ok) throw new Error(`Mozilla version lookup failed: HTTP ${response.status}`);
+          const latest = (await response.json()).LATEST_FIREFOX_VERSION;
+          if (typeof latest !== 'string' || !/^\d+\.\d+(?:\.\d+)?$/.test(latest)) {
+            throw new Error('Mozilla returned an unrecognized stable version');
+          }
+          if (lock.version !== latest) {
+            throw new Error(`Gecko update review required: Fluxion pins ${lock.version}; Mozilla stable is ${latest}. Update gecko-lock.json from official SHA256SUMS, run all native gates, and publish a new Fluxion DMG. See fluxion/docs/releases.md.`);
+          }
+          console.log(`Reviewed Gecko ${lock.version} matches Mozilla stable.`);
+          JS

@@ -74,8 +74,9 @@ Normal Firefox profiles are not opened or modified.
 
 ## Verification
 
-The browser build itself does not need Node.js. Running the JavaScript unit
-tests through `check.sh` requires Node.js 20 or newer.
+The browser build requires Python 3 for policy merging, but does not need Node.js
+when using an already installed Firefox. JavaScript tests and the locked-runtime
+downloader require Node.js 20 or newer. The packaged app needs neither runtime.
 
 ```sh
 ./scripts/check.sh

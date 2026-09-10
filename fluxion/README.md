@@ -128,6 +128,9 @@ Prerequisites:
    xcode-select --install
    ```
 
+Python 3 is also required when building from source to merge application-update
+policy safely. The downloaded Fluxion app itself needs neither Python nor Node.
+
 Then, from Terminal:
 
 ```sh

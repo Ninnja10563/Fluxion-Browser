@@ -62,7 +62,7 @@ function settingsFixture(initialURL = "about:preferences", saved = []) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,
     ChromeUtils: { importESModule: () => ({ SearchService: { init: async () => {}, getVisibleEngines: async () => [] } }) },
-    Services: { prefs, env: { get: () => "" } },
+    Services: { prefs, env: { get: () => "" }, appinfo: { platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
     FluxionSettings: globalThis.FluxionSettings,
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),

@@ -1148,6 +1148,40 @@
     }
   }
   if (Services.env.get("FLUXION_VISUAL_SEARCH_ENGINE_TEST") === "1") {
+    const runLocalAddressGate = async () => {
+      const previousTab = gBrowser.selectedTab;
+      for (const host of ["127.0.0.1", "localhost"]) {
+        const address = `${host}:19876/organisation/guide?fluxion-local-address=1`;
+        const expectedURL = `http://${address}`;
+        let openedTab;
+        const captureTab = event => { openedTab = event.target; };
+        try {
+          open("all");
+          input.value = address;
+          render(false);
+          if (visibleItems[0]?.kind !== "Address" || visibleItems[0]?.detail !== expectedURL) {
+            throw new Error(`Local address was offered as ${visibleItems[0]?.kind || "no result"}: ${address}`);
+          }
+          gBrowser.tabContainer.addEventListener("TabOpen", captureTab, { once: true });
+          input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+          let loaded = false;
+          for (let attempt = 0; attempt < 100; attempt++) {
+            loaded = Boolean(openedTab && openedTab.linkedBrowser?.currentURI?.spec === expectedURL &&
+              openedTab.label === "React learning guide" && !openedTab.hasAttribute("busy"));
+            if (loaded) break;
+            await new Promise(resolve => window.setTimeout(resolve, 100));
+          }
+          if (!loaded) throw new Error(`Local address did not render its controlled page: ${address}`);
+        } finally {
+          gBrowser.tabContainer.removeEventListener("TabOpen", captureTab);
+          close();
+          if (openedTab?.parentNode) gBrowser.removeTab(openedTab, { animate: false });
+          if (previousTab?.parentNode) gBrowser.selectedTab = previousTab;
+        }
+      }
+      Services.prefs.setStringPref("fluxion.palette.localAddress.health", "local-addresses-opened-without-search");
+      Services.prefs.savePrefFile(null);
+    };
     const runSearchEngineGate = async () => {
       const { SearchService } = ChromeUtils.importESModule(
         "moz-src:///toolkit/components/search/SearchService.sys.mjs",
@@ -1167,6 +1201,7 @@
       let openedTab = null;
       const captureTab = event => { openedTab = event.target; };
       try {
+        await runLocalAddressGate();
         await SearchService.setDefault(alternate, SearchService.CHANGE_REASON.USER);
         await window.FluxionWebSearch.refresh();
         const query = "fluxion-engine-route-9137";

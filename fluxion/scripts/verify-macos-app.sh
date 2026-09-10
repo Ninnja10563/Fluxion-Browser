@@ -105,6 +105,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.workspaceResume.health", "two-workspace-active-pages-round-tripped")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.palette.health", "command-palette-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.palette.async.health", "memory-pending-results-not-selectable")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.palette.localAddress.health", "local-addresses-opened-without-search")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.health", "local-memory-controls-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.engine.health", "\(local-vector-store-opened\|lexical-fallback-available\)")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.memory.enrichment.health", "content-indexed-and-retrieved")' "$profile/prefs.js" && \
@@ -138,6 +139,7 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.nativeMenu.health", "flow-application-menu-loaded")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.route.health", "settings-about-route-ready")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.about.visual.health", "versioned-about-fluxion-visible")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.updates.health", "package-policy-blocked-foreground-firefox-update")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.groups.health", "native-group-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.splitview.health", "native-side-by-side-and-stacked-rendered")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.status.health", "native-gecko-tab-states-projected-and-controllable")' "$profile/prefs.js" && \

@@ -276,12 +276,13 @@ packages will place chrome under a signed/read-only application bundle.
 
 ## Upstream update strategy
 
-Fluxion targets Firefox ESR first. Each supported ESR is represented by a
-small compatibility adapter around unstable browser-chrome APIs; web-platform
-APIs are not forked. For an ESR update:
+The current macOS preview targets the stable Firefox release pinned in
+`runtime/gecko-lock.json`; ESR is not assumed to support the native split and
+embedding APIs used here. Product adapters surround unstable browser-chrome
+APIs; web-platform APIs are not forked. For an upstream update:
 
 1. run unit checks and the headless Gecko startup smoke test;
-2. run browser-chrome integration tests against the new ESR;
+2. run browser-chrome integration tests against the new locked runtime;
 3. inspect changes to `browser.xhtml`, `gBrowser`, and SessionStore;
 4. update only the compatibility adapter and selectors when necessary;
 5. perform manual navigation, permission, download, private-window, session,
@@ -290,7 +291,17 @@ APIs are not forked. For an ESR update:
 The intended release build is an automated Firefox source build that applies
 the same `chrome/` code as a shallow patch stack and supplies Fluxion branding.
 Keeping product code outside Gecko makes rebasing much smaller than a deep
-Firefox fork. Security updates can therefore follow the ESR cadence quickly.
+Firefox fork. The daily upstream version check flags when the reviewed runtime
+needs a security-update review. Preview users must install the new Fluxion DMG;
+Mozilla's `DisableAppUpdate` policy prevents the inherited updater from
+overwriting the product, without disabling extension or security-service updates.
+
+The macOS bundle includes `fluxion/runtime-provenance.json` with source version,
+build IDs, original executable/signature-manifest hashes, and a source identity.
+The development cache hashes small authoritative files and inspects full source
+file metadata, so same-path upstream replacements invalidate it without reading
+large Gecko libraries on every launch. This is cache identity, not a substitute
+for release archive integrity or code-signature verification.
 
 ## Platform plan
 

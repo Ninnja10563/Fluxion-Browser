@@ -23,9 +23,31 @@ test("does not open script-bearing schemes from privileged chrome", () => {
   assert.equal(resolveNavigation("data:text/html,<script>alert(1)</script>"), null);
 });
 
-test("adds HTTPS to domains and localhost", () => {
+test("adds HTTPS to ordinary domains and HTTP to local development hosts", () => {
   assert.equal(resolveNavigation("example.com/docs"), "https://example.com/docs");
-  assert.equal(resolveNavigation("localhost:8080/test"), "https://localhost:8080/test");
+  assert.equal(resolveNavigation("localhost:8080/test"), "http://localhost:8080/test");
+});
+
+test("local network and development addresses navigate without becoming search terms", () => {
+  for (const address of ["127.0.0.1:3000/path?q=test#section", "192.168.1.1", "10.0.0.2:8080",
+    "172.16.0.1", "172.31.255.255", "169.254.2.3", "0.0.0.0:8000", "[::1]:3000",
+    "[fd12::1]:4000", "[fe80::1]", "localhost", "app.localhost:8080", "printer.local", "devbox:5000"]) {
+    assert.equal(resolveNavigation(address), `http://${address}`, address);
+  }
+});
+
+test("public numeric hosts keep HTTPS and explicit schemes always retain user intent", () => {
+  for (const address of ["8.8.8.8", "172.32.0.1", "[2606:4700:4700::1111]", "example.com:8443"]) {
+    assert.equal(resolveNavigation(address), `https://${address}`, address);
+  }
+  assert.equal(resolveNavigation("https://localhost:3000"), "https://localhost:3000");
+});
+
+test("malformed local addresses and executable schemes never become privileged navigation", () => {
+  for (const value of ["999.1.1.1", "127.0.0.1:99999", "localhost:99999", "[::gg]:80", "[::1]@example.org", "127.00.0.1",
+    "javascript:3000", "data:3000", "vbscript:3000", "dev box:3000"]) {
+    assert.equal(resolveNavigation(value), null, value);
+  }
 });
 
 test("leaves non-address text for Gecko SearchService", () => {
