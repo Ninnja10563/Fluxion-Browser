@@ -413,6 +413,10 @@ retaining ordinary history and bounded textual evidence. The shared
 manager's feature-gated connection accessor: a disabled accessor returning null
 does not prove the database is empty. Cleanup awaits Gecko's initialization
 before opening its storage-only connection, without enabling the model.
+One shared initialization promise covers that entire open/schema lifecycle:
+the low-level Gecko database accessor alone can return a connection before
+initialization finishes, or race another open into schema recovery. All
+Fluxion storage-only readers and cleanup paths share the completed connection.
 
 The adapter tracks native embedding/write operations across windows. Purging
 first persists `fluxion.memory.nativePendingRemoval`, disables native feature

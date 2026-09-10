@@ -47,17 +47,16 @@
     assert(!companion.FluxionMemory.enabled(), "Companion did not initialise while Memory was disabled");
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
     const { getPlacesSemanticHistoryManager } = ChromeUtils.importESModule("resource://gre/modules/PlacesSemanticHistoryManager.sys.mjs");
+    const { FluxionNativeMemory } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionNativeMemory.sys.mjs");
     stage("opening-native-vector-database");
     report.initialCapability = await window.FluxionMemory.enable();
     const manager = getPlacesSemanticHistoryManager();
-    // Unsupported semantic-search hardware still has native storage to erase.
-    // Finish Gecko's startup lifecycle before obtaining storage-only access.
-    await manager.getConnection();
-    connection = await manager.semanticDB.getConnection();
+    // Share storage initialization with background exclusion work. Read and
+    // verify real SQL rows below, not the adapter's reported vector counts.
+    connection = await FluxionNativeMemory.storageConnection();
     assert(connection, "Native semantic connection is missing");
     async function reenabledEmpty(label) {
-      await manager.getConnection();
-      connection = await manager.semanticDB.getConnection();
+      connection = await FluxionNativeMemory.storageConnection();
       assert(connection, `${label} could not reopen native semantic storage`);
       await empty(label);
     }

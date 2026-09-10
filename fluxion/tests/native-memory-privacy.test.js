@@ -17,7 +17,8 @@ function fixture(saved = new Map()) {
   const timers = new Map(), operations = [], errors = [];
   let timerId = 0, factoryCalls = 0;
   const state = { vectors: 2, mapping: 2, enriched: 2, failDelete: false, beforeWrite: null, beforeInit: null, writes: 0,
-    exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null };
+    exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null,
+    beforeStorage: null, failStorage: false, storageOpens: 0, storageReady: false };
   // Model the relevant native converter contract in a separate ESM-like
   // realm: Array.isArray crosses realms, instanceof Float32Array does not.
   const tensorToSQLBindable = vm.runInNewContext(`value => {
@@ -60,7 +61,14 @@ function fixture(saved = new Map()) {
       operations.push("manager initialized");
       return state.qualified && prefs.get("browser.ml.enable") && prefs.get("places.semanticHistory.featureGate") ? db : null;
     },
-    semanticDB: { async getConnection() { operations.push("storage opened"); return db; } },
+    semanticDB: { async getConnection() {
+      state.storageOpens++;
+      if (state.beforeStorage) await state.beforeStorage;
+      if (state.failStorage) throw new Error("native storage open failed");
+      state.storageReady = true;
+      operations.push("storage opened");
+      return db;
+    } },
     async updateVectorDB() {
       state.writes++;
       if (state.beforeWrite) await state.beforeWrite;
@@ -282,6 +290,41 @@ test("startup lifecycle completes before storage-only cleanup opens the database
   wait.resolve(); await deleting;
   assert.ok(f.operations.indexOf("manager initialized") < f.operations.indexOf("storage opened"));
   assert.equal(f.state.vectors, 0);
+});
+
+test("concurrent storage consumers share one fully initialized native connection", async () => {
+  const f = fixture();
+  const wait = deferred(); f.state.beforeStorage = wait.promise;
+  let completed = 0;
+  const first = f.adapter.storageConnection().then(connection => { completed++; return connection; });
+  const second = f.adapter.storageConnection().then(connection => { completed++; return connection; });
+  const counts = f.adapter.vectorCount();
+  await settle();
+  assert.equal(f.state.storageOpens, 1);
+  assert.equal(completed, 0);
+  assert.equal(f.state.storageReady, false);
+  wait.resolve();
+  const [a, b] = await Promise.all([first, second]);
+  assert.equal(a, b);
+  assert.equal(f.state.storageReady, true);
+  assert.equal(await counts, 2);
+  assert.equal(await f.adapter.storageConnection(), a);
+  assert.equal(f.state.storageOpens, 1);
+});
+
+test("failed shared native storage initialization rejects all callers and permits a clean retry", async () => {
+  const f = fixture();
+  const wait = deferred(); f.state.beforeStorage = wait.promise; f.state.failStorage = true;
+  const first = assert.rejects(f.adapter.storageConnection(), /native storage open failed/);
+  const second = assert.rejects(f.adapter.storageConnection(), /native storage open failed/);
+  await settle();
+  assert.equal(f.state.storageOpens, 1);
+  wait.resolve(); await Promise.all([first, second]);
+  f.state.failStorage = false;
+  f.state.beforeStorage = null;
+  await f.adapter.storageConnection();
+  assert.equal(f.state.storageOpens, 2);
+  assert.equal(f.state.storageReady, true);
 });
 
 test("failed native purge quarantines re-enable and recovers before reads after restart", async () => {

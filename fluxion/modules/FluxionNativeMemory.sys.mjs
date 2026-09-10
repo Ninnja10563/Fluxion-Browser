@@ -3,6 +3,7 @@ import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
 const PENDING_PREF = "fluxion.memory.nativePendingRemoval";
 const activeWrites = new Set();
 let manager;
+let storagePromise;
 let purgePromise;
 let controlPromise = Promise.resolve();
 let quarantined = Services.prefs.getBoolPref(PENDING_PREF, false);
@@ -64,13 +65,23 @@ async function bounded(task) {
   } finally { clearTimeout(timer); }
 }
 
-async function storageConnection() {
-  const native = getManager();
-  // Gecko awaits its startup database removal/schema lifecycle BEFORE its
-  // feature-gate check. The null result when disabled is not an empty DB.
-  await native.getConnection();
-  // Storage-only access does not reopen the ML gate or schedule model work.
-  return native.semanticDB.getConnection();
+function storageConnection() {
+  if (!storagePromise) {
+    storagePromise = (async () => {
+      const native = getManager();
+      // Gecko awaits its startup database removal/schema lifecycle BEFORE its
+      // feature-gate check. The null result when disabled is not an empty DB.
+      const active = await native.getConnection();
+      // Gecko's storage-only getter does not single-flight opening/schema
+      // initialization. Share the complete operation across Fluxion windows;
+      // concurrent opens can otherwise close each other's live connection.
+      return active || await native.semanticDB.getConnection();
+    })().catch(error => {
+      storagePromise = null;
+      throw error;
+    });
+  }
+  return storagePromise;
 }
 
 function purge() {
