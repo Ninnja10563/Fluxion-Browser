@@ -12,6 +12,7 @@ export const PARTIAL_BYTES = Buffer.alloc(512 * 1024);
 for (let index = 0; index < PARTIAL_BYTES.length; index += 1) PARTIAL_BYTES[index] = index % 251;
 export const PARTIAL_SHA256 = createHash("sha256").update(PARTIAL_BYTES).digest("hex");
 export const LOGIN = Object.freeze({ username: "fluxion", password: "fixture-only" });
+const BASIC_TOKEN = Buffer.from(`${LOGIN.username}:${LOGIN.password}`, "utf8").toString("base64");
 
 const page = (title, content) => `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>${title}</title></head>
@@ -111,6 +112,10 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
     logins: 0,
     rejectedLogins: 0,
     authenticatedVisits: 0,
+    basicAuth: {
+      cancel: { challenged: 0, authorized: 0, credentialPresent: 0 },
+      accept: { challenged: 0, authorized: 0, credentialPresent: 0 },
+    },
   };
   let origin;
   const server = http.createServer({ maxHeaderSize: 8192 }, async (request, response) => {
@@ -186,6 +191,23 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
         state.uploads += 1;
         state.upload = { verified: true, filename: file.filename, sha256: createHash("sha256").update(file.bytes).digest("hex"), bytes: file.bytes.length };
         send(200, page("Fluxion upload complete", '<p id="upload-result">Upload verified</p>'));
+      } else if (method === "GET" && ["/basic-cancel/", "/basic-accept/"].includes(url.pathname)) {
+        const route = url.pathname === "/basic-cancel/" ? "cancel" : "accept";
+        const counters = state.basicAuth[route];
+        const authorization = request.headers.authorization;
+        if (authorization !== undefined) counters.credentialPresent += 1;
+        // Only fixed counters are retained: neither raw headers nor supplied
+        // credentials belong in verification state, response bodies or logs.
+        const token = typeof authorization === "string" && /^Basic ([A-Za-z0-9+/]+=*)$/i.exec(authorization)?.[1];
+        if (token === BASIC_TOKEN) {
+          counters.authorized += 1;
+          send(200, page(`Fluxion basic ${route} authenticated`, '<p id="basic-auth-state" data-authenticated="true">HTTP Basic authentication verified</p>'));
+        } else {
+          counters.challenged += 1;
+          send(401, page(`Fluxion basic ${route} challenge`, '<p id="basic-auth-state" data-authenticated="false">HTTP Basic authentication required</p>'), {
+            "WWW-Authenticate": `Basic realm="Fluxion fixture ${route}", charset="UTF-8"`,
+          });
+        }
       } else if (method === "GET" && url.pathname === "/login") {
         send(200, page("Fluxion sign in", loginForm));
       } else if (method === "POST" && url.pathname === "/login") {
@@ -214,7 +236,7 @@ export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs
         send(303, "", { Location: "/", "Set-Cookie": "fluxion_fixture_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict" });
       } else if (method === "GET" && url.pathname === "/state") {
         send(200, JSON.stringify(state), { "Content-Type": "application/json" });
-      } else if (["/", "/download", "/download-slow", "/download-partial", "/upload", "/login", "/account", "/logout", "/state"].includes(url.pathname)) {
+      } else if (["/", "/download", "/download-slow", "/download-partial", "/upload", "/login", "/account", "/logout", "/state", "/basic-cancel/", "/basic-accept/"].includes(url.pathname)) {
         send(405, "Method not allowed");
       } else send(404, "Fixture endpoint not found");
     } catch (error) {

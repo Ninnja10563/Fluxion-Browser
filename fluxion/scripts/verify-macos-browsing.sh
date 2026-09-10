@@ -74,7 +74,10 @@ for ((attempt=0; attempt<600; attempt++)); do
       exit 1
     fi
     if grep -Fq 'user_pref("fluxion.browsing.health", "real-download-upload-and-session-navigation-verified")' "$profile/prefs.js"; then
-      printf 'Real download, content upload, login session, and logout verified. Native file-picker automation is not claimed.\n'
+      grep -Fq 'user_pref("fluxion.browsing.authHealth", "native-basic-auth-cancel-accept-and-reload-verified")' "$profile/prefs.js" || {
+        printf 'Native HTTP authentication evidence is missing.\n' >&2; exit 1;
+      }
+      printf 'Real download, content upload, login/logout, and native HTTP authentication verified. Native file-picker automation is not claimed.\n'
       grep 'fluxion\.browsing\.report' "$profile/prefs.js"
       exit 0
     fi

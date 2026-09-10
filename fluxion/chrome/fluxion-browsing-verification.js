@@ -43,6 +43,83 @@
   const rowAction = (row, label) => [...row.querySelectorAll("button")]
     .find(button => !button.hidden && button.textContent === label);
 
+  function nativeAuthPrompt(browser, expectedURL, mode) {
+    let complete = false;
+    let claimed = false;
+    let resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      Services.obs.removeObserver(observer, "common-dialog-loaded");
+      window.removeEventListener("unload", unload);
+    };
+    const finish = (error, value) => {
+      if (complete) return;
+      complete = true;
+      cleanup();
+      if (error) reject(error); else resolve(value);
+    };
+    const unload = () => finish(new Error("Browser unloaded before native HTTP authentication completed"));
+    const observer = { observe(subject) {
+      if (complete || subject.opener !== window) return;
+      const dialogs = gBrowser.getTabDialogBox(browser).getTabDialogManager()._dialogs;
+      if (!dialogs.some(dialog => dialog._frame?.browsingContext === subject.browsingContext)) return;
+      const dialog = subject.Dialog;
+      const args = dialog?.args;
+      if (claimed || args?.modalType !== Services.prompt.MODAL_TYPE_TAB ||
+          args?.promptType !== "promptUserAndPass" || args?.channel?.URI?.spec !== expectedURL) {
+        finish(new Error("An unexpected native authentication prompt appeared; it was left untouched"));
+        return;
+      }
+      claimed = true;
+      const button = mode === "cancel" ? dialog.ui.button1 : dialog.ui.button0;
+      waitFor(() => complete || (button && !button.disabled && button.getBoundingClientRect().height > 0),
+        "Native authentication action did not become visible and enabled").then(() => {
+        if (complete) return;
+        if (mode === "accept") {
+          assert(dialog.ui.loginTextbox?.getBoundingClientRect().height > 0 &&
+            dialog.ui.password1Textbox?.getBoundingClientRect().height > 0, "Native authentication fields are not rendered");
+          dialog.ui.loginTextbox.value = "fluxion";
+          dialog.ui.password1Textbox.value = "fixture-only";
+        }
+        button.click();
+        finish(null, { mode, url: expectedURL, nativeTabDialog: true });
+      }).catch(error => finish(error));
+    } };
+    const timer = window.setTimeout(() => finish(new Error("Native HTTP authentication prompt timed out")), 25000);
+    Services.obs.addObserver(observer, "common-dialog-loaded");
+    window.addEventListener("unload", unload, { once: true });
+    return { promise, dispose() { if (!complete) finish(new Error("Native authentication navigation ended before its prompt")); } };
+  }
+
+  async function verifyBasicAuth() {
+    report.basicAuthPrompts = [];
+    for (const mode of ["cancel", "accept"]) {
+      const path = `/basic-${mode}/`;
+      const handler = nativeAuthPrompt(tab.linkedBrowser, `${origin}${path}`, mode);
+      try {
+        const title = mode === "cancel" ? "Fluxion basic cancel challenge" : "Fluxion basic accept authenticated";
+        const [handled, page] = await Promise.all([handler.promise, navigate(path, path, title)]);
+        assert(mode === "cancel" ? /HTTP Basic authentication required/.test(page.text) : /HTTP Basic authentication verified/.test(page.text),
+          `Native Basic ${mode} did not produce its real response content`);
+        report.basicAuthPrompts.push(handled);
+      } finally { handler.dispose(); }
+    }
+    let reloadPrompt = false;
+    const observer = { observe(subject) {
+      if (subject.opener === window && gBrowser.getTabDialogBox(tab.linkedBrowser).getTabDialogManager()._dialogs
+        .some(dialog => dialog._frame?.browsingContext === subject.browsingContext)) reloadPrompt = true;
+    } };
+    Services.obs.addObserver(observer, "common-dialog-loaded");
+    try {
+      const previousGlobal = tab.linkedBrowser.browsingContext.currentWindowGlobal;
+      tab.linkedBrowser.reload();
+      await pageAt(`${origin}/basic-accept/`, "Fluxion basic accept authenticated", previousGlobal);
+      assert(!reloadPrompt, "Native HTTP credentials were not reused for authenticated reload");
+    } finally { Services.obs.removeObserver(observer, "common-dialog-loaded"); }
+    report.checks.nativeBasicAuthCancelAcceptAndReload = true;
+  }
+
   async function run() {
     assert(/^http:\/\/127\.0\.0\.1:\d+$/.test(origin), "Missing exact loopback browsing fixture origin");
     assert(/^[a-f0-9]{64}$/.test(expectedHash) && expectedSize > 0, "Missing expected download evidence");
@@ -170,6 +247,7 @@
     const signedOut = await navigate("/account");
     assert(/unauthorized|not signed in|sign in|authentication required/i.test(signedOut.text), "Logout did not revoke account access");
     report.checks.logoutRevokedAccess = true;
+    await verifyBasicAuth();
 
     const response = await window.fetch(`${origin}/state`);
     assert(response.ok, "Fixture did not expose server-side browsing evidence");
@@ -181,6 +259,11 @@
       report.server.upload.bytes === expectedSize, "Server did not receive exact multipart file bytes");
     assert(report.server.logins === 1 && report.server.authenticatedVisits >= 2,
       "Server did not observe the content login and cookie-authenticated visits");
+    assert(report.server.basicAuth?.cancel.challenged >= 1 && report.server.basicAuth.cancel.authorized === 0 &&
+      report.server.basicAuth.cancel.credentialPresent === 0 && report.server.basicAuth.accept.challenged >= 1 &&
+      report.server.basicAuth.accept.authorized >= 2 && report.server.basicAuth.accept.credentialPresent >= 2,
+      "Server evidence did not prove native Basic cancellation, accepted credentials, and authenticated reload");
+    Services.prefs.setStringPref(`${prefix}.authHealth`, "native-basic-auth-cancel-accept-and-reload-verified");
     Services.prefs.setStringPref(`${prefix}.report`, JSON.stringify(report));
     Services.prefs.setStringPref(`${prefix}.health`, "real-download-upload-and-session-navigation-verified");
   }

@@ -50,6 +50,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-ai-privacy.sh '.runtime/Fluxion.app'
 
+      - name: Check real transfers and native website authentication
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-browsing.sh '.runtime/Fluxion.app'
+
       - name: Check native Library keyboard and item menus
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:

@@ -2,7 +2,8 @@
 
 `macOS integration diagnostics` is a separate, read-only-permission workflow
 for developing native Settings accessibility, external URL/file delivery,
-AI credential/privacy checks, and Library keyboard/menu interaction.
+AI credential/privacy checks, real transfers and native website authentication,
+and Library keyboard/menu interaction.
 It builds the same locked runtime but does not contact the release-discovery
 API, create DMGs, upload applications, or publish releases. A diagnostic pass
 never replaces the complete release gates below. This allows native debugging
@@ -76,6 +77,12 @@ bytes, a guarantee of upstream security currency, or an automatic installer.
    loopback HTTP, and checks the exact origin and port on every command;
    it accepts no content-initiated privileged requests. This does not automate
    the operating system file picker or claim arbitrary third-party login coverage.
+   The same isolated browsing gate challenges Gecko with real HTTP Basic 401
+   responses in distinct realms. It checks exact tab-dialog ownership before
+   cancelling or filling the native prompt, requires the actual denial/success
+   pages to render, and verifies credential reuse on reload. Server evidence
+   records only counters, never Authorization headers or submitted credentials.
+   This is native Basic authentication coverage, not OAuth or passkey coverage.
    An isolated Library gate seeds 360 native Places history records and 550
    bookmarks in one folder, plus a wrong-folder decoy. It traverses bounded pages
    without omissions or duplicates, returns to the exact first page under tied
@@ -84,8 +91,13 @@ bytes, a guarantee of upstream security currency, or an automatic installer.
    deletion and bookmark rename/removal must update the visible results without
    an explicit Library refresh. Native geometry checks also require a deep-scroll
    sticky pager, retained reading focus/scroll after a bookmark title update,
-   and unclipped bookmark controls in a narrow window. A separate Library
-   screenshot is preserved.
+   and unclipped bookmark controls in a narrow window. The list must expose one
+   keyboard entry point, support arrow/Home/End navigation without hiding titles
+   behind the pager, and open correctly scoped native item menus. An OS-level
+   Escape is sent only while the fixture's owned process is frontmost; the menu
+   must close and restore focus. Changed queries must dismiss stale actions,
+   and protected folder mutation actions must remain disabled. A separate
+   Library screenshot is preserved.
    A separate native Memory privacy gate inserts explicit valid tensors tied
    to actual Places visits and reads both native vector and mapping tables
    after the real Places startup-completion boundary. It verifies seeded visits

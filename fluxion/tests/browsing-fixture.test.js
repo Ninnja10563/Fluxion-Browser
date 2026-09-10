@@ -139,6 +139,78 @@ test("login requires correct form values and a returned cookie across the redire
   assert.equal((await fetch(`${server.origin}/account`, { headers: { Cookie: cookieHeader } })).status, 401);
 });
 
+test("Basic authentication challenges use distinct realms and deterministic unauthorized documents", async t => {
+  const server = await fixture(t);
+  for (const route of ["cancel", "accept"]) {
+    const response = await fetch(`${server.origin}/basic-${route}/`);
+    assert.equal(response.status, 401);
+    assert.equal(response.headers.get("www-authenticate"), `Basic realm="Fluxion fixture ${route}", charset="UTF-8"`);
+    assert.match(await response.text(), new RegExp(`<title>Fluxion basic ${route} challenge</title>`));
+    assert.equal(response.headers.get("set-cookie"), null);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  }
+  const state = await (await fetch(`${server.origin}/state`)).json();
+  assert.deepEqual(state.basicAuth, {
+    cancel: { challenged: 1, authorized: 0, credentialPresent: 0 },
+    accept: { challenged: 1, authorized: 0, credentialPresent: 0 },
+  });
+});
+
+test("Basic authentication rejects wrong credentials, accepts only fixture credentials and retains no secrets", async t => {
+  const server = await fixture(t);
+  const token = Buffer.from(`${server.LOGIN.username}:${server.LOGIN.password}`).toString("base64");
+  for (const route of ["cancel", "accept"]) {
+    for (const authorization of ["Basic not-base64!", "Bearer synthetic-private-token", `Basic ${Buffer.from("fluxion:wrong-secret").toString("base64")}`]) {
+      const rejected = await fetch(`${server.origin}/basic-${route}/`, { headers: { Authorization: authorization } });
+      assert.equal(rejected.status, 401);
+      assert.doesNotMatch(await rejected.text(), /synthetic-private-token|wrong-secret|not-base64/);
+    }
+    const accepted = await fetch(`${server.origin}/basic-${route}/`, { headers: { Authorization: `Basic ${token}` } });
+    assert.equal(accepted.status, 200);
+    assert.match(await accepted.text(), new RegExp(`<title>Fluxion basic ${route} authenticated</title>`));
+    assert.equal(accepted.headers.get("www-authenticate"), null);
+    assert.equal(accepted.headers.get("set-cookie"), null);
+  }
+  const stateText = await (await fetch(`${server.origin}/state`)).text();
+  assert.doesNotMatch(stateText, /fixture-only|wrong-secret|synthetic-private-token|Authorization|Basic /);
+  assert.equal(stateText.includes(token), false);
+  const state = JSON.parse(stateText);
+  assert.deepEqual(state.basicAuth, {
+    cancel: { challenged: 3, authorized: 1, credentialPresent: 4 },
+    accept: { challenged: 3, authorized: 1, credentialPresent: 4 },
+  });
+  assert.equal(state.logins, 0);
+  assert.equal(state.authenticatedVisits, 0);
+  assert.equal((await fetch(`${server.origin}/account`, { headers: { Authorization: `Basic ${token}` } })).status, 401,
+    "Basic auth must not establish a cookie-authenticated session");
+});
+
+test("Basic routes enforce methods and fixture provenance before changing counters", async t => {
+  const server = await fixture(t);
+  const authorization = `Basic ${Buffer.from(`${server.LOGIN.username}:${server.LOGIN.password}`).toString("base64")}`;
+  for (const route of ["cancel", "accept"]) {
+    for (const method of ["POST", "PUT", "HEAD", "DELETE"]) {
+      const response = await fetch(`${server.origin}/basic-${route}/`, { method, headers: { Authorization: authorization } });
+      assert.equal(response.status, 405);
+      assert.equal(response.headers.get("www-authenticate"), null);
+      await response.text();
+    }
+  }
+  const foreignHost = await new Promise((resolve, reject) => {
+    const request = http.get(`${server.origin}/basic-accept/`, { headers: { Host: "unrelated.example", Authorization: authorization } }, response => {
+      response.resume();
+      response.on("end", () => resolve(response.statusCode));
+    });
+    request.on("error", reject);
+  });
+  assert.equal(foreignHost, 400);
+  const state = await (await fetch(`${server.origin}/state`)).json();
+  assert.deepEqual(state.basicAuth, {
+    cancel: { challenged: 0, authorized: 0, credentialPresent: 0 },
+    accept: { challenged: 0, authorized: 0, credentialPresent: 0 },
+  });
+});
+
 test("malformed multipart, excessive body and cross-origin submissions are rejected", async t => {
   const server = await fixture(t);
   const malformed = await fetch(`${server.origin}/upload`, {

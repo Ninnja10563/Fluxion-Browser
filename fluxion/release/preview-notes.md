@@ -23,7 +23,9 @@ Version 0.51 improves Library interaction and page-extraction efficiency:
 - reject extraction sources nested inside excluded form/navigation regions and
   retain readable XHTML CDATA within the same evidence limits;
 - verify native menu dismissal, contextual actions, keyboard focus, pagination,
-  and protected folders in the packaged macOS app.
+  and protected folders in the packaged macOS app;
+- exercise Gecko's native HTTP authentication prompts against real loopback
+  challenges, including cancellation, sign-in, and authenticated reload.
 
 Version 0.50 strengthens native macOS integration:
 
