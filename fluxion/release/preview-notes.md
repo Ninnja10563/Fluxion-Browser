@@ -8,6 +8,27 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.53 improves Memory context and keyboard customization:
+
+- distinguish a page's saved workspace/group from the workspaces where it is
+  open now, including multiple matching tabs in the current window;
+- retain the workspace name recorded at extraction after later renaming,
+  moving, or deleting that workspace; older records explicitly lack a saved
+  name instead of reconstructing one from current state;
+- migrate the local index without changing existing page evidence, normalized
+  search fields, or stored vector bytes;
+- let Settings capture shortcut keys before global browser commands consume
+  them, showing conflicts without opening unrelated browser controls;
+- preserve valid customized shortcut swaps and cycles through preference
+  loading and cross-window synchronization;
+- add required packaged-app checks for shortcut editing and real macOS file
+  picker cancellation, Unicode-path selection, and multipart upload bytes.
+
+Memory context describes the latest indexed extraction, not a per-visit log.
+“Open here” describes only the current window. Shortcut UI verification uses
+DOM keyboard events inside packaged Gecko; the file-picker gate separately
+requires native macOS input and the actual system dialog.
+
 Version 0.52 improves workspace continuity and exact Memory recall:
 
 - follow reopened pages to their original workspace, including Gecko's native

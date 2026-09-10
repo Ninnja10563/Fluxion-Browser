@@ -5,7 +5,8 @@
   const prefix = "fluxion.shortcutVerification";
   if (Services.prefs.getBoolPref(`${prefix}.claimed`, false)) return;
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
-  const report = { eventSource: "synthetic-DOM-keyboard-events-in-packaged-Gecko", nativeOSKeyboardTest: false, checks: [] };
+  const report = { eventSource: "synthetic-DOM-keyboard-events-in-packaged-Gecko", nativeOSKeyboardTest: false,
+    keyboardEventTrustedFlags: [], checks: [] };
   const { document, gBrowser } = window;
   const assert = (value, message) => { if (!value) throw new Error(message); };
   let companion;
@@ -40,7 +41,9 @@
         metaKey: true, bubbles: true, cancelable: true, ...extra,
       });
       target.dispatchEvent(event);
-      assert(!event.isTrusted, "Fixture must not claim OS keyboard input");
+      // Privileged Gecko chrome can mark script-created events trusted. Their
+      // construction here, not isTrusted, identifies this as DOM-only input.
+      report.keyboardEventTrustedFlags.push(Boolean(event.isTrusted));
       return event;
     };
     stage("capture-conflicts");

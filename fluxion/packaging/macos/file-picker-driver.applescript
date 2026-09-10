@@ -10,6 +10,13 @@ on ownedSheet(ownedPID)
     tell first application process whose unix id is ownedPID
       repeat with candidateWindow in windows
         if (count of sheets of candidateWindow) > 0 then return sheet 1 of candidateWindow
+        -- AppKit can expose a sheet below intermediary accessibility groups,
+        -- rather than as a direct child of the browser AXWindow.
+        repeat with descendant in entire contents of candidateWindow
+          try
+            if (value of attribute "AXRole" of descendant) is "AXSheet" then return contents of descendant
+          end try
+        end repeat
       end repeat
     end tell
   end tell
@@ -22,6 +29,14 @@ on ownedWindowSummary(ownedPID)
       set summary to "windows=" & (count of windows)
       repeat with candidateWindow in windows
         set summary to summary & "; sheets=" & (count of sheets of candidateWindow)
+        set roles to {}
+        repeat with descendant in entire contents of candidateWindow
+          try
+            set roleName to value of attribute "AXRole" of descendant
+            if roles does not contain roleName then set end of roles to roleName
+          end try
+        end repeat
+        set summary to summary & "; descendant roles=" & (roles as text)
       end repeat
       return summary
     end tell

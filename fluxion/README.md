@@ -8,6 +8,11 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+The 0.53 candidate separates saved Memory context from currently open tabs and
+repairs shortcut capture and customized shortcut-map restoration. Its packaged
+macOS verification adds an actual system file-picker cancellation/upload gate.
+Only candidates that pass the full release workflow are published as DMGs.
+
 The current preview is runnable and includes:
 
 - arbitrary website rendering through Firefox/Gecko;

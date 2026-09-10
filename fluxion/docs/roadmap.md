@@ -32,7 +32,8 @@ controls work and its failure paths have been tested.
   startup, two-window native layout/workspace restoration, and private evidence
   exclusion; real HTTP transfer, content upload/login forms, and native HTTP
   Basic authentication acceptance/cancellation/reload gates (implemented;
-  OS file-picker and third-party authentication audits remain)
+  OS file-picker gate implemented with native staging pending;
+  third-party authentication audits remain)
 - signed macOS application bundle and native application menus (custom Flow
   menu, distinct trailing toolbar menu, and About route implemented; Developer
   ID signing remains)
@@ -50,6 +51,9 @@ controls work and its failure paths have been tested.
   and child pages)
 - fuzzy command palette and high-volume tab search (initial command, tab,
   workspace, history, and bookmark search implemented)
+- Settings-owned shortcut capture and collision-aware customized-map loading,
+  including valid swaps/cycles and cross-window preference synchronization
+  (implemented; packaged DOM-event integration gate added)
 - Gecko-native side-by-side and stacked split orientations, Peek Pages, and
   configurable tab sleeping (implemented, including direct spatial
   drag-to-split and edge reordering)
@@ -58,8 +62,10 @@ controls work and its failure paths have been tested.
 
 - source-duplication-invariant ranking and old exact-title/URL candidate
   retention before limits, with shared accent/Unicode candidate normalization
-  and transactional migration of existing evidence (implemented;
-  historical-versus-current workspace/group semantics remain)
+  and transactional migration of existing evidence (implemented)
+- explicit saved extraction workspace/group context, separate from current-
+  window open-tab context, with unknown legacy names left unknown and a
+  transactional schema migration (implemented; not a per-visit context log)
 - opt-in Gecko-local embeddings, independently selectable keyword-only recall,
   sensitive-origin/domain exclusions, hybrid history ranker, and complete
   vector deletion controls (implemented)

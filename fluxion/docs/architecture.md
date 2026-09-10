@@ -486,6 +486,40 @@ by Places' frecency candidate cap and recalls accented body-only evidence absent
 from native title/URL matches. It then generates real local model vectors and
 verifies nonliteral retrieval independently.
 
+### Saved browsing context versus currently open tabs
+
+Browser Memory keeps one enriched record per URL, not a workspace-tagged ledger
+of every visit. Its saved context describes the **latest indexed extraction**:
+the workspace ID, workspace-name snapshot, group-name snapshot, and extraction
+timestamp. These values are captured before awaiting the content actor. A move,
+rename, or deletion while extraction is pending cannot substitute the tab's
+later context. A subsequent successful extraction of the same URL may replace
+the saved snapshot; merely moving a tab or renaming its workspace does not.
+
+Schema 3 adds `workspace_name` without altering existing page IDs, original
+evidence, normalized search fields, or vectors. Upgrades run v1→v2→v3 or v2→v3.
+Existing records retain their stored workspace IDs and group names, but their
+historical workspace names remain unknown: looking up today's name cannot
+recover yesterday's name. Such records say “Saved workspace name not recorded.”
+New snapshots remain readable as “Saved in …” and “Saved group: …” even after
+their original workspace/group is renamed or deleted.
+
+`savedContext` is distinct from `openContexts`. The latter is recomputed from
+non-closing tabs in the current non-private browser window for each partial and
+final search response. Multiple tabs with the same URL yield deterministic,
+deduplicated workspace/group combinations, labelled “Open here in …”; they do
+not overwrite saved context. Other windows are not inferred, and this is a
+search-response snapshot, not a continuously updating tab inventory. The UI
+shows at most three current combinations plus an additional-count label.
+
+A visit-date label concerns the returned history record and must not be read as
+the time its workspace/group snapshot was captured. “Saved in …” describes the
+stored extraction, not a claim that every visit occurred there. Ranking gives
+saved-workspace agreement a 0.3 bonus or current-window open-workspace agreement
+a 0.15 bonus, taking the stronger signal rather than adding both. Duplicate tabs
+cannot multiply that relevance. Exact-match priority remains stronger than
+either contextual signal.
+
 Page indexing crosses a separate scheduling boundary before extraction or
 embedding begins. A deduplicating queue holds at most 64 page browsers and runs
 one job at a time after four seconds without user input. It consults Gecko's

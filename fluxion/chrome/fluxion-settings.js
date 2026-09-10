@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.52.0";
-  const PRODUCT_RELEASE = "0.52.0-preview.1";
+  const PRODUCT_VERSION = "0.53.0";
+  const PRODUCT_RELEASE = "0.53.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;

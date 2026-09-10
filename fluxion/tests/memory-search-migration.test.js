@@ -126,3 +126,20 @@ test("v1→v2→v3 leaves historical workspace names unknown and preserves folde
   for (const name of Object.keys(original).filter(name => name !== "getResultByName")) assert.equal(migrated[name], original[name]);
   assert.equal((await db.execute("SELECT hex(embedding) AS value FROM page_vectors"))[0].value, "01020304");
 });
+
+test("workspace-name migration rolls back the column when version commit fails and can retry", async t => {
+  const db = database(t);
+  await seed(db, 2);
+  await Search.migrateV1(db);
+  const setVersion = db.setSchemaVersion;
+  db.setSchemaVersion = async () => { throw new Error("simulated version-write failure"); };
+  await assert.rejects(Search.migrateV2(db), /version-write failure/);
+  assert.equal((await db.execute("PRAGMA user_version"))[0].user_version, 2);
+  assert.equal((await db.execute("PRAGMA table_info(pages)")).some(row => row.name === "workspace_name"), false);
+  assert.equal((await db.execute("SELECT search_title FROM pages WHERE id=2"))[0].search_title, "cafe guide");
+  assert.equal((await db.execute("SELECT hex(embedding) AS value FROM page_vectors"))[0].value, "01020304");
+  db.setSchemaVersion = setVersion;
+  await Search.migrateV2(db);
+  assert.equal((await db.execute("PRAGMA user_version"))[0].user_version, 3);
+  assert.equal((await db.execute("SELECT workspace_name FROM pages WHERE id=2"))[0].workspace_name, "");
+});
