@@ -8,10 +8,10 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-Fluxion 0.60 is in development: flat workspaces retain Flow rows and focused
+Fluxion 0.60 is published: flat workspaces retain Flow rows and focused
 controls during tab opening, closing and reordering, and manual DMG packaging
-validates the supplied app's release identity. Full combined native staging is
-required before publication; the latest download remains 0.59 below.
+validates the supplied app's release identity. All combined native release
+gates passed, including the 1,000-tab structural check and real DMG packaging.
 
 Fluxion 0.59 is published: encoded sensitive routes remain excluded from
 Browser Memory, including saved evidence from older profiles. Native macOS
@@ -25,6 +25,13 @@ avoid redundant writes and duplicate ownership reads. Broader resource profiling
 and platform accessibility audits remain on the roadmap.
 
 ## Latest published changes
+
+Fluxion 0.60 keeps unaffected rows and controls connected during flat-tab
+structural changes. A single reordered tab requires one DOM relocation, with
+native order, independent pinned/list keyboard entries and owned focus
+preserved. Grouped/split/workspace projections keep their existing fallback.
+This reduces unnecessary mutations; it is not a physical-hardware frame-rate
+guarantee or tab virtualization.
 
 Fluxion 0.59 applies the shared sensitive-route policy to saved page text and
 vectors, including startup with Memory disabled. Cleanup prepares exclusion
@@ -49,17 +56,17 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.59](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.59.0-preview.1)
+[Fluxion 0.60](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.60.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 The adjustable sidebar retains compact/Focus rail geometry and cancels an
 unfinished resize with Escape. It includes 0.55's menu, search and Settings
 interaction improvements and 0.54's live cross-window tab transfers.
 
-All 668 regression tests and every native release gate passed, including
-stable 1,000-tab selection, OS-native tab/group menu navigation, clean/crash
+All 687 regression tests and every native release gate passed, including
+stable 1,000-tab selection and structural changes, OS-native tab/group menu navigation, clean/crash
 recovery, private-data exclusion, disabled-Memory startup cleanup, responsive
 Settings and actual anonymous update discovery. See
-[verified release provenance](release/provenance/v0.59.0-preview.1.md).
+[verified release provenance](release/provenance/v0.60.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 
