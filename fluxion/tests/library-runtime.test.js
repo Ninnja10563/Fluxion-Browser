@@ -9,7 +9,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 
 // Execute the complete shipped chrome script and its real pure helpers. Only
 // browser/DOM IO is replaced; SQL resolution is deliberately controllable.
-function harness() {
+function harness({ section = "history", initialURI = "about:downloads#history", downloads = [] } = {}) {
   const elements = [];
   let document;
   class Element {
@@ -31,6 +31,21 @@ function harness() {
       }
     }
     appendChild(child) { this.append(child); return child; }
+    get firstChild() { return this.children[0] || null; }
+    get nextSibling() {
+      const siblings = this.parentNode?.children || [];
+      return siblings[siblings.indexOf(this) + 1] || null;
+    }
+    insertBefore(child, next) {
+      if (child.parentNode) child.parentNode.children = child.parentNode.children.filter(item => item !== child);
+      const index = next ? this.children.indexOf(next) : -1;
+      this.children.splice(index < 0 ? this.children.length : index, 0, child);
+      child.parentNode = this;
+    }
+    closest(selector) {
+      if (selector === `.${this.className}`) return this;
+      return this.parentNode?.closest(selector) || null;
+    }
     replaceChildren(...children) { this.children = []; this.ownText = ""; this.append(...children); }
     remove() {
       this.isConnected = false;
@@ -51,11 +66,15 @@ function harness() {
   const browserBox = new Element(); browserBox.id = "browser";
   const deck = new Element(); deck.id = "tabbrowser-tabbox";
   const tab = new Element();
-  tab.setAttribute("fluxion-library-section", "history");
-  tab.linkedBrowser = { currentURI: { spec: "about:downloads#history" } };
+  tab.setAttribute("fluxion-library-section", section);
+  tab.linkedBrowser = { currentURI: { spec: initialURI } };
   const queries = [], errors = [], timers = new Map();
   let nextTimer = 0;
   let observerRemoved = false;
+  let progressListener;
+  let downloadView;
+  const Downloads = { PUBLIC: 1, getList: async () => ({ getAll: async () => [...downloads],
+    addView: async view => { downloadView = view; }, removeView() {} }) };
   const db = { execute: (sql, params) => new Promise((resolve, reject) => queries.push({ sql, params, resolve, reject })) };
   const PlacesUtils = { promiseDBConnection: async () => db,
     bookmarks: { toolbarGuid: "toolbar_____", menuGuid: "menu________", unfiledGuid: "unfiled_____", mobileGuid: "mobile______" },
@@ -68,8 +87,8 @@ function harness() {
   });
   const context = vm.createContext({ window, document,
     gBrowser: { tabs: [tab], selectedTab: tab, selectedBrowser: tab.linkedBrowser,
-      tabContainer: new Element(), addTabsProgressListener() {}, removeTabsProgressListener() {} },
-    ChromeUtils: { importESModule: () => ({ PlacesUtils, Downloads: {}, PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
+      tabContainer: new Element(), addTabsProgressListener(listener) { progressListener = listener; }, removeTabsProgressListener() {} },
+    ChromeUtils: { importESModule: () => ({ PlacesUtils, Downloads, PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
     SessionStore: { persistTabAttribute() {} },
     Cu: { reportError: error => errors.push(error) },
     Services: { env: { get: () => "" }, prefs: { setStringPref() {}, savePrefFile() {} } },
@@ -80,6 +99,8 @@ function harness() {
   const byClass = name => elements.find(node => node.className === name);
   const input = byClass("fluxion-library-search");
   return { window, document, queries, errors, timers, input,
+    commitURI(uri) { tab.linkedBrowser.currentURI.spec = uri; progressListener.onLocationChange(tab.linkedBrowser); },
+    downloadChanged(download) { downloadView.onDownloadChanged(download); },
     list: byClass("fluxion-library-list"), root: document.getElementById("fluxion-library"),
     next: elements.find(node => node.getAttribute("aria-label") === "Next Library page"),
     content: byClass("fluxion-library-content"), observerRemoved: () => observerRemoved,
@@ -95,6 +116,29 @@ function rows(title, count = 1) {
     return { getResultByName: name => row[name] };
   });
 }
+
+test("initial about:downloads commit retains native download rows and focused controls during progress", async () => {
+  const download = { target: { path: "/profile/transfer.txt" }, source: { url: "http://127.0.0.1/transfer" },
+    startTime: new Date(), stopped: true, succeeded: false, canceled: false,
+    currentBytes: 0, totalBytes: 100, hasProgress: true, progress: 0 };
+  const h = harness({ section: "downloads", initialURI: "about:blank", downloads: [download] });
+  await settle();
+  const row = h.list.children.find(node => node._fluxionDownload === download);
+  assert.ok(row);
+  const remove = row._fluxionParts.controls.remove;
+  remove.focus();
+  h.commitURI("about:downloads#downloads");
+  await settle();
+  assert.equal(h.list.children.find(node => node._fluxionDownload === download), row);
+  assert.equal(h.document.activeElement, remove);
+  Object.assign(download, { stopped: false, currentBytes: 25, progress: 25 });
+  h.downloadChanged(download); h.flush(); await settle();
+  assert.equal(h.list.children.find(node => node._fluxionDownload === download), row);
+  assert.equal(row._fluxionParts.controls.cancel.hidden, false);
+  assert.equal(row._fluxionParts.controls.remove, remove);
+  assert.equal(h.document.activeElement, remove);
+  assert.deepEqual(h.errors, []);
+});
 
 test("older full Library query results cannot overwrite a newer search", async () => {
   const h = harness(); await settle();

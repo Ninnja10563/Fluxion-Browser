@@ -68,8 +68,19 @@
     assert(document.activeElement === removeButton, "Could not focus the stable download Remove control");
     let initialTransferError = null;
     const initialTransfer = download.start().catch(error => { initialTransferError = error; });
-    await waitFor(() => download.currentBytes > 0 && !download.stopped && rowAction(row, "Cancel"),
-      "Native download did not expose live progress and Cancel");
+    try {
+      await waitFor(() => download.currentBytes > 0 && !download.stopped && rowAction(row, "Cancel"),
+        "Native download did not expose live progress and Cancel");
+    } catch (error) {
+      report.initialDownloadFailure = {
+        currentBytes: download.currentBytes, stopped: download.stopped, succeeded: download.succeeded,
+        error: String(download.error || initialTransferError || ""),
+        originalRowConnected: row.isConnected, sameRow: libraryRow("fluxion-download.txt") === row,
+        cancelVisible: Boolean(rowAction(row, "Cancel")),
+        libraryState: document.getElementById("fluxion-library")?.dataset.queryState,
+      };
+      throw error;
+    }
     assert(libraryRow("fluxion-download.txt") === row && rowAction(row, "Remove") === removeButton,
       "Active progress replaced the download row or controls");
     assert(document.activeElement === removeButton, "Download progress displaced keyboard focus");

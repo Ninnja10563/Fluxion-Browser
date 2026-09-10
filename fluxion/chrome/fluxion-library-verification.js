@@ -80,6 +80,14 @@
     await SessionStore.promiseAllWindowsRestored;
     assert(window.FluxionLibrary, "Native Library did not initialise");
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
+    const { PlacesBrowserStartup } = ChromeUtils.importESModule(
+      "moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs"
+    );
+    // Window restoration precedes the fresh-profile default bookmark import,
+    // whose replace:true transaction would erase a newly seeded fixture folder.
+    await waitFor(() => PlacesBrowserStartup._placesBrowserInitComplete,
+      "Firefox Places startup did not finish before Library seeding");
+    report.placesStartupComplete = true;
     const recent = new Date(Date.now() - 86400000);
     const old = new Date(Date.now() - 90 * 86400000);
     const historyTarget = "Fluxion Archive — Cedar ÉCOLE MÉMOIRE Café history";

@@ -185,7 +185,6 @@
   let queryError = "";
   let queryTimer = 0;
   let visibleTab = null;
-  let visibleURI = "";
 
   function isLibraryTab(tab) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
@@ -805,10 +804,10 @@
     document.documentElement.toggleAttribute("data-fluxion-library-visible", visible);
     if (visible) {
       privacy.textContent = PrivateBrowsingUtils.isWindowPrivate(window) ? "Private downloads only" : "Stored in this Fluxion profile";
-      const uri = tab.linkedBrowser?.currentURI?.spec || "";
-      const changed = tab !== visibleTab || uri !== visibleURI || tabSection(tab) !== currentSection;
+      // A newly opened owned tab starts at about:blank before Gecko commits
+      // about:downloads. Its section has not changed: retain live rows/focus.
+      const changed = tab !== visibleTab || tabSection(tab) !== currentSection;
       visibleTab = tab;
-      visibleURI = uri;
       if (changed) selectSection(tabSection(tab));
       else if (!wasVisible) refreshAll();
     } else {
