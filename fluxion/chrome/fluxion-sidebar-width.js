@@ -22,10 +22,11 @@
   const rtl = () => window.getComputedStyle(flow).direction === "rtl";
   function apply(value) {
     if (disposed) return;
-    displayed = sizing.effective(value, browser.clientWidth);
+    const availableWidth = browser.clientWidth;
+    displayed = sizing.effective(value, availableWidth);
     browser.style.setProperty("--fluxion-sidebar-width", `${displayed}px`);
     handle.setAttribute("aria-valuemin", String(sizing.bounds.min));
-    handle.setAttribute("aria-valuemax", String(sizing.available(browser.clientWidth)));
+    handle.setAttribute("aria-valuemax", String(sizing.available(availableWidth)));
     handle.setAttribute("aria-valuenow", String(displayed));
     handle.setAttribute("aria-valuetext", `${displayed} pixels`);
   }

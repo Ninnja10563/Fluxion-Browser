@@ -79,7 +79,30 @@
     let pointerID = null, trustedDown = false;
     const observeDown = event => { pointerID = event.pointerId; trustedDown = event.isTrusted; };
     handle.addEventListener("pointerdown", observeDown);
-    const mouse = (type, x, y) => window.windowUtils.sendMouseEvent(type, x, y, 0, type === "mousemove" ? 0 : 1, 0);
+    // Firefox155 moved the privileged widget-input router onto Window. This
+    // follows EventUtils.synthesizeMouseAtPoint, not DOM dispatchEvent.
+    assert(typeof window.synthesizeMouseEvent === "function", "Gecko155 mouse input router is unavailable");
+    report.pointerRequests = [];
+    report.pointerDowns = [];
+    const observeTarget = event => {
+      if (report.pointerDowns.length < 8) report.pointerDowns.push({
+        trusted: event.isTrusted, id: event.pointerId, target: event.target?.id || "",
+        tag: event.target?.localName || "", x: event.clientX, y: event.clientY,
+      });
+    };
+    document.addEventListener("pointerdown", observeTarget, true);
+    let mouseHeld = false;
+    const mouse = (type, x, y) => {
+      if (type === "mousedown") mouseHeld = true;
+      if (type === "mouseup") mouseHeld = false;
+      report.pointerRequests.push({ type, x, y, buttons: mouseHeld ? 1 : 0 });
+      return window.synthesizeMouseEvent(type, x, y, {
+        identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID,
+        button: 0, buttons: mouseHeld ? 1 : 0,
+        clickCount: type === "mousemove" ? 0 : 1,
+        modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
+      }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+    };
     const surfaceWidth = () => flow.querySelector(".fluxion-surface").getBoundingClientRect().width;
     const drag = async (amount, cancel) => {
       const rect = handle.getBoundingClientRect(), x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
@@ -102,7 +125,7 @@
     await drag(32, false);
     await drag(24, true);
     report.checks.push("trusted-gecko-pointer-capture-preview-commit-native-escape-rollback");
-    report.pointer = "Gecko windowUtils mouse input routing with actual pointer capture; not OS pointer movement";
+    report.pointer = "Gecko Window.synthesizeMouseEvent input routing with actual pointer capture; not OS pointer movement";
     change(318);
     ui.setSidebarState("compact");
     await wait(() => closeTo(width(), 44), "Compact sidebar did not retain44px geometry");
@@ -119,6 +142,7 @@
     assert(closeTo(surfaceWidth(), 342) && closeTo(width(), 3), "Focus pointer resize changed the rail instead of its overlay");
     assert(closeTo(gBrowser.tabpanels.getBoundingClientRect().width, content.width), "Focus pointer resize reflowed page content");
     handle.removeEventListener("pointerdown", observeDown);
+    document.removeEventListener("pointerdown", observeTarget, true);
     report.checks.push("focus-overlay-trusted-pointer-commit-without-content-reflow");
     ui.hideSidebar({ force: true }); ui.setSidebarState("expanded");
     change(420);

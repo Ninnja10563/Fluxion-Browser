@@ -88,6 +88,16 @@ test("actual controller synchronizes two windows and responsive layout never rew
   assert.equal(b.api.effectiveWidth(), 400);
 });
 
+test("a width application reads container geometry before writing CSS without a second layout read", () => {
+  const f = fixture();
+  let reads = 0;
+  Object.defineProperty(f.browser, "clientWidth", { get() { reads++; return 1200; } });
+  f.api.setWidth(300);
+  assert.equal(reads, 1, "ARIA bounds must reuse the pre-write container measurement");
+  assert.equal(f.api.effectiveWidth(), 300);
+  assert.equal(f.handle.attributes.get("aria-valuemax"), "420");
+});
+
 test("pointer preview coalesces frames and commits once using final pointerup coordinate", () => {
   const f = fixture(); const focused = f.document.activeElement;
   f.handle.emit("pointerdown");
