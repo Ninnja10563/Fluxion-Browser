@@ -30,6 +30,11 @@
   }
   function fail(error) {
     write(`fluxion.recovery.${mode}.error`, `${error?.message || error}\n${error?.stack || ""}`);
+    try {
+      write(`fluxion.recovery.${mode}.snapshot`, JSON.stringify(normalSnapshots()));
+    } catch (snapshotError) {
+      Cu.reportError(snapshotError);
+    }
     Cu.reportError(error);
   }
   async function quit() {

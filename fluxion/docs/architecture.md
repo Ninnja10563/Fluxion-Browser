@@ -135,7 +135,9 @@ survives the next privileged startup and Gecko, rather than Fluxion, decides
 whether to reopen the previous windows and tabs. The recovery gate keeps that
 preference at Gecko's restore value across every controlled relaunch, guarding
 against startup configuration accidentally replacing a saved session with the
-homepage.
+homepage. It overrides future new-tab destinations without navigating the
+selected browser: a SessionStore tab can still report `about:blank` while its
+saved page is being restored.
 
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,

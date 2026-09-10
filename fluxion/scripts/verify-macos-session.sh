@@ -34,6 +34,7 @@ run_stage() {
   local name="$1"
   local environment="$2"
   local marker="$3"
+  local error_marker="${marker%%.health*}.error\""
   shift 3
   local log="$check_root/$name.log"
   printf 'Verifying packaged Fluxion %s...\n' "$name" >&2
@@ -45,6 +46,12 @@ run_stage() {
   while (( attempt < 480 )); do
     if [[ -f "$profile/prefs.js" ]] && grep -Fq "$marker" "$profile/prefs.js"; then
       break
+    fi
+    if [[ -f "$profile/prefs.js" ]] && grep -Fq "$error_marker" "$profile/prefs.js"; then
+      printf 'Fluxion reported a terminal failure during %s.\n' "$name" >&2
+      grep 'fluxion\.recovery' "$profile/prefs.js" >&2 || true
+      sed -n '1,180p' "$log" >&2
+      return 1
     fi
     if ! kill -0 "$process_id" 2>/dev/null; then
       printf 'Fluxion exited before the %s marker appeared.\n' "$name" >&2

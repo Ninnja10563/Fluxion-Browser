@@ -22,6 +22,8 @@ Version 0.42 improves privacy and search correctness:
   a question changes, and preserve focus when switching palette modes;
 - preserve the selected Settings section across background navigation and
   tab switching, while honoring explicit settings links;
+- stop startup new-tab setup from replacing selected pages while Gecko restores
+  saved windows and split views;
 - run the native group-keyboard and pointer-close checks in their own browser
   launch so other automated tab operations cannot disturb the measurement.
 
