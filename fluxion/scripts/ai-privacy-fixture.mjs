@@ -12,7 +12,7 @@ export async function startAIPrivacyFixture() {
     if (request.method === "GET" && path === "/state") return json(state);
     if (request.method === "GET" && path === "/article") {
       response.setHeader("Content-Type", "text/html; charset=utf-8");
-      return response.end('<!doctype html><html lang="en"><title>Fluxion local AI fixture</title><main><h1>Local browser privacy</h1><p>This controlled article explains that browser page text stays on this machine unless the user explicitly asks a configured provider to process it. Disabling the provider or excluding this site must revoke an unfinished request before any page text leaves the browser.</p></main></html>');
+      return response.end('<!doctype html><html lang="en"><title>Fluxion local AI fixture</title><main><h1>Local browser privacy</h1><p>This controlled article explains that browser page text stays on this machine unless the user explicitly asks a configured provider to process it. Disabling the provider or excluding this site must revoke an unfinished request before any page text leaves the browser.</p><div contenteditable="true"><h2>FLUXION_EDITABLE_DRAFT_HEADING</h2><p>FLUXION_EDITABLE_DRAFT_BODY</p></div></main></html>');
     }
     if (/^\/[ab]\/v1\/models$/.test(path) && request.method === "GET") {
       state.models.push({ path, ...credential });
@@ -30,7 +30,10 @@ export async function startAIPrivacyFixture() {
         const body = JSON.parse(Buffer.concat(chunks).toString("utf8"));
         const hasPageContext = body.messages?.some(message => message.role === "user" &&
           message.content?.includes("This controlled article explains"));
-        state.posts.push({ path, ...credential, hasPageContext: Boolean(hasPageContext) });
+        const hasEditableDraft = body.messages?.some(message =>
+          String(message.content || "").includes("FLUXION_EDITABLE_DRAFT_"));
+        state.posts.push({ path, ...credential, hasPageContext: Boolean(hasPageContext),
+          hasEditableDraft: Boolean(hasEditableDraft) });
         return json({ choices: [{ message: { content: "The article describes local privacy and explicit page-sharing consent." } }] });
       } catch { response.writeHead(400); response.end(); return; }
     }

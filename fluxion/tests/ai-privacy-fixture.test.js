@@ -29,8 +29,20 @@ test("AI fixture counts only parsed chat bodies and records real supplied page c
   assert.ok((await response.json()).choices[0].message.content);
   const state = await (await fetch(`${origin}/state`)).json();
   assert.deepEqual(state.posts, [{ path: "/b/v1/chat/completions", headerPresent: false,
-    expectedCredential: false, hasPageContext: true }]);
+    expectedCredential: false, hasPageContext: true, hasEditableDraft: false }]);
   assert.match(await (await fetch(`${origin}/article`)).text(), /This controlled article explains/);
+});
+
+test("AI fixture contains editable drafts and detects them if a request leaks their evidence", async t => {
+  const origin = await fixture(t);
+  const article = await (await fetch(`${origin}/article`)).text();
+  assert.match(article, /contenteditable="true"/);
+  for (const marker of ["FLUXION_EDITABLE_DRAFT_HEADING", "FLUXION_EDITABLE_DRAFT_BODY"]) {
+    assert.ok(article.includes(marker));
+    await fetch(`${origin}/a/v1/chat/completions`, { method: "POST",
+      body: JSON.stringify({ messages: [{ role: "user", content: marker }] }) });
+  }
+  assert.deepEqual((await (await fetch(`${origin}/state`)).json()).posts.map(row => row.hasEditableDraft), [true, true]);
 });
 
 test("AI fixture rejects oversized page requests before recording or processing them", async t => {

@@ -54,6 +54,8 @@
     const baseline = (await state()).posts;
     assert(baseline.length === 1 && baseline[0].hasPageContext && baseline[0].headerPresent && baseline[0].expectedCredential,
       "Server did not receive baseline real extracted page context");
+    assert(baseline[0].hasEditableDraft === false,
+      "Real page extraction transmitted editable draft body or heading evidence");
     report.baseline = baseline;
     for (const mode of ["disable", "exclude"]) {
       await ai.configure(config("a"));
