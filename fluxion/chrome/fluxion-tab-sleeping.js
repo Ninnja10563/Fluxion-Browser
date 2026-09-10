@@ -139,7 +139,23 @@
     window.setTimeout(async () => {
       const fixtureURL = "https://example.com/?fluxion-sleep-race-test=1";
       const candidate = gBrowser.addTrustedTab(fixtureURL, { skipAnimation: true });
+      const anchor = gBrowser.addTrustedTab("about:blank?fluxion-sleep-anchor=1", { skipAnimation: true });
       window.FluxionUI.setTabWorkspace(candidate, window.FluxionUI.currentWorkspace());
+      window.FluxionUI.setTabWorkspace(anchor, window.FluxionUI.currentWorkspace());
+      const prepareFixture = stage => {
+        // Other smoke fixtures can change native successor selection while the
+        // HTTPS load is pending. Establish real last-access and background state
+        // synchronously; do not weaken policy or fabricate tab timestamps.
+        window.FluxionUI.selectTab(candidate);
+        window.FluxionUI.selectTab(anchor);
+        const state = tabState(candidate, Date.now(), 0);
+        Services.prefs.setStringPref("fluxion.sleeping.preflight", JSON.stringify({ stage, ...state,
+          lastAccessed: String(state.lastAccessed), inWindow: [...gBrowser.tabs].includes(candidate) }));
+        Services.prefs.savePrefFile(null);
+        if (!FluxionTabSleepingPolicy.canSleep(candidate, state)) {
+          throw new Error(`Sleep fixture is ineligible at ${stage}: ${JSON.stringify(state)}`);
+        }
+      };
       try {
         for (let attempt = 0; attempt < 100 &&
             (candidate.hasAttribute("busy") || candidate.linkedBrowser?.currentURI?.spec !== fixtureURL); attempt += 1) {
@@ -149,6 +165,7 @@
           throw new Error("The sleep race fixture did not finish its HTTPS navigation");
         }
         const originalBrowser = candidate.linkedBrowser;
+        prepareFixture("pin-race");
         const sleeping = sleep(candidate, { forceAge: true });
         if (!pending.has(candidate)) throw new Error("The sleep race fixture did not enter native state flushing");
         // The async flush is now pending. Pin through Gecko before the sleeping
@@ -159,6 +176,7 @@
         }
         Services.prefs.setStringPref("fluxion.sleeping.race.health", "pin-during-flush-kept-native-tab-live");
         gBrowser.unpinTab(candidate);
+        prepareFixture("native-discard");
         if (!(await sleep(candidate, { forceAge: true }))) {
           throw new Error("The unpinned eligible fixture did not discard through Gecko");
         }
@@ -169,8 +187,10 @@
         Services.prefs.savePrefFile(null);
         Cu.reportError(error);
       } finally {
-        if ([...gBrowser.tabs].includes(candidate) && !candidate.closing) {
-          gBrowser.removeTab(candidate, { animate: false, skipSessionStore: true });
+        for (const tab of [candidate, anchor]) {
+          if ([...gBrowser.tabs].includes(tab) && !tab.closing) {
+            gBrowser.removeTab(tab, { animate: false, skipSessionStore: true });
+          }
         }
       }
     }, 1800);

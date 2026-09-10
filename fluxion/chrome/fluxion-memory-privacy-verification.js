@@ -48,12 +48,16 @@
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
     const { getPlacesSemanticHistoryManager } = ChromeUtils.importESModule("resource://gre/modules/PlacesSemanticHistoryManager.sys.mjs");
     stage("opening-native-vector-database");
-    assert(await window.FluxionMemory.enable() === "semantic", "Native semantic database is unavailable");
+    report.initialCapability = await window.FluxionMemory.enable();
     const manager = getPlacesSemanticHistoryManager();
-    connection = await manager.getConnection();
+    // Unsupported semantic-search hardware still has native storage to erase.
+    // Finish Gecko's startup lifecycle before obtaining storage-only access.
+    await manager.getConnection();
+    connection = await manager.semanticDB.getConnection();
     assert(connection, "Native semantic connection is missing");
     async function reenabledEmpty(label) {
-      connection = await manager.getConnection();
+      await manager.getConnection();
+      connection = await manager.semanticDB.getConnection();
       assert(connection, `${label} could not reopen native semantic storage`);
       await empty(label);
     }

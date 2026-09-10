@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function fixture() {
+function fixture({ nativeFixture = false } = {}) {
   let finishFlush;
   const flushing = new Promise(resolve => { finishFlush = resolve; });
   const events = new Map();
@@ -19,7 +19,7 @@ function fixture() {
   };
   const calls = { prepare: 0, discard: 0 };
   const tab = {
-    linkedBrowser: { getAttribute: () => "" }, linkedPanel: "panel", lastAccessed: 1,
+    linkedBrowser: { getAttribute: () => "", currentURI: { spec: "https://example.com/?fluxion-sleep-race-test=1" } }, linkedPanel: "panel", lastAccessed: 1,
     hasAttribute: key => attributes.has(key),
     setAttribute: (key, value) => attributes.set(key, value),
     removeAttribute: key => attributes.delete(key),
@@ -36,20 +36,31 @@ function fixture() {
     },
   };
   const window = {
-    setTimeout: () => 1, clearTimeout() {},
+    setTimeout(callback, delay) { if (delay === 1800) calls.runFixture = callback; return 1; }, clearTimeout() {},
     addEventListener: (type, callback) => events.set(type, callback),
+    FluxionUI: { currentWorkspace: () => "focus", setTabWorkspace() {},
+      selectTab(target) { gBrowser.selectedTab = target; } },
   };
+  const anchor = {};
+  gBrowser.addTrustedTab = url => {
+    if (url.startsWith("about:blank")) { gBrowser.tabs.push(anchor); return anchor; }
+    gBrowser.selectedTab = tab;
+    return tab;
+  };
+  gBrowser.pinTab = target => { target.pinned = true; };
+  gBrowser.unpinTab = target => { target.pinned = false; };
+  gBrowser.removeTab = target => { gBrowser.tabs = gBrowser.tabs.filter(item => item !== target); };
   const context = vm.createContext({
     window, gBrowser,
     ChromeUtils: { importESModule: () => ({ PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
     Services: {
-      env: { get: () => "" },
+      env: { get: name => nativeFixture && name === "FLUXION_VISUAL_SLEEP_TEST" ? "1" : "" },
       prefs: {
         getIntPref: (key, fallback) => preferences.get(key) ?? fallback,
         setIntPref: setPref,
         addObserver: (key, observer) => prefObservers.set(key, observer),
         removeObserver: key => prefObservers.delete(key),
-        setStringPref() {}, savePrefFile() {},
+        setStringPref: (key, value) => preferences.set(key, value), savePrefFile() {},
       },
     },
     Cu: { reportError: error => { throw error; } },
@@ -62,6 +73,22 @@ function fixture() {
     setPref: value => setPref("fluxion.tabs.sleepMinutes", value),
     unload: () => events.get("unload")() };
 }
+
+test("native race fixture backgrounds its initially selected candidate before real policy checks", async () => {
+  const f = fixture({ nativeFixture: true });
+  const task = f.calls.runFixture();
+  assert.notEqual(f.gBrowser.selectedTab, f.tab);
+  assert.equal(f.calls.prepare, 1);
+  assert.equal(f.tab.pinned, true);
+  f.finishFlush();
+  await task;
+  assert.equal(f.calls.prepare, 2);
+  assert.equal(f.calls.discard, 1);
+  assert.equal(f.preferences.get("fluxion.sleeping.race.health"), "pin-during-flush-kept-native-tab-live");
+  assert.equal(f.preferences.get("fluxion.sleeping.visual.health"), "native-tab-discarded");
+  assert.equal(JSON.parse(f.preferences.get("fluxion.sleeping.preflight")).selected, false);
+  assert.equal(f.gBrowser.tabs.length, 0);
+});
 
 for (const [name, change] of [
   ["audio starts", f => { f.tab.soundPlaying = true; }],

@@ -57,13 +57,21 @@ jobs:
         env:
           FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
           FLUXION_TARGET_ARCH: universal2
-          FLUXION_CAPTURE_PATH: ${{ runner.temp }}/fluxion-chrome.png
+          FLUXION_SKIP_LAUNCH_CHECK: "1"
           RELEASE_VERSION: ${{ inputs.version }}
         run: |
           export FLUXION_APP_VERSION="${RELEASE_VERSION%%-*}"
           ./fluxion/scripts/build-macos.sh --clean
 
+      - name: Verify complete native browser integration
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          FLUXION_CAPTURE_PATH: ${{ runner.temp }}/fluxion-chrome.png
+        run: ./fluxion/scripts/verify-macos-app.sh '.runtime/Fluxion.app'
+
       - name: Verify application architecture and signature
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail

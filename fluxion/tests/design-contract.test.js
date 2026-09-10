@@ -438,8 +438,11 @@ test("macOS visual gate waits for settled chrome", () => {
   assert.match(macVerifier, /FLUXION_VISUAL_STATUS_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_DROP_TEST=1/);
   assert.match(macVerifier, /FLUXION_VISUAL_SETTINGS_TEST=1/);
-  assert.match(macVerifier, /FLUXION_VISUAL_SLEEP_TEST=1/);
-  assert.match(macVerifier, /native-tab-discarded/);
+  assert.match(macVerifier, /verify-macos-sleep\.sh/);
+  const sleepVerifier = fs.readFileSync(path.join(root, "scripts/verify-macos-sleep.sh"), "utf8");
+  assert.match(sleepVerifier, /FLUXION_VISUAL_SLEEP_TEST=1/);
+  assert.match(sleepVerifier, /native-tab-discarded/);
+  assert.match(sleepVerifier, /pin-during-flush-kept-native-tab-live/);
   assert.match(macVerifier, /FLUXION_VISUAL_PEEK_TEST=1/);
   assert.match(macVerifier, /temporary-gecko-tab-opened/);
   assert.match(macVerifier, /FLUXION_VISUAL_MULTISELECT_TEST=1/);

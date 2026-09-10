@@ -3,6 +3,13 @@
 macOS milestone builds use `.github/workflows/macos-preview-release.yml` in two
 passes:
 
+Application assembly and the complete native integration verifier are separate
+required CI steps. Independent runtime gates still run when another verifier
+fails, but any failure prevents packaging and publication. Local builds retain
+their default launch verification. The sleeping-tab race fixture uses its own
+fresh profile so other tests cannot change its selected tab or workspace while
+Gecko is flushing state.
+
 Release inputs are locked in `fluxion/runtime/gecko-lock.json`. The downloader
 accepts only the exact versioned Mozilla archive URL, verifies SHA-256 before
 making a DMG available, and never overwrites an existing destination. The
