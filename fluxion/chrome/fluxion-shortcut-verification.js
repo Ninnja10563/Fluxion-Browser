@@ -1,4 +1,4 @@
-/* global Services, SessionStore, Cu */
+/* global Services, SessionStore, IOUtils, Cu */
 (function verifyShortcutEditing(window) {
   "use strict";
   if (Services.env.get("FLUXION_SHORTCUT_TEST") !== "1") return;
@@ -13,7 +13,7 @@
   const waitFor = async (check, message) => {
     const deadline = Date.now() + 20000;
     do {
-      const value = check(); if (value) return value;
+      const value = await check(); if (value) return value;
       await new Promise(resolve => window.setTimeout(resolve, 50));
     } while (Date.now() < deadline);
     throw new Error(message);
@@ -69,10 +69,19 @@
     const before = new Set(Services.wm.getEnumerator("navigator:browser"));
     window.OpenBrowserWindow();
     companion = await waitFor(() => [...Services.wm.getEnumerator("navigator:browser")]
-      .find(candidate => !before.has(candidate) && candidate.FluxionShortcuts), "Shortcut companion window did not initialize");
-    window.focus();
+      .find(candidate => !before.has(candidate) && candidate.FluxionShortcuts && candidate.gBrowserInit?.delayedStartupFinished),
+    "Shortcut companion window did not finish browser startup");
+    const foregroundAck = Services.env.get("FLUXION_SHORTCUT_FOREGROUND_ACK");
+    assert(foregroundAck, "Shortcut foreground handshake path is missing");
+    Services.prefs.setStringPref(`${prefix}.foreground`, "requested");
+    Services.prefs.savePrefFile(null);
+    await waitFor(() => IOUtils.exists(foregroundAck), "The owned shortcut application was not activated");
+    // nsIFocusManager.focusedWindow raises this exact top-level window; the
+    // readonly activeWindow below remains an independent activation assertion.
+    Services.focus.focusedWindow = window;
     await waitFor(() => Services.focus.activeWindow === window && document.hasFocus(),
       "Primary shortcut fixture window did not regain native focus");
+    Services.prefs.setStringPref(`${prefix}.foreground`, "confirmed");
     await focusControl(capture, "Shortcut capture"); capture.click();
     key(capture, "KeyK", { altKey: true, shiftKey: true });
     const custom = "Accel+Alt+Shift+KeyK";

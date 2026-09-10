@@ -59,10 +59,11 @@ on run arguments
   set ownedPID to (item 2 of arguments) as integer
   if actionName is not "cancel" and actionName is not "accept" then error "Unknown file-picker driver action"
   tell application "System Events"
-    set frontmost of first application process whose unix id is ownedPID to true
+    set ownedProcess to first application process whose unix id is ownedPID
+    set frontmost of ownedProcess to true
     -- Gecko's supported AT detection initializes its accessibility tree when
     -- the application's role is read (accessible/mac/Platform.mm).
-    set applicationRole to value of attribute "AXRole" of first application process whose unix id is ownedPID
+    set applicationRole to value of attribute "AXRole" of ownedProcess
     if applicationRole is not "AXApplication" then error "Owned fixture is not an AX application"
   end tell
   delay 0.3

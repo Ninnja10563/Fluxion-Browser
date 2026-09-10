@@ -8,6 +8,7 @@ launcher="$app/Contents/MacOS/Fluxion"
 check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-shortcut-check.XXXXXX")"
 profile="$check_root/profile"
 browser_pid=""
+foreground_requested=false
 artifact_dir="${FLUXION_SHORTCUT_ARTIFACT_DIR:-}"
 cleanup() {
   if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
@@ -33,10 +34,18 @@ cleanup() {
 }
 trap cleanup EXIT
 FLUXION_PROFILE="$profile" FLUXION_SHORTCUT_TEST=1 \
+  FLUXION_SHORTCUT_FOREGROUND_ACK="$check_root/foreground-ready" \
   "$launcher" about:blank >"$check_root/browser.log" 2>&1 &
 browser_pid=$!
 for ((attempt=0; attempt<480; attempt++)); do
   if [[ -f "$profile/prefs.js" ]]; then
+    if [[ "$foreground_requested" == false ]] && grep -Fq 'user_pref("fluxion.shortcutVerification.foreground", "requested")' "$profile/prefs.js"; then
+      /usr/bin/osascript -e "tell application \"System Events\" to set frontmost of first application process whose unix id is $browser_pid to true" || {
+        printf 'Could not activate the owned shortcut fixture process.\n' >&2; break;
+      }
+      touch "$check_root/foreground-ready"
+      foreground_requested=true
+    fi
     if grep -Fq 'user_pref("fluxion.shortcutVerification.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.shortcutVerification.health", "packaged-settings-shortcut-capture-and-cross-window-save-verified")' "$profile/prefs.js"; then
       printf 'Verified packaged Gecko Settings capture and cross-window shortcuts using synthetic DOM events, not OS keyboard input.\n'
