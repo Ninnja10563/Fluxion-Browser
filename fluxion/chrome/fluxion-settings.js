@@ -286,7 +286,7 @@
   }
 
   const general = section("general", "General", "Startup, home, and everyday browsing behaviour.");
-  row(general, "When Fluxion starts", "Choose whether to begin fresh or restore your previous windows and tabs.", select([
+  const startupChoice = row(general, "When Fluxion starts", "Choose whether to begin fresh or restore your previous windows and tabs.", select([
     ["1", "Open home page"], ["3", "Restore previous session"], ["0", "Open a blank page"],
   ], FluxionSettings.startupPage(pref.int("browser.startup.page", 1)), value => {
     pref.setInt("browser.startup.page", FluxionSettings.startupPage(value));
@@ -298,13 +298,16 @@
     ? "about:newtab"
     : savedHomepage;
   homepage.spellcheck = false;
+  let homepageDraft = false;
+  homepage.addEventListener("input", () => { homepageDraft = true; });
   homepage.addEventListener("change", () => {
     homepage.value = FluxionSettings.homepage(homepage.value);
+    homepageDraft = false;
     pref.setString("browser.startup.homepage", homepage.value === "about:newtab"
       ? pref.string("fluxion.newtab.url", "about:newtab") : homepage.value);
   });
   row(general, "Home page", "Use a web address, about:newtab, or about:blank.", homepage);
-  row(general, "Open links in tabs", "Keep links from other applications in the current Fluxion window.", toggle("Enabled", pref.int("browser.link.open_newwindow", 3) !== 2, checked => {
+  const linksChoice = row(general, "Open links in tabs", "Keep links from other applications in the current Fluxion window.", toggle("Enabled", pref.int("browser.link.open_newwindow", 3) !== 2, checked => {
     pref.setInt("browser.link.open_newwindow", checked ? 3 : 2);
   }));
   const searchEngine = create("select");
@@ -370,20 +373,50 @@
     themeChoice.value = value;
   };
   window.addEventListener("FluxionThemeChanged", syncThemeChoice);
-  row(appearance, "Flow sidebar", "Expanded shows titles; compact keeps the rail; focus leaves a reveal edge.", select([
+  const sidebarChoice = row(appearance, "Flow sidebar", "Expanded shows titles; compact keeps the rail; focus leaves a reveal edge.", select([
     ["expanded", "Expanded"], ["compact", "Compact"], ["focus", "Focus"],
   ], FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")), value => {
     window.FluxionUI.setSidebarState(value);
   }));
-  row(appearance, "Tab density", "Adjust the vertical rhythm of tabs in Flow.", select([
+  const densityChoice = row(appearance, "Tab density", "Adjust the vertical rhythm of tabs in Flow.", select([
     ["compact", "Compact"], ["standard", "Standard"], ["roomy", "Roomy"],
   ], FluxionSettings.normaliseDensity(pref.string("fluxion.tabs.density", "standard")), value => {
     window.FluxionUI.setTabDensity(value);
   }));
-  row(appearance, "Interface motion", "Short transitions remain disabled when macOS Reduce Motion is active.", toggle("Enabled", pref.bool("fluxion.animations.enabled", true), checked => {
+  const motionChoice = row(appearance, "Interface motion", "Short transitions remain disabled when macOS Reduce Motion is active.", toggle("Enabled", pref.bool("fluxion.animations.enabled", true), checked => {
     pref.setBool("fluxion.animations.enabled", checked);
     document.documentElement.toggleAttribute("data-fluxion-no-motion", !checked);
   }));
+
+  const livePreferenceNames = ["browser.startup.page", "browser.startup.homepage", "fluxion.newtab.url",
+    "browser.link.open_newwindow", "fluxion.sidebar.state", "fluxion.tabs.density", "fluxion.animations.enabled"];
+  const lastDisplayed = new WeakMap();
+  let livePreferencesDisposed = false;
+  function syncChoice(control, value) {
+    value = String(value);
+    // A focused native select can have a pending user selection. Do not replace
+    // it with another window's value before its change event commits the choice.
+    if (document.activeElement === control && lastDisplayed.has(control) &&
+        control.value !== lastDisplayed.get(control) && control.value !== value) return;
+    control.value = value;
+    lastDisplayed.set(control, value);
+  }
+  function syncLivePreferences() {
+    if (livePreferencesDisposed) return;
+    syncChoice(startupChoice, FluxionSettings.startupPage(pref.int("browser.startup.page", 1)));
+    syncChoice(sidebarChoice, FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")));
+    syncChoice(densityChoice, FluxionSettings.normaliseDensity(pref.string("fluxion.tabs.density", "standard")));
+    linksChoice.querySelector("input").checked = pref.int("browser.link.open_newwindow", 3) !== 2;
+    motionChoice.querySelector("input").checked = pref.bool("fluxion.animations.enabled", true);
+    if (!homepageDraft) {
+      const value = pref.string("browser.startup.homepage", "about:newtab");
+      homepage.value = value === pref.string("fluxion.newtab.url", "") ? "about:newtab" : value;
+    }
+  }
+  const livePreferenceObserver = { observe: syncLivePreferences };
+  for (const name of livePreferenceNames) Services.prefs.addObserver(name, livePreferenceObserver);
+  for (const choice of [startupChoice, sidebarChoice, densityChoice]) choice.addEventListener("blur", syncLivePreferences);
+  syncLivePreferences();
 
   const tabs = section("tabs", "Tabs", "Control tab prompts and the behaviour of large sessions.");
   row(tabs, "Sleep inactive tabs", "Release memory through Gecko after a tab has stayed unused. Pinned, audio, shared, split, private, and unsaved-form tabs are protected.", select([
@@ -1056,6 +1089,7 @@
     else if (!document.documentElement.hasAttribute("data-fluxion-library-visible")) contentDeck.hidden = false;
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
+      syncLivePreferences();
       syncMemorySettings();
       syncAIControls();
       const selectedBrowser = gBrowser.selectedBrowser;
@@ -1075,6 +1109,8 @@
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
+    livePreferencesDisposed = true;
+    for (const name of livePreferenceNames) Services.prefs.removeObserver(name, livePreferenceObserver);
     workspaceEditor.destroy();
     aiDisposed = true;
     Services.prefs.removeObserver("fluxion.ai.", aiPreferenceObserver);

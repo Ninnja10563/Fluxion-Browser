@@ -47,8 +47,9 @@ for ((attempt=0; attempt<480; attempt++)); do
       foreground_requested=true
     fi
     if grep -Fq 'user_pref("fluxion.shortcutVerification.error"' "$profile/prefs.js"; then break; fi
-    if grep -Fq 'user_pref("fluxion.shortcutVerification.health", "packaged-settings-shortcut-capture-and-cross-window-save-verified")' "$profile/prefs.js"; then
-      printf 'Verified packaged Gecko Settings capture and cross-window shortcuts using synthetic DOM events, not OS keyboard input.\n'
+    if grep -Fq 'user_pref("fluxion.shortcutVerification.health", "packaged-settings-shortcut-capture-and-cross-window-save-verified")' "$profile/prefs.js" &&
+        grep -Fq 'user_pref("fluxion.shortcutVerification.preferences.health", "live-general-appearance-and-homepage-draft-verified")' "$profile/prefs.js"; then
+      printf 'Verified packaged Gecko Settings capture, cross-window shortcuts, live General/Appearance controls and draft preservation using synthetic DOM events, not OS keyboard input.\n'
       grep 'fluxion\.shortcutVerification\.' "$profile/prefs.js"
       exit 0
     fi
