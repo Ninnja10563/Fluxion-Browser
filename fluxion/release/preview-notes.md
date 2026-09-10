@@ -29,9 +29,9 @@ Version 0.55 is an interaction-quality candidate in development:
 It has not passed release validation and has no published DMG. Local CPU-only
 benchmark results are not claims of native input-to-paint latency.
 
-Version 0.54 is a candidate for native cross-window tab handling. Its release
-verification is pending; the implementation must pass the complete macOS
-workflow before a DMG is published.
+Version 0.54 was published after successful complete macOS staging. Its
+[verified provenance](https://github.com/Ninnja10563/Fluxion-Browser/blob/main/fluxion/release/provenance/v0.54.0-preview.1.md)
+records the exact built source and public download bytes.
 
 - move actual Gecko tabs between browser windows instead of reopening their
   URLs as replacement pages;
@@ -48,9 +48,9 @@ workflow before a DMG is published.
 - add a required packaged-app transfer gate alongside all existing browsing,
   session, privacy, shortcut, and native macOS file-picker checks.
 
-The transfer gate must exercise real browser windows and Gecko tab adoption.
+The transfer gate exercised real browser windows and Gecko tab adoption.
 It is not a claim of OS-level drag automation or exhaustive website-state
-compatibility; native verification results will determine release readiness.
+compatibility.
 
 Version 0.53 improves Memory context and keyboard customization:
 
