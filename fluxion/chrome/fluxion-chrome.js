@@ -1012,19 +1012,33 @@
   }
 
   function tabWorkspace(tab) {
-    let id = storedTabWorkspace(tab);
+    let saved;
+    let readSucceeded = false;
+    try {
+      saved = SessionStore.getCustomTabValue(tab, TAB_WORKSPACE);
+      readSucceeded = true;
+    } catch (_) {}
+    let id = saved || tab.getAttribute(TAB_WORKSPACE);
     if (!workspaces.some(item => item.id === id)) {
       id = currentWorkspace;
     }
-    setTabWorkspace(tab, id);
+    // Reuse only this synchronous call's successful read. Failed reads retain
+    // the setter's fresh recovery attempt; nothing is cached across selections.
+    if (readSucceeded) updateTabWorkspace(tab, id, saved, true);
+    else setTabWorkspace(tab, id);
     return id;
   }
 
   function setTabWorkspace(tab, id) {
+    return updateTabWorkspace(tab, id);
+  }
+
+  function updateTabWorkspace(tab, id, savedWorkspace, hasSavedWorkspace = false) {
     if (!tab?.parentNode || !workspaces.some(item => item.id === id)) return null;
     if (tab.getAttribute(TAB_WORKSPACE) !== id) tab.setAttribute(TAB_WORKSPACE, id);
     try {
-      if (SessionStore.getCustomTabValue(tab, TAB_WORKSPACE) !== id) {
+      const saved = hasSavedWorkspace ? savedWorkspace : SessionStore.getCustomTabValue(tab, TAB_WORKSPACE);
+      if (saved !== id) {
         SessionStore.setCustomTabValue(tab, TAB_WORKSPACE, id);
       }
     } catch (error) {
