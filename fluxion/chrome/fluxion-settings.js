@@ -1108,13 +1108,38 @@
       };
       settleWorkspaceCapture();
     }, { once: true });
-    window.setTimeout(() => {
+    window.setTimeout(async () => {
       let fixtureTab = null;
+      let settingsTab = null;
       let createdId = "";
       try {
-        const settingsTab = [...gBrowser.tabs].find(candidate =>
-          candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
-        if (settingsTab) window.FluxionUI.selectTab(settingsTab);
+        // Other fixtures may navigate or discard their Settings tab. Own this
+        // page and wait for its actual route before exercising visible controls.
+        settingsTab = gBrowser.addTrustedTab("about:preferences?fluxion=workspaces", {
+          skipAnimation: true,
+        });
+        window.FluxionUI.setTabWorkspace(settingsTab, window.FluxionUI.currentWorkspace());
+        window.FluxionUI.selectTab(settingsTab);
+        await new Promise((resolve, reject) => {
+          const awaitSettingsRoute = (attempt = 0) => {
+            if (!settingsTab?.parentNode || settingsTab.closing) {
+              reject(new Error("Workspace settings fixture tab closed before navigation completed"));
+              return;
+            }
+            const spec = settingsTab.linkedBrowser?.currentURI?.spec || "";
+            if (spec.startsWith("about:preferences?fluxion=workspaces")) {
+              resolve();
+              return;
+            }
+            if (attempt >= 60) {
+              reject(new Error(`Workspace settings route did not load: ${spec || "missing"}`));
+              return;
+            }
+            window.setTimeout(() => awaitSettingsRoute(attempt + 1), 50);
+          };
+          awaitSettingsRoute();
+        });
+        window.FluxionUI.selectTab(settingsTab);
         syncVisibility();
         showSection("workspaces");
         const originalIds = window.FluxionUI.workspaces().map(workspace => workspace.id);
@@ -1188,6 +1213,7 @@
         Cu.reportError(error);
       } finally {
         if (fixtureTab?.parentNode) gBrowser.removeTab(fixtureTab, { animate: false });
+        if (settingsTab?.parentNode) gBrowser.removeTab(settingsTab, { animate: false });
         if (createdId && window.FluxionUI.workspaces().some(workspace => workspace.id === createdId)) {
           window.FluxionUI.deleteWorkspace(createdId, { confirm: false });
         }
