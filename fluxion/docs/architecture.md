@@ -709,8 +709,15 @@ and its availability check before opening storage). Settings
 retains conflicting drafts for correction and offers explicit reset recovery;
 reset warns that already-enabled features can resume with empty exclusions.
 Private windows can inspect policy but cannot modify persistent exclusions.
-These additions are a feature-branch candidate pending packaged native checks;
+These additions passed branch native diagnostics and are integrated into the
+0.61 release candidate, pending its full release checks;
 see [exclusion-list validation](validation/exclusion-lists-candidate.md).
+
+Older previews do not understand named lists or the canonical preference.
+Do not downgrade a migrated profile while relying on these exclusions: turn
+off Memory and page AI first, and re-establish exclusions supported by the
+older version before enabling them. The legacy preference retained during
+migration is not a continuously synchronized compatibility copy.
 
 Clearing Browser Memory disables its feature gates,
 deletes vector rows and mappings, and schedules the semantic database files for

@@ -8,6 +8,16 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.61 is a release candidate: named local Memory exclusion lists,
+revision-safe cross-window editing and malformed-policy recovery. Its feature
+branch passed all native diagnostics; final integrated staging is still needed.
+The latest downloadable browser is 0.60 below.
+
+Known preview limitation: native indexing can briefly store vectors for newly
+visited excluded sites before cleanup, and interruption can retain them. Keep
+Browser Memory disabled if you rely on exclusions while the 0.61 fix is tested.
+Normal browsing is unaffected; no external upload was demonstrated.
+
 Fluxion 0.60 is published: flat workspaces retain Flow rows and focused
 controls during tab opening, closing and reordering, and manual DMG packaging
 validates the supplied app's release identity. All combined native release
@@ -17,7 +27,7 @@ Fluxion 0.59 is published: encoded sensitive routes remain excluded from
 Browser Memory, including saved evidence from older profiles. Native macOS
 privacy and restart checks verify selective cleanup while preserving safe
 evidence and ordinary browsing history. Sensitive-page detection remains
-heuristic; category-based exclusions are still on the roadmap.
+heuristic; user-defined exclusion lists are in the 0.61 candidate, not 0.60.
 
 Fluxion 0.58 is published: ordinary tab switching preserves unchanged Flow rows
 and controls, native multi-selection stays synchronized, and workspace sessions
