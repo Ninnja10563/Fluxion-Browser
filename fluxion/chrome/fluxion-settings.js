@@ -182,6 +182,7 @@
   browser.appendChild(root);
 
   const sections = new Map();
+  const tabSections = new WeakMap();
   let activeSection = "general";
   const notes = new Map();
   let renderPermissions = () => {};
@@ -199,9 +200,14 @@
     return sections.has(hash) ? hash : activeSection;
   }
 
-  function showSection(id) {
+  function showSection(id, { remember = true } = {}) {
     if (!sections.has(id)) id = "general";
     activeSection = id;
+    const selectedBrowser = gBrowser.selectedBrowser;
+    const spec = selectedBrowser?.currentURI?.spec;
+    if (remember && spec?.startsWith("about:preferences")) {
+      tabSections.set(selectedBrowser, { spec, section: id });
+    }
     for (const [key, entry] of sections) {
       entry.panel.hidden = key !== id;
       entry.button.setAttribute("aria-current", String(key === id));
@@ -911,13 +917,20 @@
     else if (!document.documentElement.hasAttribute("data-fluxion-library-visible")) contentDeck.hidden = false;
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
-      showSection(sectionFromLocation(gBrowser.selectedBrowser.currentURI.spec));
+      const selectedBrowser = gBrowser.selectedBrowser;
+      const spec = selectedBrowser.currentURI.spec;
+      const remembered = tabSections.get(selectedBrowser);
+      showSection(remembered?.spec === spec ? remembered.section : sectionFromLocation(spec));
       Services.prefs.setStringPref("fluxion.settings.visual.health", "settings-surface-visible");
       Services.prefs.savePrefFile(null);
     }
   }
 
-  const progressListener = { onLocationChange: syncVisibility };
+  const progressListener = {
+    onLocationChange(changedBrowser, webProgress) {
+      if (changedBrowser === gBrowser.selectedBrowser && webProgress?.isTopLevel) syncVisibility();
+    },
+  };
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
@@ -931,7 +944,7 @@
     window.removeEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
     unsubscribePermissions?.();
   }, { once: true });
-  showSection("general");
+  showSection("general", { remember: false });
   syncVisibility();
   Services.prefs.setStringPref("fluxion.settings.health", "live-preferences-loaded");
   Services.prefs.savePrefFile(null);
@@ -1101,7 +1114,7 @@
       try {
         const settingsTab = [...gBrowser.tabs].find(candidate =>
           candidate.linkedBrowser?.currentURI?.spec.startsWith("about:preferences"));
-        if (settingsTab) gBrowser.selectedTab = settingsTab;
+        if (settingsTab) window.FluxionUI.selectTab(settingsTab);
         syncVisibility();
         showSection("workspaces");
         const originalIds = window.FluxionUI.workspaces().map(workspace => workspace.id);
@@ -1130,13 +1143,20 @@
         }
         item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
         item?.querySelector('button[aria-label^="Move "][aria-label$=" earlier"]')?.click();
+        item = workspaceList.querySelector(`[data-workspace-id="${createdId}"]`);
         const configured = window.FluxionUI.workspaces().find(workspace => workspace.id === createdId);
         const persisted = FluxionWorkspaces.parseWorkspaces(
           Services.prefs.getStringPref("fluxion.workspaces", ""),
         ).find(workspace => workspace.id === createdId);
+        const controlsHeight = workspaceList.getBoundingClientRect().height;
+        const controlsState = `height=${controlsHeight} rootHidden=${root.hidden} ` +
+          `panelHidden=${workspacePanel.hidden} section=${activeSection} ` +
+          `selectedURI=${gBrowser.selectedBrowser?.currentURI?.spec || "missing"} ` +
+          `itemConnected=${Boolean(item?.isConnected)}`;
         const controlsVisible = Boolean(
-          item?.querySelector('button[aria-label^="Delete "]') &&
-          workspaceList.getBoundingClientRect().height > 100,
+          item?.isConnected && item.querySelector('button[aria-label^="Delete "]') &&
+          !root.hidden && !workspacePanel.hidden && activeSection === "workspaces" &&
+          controlsHeight > 100,
         );
         fixtureTab = gBrowser.addTrustedTab("about:blank?fluxion-workspace-settings=migration", {
           skipAnimation: true,
@@ -1160,7 +1180,7 @@
           Services.prefs.setStringPref(
             "fluxion.workspaceSettings.visual.error",
             `created=${Boolean(createdId)} controls=${controlsVisible} configured=${configuredExactly} ` +
-              `deleted=${deleted} removed=${removed} migrated=${migrated}`,
+              `deleted=${deleted} removed=${removed} migrated=${migrated} ${controlsState}`,
           );
         }
       } catch (error) {

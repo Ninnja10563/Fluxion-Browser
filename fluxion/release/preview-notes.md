@@ -20,6 +20,8 @@ Version 0.42 improves privacy and search correctness:
   pressing Return while searching cannot open a result from the previous query;
 - ignore outdated search failures and answers, cancel provider requests when
   a question changes, and preserve focus when switching palette modes;
+- preserve the selected Settings section across background navigation and
+  tab switching, while honoring explicit settings links;
 - run the native group-keyboard and pointer-close checks in their own browser
   launch so other automated tab operations cannot disturb the measurement.
 
