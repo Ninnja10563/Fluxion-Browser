@@ -8,10 +8,9 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.57 candidate focuses on narrow Settings layouts across every section,
-including workspace editing, permission decisions and keyboard shortcuts.
-All 601 tests and native diagnostics passed; full release staging is next.
-The published DMG below remains 0.56.
+Fluxion 0.57 adapts every Settings section to narrow windows, including workspace
+editing, permission decisions and keyboard shortcuts. Permission expiry remains
+visible, and reset controls identify their exact origin and browsing context.
 
 ## Latest published changes
 
@@ -22,16 +21,16 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.56](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.56.0-preview.1)
+[Fluxion 0.57](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.57.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 The adjustable sidebar retains compact/Focus rail geometry and cancels an
 unfinished resize with Escape. It includes 0.55's menu, search and Settings
 interaction improvements and 0.54's live cross-window tab transfers.
 
-All 598 regression tests and every native release gate passed, including
-Gecko pointer capture, native macOS resize keys, narrow-window geometry and
-clean-relaunch width restoration. See
-[verified release provenance](release/provenance/v0.56.0-preview.1.md).
+All 601 regression tests and every native release gate passed, including
+all ten Settings sections at 320/600 pixel root widths, actual workspace edits,
+visible permission expiry and native accessible reset names. See
+[verified release provenance](release/provenance/v0.57.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 

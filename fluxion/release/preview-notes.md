@@ -8,11 +8,21 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
-Version 0.57 is an unreleased Settings-layout candidate. It is intended to
-keep every Settings section usable beside a wide Flow sidebar, preserving
-permission expiry details and access to workspace and shortcut controls.
-Packaged all-section geometry and accessibility validation is required before
-publication; 0.56 remains the latest published DMG.
+Version 0.57 is a published Settings-layout preview:
+
+- adapt all Settings sections to the space left beside Flow;
+- wrap or stack workspace editing, shortcuts and paired action controls;
+- retain permanent, session and timed permission expiry information;
+- identify exact origin/context in permission-reset accessible names and the
+  site-reset confirmation, preserving existing targeted removal behavior;
+- use simpler Appearance and Workspace introduction text.
+
+All 601 regression tests and every native release gate passed. The all-section
+layout gate measured 184 rendered controls across 320/600 pixel Settings root
+widths without horizontal page overflow. It exercised actual workspace edits
+and Gecko accessibility names. [Release provenance](https://github.com/Ninnja10563/Fluxion-Browser/blob/main/fluxion/release/provenance/v0.57.0-preview.1.md)
+records the exact tested and published assets. This is packaged DOM-driven
+evidence, not exhaustive screen-reader or physical OS input coverage.
 
 Version 0.56 is a published sidebar-sizing preview:
 
@@ -31,8 +41,8 @@ packaged pointer capture, native macOS keyboard input, narrow-window geometry
 and clean-relaunch restoration. [Release provenance](https://github.com/Ninnja10563/Fluxion-Browser/blob/main/fluxion/release/provenance/v0.56.0-preview.1.md)
 records the exact tested and published assets. Pointer input uses Gecko's
 trusted event router, not physical OS movement; broader accessibility and
-performance audits remain. Workspace settings may still require horizontal
-scrolling at the narrowest size.
+performance audits remain. The Workspace horizontal-scrolling limitation from
+0.56 is addressed by the 0.57 layouts and native checks above.
 
 Version 0.55 is a published interaction-quality preview:
 

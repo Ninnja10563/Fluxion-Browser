@@ -72,7 +72,7 @@ controls work and its failure paths have been tested.
   pointer and assistive-technology audits remain
 - all-section responsive Settings, including workspace editing, complete
   permission expiry and origin/context-specific permission-reset names
-  (implemented in the 0.57 candidate; packaged checks passed at 320/600 pixel
+  (implemented in the published 0.57 preview; packaged checks passed at 320/600 pixel
   root widths across all ten sections without horizontal page scrolling)
 - Settings-owned shortcut capture and collision-aware customized-map loading,
   including valid swaps/cycles and cross-window preference synchronization
@@ -125,6 +125,10 @@ controls work and its failure paths have been tested.
   200-tab initial render and repeated content-update gates, stable in-place
   content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
+- preserve Flow row identity during ordinary same-workspace tab selection
+  (remaining: TabSelect/TabMultiSelect currently trigger structural rebuilding;
+  existing content-update and palette timing gates do not cover repeated
+  selection; collapsed-group and split projections need explicit fallbacks)
 - bounded page evidence traversal without DOM cloning or full text-node reads,
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)
