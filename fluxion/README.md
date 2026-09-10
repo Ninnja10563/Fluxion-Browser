@@ -8,24 +8,23 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.56 candidate adds adjustable Flow width: drag its inner edge, use the
-keyboard separator, or enter a pixel width in Appearance. Changes persist across
-windows and launches, while narrower windows limit only the displayed width.
-All 598 regression tests and native diagnostics passed; full release staging
-is next. This candidate has no published DMG yet.
+Fluxion 0.56 adds adjustable Flow width: drag its inner edge, use the keyboard
+separator, or enter a pixel width in Appearance. Changes persist across windows
+and launches, while narrower windows limit only the displayed width. Settings
+and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.55](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.55.0-preview.1)
+[Fluxion 0.56](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.56.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
-Menu commands retain their original targets and refuse stale ones; tab search
-reuses prepared fields and finds current workspace names; Settings reflect
-cross-window changes without replacing unsaved homepage drafts. It includes
-0.54's live cross-window tab transfers and recovery improvements.
+The adjustable sidebar retains compact/Focus rail geometry and cancels an
+unfinished resize with Escape. It includes 0.55's menu, search and Settings
+interaction improvements and 0.54's live cross-window tab transfers.
 
-All 582 regression tests and every native release gate passed, including
-OS-keyboard menus, 1,000-tab search and two-window Settings editing. See
-[verified release provenance](release/provenance/v0.55.0-preview.1.md).
+All 598 regression tests and every native release gate passed, including
+Gecko pointer capture, native macOS resize keys, narrow-window geometry and
+clean-relaunch width restoration. See
+[verified release provenance](release/provenance/v0.56.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 
