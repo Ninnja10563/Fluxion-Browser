@@ -43,3 +43,23 @@ All 671 local regression tests pass, including the adjacent-swap tie case.
 The native gate retains every row/control in that case, permits only either
 equivalent adjacent row to relocate, and requires exactly one relocation with
 the neighbor's exact close-button focus preserved.
+
+## Passing native diagnostic
+
+[34535943938](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/34535943938)
+passed all 671 tests and every macOS diagnostic on
+`46c4aec54eec9528bf83b63069573d8bf773c3c8`. The structure report passed all
+seven operation/fallback checks, recorded zero unaffected-row subtree writes,
+and measured exactly one adjacent-swap DOM relocation. Exact close/audio
+focus, native ordering, pin roles, collapsed groups and stacked split state
+were verified against actual Gecko tabs and privileged Flow DOM.
+
+Native selection, Library, workspace editing, live cross-window tab transfer,
+Memory privacy and clean/SIGKILL session recovery also passed. This is not
+physical OS drag/high-refresh-rate hardware profiling. Artifact
+`10175441307` (`Fluxion-structure-evidence`) holds the native report.
+
+The initial pending-native status above describes the pre-diagnostic stage.
+The branch is now natively checked, but remains outside 0.59: main-branch
+integration, a new milestone version and full release staging are still
+required before any public DMG can include this work.
