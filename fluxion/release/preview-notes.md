@@ -8,6 +8,18 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.48 improves live settings and Memory search interaction:
+
+- show grounded text matches before optional semantic work completes, preserving
+  the selected page when later results change ranking;
+- bound native semantic startup/inference waits to 1.2 seconds and keep one
+  outstanding native search across windows, including after a timeout;
+- query native semantic history and enriched page evidence concurrently;
+- synchronize Memory settings across visible and hidden windows without
+  overwriting unsaved exclusion edits or unlocking pending controls;
+- fix the Fluxion toolbar icon's dark-mode contrast and verify its real Gecko
+  context fill, alongside native progressive-search and cross-window UI checks.
+
 Version 0.47 makes Library useful beyond recent records:
 
 - search the full Places history and bookmark database instead of only the

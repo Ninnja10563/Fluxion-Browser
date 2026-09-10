@@ -93,6 +93,60 @@ function harness(environment = {}) {
 const settle = () => new Promise(resolve => setImmediate(resolve));
 const response = title => ({ state: "keyword-only", results: [{ title, url: `https://example.org/${title}` }] });
 
+test("Memory text matches are usable before semantic completion", async () => {
+  const h = harness();
+  h.window.FluxionPalette.open("memory");
+  h.type("query"); h.flushTimers();
+  h.memory[0].args[2].onPartial({ ...response("text-match"), state: "searching" });
+  assert.match(h.text(), /text-match/);
+  h.input.dispatch("keydown", "Enter");
+  assert.deepEqual(h.opened, ["https://example.org/text-match"]);
+  h.memory[0].resolve(response("late-semantic")); await settle();
+  assert.deepEqual(h.opened, ["https://example.org/text-match"]);
+});
+
+test("late semantic ranking preserves the selected text match by URL", async () => {
+  const h = harness();
+  h.window.FluxionPalette.open("memory");
+  h.type("query"); h.flushTimers();
+  const first = response("first").results[0], second = response("second").results[0];
+  h.memory[0].args[2].onPartial({ state: "searching", results: [first, second] });
+  h.input.dispatch("keydown", "ArrowDown");
+  h.memory[0].resolve({ state: "ready", results: [second, first] }); await settle();
+  h.input.dispatch("keydown", "Enter");
+  assert.deepEqual(h.opened, [second.url]);
+});
+
+test("stale and post-completion partial Memory responses cannot replace current results", async () => {
+  const h = harness();
+  h.window.FluxionPalette.open("memory");
+  h.type("old"); h.flushTimers();
+  h.type("new"); h.flushTimers();
+  h.memory[0].args[2].onPartial(response("obsolete"));
+  assert.doesNotMatch(h.text(), /obsolete/);
+  h.memory[1].resolve(response("final")); await settle();
+  h.memory[1].args[2].onPartial(response("late-partial"));
+  assert.match(h.text(), /final/);
+  assert.doesNotMatch(h.text(), /late-partial/);
+});
+
+test("losing the selected Memory evidence requires a fresh selection before Return", async () => {
+  const h = harness();
+  h.window.FluxionPalette.open("memory");
+  h.type("query"); h.flushTimers();
+  h.memory[0].args[2].onPartial(response("original"));
+  h.memory[0].args[2].onPartial(response("replacement"));
+  h.input.dispatch("keydown", "Enter");
+  assert.deepEqual(h.opened, []);
+  assert.equal(h.input.getAttribute("aria-activedescendant"), null);
+  h.memory[0].resolve(response("replacement")); await settle();
+  h.input.dispatch("keydown", "Enter");
+  assert.deepEqual(h.opened, []);
+  h.input.dispatch("keydown", "ArrowDown");
+  h.input.dispatch("keydown", "Enter");
+  assert.deepEqual(h.opened, ["https://example.org/replacement"]);
+});
+
 test("Memory removes stale keyboard targets immediately, including during debounce", async () => {
   const h = harness();
   h.window.FluxionPalette.open("memory");

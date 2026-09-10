@@ -354,6 +354,18 @@ open state changes. Editing a query immediately removes the previous executable
 results; delayed successes and failures cannot replace the current results.
 Editing a page question also aborts the previous provider request.
 
+Memory search publishes grounded Places text matches first and enriched text
+matches as soon as their SQL query finishes, before waiting for embeddings.
+The palette applies the same query/open-state guards to partial and final
+results, rejects post-completion partials, and retains the selected result by
+URL when semantic ranking changes. Partial results never claim semantic evidence.
+Native semantic search has a shared 1.2-second response deadline covering
+connection initialization, index readiness, and inference. Its pending slot
+remains occupied until Gecko actually finishes, even after timeout; other
+windows receive immediate lexical fallback instead of queuing more requests.
+Native and enriched retrieval run concurrently. These are embedding deadlines,
+not guarantees on disk latency or the total search duration.
+
 Enriched keyword retrieval matches each query term across title, URL,
 description, headings, and body before hybrid ranking. Whole-phrase title/URL
 matches take priority when bounding candidates. Embedding calls are single-flight
@@ -361,6 +373,11 @@ with a 10-second indexing wait and a 1.5-second query wait. Gecko has no
 per-request cancellation here: a timed-out model request may finish internally,
 but cannot write a late vector or accumulate more model requests. Other pages
 can still save lexical evidence while that request is pending.
+
+Settings observes the persisted Memory enabled/provider/exclusion preferences
+in each window and reconciles again when shown. Synchronization does not unlock
+pending controls or overwrite an unsaved exclusion draft. Completion reconciles
+the latest persisted values, and window unload removes all observers.
 
 Browser Memory is opt-in and uses Gecko's packaged
 `PlacesSemanticHistoryManager`, `EmbeddingsGenerator`, and SQLite `vec0`

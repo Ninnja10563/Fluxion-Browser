@@ -262,7 +262,7 @@ export const FluxionMemoryStore = Object.freeze({
     await embedAndStore(url, text);
   },
 
-  async search(query, limit = 12, includeSemantic = true) {
+  async search(query, limit = 12, includeSemantic = true, { onLexical } = {}) {
     const terms = [...new Set(String(query || "").trim().split(/\s+/).filter(Boolean))].slice(0, 16);
     if (!terms.length) return { lexical: [], semantic: [] };
     const startedAt = revision;
@@ -282,6 +282,10 @@ export const FluxionMemoryStore = Object.freeze({
         WHEN headings LIKE :pattern ESCAPE '\\' OR description LIKE :pattern ESCAPE '\\' THEN 1
         WHEN content LIKE :pattern ESCAPE '\\' THEN 2 ELSE 3 END,
         last_visit DESC LIMIT :limit`, parameters);
+    const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","tab_group","last_visit","visit_count","distance"].map(name => [name === "tab_group" ? "group" : name === "last_visit" ? "lastVisit" : name === "visit_count" ? "visitCount" : name, item.getResultByName(name)]));
+    if (startedAt === revision && typeof onLexical === "function") {
+      try { onLexical(lexical.map(row)); } catch (error) { Cu.reportError(error); }
+    }
     let semantic = [];
     try {
       const counts = await db.execute("SELECT count(*) AS count FROM page_vectors");
@@ -296,7 +300,6 @@ export const FluxionMemoryStore = Object.freeze({
     } catch (error) {
       Cu.reportError(error);
     }
-    const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","tab_group","last_visit","visit_count","distance"].map(name => [name === "tab_group" ? "group" : name === "last_visit" ? "lastVisit" : name === "visit_count" ? "visitCount" : name, item.getResultByName(name)]));
     return startedAt === revision
       ? { lexical: lexical.map(row), semantic: semantic.map(row) }
       : { lexical: [], semantic: [] };

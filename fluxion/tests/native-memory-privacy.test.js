@@ -18,7 +18,9 @@ function fixture(saved = new Map()) {
   let timerId = 0, factoryCalls = 0;
   const state = { vectors: 2, mapping: 2, enriched: 2, failDelete: false, beforeWrite: null, beforeInit: null, writes: 0,
     exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null,
-    beforeStorage: null, failStorage: false, storageOpens: 0, storageReady: false };
+    beforeStorage: null, failStorage: false, storageOpens: 0, storageReady: false,
+    beforeInference: null, inferenceCalls: 0, searchCalls: 0, beforeEnriched: null,
+    nativeResults: [], keywords: [], enrichedResults: { lexical: [], semantic: [] } };
   // Model the relevant native converter contract in a separate ESM-like
   // realm: Array.isArray crosses realms, instanceof Float32Array does not.
   const tensorToSQLBindable = vm.runInNewContext(`value => {
@@ -76,6 +78,12 @@ function fixture(saved = new Map()) {
       operations.push("background write");
     },
     onPagesRankChanged() {},
+    async hasSufficientEntriesForSearching() { return true; },
+    async infer() {
+      state.inferenceCalls++;
+      if (state.beforeInference) await state.beforeInference;
+      return { results: state.nativeResults };
+    },
   };
   const timerTools = {
     setTimeout(callback) { timers.set(++timerId, callback); return timerId; },
@@ -97,16 +105,28 @@ function fixture(saved = new Map()) {
     async clear() { state.enriched = 0; },
     async vectorCount() { return state.enriched; },
     async deleteBlocked(domains) { state.ownedExclusions.push(Array.from(domains)); },
+    async search(query, limit, semantic, { onLexical } = {}) {
+      state.searchCalls++;
+      onLexical?.(state.enrichedResults.lexical);
+      if (state.beforeEnriched) await state.beforeEnriched;
+      return state.enrichedResults;
+    },
   };
   function chromeWindow({ isPrivate = false } = {}) {
     const window = { navigator: {}, ...timerTools,
       addEventListener() {}, removeEventListener() {}, dispatchEvent() {}, CustomEvent: class {},
       gBrowser: { tabs: [], addTabsProgressListener() {}, removeTabsProgressListener() {} },
+      FluxionUI: { workspaces: () => [], tabWorkspace: () => "" },
     };
-    const ctx = vm.createContext({ window, Services, URL, Cc: {}, Ci: {},
+    const PlacesUtils = { tensorToSQLBindable, history: {
+      getNewQuery: () => ({}), getNewQueryOptions: () => ({}), executeQuery: () => ({ root: {
+        get childCount() { return state.keywords.length; }, getChild: index => state.keywords[index],
+      } }),
+    } };
+    const ctx = vm.createContext({ window, Services, URL, Cc: {}, Ci: { nsINavHistoryQueryOptions: {} },
       Cu: { reportError: error => errors.push(error) },
       ChromeUtils: { importESModule: () => ({ FluxionNativeMemory: adapter, FluxionMemoryStore,
-        PlacesUtils: { tensorToSQLBindable }, PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate } }) },
+        PlacesUtils, PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate } }) },
     });
     for (const file of ["core/settings.js", "core/index-scheduler.js", "core/memory-policy.js",
       "core/memory-content.js", "core/memory-ranking.js", "core/memory-grounding.js", "fluxion-memory.js"]) {
@@ -114,11 +134,73 @@ function fixture(saved = new Map()) {
     }
     return window.FluxionMemory;
   }
-  return { adapter, native, state, prefs, operations, errors, chromeWindow, tensorToSQLBindable,
+  return { adapter, native, state, prefs, operations, errors, chromeWindow, tensorToSQLBindable, store: FluxionMemoryStore,
     factoryCalls: () => factoryCalls,
     expireTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
   };
 }
+
+test("Memory emits immediate grounded keyword and enriched partials while native connection is stalled", async () => {
+  const f = fixture();
+  const main = f.chromeWindow(); await main.enable(); await settle();
+  f.state.keywords = [{ uri: "https://example.test/keyword", title: "Plant guide", time: 1000000, accessCount: 1 }];
+  f.state.enrichedResults.lexical = [{ url: "https://example.test/enriched", title: "Plant biology", lastVisit: 1000 }];
+  const wait = deferred(); f.state.beforeInit = wait.promise;
+  const partials = [];
+  const result = main.search("plant", "", { onPartial: partial => partials.push(partial) });
+  assert.equal(partials.length, 2);
+  assert.equal(partials[0].results[0].url, "https://example.test/keyword");
+  assert.ok(partials[1].results.some(row => row.url === "https://example.test/enriched"));
+  assert.ok(partials[0].answer);
+  assert.equal(f.state.searchCalls, 1, "enriched SQL did not start independently");
+  await settle(); f.expireTimers();
+  const final = await result;
+  assert.equal(final.state, "lexical");
+  assert.equal(final.results.length, 2);
+  assert.equal(f.state.inferenceCalls, 0);
+  wait.resolve(); await settle();
+});
+
+test("timed-out native inference retains one shared slot across windows and never publishes late vectors", async () => {
+  const f = fixture(); const main = f.chromeWindow(), companion = f.chromeWindow();
+  await main.enable(); await settle();
+  const wait = deferred(); f.state.beforeInference = wait.promise;
+  f.state.nativeResults = [{ url: "https://example.test/late", title: "Plant cell", distance: 0.05 }];
+  const first = main.search("photosynthesis"); await settle();
+  assert.equal(f.state.inferenceCalls, 1);
+  f.expireTimers(); const final = await first;
+  assert.equal(final.results.length, 0);
+  for (let n = 0; n < 5; n++) await companion.search(`new query ${n}`);
+  assert.equal(f.state.inferenceCalls, 1);
+  wait.resolve(); await settle();
+  assert.equal(final.results.length, 0);
+  f.state.beforeInference = null;
+  const successful = await main.search("photosynthesis");
+  assert.equal(f.state.inferenceCalls, 2);
+  assert.equal(successful.state, "ready");
+  assert.equal(successful.results[0].url, "https://example.test/late");
+});
+
+test("partial and final Memory responses respect private, disabled and deletion revision boundaries", async () => {
+  const f = fixture(); const main = f.chromeWindow(), privateWindow = f.chromeWindow({ isPrivate: true });
+  const partials = [];
+  await privateWindow.search("private", "", { onPartial: value => partials.push(value) });
+  await main.search("disabled", "", { onPartial: value => partials.push(value) });
+  assert.equal(f.state.searchCalls, 0);
+  assert.equal(f.state.inferenceCalls, 0);
+  assert.equal(partials.length, 0);
+  await main.enable(); await settle();
+  const wait = deferred(); f.state.beforeEnriched = wait.promise;
+  const pending = main.search("plant", "", { onPartial: value => partials.push(value) });
+  const count = partials.length;
+  f.store.revision++;
+  f.prefs.set("fluxion.memory.enabled", false);
+  wait.resolve();
+  const result = await pending;
+  assert.equal(result.state, "disabled");
+  assert.equal(result.results.length, 0);
+  assert.equal(partials.length, count);
+});
 
 test("full chrome exclusion sentinel crosses the native converter realm and updates only blocked rows", async () => {
   const f = fixture(new Map([["fluxion.memory.excludedDomains", '["excluded.example"]']]));

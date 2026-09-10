@@ -543,6 +543,7 @@
     }
   });
   row(search, "Browser Memory", "Keep searchable non-private history and bounded page evidence on this Mac.", memoryToggle);
+  memoryToggle.querySelector("input").id = "fluxion-memory-enabled";
   let embeddingChoiceTask = Promise.resolve("gecko-local");
   const embeddingChoice = select([
     ["gecko-local", "Gecko on-device semantic"],
@@ -568,7 +569,10 @@
       embeddingChoice.value = window.FluxionMemory?.embeddingProvider() || "gecko-local";
       setNote(`Could not change embedding mode: ${error.message}`, "search");
       throw error;
-    } finally { embeddingChoice.disabled = false; }
+    } finally {
+      embeddingChoice.disabled = false;
+      syncMemorySettings();
+    }
   }
   embeddingChoice.id = "fluxion-memory-embedding-provider";
   row(
@@ -577,15 +581,17 @@
     "Keep lexical Browser Memory while independently disabling model execution and vector storage.",
     embeddingChoice,
   );
-  const syncEmbeddingChoice = event => {
-    embeddingChoice.value = event.detail?.provider ||
-      window.FluxionMemory?.embeddingProvider() || "gecko-local";
+  const syncEmbeddingChoice = () => {
+    syncMemorySettings();
   };
   window.addEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
   const domains = create("input");
+  domains.id = "fluxion-memory-excluded-domains";
   domains.type = "text";
   domains.placeholder = "example.com, private.example";
   domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
+  let domainsDirty = false;
+  domains.addEventListener("input", () => { domainsDirty = true; });
   domains.addEventListener("change", async () => {
     const next = FluxionSettings.excludedDomains(domains.value);
     domains.disabled = true;
@@ -596,8 +602,23 @@
     } catch (error) {
       domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
       setNote(`Could not finish removing excluded data: ${error.message}`, "search");
-    } finally { domains.disabled = false; }
+    } finally {
+      domainsDirty = false;
+      domains.disabled = false;
+      syncMemorySettings();
+    }
   });
+  domains.addEventListener("blur", () => {
+    if (!domainsDirty) syncMemorySettings();
+  });
+  const memoryPreferenceNames = ["fluxion.memory.enabled", "fluxion.memory.embeddingProvider", "fluxion.memory.excludedDomains"];
+  function syncMemorySettings() {
+    memoryToggle.querySelector("input").checked = Boolean(window.FluxionMemory?.enabled());
+    if (!embeddingChoice.disabled) embeddingChoice.value = window.FluxionMemory?.embeddingProvider() || "gecko-local";
+    if (!domains.disabled && !domainsDirty) domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
+  }
+  const memoryPreferenceObserver = { observe: syncMemorySettings };
+  for (const name of memoryPreferenceNames) Services.prefs.addObserver(name, memoryPreferenceObserver);
   row(search, "Excluded domains", "These sites are removed from and never added to Browser Memory.", domains);
   const clearMemory = create("button", "fluxion-settings-button danger", "Clear Browser Memory");
   clearMemory.type = "button";
@@ -946,6 +967,7 @@
     else if (!document.documentElement.hasAttribute("data-fluxion-library-visible")) contentDeck.hidden = false;
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
+      syncMemorySettings();
       const selectedBrowser = gBrowser.selectedBrowser;
       const spec = selectedBrowser.currentURI.spec;
       const remembered = tabSections.get(selectedBrowser);
@@ -971,6 +993,7 @@
     window.removeEventListener("FluxionThemeChanged", syncThemeChoice);
     window.removeEventListener("FluxionWorkspacesChanged", syncWorkspaceSettings);
     window.removeEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
+    for (const name of memoryPreferenceNames) Services.prefs.removeObserver(name, memoryPreferenceObserver);
     window.removeEventListener("FluxionShortcutsChanged", refreshShortcutButtons);
     unsubscribePermissions?.();
   }, { once: true });

@@ -15,6 +15,17 @@
   };
   let companion;
   let connection;
+  function settingsMatch(label, enabled, provider, domains) {
+    for (const [name, target] of [["main", window], ["companion", companion]]) {
+      const checkbox = target.document.getElementById("fluxion-memory-enabled");
+      const choice = target.document.getElementById("fluxion-memory-embedding-provider");
+      const exclusions = target.document.getElementById("fluxion-memory-excluded-domains");
+      assert(checkbox && choice && exclusions, `${label}: ${name} Settings controls are missing`);
+      assert(checkbox.checked === enabled && choice.value === provider && exclusions.value === domains,
+        `${label}: ${name} Settings do not reflect shared Memory state`);
+    }
+    report.checks.push({ label, settingsWindows: 2, enabled, provider, domains });
+  }
   const stage = value => {
     Services.prefs.setStringPref(`${prefix}.stage`, value);
     Services.prefs.savePrefFile(null);
@@ -55,11 +66,21 @@
       .find(candidate => !before.has(candidate) && candidate.FluxionMemory && candidate.FluxionUI),
     "Privacy companion window did not initialise");
     assert(!companion.FluxionMemory.enabled(), "Companion did not initialise while Memory was disabled");
+    await waitFor(() => [window, companion].every(target =>
+      target.document.getElementById("fluxion-memory-excluded-domains")),
+    "Memory Settings controls did not initialise in both windows");
+    settingsMatch("initial-hidden-settings", false, "gecko-local", "");
+    const settingsTab = window.gBrowser.addTrustedTab("about:preferences?fluxion=search", { skipAnimation: true });
+    window.FluxionUI.setTabWorkspace(settingsTab, window.FluxionUI.currentWorkspace());
+    window.gBrowser.selectedTab = settingsTab;
+    await waitFor(() => window.document.getElementById("fluxion-memory-enabled")
+      .getBoundingClientRect().height > 0, "Main Memory Settings did not become visible");
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
     const { getPlacesSemanticHistoryManager } = ChromeUtils.importESModule("resource://gre/modules/PlacesSemanticHistoryManager.sys.mjs");
     const { FluxionNativeMemory } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionNativeMemory.sys.mjs");
     stage("opening-native-vector-database");
     report.initialCapability = await window.FluxionMemory.enable();
+    settingsMatch("other-window-enable-reflected", true, "gecko-local", "");
     const manager = getPlacesSemanticHistoryManager();
     // Share storage initialization with background exclusion work. Read and
     // verify real SQL rows below, not the adapter's reported vector counts.
@@ -134,12 +155,14 @@
     assert(initialVector[0] === 0 && initialVector[1] === 1, "Exclusion fixture was already a sentinel");
     stage("excluding-native-evidence-from-other-window");
     await companion.FluxionMemory.setExcludedDomains(["memory-privacy-fixture.invalid"]);
+    settingsMatch("other-window-exclusion-reflected", true, "gecko-local", "memory-privacy-fixture.invalid");
     const scrubbed = await storedExcludedVector();
     assert(scrubbed[0] === 1 && scrubbed.slice(1).every(value => value === 0),
       "Other-window domain exclusion did not scrub actual native vector bytes");
     report.checks.push({ label: "other-window-exclusion-scrub", mappingRetained: true,
       originalVectorReplaced: true, dimensions: scrubbed.length });
     await window.FluxionMemory.setEmbeddingProvider("disabled");
+    settingsMatch("other-window-provider-reflected", true, "disabled", "memory-privacy-fixture.invalid");
     await empty("provider-disabled");
     const recall = await companion.FluxionMemory.search("privacy verification");
     assert(!recall.results.some(result => result.url === excludedURL), "Excluded page leaked into keyword-only Memory results");
@@ -154,11 +177,14 @@
     await reenabledEmpty("other-window-provider-reenabled");
     await seed("seed-before-other-window-clear", 91047003);
     await companion.FluxionMemory.clearAndDisable();
+    settingsMatch("other-window-clear-reflected", false, "gecko-local", "");
     assert(!window.FluxionMemory.enabled(), "Other-window clear did not disable shared Memory");
     await empty("other-window-clear-and-disable");
     await window.FluxionMemory.enable();
+    settingsMatch("other-window-reenable-reflected", true, "gecko-local", "");
     await reenabledEmpty("memory-reenabled-after-clear");
     await window.FluxionMemory.clearAndDisable();
+    settingsMatch("final-settings-disabled", false, "gecko-local", "");
     await empty("final-disabled-state");
     report.reenableScope = "Immediate empty-state check; newly opted-in indexing of retained ordinary history may legitimately generate new vectors later";
   }

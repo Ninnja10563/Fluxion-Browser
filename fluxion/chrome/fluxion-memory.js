@@ -235,7 +235,7 @@
     return next;
   }
 
-  async function search(searchText, currentWorkspace = "") {
+  async function search(searchText, currentWorkspace = "", { onPartial } = {}) {
     const startedAt = FluxionMemoryStore.revision;
     const query = String(searchText || "").trim();
     if (PrivateBrowsingUtils.isWindowPrivate(window)) {
@@ -251,42 +251,6 @@
     }
 
     const useEmbeddings = embeddingsEnabled();
-    let semantic = [];
-    let enrichedKeyword = [];
-    let state = useEmbeddings ? "building" : "keyword-only";
-    if (useEmbeddings) {
-      try {
-        const semanticManager = getManager();
-        const connection = await semanticManager.getConnection();
-        if (!connection) {
-          state = "lexical";
-        } else if (await semanticManager.hasSufficientEntriesForSearching()) {
-          const response = await semanticManager.infer({ searchString: query });
-          semantic = (response.results || [])
-            .filter(row => isAllowedResult(row.url))
-            .map(row => ({ ...row, lastVisit: Number(row.lastVisit || 0) / 1000 }));
-          state = "ready";
-        }
-        applyExclusions().catch(Cu.reportError);
-      } catch (error) {
-        Cu.reportError(error);
-        state = "lexical";
-      }
-    }
-
-    try {
-      const enriched = await FluxionMemoryStore.search(query, 18, useEmbeddings);
-      enrichedKeyword = enriched.lexical.filter(row => isAllowedResult(row.url));
-      semantic.push(...enriched.semantic.filter(row => isAllowedResult(row.url)));
-      if (enriched.semantic.length) state = "ready";
-    } catch (error) {
-      Cu.reportError(error);
-    }
-
-    if (startedAt !== FluxionMemoryStore.revision || !enabled()) {
-      return { results: [], state: enabled() ? "ready" : "disabled",
-        answer: FluxionMemoryGrounding.ground(query, []) };
-    }
     const openTabsByUrl = new Map();
     const workspaceNames = new Map(window.FluxionUI.workspaces().map(item => [item.id, item.name]));
     for (const tab of window.gBrowser.tabs) {
@@ -296,23 +260,52 @@
     const annotate = row => {
       const tab = openTabsByUrl.get(row.url);
       const workspace = tab ? window.FluxionUI.tabWorkspace(tab) : row.workspace;
-      return {
-        ...row,
-        workspace,
-        workspaceName: workspaceNames.get(workspace) || workspace || "",
-      };
+      return { ...row, workspace, workspaceName: workspaceNames.get(workspace) || workspace || "" };
     };
-    const results = FluxionMemoryRanking.mergeMemoryResults(
-        query,
-        [...keyword, ...enrichedKeyword].map(annotate),
-        semantic.map(annotate),
-        { currentWorkspace, limit: 12 },
-      );
-    return {
-      results,
-      state,
-      answer: FluxionMemoryGrounding.ground(query, results),
+    const snapshot = (state, lexical = [], semantic = []) => {
+      const results = FluxionMemoryRanking.mergeMemoryResults(query,
+        [...keyword, ...lexical].map(annotate), semantic.map(annotate), { currentWorkspace, limit: 12 });
+      return { results, state, answer: FluxionMemoryGrounding.ground(query, results) };
     };
+    const partial = rows => {
+      if (typeof onPartial !== "function" || startedAt !== FluxionMemoryStore.revision ||
+          !enabled() || PrivateBrowsingUtils.isWindowPrivate(window)) return;
+      try { onPartial(snapshot(useEmbeddings ? "searching" : "keyword-only", rows.filter(row => isAllowedResult(row.url)))); }
+      catch (error) { Cu.reportError(error); }
+    };
+    partial([]);
+    let semantic = [];
+    let enrichedKeyword = [];
+    let state = useEmbeddings ? "building" : "keyword-only";
+    // Native model startup must not delay the independent page-evidence query.
+    // Each embedding path has its own deadline and one pending-model limit.
+    const [native, enriched] = await Promise.all([
+      useEmbeddings ? FluxionNativeMemory.search(query).catch(error => {
+        Cu.reportError(error);
+        return { state: "lexical", results: [] };
+      }) : null,
+      FluxionMemoryStore.search(query, 18, useEmbeddings, { onLexical: partial }).catch(error => {
+        Cu.reportError(error);
+        return null;
+      }),
+    ]);
+    if (native) {
+      semantic = native.results.filter(row => isAllowedResult(row.url))
+        .map(row => ({ ...row, lastVisit: Number(row.lastVisit || 0) / 1000 }));
+      state = ["ready", "building"].includes(native.state) ? native.state : "lexical";
+      applyExclusions().catch(Cu.reportError);
+    }
+    if (enriched) {
+      enrichedKeyword = enriched.lexical.filter(row => isAllowedResult(row.url));
+      semantic.push(...enriched.semantic.filter(row => isAllowedResult(row.url)));
+      if (enriched.semantic.length) state = "ready";
+    }
+
+    if (startedAt !== FluxionMemoryStore.revision || !enabled()) {
+      return { results: [], state: enabled() ? "ready" : "disabled",
+        answer: FluxionMemoryGrounding.ground(query, []) };
+    }
+    return snapshot(state, enrichedKeyword, semantic);
   }
 
   function enable() {

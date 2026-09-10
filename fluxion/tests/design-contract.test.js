@@ -564,7 +564,7 @@ test("Browser Memory exposes functional privacy controls", () => {
   assert.match(memory, /async function embeddingVectorCounts/);
   assert.match(memory, /FluxionNativeMemory\.purge\(\)/);
   assert.match(memory, /FluxionNativeMemory\.vectorCount\(\)/);
-  assert.match(memory, /FluxionMemoryStore\.search\(query, 18, useEmbeddings\)/);
+  assert.match(memory, /FluxionMemoryStore\.search\(query, 18, useEmbeddings, \{ onLexical: partial \}\)/);
   assert.match(store, /async clearVectors\(\)/);
   assert.match(store, /async vectorCount\(\)/);
   assert.match(store, /AsyncShutdown\.profileBeforeChange\.addBlocker/);

@@ -687,7 +687,8 @@
       button.addEventListener("click", () => choose(index));
       results.appendChild(button);
     });
-    setActive(activeIndex);
+    if (activeIndex < 0) input.removeAttribute("aria-activedescendant");
+    else setActive(activeIndex);
   }
 
   async function renderMemory() {
@@ -707,16 +708,79 @@
     const isCurrent = () => request === memoryRequest && !layer.hidden &&
       mode === "memory" && input.value.trim() === search;
     let response;
+    let settled = false;
     try {
-      response = await window.FluxionMemory.search(search, ui.currentWorkspace());
+      response = await window.FluxionMemory.search(search, ui.currentWorkspace(), {
+        onPartial(partial) {
+          if (settled || !isCurrent()) return;
+          renderMemoryResponse(partial);
+          if (Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" &&
+              partial.results.length && partial.answer?.state === "grounded" &&
+              results.querySelector(".fluxion-palette-result")?.getBoundingClientRect().height > 0) {
+            Services.prefs.setStringPref("fluxion.memory.progressive.health",
+              "text-evidence-visible-before-semantic-completion");
+            Services.prefs.savePrefFile(null);
+          }
+        },
+      });
     } catch (error) {
+      settled = true;
       if (!isCurrent()) return;
       Cu.reportError(error);
       renderItems([], "Browser Memory could not be searched");
       return;
     }
+    settled = true;
     if (!isCurrent()) return;
+    renderMemoryResponse(response);
+    if (
+      Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" &&
+      response.answer?.state === "grounded" &&
+      response.answer.evidence.some(item => item.excerpt)
+    ) {
+      if (!memoryPendingGateComplete) {
+        memoryPendingGateComplete = true;
+        const tabCount = gBrowser.tabs.length;
+        const selectedTab = gBrowser.selectedTab;
+        const hadResult = visibleItems.length > 0 && input.hasAttribute("aria-activedescendant");
+        input.value = `${search} revised`;
+        input.dispatchEvent(new window.Event("input", { bubbles: true }));
+        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        const debounceSafe = !layer.hidden && !visibleItems.length &&
+          !input.hasAttribute("aria-activedescendant") &&
+          gBrowser.tabs.length === tabCount && gBrowser.selectedTab === selectedTab;
+        window.clearTimeout(placesTimer);
+        // Current-query text matches are intentionally usable immediately.
+        // Check the empty pending interval with a query absent from this profile,
+        // rather than treating all in-flight searches as unselectable.
+        input.value = `fluxion-no-record-${Date.now()}`;
+        const pendingSearch = renderMemory();
+        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        const pendingSafe = !layer.hidden && !visibleItems.length &&
+          !input.hasAttribute("aria-activedescendant") &&
+          gBrowser.tabs.length === tabCount && gBrowser.selectedTab === selectedTab;
+        if (!hadResult || !debounceSafe || !pendingSafe) {
+          Services.prefs.setStringPref("fluxion.palette.async.error",
+            `Memory selection safety: result=${hadResult}, debounce=${debounceSafe}, pending=${pendingSafe}`);
+        } else {
+          Services.prefs.setStringPref("fluxion.palette.async.health", "memory-pending-results-not-selectable");
+        }
+        Services.prefs.savePrefFile(null);
+        await pendingSearch;
+        input.value = search;
+        await renderMemory();
+        return;
+      }
+      Services.prefs.setStringPref("fluxion.memory.grounding.health", "grounded-evidence-visible");
+      Services.prefs.savePrefFile(null);
+      window.dispatchEvent(new window.CustomEvent("FluxionGroundingVisualReady"));
+    }
+  }
+
+  function renderMemoryResponse(response) {
+    const selectedURL = visibleItems[activeIndex]?.memoryURL;
     const stateLabels = {
+      searching: "Text matches available · Checking local semantic matches…",
       building: "Local index is building · Exact history matches are available now",
       lexical: "Local semantic model unavailable · Showing exact history matches",
       "keyword-only": "Keywords only · Titles and local page evidence · No embedding model",
@@ -741,6 +805,7 @@
     const items = response.results.map(row => {
       const evidence = evidenceByUrl.get(row.url);
       return {
+      memoryURL: row.url,
       label: row.title || row.url,
       detail: evidence
         ? `${evidence.domain} · ${evidence.visitLabel}${evidence.workspaceName ? ` · ${evidence.workspaceName}` : ""}`
@@ -750,44 +815,12 @@
       run: () => openUrl(row.url),
       };
     });
+    // A late semantic result must not redirect Return to a different page while
+    // the user is navigating the already usable text matches.
+    const retainedIndex = items.findIndex(item => item.memoryURL === selectedURL);
+    if (retainedIndex >= 0) activeIndex = retainedIndex;
+    else if (selectedURL) activeIndex = -1;
     renderItems(items, "No source records support this memory", answer);
-    if (
-      Services.env.get("FLUXION_VISUAL_GROUNDING_TEST") === "1" &&
-      response.answer?.state === "grounded" &&
-      response.answer.evidence.some(item => item.excerpt)
-    ) {
-      if (!memoryPendingGateComplete) {
-        memoryPendingGateComplete = true;
-        const tabCount = gBrowser.tabs.length;
-        const selectedTab = gBrowser.selectedTab;
-        const hadResult = visibleItems.length > 0 && input.hasAttribute("aria-activedescendant");
-        input.value = `${search} revised`;
-        input.dispatchEvent(new window.Event("input", { bubbles: true }));
-        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-        const debounceSafe = !layer.hidden && !visibleItems.length &&
-          !input.hasAttribute("aria-activedescendant") &&
-          gBrowser.tabs.length === tabCount && gBrowser.selectedTab === selectedTab;
-        window.clearTimeout(placesTimer);
-        input.value = search;
-        const restoredSearch = renderMemory();
-        input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-        const pendingSafe = !layer.hidden && !visibleItems.length &&
-          !input.hasAttribute("aria-activedescendant") &&
-          gBrowser.tabs.length === tabCount && gBrowser.selectedTab === selectedTab;
-        if (!hadResult || !debounceSafe || !pendingSafe) {
-          Services.prefs.setStringPref("fluxion.palette.async.error",
-            `Memory selection safety: result=${hadResult}, debounce=${debounceSafe}, pending=${pendingSafe}`);
-        } else {
-          Services.prefs.setStringPref("fluxion.palette.async.health", "memory-pending-results-not-selectable");
-        }
-        Services.prefs.savePrefFile(null);
-        await restoredSearch;
-        return;
-      }
-      Services.prefs.setStringPref("fluxion.memory.grounding.health", "grounded-evidence-visible");
-      Services.prefs.savePrefFile(null);
-      window.dispatchEvent(new window.CustomEvent("FluxionGroundingVisualReady"));
-    }
   }
 
   function renderAskPrompt() {
@@ -957,7 +990,9 @@
       input.focus();
     } else if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
-      setActive(activeIndex + (event.key === "ArrowDown" ? 1 : -1));
+      setActive(activeIndex < 0
+        ? event.key === "ArrowDown" ? 0 : visibleItems.length - 1
+        : activeIndex + (event.key === "ArrowDown" ? 1 : -1));
     } else if (event.key === "Enter" && (mode === "ask" || mode === "compare")) {
       event.preventDefault();
       runAsk().catch(Cu.reportError);

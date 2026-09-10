@@ -146,6 +146,8 @@ while (( attempt < 360 )); do
       grep -q 'user_pref("fluxion.drop.health", "native-drag-reorder-and-two-orientation-split")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.focus.health", "focus-rail-overlay-revealed-without-content-reflow")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.toolbarMenu.health", "product-menu-mounted-and-native-command-executed")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.toolbarMenu.icon.health", "dark-context-fill-and-contrast-verified")' "$profile/prefs.js" && \
+      grep -q 'user_pref("fluxion.memory.progressive.health", "text-evidence-visible-before-semantic-completion")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.pageMenu.health", "native-page-tools-wired-and-zoom-round-tripped")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.paletteCommands.health", "native-page-commands-listed-and-keyboard-zoom-round-tripped")' "$profile/prefs.js" && \
       grep -q 'user_pref("fluxion.closedTabs.health", "native-list-and-keyboard-restore-preserved-workspace")' "$profile/prefs.js" && \

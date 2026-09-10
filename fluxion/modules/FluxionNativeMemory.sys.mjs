@@ -6,6 +6,7 @@ let manager;
 let storagePromise;
 let purgePromise;
 let controlPromise = Promise.resolve();
+let searchTask;
 let quarantined = Services.prefs.getBoolPref(PENDING_PREF, false);
 
 function pending() {
@@ -54,6 +55,33 @@ function runControl(operation) {
   // A failed deletion stays quarantined, but a subsequent retry can execute.
   controlPromise = result.catch(() => {});
   return result;
+}
+
+async function search(query) {
+  if (!mayIndex()) return { state: "disabled", results: [] };
+  // Gecko has no per-inference cancellation. A timed-out query keeps its slot
+  // until the underlying operation settles, preventing a backlog of models.
+  if (searchTask) return { state: "busy", results: [] };
+  const task = Promise.resolve().then(async () => {
+    if (!mayIndex()) return { state: "disabled", results: [] };
+    const native = getManager();
+    const connection = await native.getConnection();
+    if (!connection) return { state: "lexical", results: [] };
+    if (!mayIndex()) return { state: "disabled", results: [] };
+    if (!(await native.hasSufficientEntriesForSearching())) return { state: "building", results: [] };
+    if (!mayIndex()) return { state: "disabled", results: [] };
+    const result = await native.infer({ searchString: query });
+    return mayIndex() ? { state: "ready", results: result.results || [] } : { state: "disabled", results: [] };
+  });
+  searchTask = task;
+  const release = () => { if (searchTask === task) searchTask = null; };
+  task.then(release, release);
+  let timer;
+  try {
+    return await Promise.race([task, new Promise(resolve => {
+      timer = setTimeout(() => resolve({ state: "timed-out", results: [] }), 1200);
+    })]);
+  } finally { clearTimeout(timer); }
 }
 
 async function bounded(task) {
@@ -122,6 +150,7 @@ export const FluxionNativeMemory = Object.freeze({
   purge,
   runControl,
   runMutation,
+  search,
   async recover() { if (pending()) await purge(); },
   async vectorCount() {
     const connection = await storageConnection();

@@ -291,11 +291,40 @@ test("search discards a lexical snapshot if Memory is cleared before it returns"
     reading.resolve();
     return read.promise;
   };
-  const pending = store.search("private evidence", 12, false);
+  const partials = [];
+  const pending = store.search("private evidence", 12, false, { onLexical: rows => partials.push(rows) });
   await reading.promise;
   await store.clear();
   read.resolve([{ getResultByName: key => key === "url" ? "https://example.com/" : "private evidence" }]);
   const results = await pending;
   assert.equal(results.lexical.length, 0);
   assert.equal(results.semantic.length, 0);
+  assert.equal(partials.length, 0, "deleted evidence was emitted through the progressive callback");
+});
+
+test("enriched lexical rows are emitted once before the bounded embedding wait", async () => {
+  const f = fixture();
+  const execute = f.db.execute, cached = f.db.executeCached;
+  f.db.execute = sql => sql.startsWith("SELECT count")
+    ? Promise.resolve([{ getResultByName: () => 1 }]) : execute(sql);
+  let lexicalQueries = 0;
+  f.db.executeCached = (sql, params) => {
+    if (!sql.startsWith("SELECT *,")) return cached(sql, params);
+    lexicalQueries++;
+    return Promise.resolve([{ getResultByName: name => name === "url" ? "https://example.com/plant" : "Plant evidence" }]);
+  };
+  const partials = [];
+  let complete = false;
+  const result = f.store.search("plant", 12, true, { onLexical: rows => partials.push(rows) })
+    .then(value => { complete = true; return value; });
+  await f.embeddingStarted.promise;
+  assert.equal(complete, false);
+  assert.equal(partials.length, 1);
+  assert.equal(partials[0][0].url, "https://example.com/plant");
+  assert.equal(lexicalQueries, 1);
+  f.expireEmbeddingWait();
+  const final = await result;
+  assert.equal(final.lexical[0].url, "https://example.com/plant");
+  assert.equal(final.semantic.length, 0);
+  f.embedding.resolve([0.5, 0.5]);
 });

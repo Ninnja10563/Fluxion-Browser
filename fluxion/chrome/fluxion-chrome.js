@@ -145,8 +145,10 @@
       box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
     }
     #PanelUI-button { display: none !important; }
-    #fluxion-toolbar-menu {
-      -moz-context-properties: fill; fill: currentColor;
+    #fluxion-toolbar-menu,
+    #fluxion-toolbar-menu > .toolbarbutton-icon {
+      color: var(--fluxion-ink) !important;
+      -moz-context-properties: fill !important; fill: currentColor !important;
     }
     @media (-moz-platform: macos) {
       #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
@@ -3595,6 +3597,34 @@
     }, 23500);
   }
   if (Services.env.get("FLUXION_VISUAL_TOOLBAR_MENU_TEST") === "1") {
+    on(window, "FluxionThemeVisualReady", () => {
+      const icon = toolbarMenuButton.querySelector(".toolbarbutton-icon");
+      const iconStyle = icon && window.getComputedStyle(icon);
+      const buttonStyle = window.getComputedStyle(toolbarMenuButton);
+      const background = window.getComputedStyle(document.getElementById("nav-bar")).backgroundColor;
+      const luminance = color => {
+        const channels = color.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+        if (channels?.length !== 3) return NaN;
+        return channels.map(value => {
+          const channel = value / 255;
+          return channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+        }).reduce((sum, value, index) => sum + value * [0.2126, 0.7152, 0.0722][index], 0);
+      };
+      const foregroundLight = luminance(iconStyle?.fill || "");
+      const backgroundLight = luminance(background);
+      const contrast = (Math.max(foregroundLight, backgroundLight) + 0.05) /
+        (Math.min(foregroundLight, backgroundLight) + 0.05);
+      const rect = icon?.getBoundingClientRect();
+      const contextFill = iconStyle?.getPropertyValue("-moz-context-properties").split(/\s*,\s*/).includes("fill");
+      const valid = window.FluxionTheme?.current() === "dark" && rect?.width >= 16 && rect?.height >= 16 &&
+        iconStyle.fill === buttonStyle.color && contextFill && contrast >= 4.5;
+      Services.prefs.setStringPref("fluxion.toolbarMenu.icon.report", JSON.stringify({
+        fill: iconStyle?.fill, color: buttonStyle.color, background, contextFill, contrast,
+      }));
+      if (valid) Services.prefs.setStringPref("fluxion.toolbarMenu.icon.health", "dark-context-fill-and-contrast-verified");
+      else Services.prefs.setStringPref("fluxion.toolbarMenu.visual.error", "Toolbar bolt failed native dark-mode context-fill or contrast verification");
+      Services.prefs.savePrefFile(null);
+    }, { once: true });
     window.setTimeout(() => {
       const panelButton = document.getElementById("PanelUI-button");
       const inheritedHidden = !panelButton || window.getComputedStyle(panelButton).display === "none";

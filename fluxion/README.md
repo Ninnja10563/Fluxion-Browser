@@ -71,6 +71,10 @@ The current preview is runnable and includes:
   work is invalidated by privacy changes so deleted evidence cannot return;
 - native vector cleanup works across windows with model execution disabled;
   failed cleanup blocks semantic re-enablement until recovery succeeds;
+- progressive grounded Memory text matches before optional semantic completion,
+  bounded native model waits, and stable selected-page identity during reranking;
+- live cross-window Memory settings that preserve pending controls and unsaved
+  exclusion edits;
 - a bounded, deduplicating Browser Memory queue that runs one page at a time
   and yields during user activity, low battery, active media/sharing, or memory
   pressure;
