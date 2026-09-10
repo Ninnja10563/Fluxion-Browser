@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.56.0";
-  const PRODUCT_RELEASE = "0.56.0-preview.1";
+  const PRODUCT_VERSION = "0.57.0";
+  const PRODUCT_RELEASE = "0.57.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -167,8 +167,6 @@
       .fluxion-switch { justify-self: start; }
       .fluxion-settings-workspace-controls { grid-template-columns: 1fr 1fr; }
       .fluxion-settings-workspace-actions { grid-column: 1 / -1; }
-      .fluxion-permission-row { grid-template-columns: minmax(100px, 1fr) auto auto; }
-      .fluxion-permission-expiry { display: none; }
     }
     /* Flow changes the usable Settings width independently of the window.
        Keep these after viewport fallbacks so a wide rail cannot clip fields. */
@@ -178,12 +176,46 @@
       .fluxion-setting { grid-template-columns: minmax(0, 1fr); gap: 8px; }
       .fluxion-setting-copy { min-width: 0; overflow-wrap: anywhere; }
       .fluxion-switch { justify-self: start; }
+      .fluxion-settings-section, .fluxion-settings-intro, .fluxion-settings-note,
+      .fluxion-shortcut, .fluxion-about-mark { min-width: 0; overflow-wrap: anywhere; }
+      .fluxion-settings-button, .fluxion-shortcut-key {
+        min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere;
+      }
+      .fluxion-settings-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .fluxion-shortcut-control { min-width: 0; grid-template-columns: minmax(0, 1fr) 30px; }
+      .fluxion-workspace-create { grid-template-columns: minmax(0, 1fr) auto; }
+      .fluxion-workspace-summary { flex-wrap: wrap; gap: 4px 12px; overflow-wrap: anywhere; }
+      .fluxion-workspace-summary > span { min-width: 0; max-width: 100%; }
+      .fluxion-settings-workspace-identity { grid-template-columns: 18px minmax(0, 1fr) auto; }
+      .fluxion-settings-workspace-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .fluxion-settings-workspace-actions { grid-column: 1 / -1; flex-wrap: wrap; }
+      .fluxion-permissions-toolbar { grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
+      .fluxion-permission-site-head { gap: 8px; }
+      .fluxion-permission-site-copy b, .fluxion-permission-site-copy small,
+      .fluxion-permission-kind {
+        overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere;
+      }
+      .fluxion-permission-row { grid-template-columns: minmax(0, 1fr) auto; gap: 6px 10px; padding: 9px 0 9px 10px; }
+      .fluxion-permission-kind { grid-column: 1; grid-row: 1; }
+      .fluxion-permission-state { grid-column: 2; grid-row: 1; min-width: 0; overflow-wrap: anywhere; }
+      .fluxion-permission-expiry { grid-column: 1; grid-row: 2; text-align: start; white-space: normal; overflow-wrap: anywhere; }
+      .fluxion-permission-row .fluxion-settings-button { grid-column: 2; grid-row: 2; }
+      .fluxion-about-mark > div { min-width: 0; }
     }
     @container fluxion-settings (max-width: 480px) {
       .fluxion-settings-nav button { height: auto; min-height: 31px; padding-block: 6px; }
       .fluxion-settings-nav { flex-basis: 120px; width: 120px; min-width: 120px; padding-inline: 6px; }
       .fluxion-settings-main { padding-inline: 12px; }
       .fluxion-settings-nav button { padding-inline: 6px; }
+      .fluxion-settings-actions, .fluxion-workspace-create,
+      .fluxion-settings-workspace-controls, .fluxion-permissions-toolbar,
+      .fluxion-permission-site-head { grid-template-columns: minmax(0, 1fr); }
+      .fluxion-workspace-create .fluxion-settings-button,
+      .fluxion-permission-site-head .fluxion-settings-button { justify-self: start; }
+      .fluxion-settings-workspace-identity { grid-template-columns: 18px minmax(0, 1fr); gap: 5px 9px; }
+      .fluxion-settings-workspace-current { grid-column: 2; min-width: 0; text-align: start; }
+      .fluxion-settings-workspace-controls { padding-inline-start: 0; }
+      .fluxion-permissions-count { white-space: normal; overflow-wrap: anywhere; }
     }
     @media (prefers-reduced-motion: reduce) { #fluxion-settings * { scroll-behavior: auto !important; } }
   `;
@@ -354,7 +386,7 @@
     setNote(`Could not load search engines: ${error.message}`, "general");
   });
 
-  const appearance = section("appearance", "Appearance", "Tune information density without turning the browser into a theme dashboard.");
+  const appearance = section("appearance", "Appearance", "Choose your theme, sidebar size, tab spacing, and motion preferences.");
   const themeOptions = [
     ["system", "Follow system"], ["light", "Light"], ["dark", "Dark"],
   ];
@@ -504,7 +536,7 @@
 
   const workspacePanel = section(
     "workspaces", "Workspaces",
-    "Keep separate tab sets for different parts of your day. Names, order, symbols, and quiet accents persist across launches.",
+    "Organise separate sets of tabs. Workspace names, order, symbols, and colours are saved across launches.",
   );
   const workspaceCreate = create("form", "fluxion-workspace-create");
   const workspaceName = create("input", "fluxion-settings-control");
@@ -903,10 +935,11 @@
       );
       const resetSite = create("button", "fluxion-settings-button", "Reset site");
       resetSite.type = "button";
+      resetSite.setAttribute("aria-label", `Reset all saved permissions for ${group.origin} (${group.context})`);
       resetSite.addEventListener("click", () => {
         if (!Services.prompt.confirm(
           window, "Reset Site Permissions",
-          `Remove all saved permission decisions for ${group.site}?`,
+          `Remove all saved permission decisions for ${group.origin} (${group.context})?`,
         )) return;
         const count = window.FluxionPermissions?.removeSite(group.siteKey) || 0;
         setNote(`Reset ${count} saved decision${count === 1 ? "" : "s"} for ${group.site}.`, "permissions");
@@ -919,7 +952,7 @@
         state.dataset.tone = permission.tone;
         const reset = create("button", "fluxion-settings-button", "Reset");
         reset.type = "button";
-        reset.setAttribute("aria-label", `Reset ${permission.typeLabel} for ${group.site}`);
+        reset.setAttribute("aria-label", `Reset ${permission.typeLabel} for ${permission.origin} (${permission.context})`);
         reset.addEventListener("click", () => {
           if (!window.FluxionPermissions?.remove(permission.id)) return;
           setNote(`${permission.typeLabel} decision reset for ${group.site}.`, "permissions");

@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.56.0-preview.1
+        default: 0.57.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.56.0-preview.1
+        default: v0.57.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -208,7 +208,17 @@ jobs:
       - name: Verify native Settings accessible names and descriptions
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
+        env:
+          FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-settings-layout-evidence
         run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Settings layout and accessibility evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-settings-layout-evidence
+          path: ${{ runner.temp }}/fluxion-settings-layout-evidence
+          if-no-files-found: warn
 
       - name: Verify native AI credential isolation and sharing revocation
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

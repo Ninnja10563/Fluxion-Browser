@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth, permissions, prompt } = {}) {
   const preferences = new Map(saved);
   const elements = [];
   class Element {
@@ -58,7 +58,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     addTrustedTab(url) { opened.push(url); return { linkedBrowser: { currentURI: { spec: url } } }; },
   };
   const window = Object.assign(new Element(), {
-    document, FluxionMemory: memory, Event: class { constructor(type) { this.type = type; } },
+    document, FluxionMemory: memory, FluxionPermissions: permissions, Event: class { constructor(type) { this.type = type; } },
     FluxionUI: { workspaces: () => [], currentWorkspace: () => "work", setTabWorkspace() {} },
     FluxionTheme: { current: () => "system" },
     FluxionAI: ai || { config: () => ({ provider: "disabled", endpoint: "", model: "" }) },
@@ -82,7 +82,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     window, gBrowser,
     ChromeUtils: { importESModule: name => name.includes("FluxionUpdates") ? { FluxionUpdates: updates }
       : { SearchService: { init: async () => {}, getVisibleEngines: async () => [] } } },
-    Services: { prefs, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
+    Services: { prefs, prompt, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
     FluxionSettings: globalThis.FluxionSettings,
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),

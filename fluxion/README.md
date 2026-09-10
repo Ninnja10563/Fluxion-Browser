@@ -8,6 +8,12 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+The 0.57 candidate focuses on narrow Settings layouts across every section,
+including workspace editing, permission decisions and keyboard shortcuts.
+Native validation is pending; the published DMG below remains 0.56.
+
+## Latest published changes
+
 Fluxion 0.56 adds adjustable Flow width: drag its inner edge, use the keyboard
 separator, or enter a pixel width in Appearance. Changes persist across windows
 and launches, while narrower windows limit only the displayed width. Settings

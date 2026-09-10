@@ -1017,6 +1017,16 @@ controls to the space actually left beside Flow, rather than viewport width
 alone. The dedicated packaged gate checks native keys, Gecko-routed pointer
 capture, cross-window geometry, narrow content bounds and clean relaunch.
 
+The Settings layout uses the surface's container width, not the outer window,
+to adapt workspace identity/editing rows, permission decisions, shortcut
+controls and paired actions. At narrow widths these controls wrap or stack;
+permission expiry is retained beside its decision instead of being hidden by
+a viewport rule. The native Settings gate traverses all ten sections at 320
+and 600 pixel root widths, with real populated permission records and workspace
+creation/renaming, in addition to its original accessible-name checks. Browser
+services and event handlers remain the owners of the actions; CSS changes do
+not introduce replacement state or an alternate settings backend.
+
 ## Native tab-status ownership
 
 Flow derives page activity exclusively from Gecko's native tab state:

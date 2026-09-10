@@ -10,6 +10,15 @@ API, create DMGs, upload applications, or publish releases. A diagnostic pass
 never replaces the complete release gates below. This allows native debugging
 while a GitHub API cooldown blocks release verification.
 
+The Settings accessibility gate also requires actual layout evidence across
+all ten Settings sections at 320 and 600 pixel surface widths, beside Flow.
+It seeds only its isolated profile, edits a workspace through the real form,
+requires permission expiry to stay visible, and checks rendered controls and
+horizontal overflow. The original native accessible names/descriptions gate
+remains independently required. Reports and a narrow Workspace screenshot are
+preserved as Settings layout evidence; these are DOM-driven packaged checks,
+not an assertion of physical OS input or exhaustive screen-reader usability.
+
 macOS milestone builds use `.github/workflows/macos-preview-release.yml` with a
 verified staging pass followed by publication. The default rebuild/publication
 route and exact-artifact promotion alternative are described below:

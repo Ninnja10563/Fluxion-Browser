@@ -40,7 +40,17 @@ jobs:
 
       - name: Check native Settings accessibility
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-settings-layout-evidence
         run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Settings layout and accessibility evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-settings-layout-diagnostic
+          path: ${{ runner.temp }}/fluxion-settings-layout-evidence
+          if-no-files-found: warn
 
       - name: Check Flow updates and thousand-tab search responsiveness
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

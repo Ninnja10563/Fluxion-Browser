@@ -8,6 +8,12 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.57 is an unreleased Settings-layout candidate. It is intended to
+keep every Settings section usable beside a wide Flow sidebar, preserving
+permission expiry details and access to workspace and shortcut controls.
+Packaged all-section geometry and accessibility validation is required before
+publication; 0.56 remains the latest published DMG.
+
 Version 0.56 is a published sidebar-sizing preview:
 
 - resize expanded Flow or its revealed Focus overlay from a narrow inner edge;
