@@ -133,6 +133,73 @@
     Services.prefs.setStringPref(`${prefix}.routingHealth`, "native-section-address-and-history-verified");
   }
 
+  async function verifyNativeMenuEscape(popup, anchor, describeFocus) {
+    const evidence = report.nativeEscape = { transport: "system-events-key-codes-125-then-53",
+      nativeMenu: Boolean(popup.isNativeMenu), beforeFocus: describeFocus(), events: [], leaves: [],
+      transitions: [], acknowledgements: { down: false, escape: false }, stage: "preflight" };
+    let requestedAction = null, highlightedLeaf = null;
+    const keyObserver = event => {
+      if (["Escape", "ArrowDown"].includes(event.key)) evidence.events.push({ type: event.type,
+        key: event.key, trusted: event.isTrusted, target: event.target?.localName,
+        targetId: event.target?.id, prevented: event.defaultPrevented });
+    };
+    const leafObserver = event => {
+      const leaf = event.target;
+      if (!event.isTrusted || requestedAction !== "down" || leaf?.parentNode !== popup ||
+          leaf.localName !== "menuitem" || leaf.hidden || leaf.disabled) return;
+      const style = window.getComputedStyle(leaf);
+      if (style.display === "none" || ["hidden", "collapse"].includes(style.visibility)) return;
+      highlightedLeaf = leaf;
+      evidence.leaves.push({ label: leaf.getAttribute("label"), trusted: true, parent: popup.id });
+    };
+    const popupObserver = event => {
+      if (event.target === popup) evidence.transitions.push({ type: event.type, state: popup.state });
+    };
+    window.addEventListener("keydown", keyObserver, true);
+    window.addEventListener("keyup", keyObserver, true);
+    popup.addEventListener("DOMMenuItemActive", leafObserver);
+    popup.addEventListener("popupshown", popupObserver);
+    popup.addEventListener("popuphidden", popupObserver);
+    const request = async (action, completed, message) => {
+      assert(Services.focus.activeWindow === window && document.hasFocus(),
+        `Owned Library window lost focus before native ${action}`);
+      const ack = Services.env.get(action === "down" ? "FLUXION_LIBRARY_DOWN_ACK" : "FLUXION_LIBRARY_ESCAPE_ACK");
+      assert(ack, `Library native ${action} handshake path is missing`);
+      requestedAction = action;
+      evidence.stage = `${action}-requested`;
+      evidence[`${action}Before`] = describeFocus();
+      Services.prefs.setStringPref(`${prefix}.${action}`, "requested");
+      Services.prefs.savePrefFile(null);
+      await waitFor(async () => {
+        evidence.acknowledgements[action] = await IOUtils.exists(ack);
+        return evidence.acknowledgements[action] && completed();
+      }, message);
+      evidence[`${action}After`] = describeFocus();
+      evidence.stage = `${action}-processed`;
+    };
+    try {
+      // An injection receipt is insufficient. Require actual native menu input
+      // before testing dismissal; never retry keys or manipulate activeChild.
+      await request("down", () => highlightedLeaf?.isConnected && highlightedLeaf.parentNode === popup &&
+        !highlightedLeaf.disabled && popup.state === "open",
+      "Native ArrowDown did not activate an enabled item in the exact Library popup");
+      evidence.beforeDispatch = describeFocus();
+      await request("escape", () => popup.state === "closed" && document.activeElement === anchor &&
+        Services.focus.activeWindow === window && document.hasFocus(),
+      "Native Escape did not dismiss the menu and restore its action-button focus");
+    } catch (error) {
+      evidence.afterDispatch = describeFocus();
+      throw new Error(`${error.message}: ${JSON.stringify(evidence)}`);
+    } finally {
+      evidence.afterDispatch = describeFocus();
+      window.removeEventListener("keydown", keyObserver, true);
+      window.removeEventListener("keyup", keyObserver, true);
+      popup.removeEventListener("DOMMenuItemActive", leafObserver);
+      popup.removeEventListener("popupshown", popupObserver);
+      popup.removeEventListener("popuphidden", popupObserver);
+    }
+  }
+
   async function keyboardAndMenus(PlacesUtils, folderGuid) {
     // The shell activates only this fixture's owned PID. Request that before
     // opening any menu: app activation can itself dismiss an existing popup.
@@ -197,33 +264,7 @@
         expectedAnchorFocused: active === more(rows[0]),
         selectedURI: window.gBrowser.selectedBrowser.currentURI.spec };
     };
-    report.nativeEscape = { transport: "system-events-key-code-53", beforeFocus: describeFocus(), events: [] };
-    const keyObserver = event => {
-      if (event.key === "Escape") report.nativeEscape.events.push({ type: event.type, trusted: event.isTrusted,
-        target: event.target?.localName, targetId: event.target?.id, prevented: event.defaultPrevented });
-    };
-    window.addEventListener("keydown", keyObserver, true);
-    window.addEventListener("keyup", keyObserver, true);
-    report.nativeEscape.beforeDispatch = describeFocus();
-    // Cocoa menus own a separate event loop. The shell posts a real system key
-    // only while this fixture is frontmost, rather than targeting the browser
-    // NSWindow and bypassing the menu's event handling.
-    try {
-      const escapeAck = Services.env.get("FLUXION_LIBRARY_ESCAPE_ACK");
-      assert(escapeAck, "Library native Escape handshake path is missing");
-      Services.prefs.setStringPref(`${prefix}.escape`, "requested");
-      Services.prefs.savePrefFile(null);
-      await waitFor(async () => await IOUtils.exists(escapeAck) &&
-        popup.state === "closed" && document.activeElement === more(rows[0]),
-        "Native Escape did not dismiss the menu and restore its action-button focus");
-    } catch (error) {
-      report.nativeEscape.afterDispatch = describeFocus();
-      throw new Error(`${error.message}: ${JSON.stringify(report.nativeEscape)}`);
-    } finally {
-      window.removeEventListener("keydown", keyObserver, true);
-      window.removeEventListener("keyup", keyObserver, true);
-    }
-    report.nativeEscape.afterDispatch = describeFocus();
+    await verifyNativeMenuEscape(popup, more(rows[0]), describeFocus);
     key("F10", { shiftKey: true });
     await waitFor(() => popup.state === "open", "Native item menu did not reopen");
     await query("cedar", values => values.length === 1);

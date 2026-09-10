@@ -11,6 +11,7 @@ profile="$check_root/profile"
 browser_log="$check_root/browser.log"
 browser_pid=""
 foreground_requested=false
+down_requested=false
 escape_requested=false
 artifact_dir="${FLUXION_LIBRARY_ARTIFACT_DIR:-}"
 cleanup() {
@@ -39,6 +40,7 @@ trap cleanup EXIT
 
 FLUXION_PROFILE="$profile" FLUXION_LIBRARY_SCALE_TEST=1 \
   FLUXION_LIBRARY_FOREGROUND_ACK="$check_root/foreground-ready" FLUXION_LIBRARY_ESCAPE_ACK="$check_root/escape-sent" \
+  FLUXION_LIBRARY_DOWN_ACK="$check_root/down-sent" \
   "$launcher" about:blank >"$browser_log" 2>&1 &
 browser_pid=$!
 for ((attempt=0; attempt<720; attempt++)); do
@@ -52,7 +54,18 @@ for ((attempt=0; attempt<720; attempt++)); do
       touch "$check_root/foreground-ready"
       foreground_requested=true
     fi
+    if [[ "$down_requested" == false ]] && grep -Fq 'user_pref("fluxion.library.verification.down", "requested")' "$profile/prefs.js"; then
+      /usr/bin/osascript \
+        -e 'tell application "System Events"' \
+        -e "if (unix id of (first application process whose frontmost is true)) is not $browser_pid then error \"Library fixture is no longer frontmost\"" \
+        -e 'key code 125' -e 'end tell' || {
+        printf 'Could not send native ArrowDown to the owned Library fixture.\n' >&2; break;
+      }
+      touch "$check_root/down-sent"
+      down_requested=true
+    fi
     if [[ "$escape_requested" == false ]] && grep -Fq 'user_pref("fluxion.library.verification.escape", "requested")' "$profile/prefs.js"; then
+      [[ "$down_requested" == true ]] || { printf 'Library Escape requested before native input preflight.\n' >&2; break; }
       /usr/bin/osascript \
         -e 'tell application "System Events"' \
         -e "if (unix id of (first application process whose frontmost is true)) is not $browser_pid then error \"Library fixture is no longer frontmost\"" \

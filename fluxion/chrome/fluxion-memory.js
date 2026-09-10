@@ -169,9 +169,8 @@
         FROM vec_history_mapping map
         JOIN places.moz_places places USING (url_hash)
       `);
-      const blocked = rows.filter(row =>
-        !isAllowedResult(row.getResultByName("url"))
-      );
+      const canIndex = FluxionMemoryPolicy.createPageFilter(excludedDomains());
+      const blocked = rows.filter(row => !canIndex({ url: row.getResultByName("url") }));
       if (!blocked.length) return;
       // Array.isArray crosses chrome/module realms; Gecko's Float32Array
       // instanceof check does not accept this window's typed-array constructor.
@@ -354,7 +353,8 @@
   async function addExcludedDomain(value) {
     const domain = FluxionMemoryPolicy.normaliseDomain(value);
     if (!domain) return false;
-    const next = [...new Set([...excludedDomains(), domain])].slice(0, 200);
+    const next = [...new Set([...excludedDomains(), domain])];
+    if (next.length > 200) throw new Error("Browser Memory supports up to 200 excluded domains. Remove a domain before adding another.");
     Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
     Services.prefs.savePrefFile(null);
     await deleteExcludedEvidence(next);
@@ -366,7 +366,8 @@
   }
 
   async function replaceExcludedDomains(values) {
-    const next = [...new Set(values.map(FluxionMemoryPolicy.normaliseDomain).filter(Boolean))].slice(0, 200);
+    const next = [...new Set(values.map(FluxionMemoryPolicy.normaliseDomain).filter(Boolean))];
+    if (next.length > 200) throw new Error("Browser Memory supports up to 200 excluded domains. Remove extra domains and try again.");
     Services.prefs.setStringPref(PREF_EXCLUDED, JSON.stringify(next));
     Services.prefs.savePrefFile(null);
     await deleteExcludedEvidence(next);

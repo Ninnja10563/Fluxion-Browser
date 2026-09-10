@@ -23,8 +23,7 @@
 
   function excludedDomains(value) {
     const items = Array.isArray(value) ? value : String(value || "").split(/[\n,]+/);
-    return [...new Set(items.map(item => String(item).trim().toLowerCase()).filter(Boolean))]
-      .slice(0, 200);
+    return [...new Set(items.map(item => String(item).trim().toLowerCase()).filter(Boolean))];
   }
 
   scope.FluxionSettings = Object.freeze({

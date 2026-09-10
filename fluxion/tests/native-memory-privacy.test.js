@@ -143,6 +143,26 @@ function fixture(saved = new Map()) {
   };
 }
 
+test("excluded domain limit rejects new entries atomically after normalization but permits duplicates at capacity", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  const domains = Array.from({ length: 200 }, (_, index) => `site${index}.example`);
+  const saved = await api.setExcludedDomains(domains);
+  assert.equal(saved.length, 200);
+  const previous = f.prefs.get("fluxion.memory.excludedDomains");
+  const prefsBefore = [...f.prefs];
+  f.state.ownedExclusions.length = 0;
+  await assert.rejects(api.setExcludedDomains([...domains, "extra.example"]), /up to 200 excluded domains/);
+  await assert.rejects(api.excludeDomain("extra.example"), /up to 200 excluded domains/);
+  assert.equal(f.prefs.get("fluxion.memory.excludedDomains"), previous);
+  assert.deepEqual([...f.prefs], prefsBefore, "rejected edit must not partially mutate any preference");
+  assert.deepEqual(f.state.ownedExclusions, []);
+  assert.deepEqual(f.state.cachedWrites, []);
+  assert.equal(await api.excludeDomain("https://www.SITE0.example./article"), true);
+  assert.equal((await api.setExcludedDomains([...domains, "https://www.SITE1.example./article"])).length, 200);
+  assert.equal(f.prefs.get("fluxion.memory.excludedDomains"), previous);
+  assert.equal(f.state.ownedExclusions.length, 2, "valid normalized duplicate edits retain normal cleanup semantics");
+});
+
 test("startup prunes existing owned evidence while disabled but private windows never initiate cleanup", async () => {
   const f = fixture();
   f.chromeWindow({ isPrivate: true }); await settle();

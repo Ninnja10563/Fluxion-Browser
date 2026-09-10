@@ -722,7 +722,7 @@
   }
   const memoryPreferenceObserver = { observe: syncMemorySettings };
   for (const name of memoryPreferenceNames) Services.prefs.addObserver(name, memoryPreferenceObserver);
-  row(search, "Excluded domains", "These sites are removed from and never added to Browser Memory.", domains);
+  row(search, "Excluded domains", "Exclude up to 200 domains, including their subdomains. Matching Browser Memory data is removed; ordinary history is kept.", domains);
   const clearMemory = create("button", "fluxion-settings-button danger", "Clear Browser Memory");
   clearMemory.type = "button";
   clearMemory.addEventListener("click", async () => {

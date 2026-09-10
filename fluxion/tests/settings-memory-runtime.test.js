@@ -147,6 +147,31 @@ const controlsFor = h => ({
   domains: h.document.getElementById("fluxion-memory-excluded-domains"),
 });
 
+test("shipped Settings sends all 201 entered domains to validation and reports rejection without success", async () => {
+  const shared = sharedMemorySettings();
+  shared.update("excludedDomains", "saved.example");
+  let submitted;
+  shared.memory.setExcludedDomains = async values => {
+    submitted = Array.from(values);
+    throw new Error("Browser Memory supports up to 200 excluded domains.");
+  };
+  const h = shared.makeWindow(), { domains } = controlsFor(h);
+  const entries = Array.from({ length: 201 }, (_, index) => `site${index}.example`);
+  domains.value = entries.join(", ");
+  domains.dispatchEvent({ type: "input" });
+  domains.dispatchEvent({ type: "change" });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(submitted, entries);
+  assert.equal(domains.value, "saved.example");
+  assert.equal(domains.disabled, false);
+  const texts = [];
+  const visit = node => { texts.push(node.textContent || ""); for (const child of node.children || []) visit(child); };
+  visit(h.root);
+  assert.ok(texts.some(text => text.includes("up to 200 excluded domains")));
+  assert.equal(texts.includes("Browser Memory exclusions saved."), false);
+  h.unload();
+});
+
 test("complete shipped Settings syncs all Memory preferences across visible and hidden windows and cleans observers", () => {
   const shared = sharedMemorySettings();
   const first = shared.makeWindow(), second = shared.makeWindow();

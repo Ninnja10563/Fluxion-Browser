@@ -122,7 +122,16 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:
           FLUXION_LIBRARY_SCREENSHOT: ${{ runner.temp }}/fluxion-library.png
+          FLUXION_LIBRARY_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-library-evidence
         run: ./fluxion/scripts/verify-macos-library.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Library verification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-Library-evidence-diagnostic
+          path: ${{ runner.temp }}/fluxion-library-evidence
+          if-no-files-found: warn
 
       - name: Check workspace restoration and cross-window editing
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

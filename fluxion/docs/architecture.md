@@ -673,6 +673,11 @@ one in a never-enabled profile. Upserts recheck the current policy after their
 asynchronous storage barrier. Existing deletion revision/quarantine guards
 remain in force. These are logical SQLite deletions, not a promise of forensic
 erasure from storage media or backups; ordinary Places history is retained.
+Native exclusion sweeps likewise prepare one policy for their synchronous
+classification pass. User edits validate the entire normalized list before
+saving: exceeding 200 distinct domains reports an error without silently
+dropping entries or changing the saved policy. Duplicate normalized domains
+do not consume additional capacity.
 
 Clearing Browser Memory disables its feature gates,
 deletes vector rows and mappings, and schedules the semantic database files for

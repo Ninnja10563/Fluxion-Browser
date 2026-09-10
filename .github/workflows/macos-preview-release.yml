@@ -163,7 +163,16 @@ jobs:
         shell: bash
         env:
           FLUXION_LIBRARY_SCREENSHOT: ${{ runner.temp }}/fluxion-library.png
+          FLUXION_LIBRARY_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-library-evidence
         run: ./fluxion/scripts/verify-macos-library.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Library verification evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-library-evidence
+          path: ${{ runner.temp }}/fluxion-library-evidence
+          if-no-files-found: warn
 
       - name: Verify real local semantic retrieval
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}

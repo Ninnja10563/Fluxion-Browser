@@ -35,3 +35,9 @@ test("homepage and exclusion inputs are bounded and normalised", () => {
     ["example.com", "docs.example"],
   );
 });
+
+test("exclusion input preserves 201 domains for controller validation instead of silently dropping one", () => {
+  const domains = Array.from({ length: 201 }, (_, index) => `site${index}.example`);
+  assert.deepEqual(settings.excludedDomains(domains.join(", ")), domains);
+  assert.deepEqual(settings.excludedDomains([...domains, " SITE0.EXAMPLE "]), domains);
+});
