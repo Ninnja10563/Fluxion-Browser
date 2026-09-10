@@ -29,6 +29,7 @@ function fixture({ legacy = false } = {}) {
   if (legacy) logins.push({ origin: "https://fluxion-ai.invalid", httpRealm: "Fluxion AI API key", password: "legacy-a-key" });
   const Services = {
     prefs: {
+      getPrefType: key => !prefs.has(key) ? 0 : typeof prefs.get(key) === "string" ? 32 : 128,
       getStringPref: (key, fallback) => prefs.get(key) ?? fallback,
       setStringPref(key, value) {
         prefs.set(key, value);
@@ -207,4 +208,17 @@ test("unchanged allowed request retains real provider dispatch and grounded sour
   assert.equal(answer.source.url, "https://example.org/article");
   assert.equal(f.requests.length, 1);
   assert.match(f.requests[0].options.body, /botany/);
+});
+
+test("named list edits abort pending AI extraction and malformed canonical policy never falls back", async () => {
+  const f = fixture(), extraction = deferred();
+  const request = f.api.askCurrentPage("Summarise", browser("https://medical.example/article", extraction.promise));
+  const rejected = assert.rejects(request, /cancelled|excluded/);
+  f.Services.prefs.setStringPref("fluxion.memory.exclusionPolicy", JSON.stringify({ version: 1, directDomains: [],
+    lists: [{ id: "health", name: "Health", enabled: true, domains: ["medical.example"] }] }));
+  extraction.resolve(page("https://medical.example/article")); await rejected;
+  await assert.rejects(f.api.askCurrentPage("Summarise", browser("https://sub.medical.example/article")), /excluded/);
+  f.Services.prefs.setStringPref("fluxion.memory.exclusionPolicy", "\u0000");
+  await assert.rejects(f.api.askCurrentPage("Summarise", browser("https://safe.example/article")), /excluded/);
+  assert.equal(f.requests.length, 0);
 });

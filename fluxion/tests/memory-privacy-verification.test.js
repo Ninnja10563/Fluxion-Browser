@@ -23,6 +23,7 @@ function fixture() {
     Services: { env: { get: () => "1" }, wm: { getEnumerator: () => [] }, prefs: {
       getBoolPref: (name, fallback) => prefs.get(name) ?? fallback,
       setBoolPref: (name, value) => prefs.set(name, value),
+      clearUserPref: name => prefs.delete(name),
       setStringPref: (name, value) => prefs.set(name, value), savePrefFile() {},
     } },
     ChromeUtils: { importESModule(name) {
@@ -59,4 +60,55 @@ test("unfinished Places startup fails the privacy gate without opening another w
   assert.equal(f.opened(), 0);
   assert.match(f.prefs.get("fluxion.memory.privacy.error"), /Places startup did not finish/);
   assert.equal(f.prefs.has("fluxion.memory.privacy.health"), false);
+});
+
+async function completionFixture({ nativeFailure = false, closeFailure = false, flushFailure = false } = {}) {
+  const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-memory-privacy-verification.js"), "utf8");
+  const start = source.indexOf("  async function closeCompanions() {");
+  assert.ok(start > 0);
+  const completion = source.slice(start, source.lastIndexOf("})(window);"));
+  const events = [], prefs = new Map();
+  let flushed = false;
+  const target = name => ({ closed: false, close() {
+    events.push(name);
+    if (closeFailure && name === "private-close") throw Error("private companion close failed");
+    this.closed = true;
+  } });
+  await vm.runInNewContext(completion, {
+    companion: target("normal-close"), privateCompanion: target("private-close"),
+    prefix: "privacy", report: { checks: [] }, Cu: { reportError() {} },
+    run: () => nativeFailure ? Promise.reject(Error("native assertion failed")) : Promise.resolve(),
+    waitFor: async predicate => assert.ok(predicate()),
+    Services: { prefs: {
+      setStringPref(key, value) { events.push(key); prefs.set(key, value); },
+      clearUserPref: key => prefs.delete(key),
+      savePrefFile() {
+        events.push("flush");
+        if (flushFailure && !flushed) { flushed = true; throw Error("pref flush failed"); }
+      },
+    } },
+  });
+  return { events, prefs };
+}
+
+test("privacy verifier closes owned companions before persisting success", async () => {
+  const result = await completionFixture();
+  assert.deepEqual(result.events, ["private-close", "normal-close", "privacy.report", "privacy.health", "flush"]);
+  assert.equal(result.prefs.has("privacy.error"), false);
+});
+
+test("privacy cleanup failure cannot pass and does not hide the native assertion", async () => {
+  const cleanup = await completionFixture({ closeFailure: true });
+  assert.equal(cleanup.prefs.has("privacy.health"), false);
+  assert.match(cleanup.prefs.get("privacy.error"), /private companion close failed/);
+  assert.ok(cleanup.events.includes("normal-close"));
+  const both = await completionFixture({ closeFailure: true, nativeFailure: true });
+  assert.match(both.prefs.get("privacy.error"), /native assertion failed/);
+  assert.equal(both.prefs.has("privacy.health"), false);
+});
+
+test("privacy success-pref flush failure clears the marker before error persistence", async () => {
+  const result = await completionFixture({ flushFailure: true });
+  assert.equal(result.prefs.has("privacy.health"), false);
+  assert.match(result.prefs.get("privacy.error"), /pref flush failed/);
 });

@@ -658,8 +658,9 @@ passes and an 8,192-code-unit path budget bound the work; malformed escapes,
 invalid UTF-8, remaining escapes beyond the limit, and oversized paths are
 ineligible for Memory. Ordinary encoded article names and Unicode remain
 eligible. This is a conservative heuristic, not a comprehensive classifier
-of financial, health, or other sensitive content. Category exclusions remain
-on the roadmap.
+of financial, health, or other sensitive content. Named exclusion lists let
+users organize their own domains into categories; there is no downloaded
+taxonomy, automatic category classification, or external lookup.
 
 The enriched store imports the same policy through a privileged module bridge.
 Before exposing its first connection on each launch, it removes blocked page
@@ -674,10 +675,42 @@ asynchronous storage barrier. Existing deletion revision/quarantine guards
 remain in force. These are logical SQLite deletions, not a promise of forensic
 erasure from storage media or backups; ordinary Places history is retained.
 Native exclusion sweeps likewise prepare one policy for their synchronous
-classification pass. User edits validate the entire normalized list before
-saving: exceeding 200 distinct domains reports an error without silently
-dropping entries or changing the saved policy. Duplicate normalized domains
-do not consume additional capacity.
+classification pass. User edits validate the entire policy before saving:
+at most 20 named lists and 200 domain memberships across direct exclusions
+and all lists, including disabled lists. Duplicate normalized domains within
+one list count once; the same domain in separate lists counts in each. Limits
+report errors without silently dropping entries or changing the saved policy.
+
+`FluxionExclusionPolicy.sys.mjs` owns a single versioned JSON preference,
+`fluxion.memory.exclusionPolicy`. Existing flat exclusions remain a read-only
+fallback only while that preference is absent; the first successful edit
+migrates them atomically. An opaque process revision detects stale drafts and
+cross-window edits, including changes away from and back to the same value.
+Mutations and cleanup use the shared native control queue. Committing a policy
+synchronously invalidates pending extraction/search and aborts page-AI work;
+cleanup then attempts native sentinel replacement and enriched evidence
+deletion. A cleanup error can follow a successful policy commit and is reported
+as such. Ordinary Places history is not deleted. Removing an exclusion permits
+future indexing; it never restores deleted extracted text or vectors.
+
+Malformed or unsupported policy blocks Memory indexing, retrieval and page-AI
+egress until explicitly repaired/reset. It is not itself permission to purge
+existing databases. Startup preserves previously requested deletion flags and
+does not construct Fluxion's native manager for an invalid policy. Fluxion
+also clears Gecko 155's internal `places.semanticHistory.initialized` activation
+marker on invalid policy, without changing `removeOnStartup` or pending purge
+intent. This prevents a separate Gecko address-bar consumer from interpreting
+temporarily unavailable models as permission to delete the native database.
+The marker is set by Gecko's constructor when models are available; it is not an
+embedding or a user enablement preference. This pinned constructor contract
+must be re-audited on upstream upgrades (see the pinned
+[manager constructor](https://github.com/mozilla-firefox/firefox/blob/FIREFOX_155_0_1_RELEASE/toolkit/components/places/PlacesSemanticHistoryManager.sys.mjs#L242)
+and its availability check before opening storage). Settings
+retains conflicting drafts for correction and offers explicit reset recovery;
+reset warns that already-enabled features can resume with empty exclusions.
+Private windows can inspect policy but cannot modify persistent exclusions.
+These additions are a feature-branch candidate pending packaged native checks;
+see [exclusion-list validation](validation/exclusion-lists-candidate.md).
 
 Clearing Browser Memory disables its feature gates,
 deletes vector rows and mappings, and schedules the semantic database files for

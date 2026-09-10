@@ -575,7 +575,7 @@ test("Browser Memory exposes functional privacy controls", () => {
   assert.match(store, /if \(shutdownStarted\) throw new Error/);
   assert.match(settings, /id = "fluxion-memory-embedding-provider"/);
   assert.match(settings, /\["disabled", "Keywords only"\]/);
-  assert.match(runtimeConfig, /places\.semanticHistory\.featureGate", embeddingsEnabled/);
+  assert.match(runtimeConfig, /places\.semanticHistory\.featureGate", validPolicy && embeddingsEnabled/);
   assert.match(macVerifier, /FLUXION_VISUAL_EMBEDDING_SETTINGS_TEST=1/);
   assert.match(macVerifier, /keyword-mode-retained-recall-and-local-mode-restored/);
   assert.match(macVerifier, /settled-embedding-controls-visible/);

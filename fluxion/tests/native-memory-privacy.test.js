@@ -18,7 +18,7 @@ function fixture(saved = new Map()) {
   let timerId = 0, factoryCalls = 0;
   const state = { vectors: 2, mapping: 2, enriched: 2, failDelete: false, beforeWrite: null, beforeInit: null, writes: 0,
     exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null,
-    beforeStorage: null, failStorage: false, storageOpens: 0, storageReady: false,
+    beforeStorage: null, beforeExclusionQuery: null, failStorage: false, storageOpens: 0, storageReady: false,
     beforeInference: null, inferenceCalls: 0, searchCalls: 0, beforeEnriched: null,
     nativeResults: [], keywords: [], windows: [], upserts: [], pruneCalls: 0, enrichedResults: { lexical: [], semantic: [] } };
   // Model the relevant native converter contract in a separate ESM-like
@@ -28,11 +28,14 @@ function fixture(saved = new Map()) {
     if (!(value instanceof Float32Array)) throw new Error("Invalid tensor format");
     return value;
   }`);
-  const Services = { env: { get: () => "" }, obs: { addObserver() {}, removeObserver() {} }, prefs: {
+  let uuid = 0;
+  const Services = { uuid: { generateUUID: () => `fixture-${++uuid}` }, env: { get: () => "" }, obs: { addObserver() {}, removeObserver() {} }, prefs: {
+    getPrefType: key => !prefs.has(key) ? 0 : typeof prefs.get(key) === "string" ? 32 : 128,
     getBoolPref: (key, fallback) => prefs.get(key) ?? fallback,
     getStringPref: (key, fallback) => prefs.get(key) ?? fallback,
     setBoolPref: (key, value) => prefs.set(key, value),
     setStringPref: (key, value) => prefs.set(key, value),
+    clearUserPref: key => prefs.delete(key),
     savePrefFile() {}, addObserver() {}, removeObserver() {},
   } };
   const db = {
@@ -45,7 +48,10 @@ function fixture(saved = new Map()) {
         if (sql.endsWith("vec_history_mapping")) state.mapping = 0;
       }
       if (sql.startsWith("SELECT count")) return [{ getResultByName: () => state.vectors }];
-      if (sql.includes("SELECT map.rowid")) return state.exclusionRows.map(row => ({ getResultByName: name => row[name] }));
+      if (sql.includes("SELECT map.rowid")) {
+        if (state.beforeExclusionQuery) await state.beforeExclusionQuery;
+        return state.exclusionRows.map(row => ({ getResultByName: name => row[name] }));
+      }
       return [];
     },
     async executeCached(sql, parameters) {
@@ -90,6 +96,7 @@ function fixture(saved = new Map()) {
     clearTimeout(id) { timers.delete(id); },
   };
   const context = vm.createContext({ Services, Cu: { reportError: error => errors.push(error) }, ...timerTools,
+    FluxionMemoryPolicy: require("../chrome/core/memory-policy.js"),
     ChromeUtils: { importESModule: () => ({ getPlacesSemanticHistoryManager() { factoryCalls++; return native; } }) },
   });
   // Only adapt ES-module linkage for Node20's VM; execute the complete shipped
@@ -99,6 +106,11 @@ function fixture(saved = new Map()) {
     .replace("export const FluxionNativeMemory", "globalThis.FluxionNativeMemory");
   vm.runInContext(source, context, { filename: "FluxionNativeMemory.sys.mjs" });
   const adapter = context.FluxionNativeMemory;
+  const policyContext = vm.createContext({ Services, Cu: { reportError: error => errors.push(error) },
+    FluxionNativeMemory: adapter, FluxionMemoryPolicy: require("../chrome/core/memory-policy.js") });
+  vm.runInContext(fs.readFileSync(path.join(__dirname, "../modules/FluxionExclusionPolicy.sys.mjs"), "utf8")
+    .replace(/^import .*;\n/gm, "").replace("export const FluxionExclusionPolicy", "globalThis.FluxionExclusionPolicy"), policyContext);
+  const FluxionExclusionPolicy = policyContext.FluxionExclusionPolicy;
   const FluxionMemoryStore = {
     revision: 0,
     async pruneExisting() { state.pruneCalls++; },
@@ -128,7 +140,7 @@ function fixture(saved = new Map()) {
     } };
     const ctx = vm.createContext({ window, Services, URL, Cc: {}, Ci: { nsINavHistoryQueryOptions: {} },
       Cu: { reportError: error => errors.push(error) },
-      ChromeUtils: { importESModule: () => ({ FluxionNativeMemory: adapter, FluxionMemoryStore,
+      ChromeUtils: { importESModule: () => ({ FluxionNativeMemory: adapter, FluxionMemoryStore, FluxionExclusionPolicy,
         PlacesUtils, PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate } }) },
     });
     for (const file of ["core/settings.js", "core/index-scheduler.js", "core/memory-policy.js",
@@ -142,6 +154,99 @@ function fixture(saved = new Map()) {
     expireTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
   };
 }
+
+test("policy corruption while a native exclusion query waits never scrubs every vector or invents startup deletion", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  await api.enable(); await settle();
+  assert.equal(f.prefs.get("places.semanticHistory.removeOnStartup"), false);
+  f.state.exclusionRows = [{ rowid: 1, url: "https://blocked.example/guide" }, { rowid: 2, url: "https://safe.example/guide" }];
+  const pause = deferred(); f.state.beforeExclusionQuery = pause.promise;
+  const edit = api.setExcludedDomains(["blocked.example"]);
+  await settle();
+  f.prefs.set("places.semanticHistory.initialized", true);
+  f.prefs.set("fluxion.memory.exclusionPolicy", "\u0000");
+  assert.equal(api.exclusionPolicy().valid, false); // Reconcile actual policy subscription.
+  assert.equal(f.prefs.get("browser.ml.enable"), false);
+  assert.equal(f.prefs.get("places.semanticHistory.featureGate"), false);
+  assert.equal(f.prefs.get("places.semanticHistory.removeOnStartup"), false);
+  assert.equal(f.prefs.has("places.semanticHistory.initialized"), false);
+  pause.resolve(); await edit;
+  assert.deepEqual(f.state.cachedWrites, []);
+  assert.equal(f.state.vectors, 2);
+  // An existing explicit opt-out's persisted deletion intent stays in force.
+  const optedOut = fixture(new Map([["fluxion.memory.exclusionPolicy", "{"], ["places.semanticHistory.removeOnStartup", true]]));
+  optedOut.chromeWindow().exclusionPolicy();
+  assert.equal(optedOut.prefs.get("places.semanticHistory.removeOnStartup"), true);
+});
+
+test("named lists migrate legacy domains atomically and preserve direct ownership when a list is disabled", async () => {
+  const legacy = '["direct.example"]';
+  const f = fixture(new Map([["fluxion.memory.excludedDomains", legacy]]));
+  const main = f.chromeWindow(), second = f.chromeWindow();
+  const initial = main.exclusionPolicy();
+  assert.equal(initial.legacy, true);
+  assert.equal(f.prefs.has("fluxion.memory.exclusionPolicy"), false, "reading legacy policy must not persist migration");
+  const created = await main.saveExclusionList({ name: "Health", enabled: true, domains: ["medical.example"] }, initial.revision);
+  assert.equal(created.lists.length, 1);
+  assert.equal(f.prefs.get("fluxion.memory.excludedDomains"), legacy, "legacy migration record changed");
+  assert.deepEqual(Array.from(second.excludedDomains()), ["direct.example", "medical.example"]);
+  await main.excludeDomain("medical.example");
+  const latest = second.exclusionPolicy();
+  await second.saveExclusionList({ ...latest.lists[0], enabled: false }, latest.revision);
+  assert.deepEqual(Array.from(main.excludedDomains()), ["direct.example", "medical.example"], "explicit exclusion must stay direct even when already in a list");
+  await main.setExcludedDomains(["direct.example"], main.exclusionPolicy().revision);
+  assert.deepEqual(Array.from(main.excludedDomains()), ["direct.example"]);
+  assert.equal(main.exclusionPolicy().lists.length, 1, "editing direct entries erased lists");
+  const before = main.exclusionPolicy();
+  await main.deleteExclusionList(before.lists[0].id, before.revision);
+  assert.equal(main.exclusionPolicy().lists.length, 0);
+  assert.equal(f.state.upserts.length, 0, "list disable/delete must never resurrect removed evidence");
+});
+
+test("queued cross-window stale policy edits reject before any write or cleanup", async () => {
+  const f = fixture(), main = f.chromeWindow(), second = f.chromeWindow();
+  const revision = main.exclusionPolicy().revision;
+  const pause = deferred();
+  f.store.deleteBlocked = async values => { f.state.ownedExclusions.push(Array.from(values)); await pause.promise; };
+  const first = main.saveExclusionList({ name: "Health", enabled: true, domains: ["medical.example"] }, revision);
+  await settle();
+  assert.deepEqual(Array.from(second.excludedDomains()), ["medical.example"], "new exclusion was not visible before delayed deletion");
+  const saved = f.prefs.get("fluxion.memory.exclusionPolicy");
+  const rejected = assert.rejects(second.setExcludedDomains(["other.example"], revision), error => error.code === "POLICY_CONFLICT");
+  pause.resolve(); await first; await rejected;
+  assert.equal(f.prefs.get("fluxion.memory.exclusionPolicy"), saved);
+  assert.deepEqual(f.state.ownedExclusions, [["medical.example"]]);
+});
+
+test("invalid canonical policy blocks runtime results/extraction and permits only explicit revision-checked recovery", async () => {
+  const f = fixture(new Map([["fluxion.memory.enabled", true], ["fluxion.memory.exclusionPolicy", "\u0000"]]));
+  const api = f.chromeWindow();
+  f.state.keywords = [{ uri: "https://example.org/guide", title: "Guide" }];
+  let actorCalls = 0;
+  await api.indexBrowser({ currentURI: { spec: "https://example.org/guide" }, browsingContext: { currentWindowGlobal: {
+    getActor() { actorCalls++; throw Error("should not extract"); },
+  } } });
+  assert.equal(actorCalls, 0);
+  assert.equal((await api.search("guide")).state, "policy-error");
+  assert.equal(f.state.searchCalls, 0); assert.equal(f.state.inferenceCalls, 0);
+  const snapshot = api.exclusionPolicy(); assert.equal(snapshot.valid, false);
+  assert.throws(() => f.adapter.getManager(), /Repair the exclusion policy/);
+  assert.equal(f.factoryCalls(), 0, "corrupt policy constructed a Gecko manager that could erase existing data");
+  await assert.rejects(api.setExcludedDomains([]), /needs recovery/);
+  const recovered = await api.resetExclusionPolicy(snapshot.revision);
+  assert.equal(recovered.valid, true); assert.equal(recovered.lists.length, 0);
+});
+
+test("private windows cannot migrate, reset, or change any exclusion policy", async () => {
+  const f = fixture(new Map([["fluxion.memory.excludedDomains", '["direct.example"]']]));
+  const api = f.chromeWindow({ isPrivate: true });
+  const previous = [...f.prefs], revision = api.exclusionPolicy().revision;
+  assert.equal(api.exclusionPolicy().readOnly, true);
+  for (const call of [() => api.saveExclusionList({ name: "Private", enabled: true, domains: [] }, revision),
+    () => api.deleteExclusionList("missing", revision), () => api.resetExclusionPolicy(revision),
+    () => api.setExcludedDomains([]), () => api.excludeDomain("another.example")]) await assert.rejects(call(), /private window/);
+  assert.deepEqual([...f.prefs], previous); assert.equal(f.state.ownedExclusions.length, 0);
+});
 
 test("excluded domain limit rejects new entries atomically after normalization but permits duplicates at capacity", async () => {
   const f = fixture(), api = f.chromeWindow();
@@ -390,7 +495,7 @@ test("exclusions purge native evidence from another window even when hardware ga
 test("private-window exclusion processing never opens native semantic storage", async () => {
   const f = fixture(new Map([["fluxion.memory.enabled", true]]));
   const privateWindow = f.chromeWindow({ isPrivate: true });
-  await privateWindow.setExcludedDomains(["excluded.example"]);
+  await assert.rejects(privateWindow.setExcludedDomains(["excluded.example"]), /private window/);
   assert.equal(f.factoryCalls(), 0);
   assert.equal(f.operations.length, 0);
 });

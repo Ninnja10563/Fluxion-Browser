@@ -235,6 +235,20 @@ jobs:
           path: ${{ runner.temp }}/fluxion-chrome.png
           if-no-files-found: warn
 
+      - name: Verify corrupt Memory policy preserves native evidence on restart
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_MEMORY_CORRUPTION_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-memory-corruption-evidence
+        run: ./fluxion/scripts/verify-macos-memory-corruption.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Memory corruption evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-memory-corruption
+          path: ${{ runner.temp }}/fluxion-memory-corruption-evidence
+          if-no-files-found: warn
+
       - name: Verify explicit Fluxion update discovery
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash

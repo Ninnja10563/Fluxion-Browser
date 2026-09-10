@@ -17,6 +17,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
       elements.push(this);
     }
     append(...children) {
+      for (const child of children) child.parentNode = this;
       this.children.push(...children);
       if (this.tagName === "select") {
         const selected = children.find(child => child.selected);
@@ -38,9 +39,11 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     addEventListener(type, callback) {
       this.listeners.set(type, [...(this.listeners.get(type) || []), callback]);
     }
-    remove() {}
+    contains(node) { return node === this || this.children.some(child => child.contains?.(node)); }
+    focus() { document.activeElement = this; }
+    remove() { if (this.parentNode) this.parentNode.children = this.parentNode.children.filter(child => child !== this); this.parentNode = null; }
     removeEventListener(type, callback) { this.listeners.set(type, (this.listeners.get(type) || []).filter(item => item !== callback)); }
-    dispatchEvent(event) { for (const callback of this.listeners.get(event.type) || []) callback(event); }
+    dispatchEvent(event) { return Promise.all((this.listeners.get(event.type) || []).map(callback => callback(event))); }
   }
   const browserRoot = new Element(); browserRoot.id = "browser";
   const deck = new Element(); deck.id = "tabbrowser-tabbox";

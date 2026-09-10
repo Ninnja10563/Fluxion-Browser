@@ -14,6 +14,7 @@
     throw new Error(message);
   };
   let companion;
+  let privateCompanion;
   let connection;
   function settingsMatch(label, enabled, provider, domains) {
     for (const [name, target] of [["main", window], ["companion", companion]]) {
@@ -177,7 +178,7 @@
       const oldVector = new Array(dimension).fill(0); oldVector[1] = 1;
       // Direct SQL intentionally bypasses the new upsert policy: these rows
       // represent data retained by an older installed browser build.
-      for (const [id, url] of [[91047010, blockedURL], [91047011, safeURL]]) {
+      async function seedEnriched(id, url) {
         await enriched.execute(`INSERT INTO pages
           (id,url,title,description,headings,content,workspace,workspace_name,tab_group,last_visit,visit_count,indexed_at,
            search_title,search_url,search_description,search_headings,search_content)
@@ -186,6 +187,7 @@
         await enriched.execute("INSERT INTO page_vectors(rowid,embedding) VALUES(:id,:vector)",
           { id, vector: PlacesUtils.tensorToSQLBindable(oldVector) });
       }
+      for (const [id, url] of [[91047010, blockedURL], [91047011, safeURL]]) await seedEnriched(id, url);
       const rawCounts = async id => {
         const rows = await enriched.execute(`SELECT
           (SELECT count(*) FROM pages WHERE id=:id) AS pages,
@@ -206,6 +208,73 @@
       for (const url of [blockedURL, safeURL]) assert((await PlacesUtils.history.fetch(url, { includeVisits: true }))?.visits?.length > 0,
         "Enriched privacy cleanup removed Places history");
       report.checks.push({ label: "old-enriched-sensitive-text-and-vector-deleted", blocked, safe });
+
+      stage("creating-disabled-exclusion-list");
+      const listDomains = ["list-privacy-fixture.invalid"];
+      const listed = ["https://list-privacy-fixture.invalid/research/page", "https://research.list-privacy-fixture.invalid/article"];
+      const initialPolicy = companion.FluxionMemory.exclusionPolicy();
+      assert(initialPolicy.valid && !initialPolicy.readOnly, "Companion exclusion policy is not editable");
+      const created = await companion.FluxionMemory.saveExclusionList({ name: "Research privacy", enabled: false, domains: listDomains }, initialPolicy.revision);
+      const list = created.lists.find(item => item.name === "Research privacy");
+      assert(list?.id && !list.enabled, "Disabled exclusion list was not created");
+      for (let index = 0; index < listed.length; index++) {
+        const id = 91047012 + index;
+        await seed("seed-disabled-list-native-evidence", id, nonSentinelBlob, listed[index]);
+        await seedEnriched(id, listed[index]);
+        assert((await rawCounts(id)).pages === 1 && (await storedVector(listed[index]))[1] === 1,
+          "Disabled list fixture did not retain initial evidence");
+      }
+      stage("enabling-list-from-companion-window");
+      const enabledPolicy = await companion.FluxionMemory.saveExclusionList({ ...list, enabled: true }, created.revision);
+      assert(window.FluxionMemory.exclusionPolicy().revision === enabledPolicy.revision,
+        "Main window did not observe the same atomic exclusion policy");
+      settingsMatch("list-policy-keeps-direct-domain-field-separate", true, "gecko-local", "");
+      for (let index = 0; index < listed.length; index++) {
+        const remaining = await rawCounts(91047012 + index);
+        assert(remaining.pages === 0 && remaining.vectors === 0, "Enabled list retained enriched text or vectors");
+        assert((await storedVector(listed[index])).every((value, i) => value === tensor[i]),
+          "Enabled list retained a native vector on its domain or subdomain");
+        assert((await PlacesUtils.history.fetch(listed[index], { includeVisits: true }))?.visits?.length > 0,
+          "Enabling an exclusion list removed ordinary history");
+      }
+      assert((await rawCounts(91047011)).pages === 1 && (await rawCounts(91047011)).vectors === 1 &&
+        (await storedVector(safeURL)).every((value, i) => value === nonSentinel[i]), "List cleanup changed safe evidence");
+      for (const target of [window, companion]) {
+        const results = (await target.FluxionMemory.search("privacy verification")).results;
+        assert(!results.some(item => listed.includes(item.url)) && results.some(item => item.url === safeURL),
+          "List exclusion did not filter both windows while retaining safe history");
+      }
+      let rejected = false;
+      try { await window.FluxionMemory.saveExclusionList({ ...list, name: "Stale overwrite" }, created.revision); }
+      catch (error) { rejected = error.code === "POLICY_CONFLICT"; }
+      assert(rejected && window.FluxionMemory.exclusionPolicy().revision === enabledPolicy.revision,
+        "Stale list edit overwrote the current policy");
+      const beforePrivate = new Set(Services.wm.getEnumerator("navigator:browser"));
+      window.OpenBrowserWindow({ private: true });
+      privateCompanion = await waitFor(() => [...Services.wm.getEnumerator("navigator:browser")]
+        .find(candidate => !beforePrivate.has(candidate) && candidate.FluxionMemory), "Private policy window did not initialise");
+      const privatePolicy = privateCompanion.FluxionMemory.exclusionPolicy();
+      const privateSearch = await privateCompanion.FluxionMemory.search("privacy verification");
+      assert(privatePolicy.readOnly && privateSearch.state === "private" && privateSearch.results.length === 0,
+        "Private policy was not read-only or exposed Memory results");
+      let privateRejected = false;
+      try { await privateCompanion.FluxionMemory.deleteExclusionList(list.id, privatePolicy.revision); }
+      catch (_) { privateRejected = true; }
+      assert(privateRejected && window.FluxionMemory.exclusionPolicy().revision === enabledPolicy.revision,
+        "Private window changed persistent exclusions");
+      privateCompanion.close();
+      await waitFor(() => privateCompanion.closed, "Private policy fixture did not close");
+      const disabledPolicy = await window.FluxionMemory.saveExclusionList({ ...list, enabled: false }, enabledPolicy.revision);
+      await companion.FluxionMemory.deleteExclusionList(list.id, disabledPolicy.revision);
+      for (let index = 0; index < listed.length; index++) {
+        const remaining = await rawCounts(91047012 + index);
+        assert(remaining.pages === 0 && remaining.vectors === 0 &&
+          (await storedVector(listed[index])).every((value, i) => value === tensor[i]),
+          "Disabling or deleting a list resurrected deleted page evidence");
+      }
+      report.checks.push({ label: "user-list-domain-and-subdomain-cross-window-selective-cleanup",
+        placesRetained: true, safeVectorsRetained: true, staleEditRejected: true, privateWriteRejected: true,
+        noEvidenceResurrection: true });
     } finally { await enriched.close(); }
 
     const excludedURL = await seed("seed-before-provider-disable", 91047001, nonSentinelBlob);
@@ -246,15 +315,28 @@
     await empty("final-disabled-state");
     report.reenableScope = "Immediate empty-state check; newly opted-in indexing of retained ordinary history may legitimately generate new vectors later";
   }
-  run().then(() => {
+  async function closeCompanions() {
+    const failures = [];
+    for (const target of [privateCompanion, companion]) {
+      try {
+        if (!target || target.closed) continue;
+        target.close();
+        await waitFor(() => target.closed, "Memory privacy companion did not close");
+      } catch (error) { failures.push(error); }
+    }
+    if (failures.length) throw new Error(failures.map(error => error.message).join("; "));
+  }
+  run().then(async () => {
+    await closeCompanions();
     Services.prefs.setStringPref(`${prefix}.report`, JSON.stringify(report));
     Services.prefs.setStringPref(`${prefix}.health`, "native-vectors-cleared-across-windows");
-  }).catch(error => {
+    Services.prefs.savePrefFile(null);
+  }).catch(async error => {
+    try { await closeCompanions(); } catch (cleanupError) { Cu.reportError(cleanupError); }
+    Services.prefs.clearUserPref(`${prefix}.health`);
     Services.prefs.setStringPref(`${prefix}.report`, JSON.stringify(report));
     Services.prefs.setStringPref(`${prefix}.error`, `${error?.message || error}\n${error?.stack || ""}`);
     Cu.reportError(error);
-  }).finally(() => {
-    companion?.close();
     Services.prefs.savePrefFile(null);
   });
 })(window);

@@ -22,6 +22,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   const operations = [];
   const errors = [];
   const timers = new Map();
+  const prefObservers = new Map();
   let timerID = 0;
   let embeddingCalls = 0;
   let opens = 0, closes = 0, yields = 0;
@@ -69,10 +70,12 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     },
     clearTimeout(id) { timers.delete(id); },
     Services: { prefs: {
+      getPrefType: key => !persistedPrefs.has(key) ? 0 : typeof persistedPrefs.get(key) === "string" ? 32 : 128,
       getBoolPref: (key, fallback) => persistedPrefs.get(key) ?? fallback,
       getStringPref: (key, fallback) => persistedPrefs.get(key) ?? fallback,
       setBoolPref: (key, value) => persistedPrefs.set(key, value),
       savePrefFile() {},
+      addObserver(key, observer) { prefObservers.set(key, observer); },
     } },
     PlacesObservers: {
       addListener(types, callback) { historyObserver = callback; },
@@ -84,11 +87,35 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     .replace("export const FluxionMemoryStore", "globalThis.FluxionMemoryStore");
   vm.runInContext(source, context);
   return { store: context.FluxionMemoryStore, embedding, embeddingStarted, writes, db, operations, errors,
+    setPref(key, value) { persistedPrefs.set(key, value); prefObservers.get(key)?.observe(); },
     opens: () => opens, closes: () => closes, yields: () => yields,
     embeddingCalls: () => embeddingCalls,
     expireEmbeddingWait: () => { for (const callback of timers.values()) callback(); },
     notifyHistory: events => historyObserver(events) };
 }
+
+test("canonical policy changes invalidate deferred embeddings immediately before cleanup starts", async () => {
+  const f = fixture();
+  const pending = f.store.embed("https://medical.example/article", "Article evidence");
+  await f.embeddingStarted.promise;
+  const before = f.store.revision;
+  f.setPref("fluxion.memory.exclusionPolicy", JSON.stringify({ version: 1, directDomains: [],
+    lists: [{ id: "health", name: "Health", enabled: true, domains: ["medical.example"] }] }));
+  assert.ok(f.store.revision > before);
+  f.embedding.resolve({ output: [0.25, 0.75] }); await pending;
+  assert.equal(f.operations.some(operation => operation.sql.startsWith("INSERT INTO page_vectors")), false);
+  assert.equal(await f.store.get("https://medical.example/article"), null);
+});
+
+test("malformed canonical policy blocks store reads and writes without treating it as erase-all", async () => {
+  const f = fixture(new Map([["fluxion.memory.exclusionPolicy", "\u0000"]]));
+  assert.equal(await f.store.get("https://safe.example"), null);
+  assert.deepEqual(JSON.parse(JSON.stringify(await f.store.search("guide"))), { lexical: [], semantic: [] });
+  assert.equal(await f.store.upsert({ url: "https://safe.example", title: "Guide", text: "Evidence" }), false);
+  await f.store.embed("https://safe.example", "Evidence");
+  assert.equal(f.embeddingCalls(), 0);
+  assert.equal(f.operations.some(operation => /^(DELETE|INSERT)/.test(operation.sql)), false);
+});
 
 async function lexicalURLs(query, pages, limit = 12) {
   const { store, operations } = fixture();

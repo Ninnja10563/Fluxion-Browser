@@ -13,7 +13,7 @@ function invalidate() {
 // One module instance coordinates every browser window, including direct pref
 // changes. A disable followed by re-enable must still invalidate old requests.
 const observer = { observe: invalidate };
-for (const pref of ["fluxion.ai.provider", "fluxion.ai.endpoint", "fluxion.ai.model", "fluxion.memory.excludedDomains"]) {
+for (const pref of ["fluxion.ai.provider", "fluxion.ai.endpoint", "fluxion.ai.model", "fluxion.memory.excludedDomains", "fluxion.memory.exclusionPolicy"]) {
   Services.prefs.addObserver(pref, observer);
 }
 

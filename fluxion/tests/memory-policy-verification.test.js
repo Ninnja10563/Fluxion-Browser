@@ -10,6 +10,9 @@ const prefix = "fluxion.memory.policyVerification";
 async function checkPhase(options = {}) {
   const owned = "/private/tmp/fluxion-memory-policy.unit/profile";
   const prefs = new Map([[`${prefix}.safeBytes`, "0000803E0000803E"]]);
+  if (!options.missingSavedPolicy) prefs.set("fluxion.memory.exclusionPolicy", JSON.stringify({ version: 1, directDomains: [],
+    lists: [{ id: "22222222-2222-4222-8222-222222222222", name: "Startup exclusions", enabled: true,
+      domains: ["excluded-policy-fixture.invalid"] }] }));
   if (options.enabledPref) prefs.set(options.enabledPref, true);
   const imports = [], sql = [], connections = [], errors = [];
   let elapsed = 0, closed = 0, fetches = 0;
@@ -21,6 +24,8 @@ async function checkPhase(options = {}) {
       sql.push(statement);
       if (statement.includes("FROM pages WHERE id=1")) return [row({ n: options.blockedPage ? 1 : elapsed < (options.cleanupDelay || 0) ? 1 : 0 })];
       if (statement.includes("FROM page_vectors WHERE rowid=1")) return [row({ n: options.blockedVector ? 1 : 0 })];
+      if (statement.includes("FROM pages WHERE id=3")) return [row({ n: options.listPage ? 1 : 0 })];
+      if (statement.includes("FROM page_vectors WHERE rowid=3")) return [row({ n: options.listVector ? 1 : 0 })];
       if (statement.includes("FROM pages WHERE id=2")) return options.missingSafePage ? [] : [row({
         url: "https://memory-policy-fixture.invalid/article", content: options.changedSafePage ? "Changed" : "Original evidence",
       })];
@@ -52,7 +57,8 @@ async function checkPhase(options = {}) {
       imports.push(uri);
       if (uri === "resource://gre/modules/Sqlite.sys.mjs") return { Sqlite: { async openConnection(config) { connections.push(config); return db; } } };
       if (uri === "resource://gre/modules/PlacesUtils.sys.mjs") return { PlacesUtils: { history: {
-        async fetch() { fetches++; return options.missingVisit ? { visits: [] } : { visits: [{}] }; },
+        async fetch(url) { fetches++; return options.missingVisit || (options.missingListVisit && url.includes("excluded-policy-fixture"))
+          ? { visits: [] } : { visits: [{}] }; },
       } } };
       if (uri.includes("PlacesBrowserStartup.sys.mjs")) return { PlacesBrowserStartup: { _placesBrowserInitComplete: true } };
       throw new Error(`Verifier must not import a cleanup implementation: ${uri}`);
@@ -75,8 +81,26 @@ test("shipped check phase observes delayed startup cleanup without importing Sto
   assert.equal(result.connections[0].readOnly, true);
   assert.equal(result.elapsed, 10000);
   assert.equal(result.closed, 1);
-  assert.equal(result.fetches, 2);
-  assert.equal(JSON.parse(result.prefs.get(`${prefix}.report`)).checks.length, 3);
+  assert.equal(result.fetches, 3);
+  assert.equal(JSON.parse(result.prefs.get(`${prefix}.report`)).checks.length, 4);
+});
+
+test("list-excluded evidence and vectors must independently disappear on disabled startup", async () => {
+  for (const key of ["listPage", "listVector"]) {
+    const result = await checkPhase({ [key]: true });
+    assert.equal(result.prefs.has(`${prefix}.check.health`), false);
+    assert.match(result.prefs.get(`${prefix}.error`), /retained list-excluded evidence|List-excluded vector survived/);
+    assert.equal(result.closed, 1);
+  }
+});
+
+test("lost persisted list or its ordinary Places visit cannot pass the restart verifier", async () => {
+  const policy = await checkPhase({ missingSavedPolicy: true });
+  assert.match(policy.prefs.get(`${prefix}.error`), /Enabled exclusion list did not persist/);
+  assert.equal(policy.connections.length, 0);
+  const visit = await checkPhase({ missingListVisit: true });
+  assert.match(visit.prefs.get(`${prefix}.error`), /removed an ordinary Places visit/);
+  assert.equal(visit.prefs.has(`${prefix}.check.health`), false);
 });
 
 test("retained sensitive page reaches bounded deadline; retained vector separately fails", async () => {
