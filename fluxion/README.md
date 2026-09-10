@@ -10,8 +10,9 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 The 0.58 candidate targets stable tab switching in large sessions: updating
 selection without rebuilding unchanged Flow rows and avoiding redundant
-workspace-session marker writes. Native verification is pending; the published
-DMG remains 0.57.
+workspace-session marker writes and duplicate ownership reads. All 625 tests
+and native diagnostics passed; full release staging is waiting for GitHub's
+update-check quota reset. The published DMG remains 0.57.
 
 ## Latest published changes
 

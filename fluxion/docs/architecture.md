@@ -1053,6 +1053,13 @@ across the workspace, including restoration repairs. Only values that actually
 change are written; a failed read still attempts repair. This reduces writes,
 not the O(N) marker-read cost, and does not add a shadow session cache.
 
+Workspace ownership lookup reuses its successful SessionStore read only within
+that synchronous call when deciding whether repair is necessary. Explicit
+setters and failed first reads retain a fresh comparison. No ownership is
+cached across calls, events or restoration passes. This removes duplicate
+lookup/comparison reads without removing either authoritative reconciliation
+pass; the read path remains O(N).
+
 The separate selection verifier uses 1,000 real native tabs (40 eagerly created
 browsers and the remainder lazy), repeated ordinary selection and multi-select
 operations, and real Flow activation handlers. Identity, mutation and focus

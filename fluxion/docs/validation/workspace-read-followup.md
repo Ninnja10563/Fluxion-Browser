@@ -1,7 +1,8 @@
 # Workspace read reduction — experimental follow-up
 
-This is separate from the frozen 0.58 release candidate. It has not been
-published in a DMG or verified by a complete native release staging run.
+This was developed separately from the first 0.58 release candidate and merged
+only after all native diagnostics passed. It has not yet been published in a
+DMG or verified by a complete native release staging run.
 
 The prior marker-write optimization retained two workspace SessionStore reads
 per candidate: lookup followed immediately by the setter's comparison. This
@@ -22,6 +23,11 @@ ownership at restoration, rapid selection and detached/guarded targets.
 Separate-window marker tests establish in-memory isolation, not private disk
 exclusion. All 625 local tests passed on the implementation tree.
 
-Native selection, cross-window transfer and clean/crash/private recovery must
-pass before this follow-up is promoted into a release. Both authoritative
-reconciliation passes are intentionally retained.
+Native diagnostic
+[34529039499](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/34529039499)
+passed every gate on `161828748b38bd8b66e628f8737d3a3322637928`, including
+selection, cross-window transfer and clean/crash/private recovery. The 1,000-tab
+selection gate retained all row identities with zero unrelated/no-op/structural
+mutations. Hosted p50 was 18.04 ms and p95 33.01 ms; different runs are not a
+controlled before/after timing comparison. Both authoritative reconciliation
+passes are intentionally retained. Full release staging remains required.
