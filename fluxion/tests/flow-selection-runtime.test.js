@@ -63,17 +63,31 @@ function fixture(size = 1000) {
     hasAttribute: () => false, multiselected: false,
   }));
   let selected = tabs[0];
+  const registrations = new Map();
+  const emit = (target, type, origin = target) => {
+    for (const listener of registrations.get(target)?.get(type) || []) listener({ type, target: origin });
+    // Native bubbling is child-to-parent only: parent TabMultiSelect must not
+    // reach a listener incorrectly installed on the tab-strip child.
+    if (target.parentEventTarget) emit(target.parentEventTarget, type, origin);
+  };
   const gBrowser = { tabs, get selectedTabs() { return tabs.filter(tab => tab === selected || tab.multiselected); },
-    clearMultiSelectedTabs() { for (const tab of tabs) tab.multiselected = false; },
-    addToMultiSelectedTabs(tab) { tab.multiselected = true; context.scheduleRender({ type: "TabMultiSelect" }); },
-    removeFromMultiSelectedTabs(tab) { tab.multiselected = false; context.scheduleRender({ type: "TabMultiSelect" }); },
+    clearMultiSelectedTabs() { for (const tab of tabs) tab.multiselected = false; emit(this, "TabMultiSelect"); },
+    addToMultiSelectedTabs(tab) { tab.multiselected = true; emit(this, "TabMultiSelect"); },
+    removeFromMultiSelectedTabs(tab) { tab.multiselected = false; emit(this, "TabMultiSelect"); },
     lockClearMultiSelectionOnce() {}, lastMultiSelectedTab: selected,
   };
+  gBrowser.tabContainer = { parentEventTarget: gBrowser };
   Object.defineProperty(gBrowser, "selectedTab", { get: () => selected, set(tab) {
-    if (tab === selected) return; selected = tab; context.scheduleRender({ type: "TabSelect", target: tab });
+    if (tab === selected) return; selected = tab; emit(gBrowser.tabContainer, "TabSelect", tab);
   } });
   const context = vm.createContext({ document, gBrowser, navigator: { platform: "MacIntel" },
     window: { requestAnimationFrame: action => frames.push(action) },
+    on(target, type, listener) {
+      if (!registrations.has(target)) registrations.set(target, new Map());
+      const listeners = registrations.get(target);
+      if (!listeners.has(type)) listeners.set(type, []);
+      listeners.get(type).push(listener);
+    },
     tabElements: new Map(), groupElements: new Map(), workspaceElements: new Map(),
     dirtyTabs: new Set(), rovingElements: new Map(), renderedMultiSelected: new Set(),
     renderedSelectedTab: null, renderedWorkspace: null, selectionDirty: false,
@@ -94,7 +108,8 @@ function fixture(size = 1000) {
   vm.runInContext(block("  function renderedTreeItems()", "  function clearTabDropFeedback()") +
     block("  function refreshTabElement(", "  function workspaceSymbol(") +
     block("  function createGroupElement(", "  function renderWorkspaces()") +
-    block("  function render()", "  const popupSet ="), context);
+    block("  function render()", "  const popupSet =") +
+    block('  for (const eventName of [\n    "TabOpen",', '  on(gBrowser.tabContainer, "TabSelect", () => {'), context);
   const flush = () => { while (frames.length) frames.shift()(); };
   context.render();
   const row = tab => context.tabElements.get(tab);
@@ -219,6 +234,21 @@ test("coalesced selection and content update settle latest state without topolog
   assert.equal(f.row(f.tabs[3]).classList.contains("is-multiselected"), false);
   assert.equal(f.row(f.tabs[4]).classList.contains("is-multiselected"), true);
   assert.equal(f.row(f.tabs[4])._fluxionParts.title.textContent, "Changed during selection");
+});
+
+test("Gecko parent-dispatched multiselection reaches the shipped subscription without a row click", () => {
+  const f = fixture(20), original = f.nodes();
+  f.gBrowser.addToMultiSelectedTabs(f.tabs[3]); f.flush();
+  assert.equal(f.row(f.tabs[3]).classList.contains("is-multiselected"), true);
+  assert.equal(f.row(f.tabs[3]).getAttribute("aria-selected"), "true");
+  f.gBrowser.addToMultiSelectedTabs(f.tabs[4]); f.flush();
+  f.gBrowser.removeFromMultiSelectedTabs(f.tabs[3]); f.flush();
+  assert.equal(f.row(f.tabs[3]).getAttribute("aria-selected"), "false");
+  assert.equal(f.row(f.tabs[4]).getAttribute("aria-selected"), "true");
+  f.gBrowser.clearMultiSelectedTabs(); f.flush();
+  assert.equal(f.row(f.tabs[4]).classList.contains("is-multiselected"), false);
+  assert.equal(f.row(f.tabs[0]).getAttribute("aria-selected"), "true");
+  assert.deepEqual(f.nodes(), original);
 });
 
 test("workspace and pin topology changes win over pending selection", () => {

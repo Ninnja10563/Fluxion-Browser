@@ -3096,10 +3096,11 @@
     "TabSharingStateChanged",
     "FluxionTabSleep",
     "FluxionPeekChange",
-    "TabMultiSelect",
   ]) {
     on(gBrowser.tabContainer, eventName, scheduleRender);
   }
+  // Gecko emits this event on the tabbrowser itself, not its tab-strip child.
+  on(gBrowser, "TabMultiSelect", scheduleRender);
   on(gBrowser.tabContainer, "TabSelect", () => {
     const tab = gBrowser.selectedTab;
     if (tab?.parentNode && storedTabWorkspace(tab) === currentWorkspace) rememberWorkspaceTab(tab);

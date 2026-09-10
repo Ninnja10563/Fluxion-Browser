@@ -113,9 +113,16 @@
       assert(report.untouchedRowWrites === 0, "Selection mutated an unchanged Flow tab");
       assert(report.unchangedAttributeWrites === 0, "Selection rewrote an unchanged Flow attribute");
       assert(report.rowStructuralChanges === 0, "Selection rebuilt the tab list");
-      assert([...baseline].every(([tab, row]) => row.getAttribute("data-active") === String(tab === gBrowser.selectedTab) &&
-        row.getAttribute("aria-selected") === String(tab === gBrowser.selectedTab || Boolean(tab.multiselected)) &&
-        row.classList.contains("is-multiselected") === Boolean(tab.multiselected)), "Flow active or multiselect state diverged from Gecko");
+      const mismatches = [...baseline].filter(([tab, row]) => row.getAttribute("data-active") !== String(tab === gBrowser.selectedTab) ||
+        row.getAttribute("aria-selected") !== String(tab === gBrowser.selectedTab || Boolean(tab.multiselected)) ||
+        row.classList.contains("is-multiselected") !== Boolean(tab.multiselected));
+      if (mismatches.length) report.stateMismatches = mismatches.slice(0, 12).map(([tab, row]) => ({
+        fixtureIndex: fixtures.indexOf(tab), label: tab.label, nativeSelected: tab === gBrowser.selectedTab,
+        nativeMultiselected: Boolean(tab.multiselected), nativeSelectedTabsIncludes: gBrowser.selectedTabs.includes(tab),
+        rowActive: row.getAttribute("data-active"), rowMultiselected: row.classList.contains("is-multiselected"),
+        rowAriaSelected: row.getAttribute("aria-selected"), connected: row.isConnected,
+      }));
+      assert(mismatches.length === 0, `Flow active or multiselect state diverged from Gecko: ${JSON.stringify(report.stateMismatches)}`);
       const stops = [...tree.querySelectorAll('[role="treeitem"]')].filter(node => node.tabIndex === 0 && !node.closest("[hidden]"));
       assert(stops.length === 1, "Selection broke the tree's single roving tab stop");
       const pinned = [...flow.querySelectorAll(".fluxion-pinned-tabs .fluxion-tab")];
