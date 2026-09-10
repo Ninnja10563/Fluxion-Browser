@@ -84,6 +84,36 @@ test("an interrupted download can resume with exact Range bytes and stable entit
   assert.deepEqual(Buffer.from(await changedEntity.arrayBuffer()), server.DOWNLOAD_BYTES);
 });
 
+test("partial-file fixture delivers buffered-file-sized chunks and resumes its exact binary payload", async t => {
+  const server = await fixture(t, { partialDurationMs: 200 });
+  assert.equal(server.partialDownload.bytes, 512 * 1024);
+  const response = await fetch(`${server.origin}/download-partial`);
+  assert.equal(response.headers.get("content-length"), String(server.PARTIAL_BYTES.length));
+  assert.equal(response.headers.get("content-disposition"), `attachment; filename="${server.PARTIAL_FILENAME}"`);
+  const reader = response.body.getReader();
+  const chunks = [];
+  let received = 0;
+  while (received < 64 * 1024) {
+    const next = await reader.read();
+    assert.equal(next.done, false);
+    chunks.push(next.value);
+    received += next.value.length;
+  }
+  assert.ok(received < server.PARTIAL_BYTES.length);
+  await reader.cancel();
+  const resumed = await fetch(`${server.origin}/download-partial`, {
+    headers: { Range: `bytes=${received}-`, "If-Range": response.headers.get("etag") },
+  });
+  assert.equal(resumed.status, 206);
+  chunks.push(Buffer.from(await resumed.arrayBuffer()));
+  assert.deepEqual(Buffer.concat(chunks), server.PARTIAL_BYTES);
+  const state = await (await fetch(`${server.origin}/state`)).json();
+  assert.equal(state.downloads, 2);
+  assert.equal(state.partialDownloads, 2);
+  assert.equal(state.slowDownloads, 0);
+  assert.equal(state.rangeDownloads, 1);
+});
+
 test("login requires correct form values and a returned cookie across the redirect", async t => {
   const server = await fixture(t);
   assert.equal((await fetch(`${server.origin}/account`)).status, 401);

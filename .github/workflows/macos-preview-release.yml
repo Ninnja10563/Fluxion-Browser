@@ -52,6 +52,7 @@ jobs:
           [[ "$source_version" == "$locked_version" ]]
 
       - name: Build Fluxion application
+        id: build
         shell: bash
         env:
           FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
@@ -86,18 +87,22 @@ jobs:
           [[ "$(plutil -extract policies.DisableAppUpdate raw "$resources/distribution/policies.json")" == 'true' ]]
 
       - name: Verify repeated native Flow updates
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: ./fluxion/scripts/verify-macos-flow.sh '.runtime/Fluxion.app'
 
       - name: Verify real transfers and content form navigation
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: ./fluxion/scripts/verify-macos-browsing.sh '.runtime/Fluxion.app'
 
       - name: Verify real local semantic retrieval
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: ./fluxion/scripts/verify-macos-memory.sh '.runtime/Fluxion.app'
 
       - name: Verify session recovery and private isolation
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: ./fluxion/scripts/verify-macos-session.sh '.runtime/Fluxion.app'
 

@@ -7,6 +7,10 @@ export const DOWNLOAD_FILENAME = "fluxion-download.txt";
 export const DOWNLOAD_TEXT = "Fluxion native browsing verification\nDownloaded bytes survive a real multipart upload.\n";
 export const DOWNLOAD_BYTES = Buffer.from(DOWNLOAD_TEXT, "utf8");
 export const DOWNLOAD_SHA256 = createHash("sha256").update(DOWNLOAD_BYTES).digest("hex");
+export const PARTIAL_FILENAME = "fluxion-partial.bin";
+export const PARTIAL_BYTES = Buffer.alloc(512 * 1024);
+for (let index = 0; index < PARTIAL_BYTES.length; index += 1) PARTIAL_BYTES[index] = index % 251;
+export const PARTIAL_SHA256 = createHash("sha256").update(PARTIAL_BYTES).digest("hex");
 export const LOGIN = Object.freeze({ username: "fluxion", password: "fixture-only" });
 
 const page = (title, content) => `<!doctype html>
@@ -77,13 +81,30 @@ function multipartFile(contentType, body) {
   return { filename, bytes: body.subarray(contentStart, contentEnd) };
 }
 
-export async function start({ port = 0, slowDurationMs = 2100 } = {}) {
+function streamDownload(response, status, headers, payload, duration, segments) {
+  response.writeHead(status, headers);
+  const chunkSize = Math.ceil(payload.length / segments);
+  response.write(payload.subarray(0, chunkSize));
+  const timers = [];
+  for (let index = 1; index < segments; index += 1) {
+    timers.push(setTimeout(() => {
+      const chunk = payload.subarray(index * chunkSize, (index + 1) * chunkSize);
+      if (index === segments - 1) response.end(chunk);
+      else response.write(chunk);
+    }, Math.round(duration * index / (segments - 1))));
+  }
+  response.once("close", () => timers.forEach(clearTimeout));
+}
+
+export async function start({ port = 0, slowDurationMs = 2100, partialDurationMs = 4000 } = {}) {
   if (!Number.isInteger(port) || port < 0 || port > 65535) throw new TypeError("Fixture port must be an integer from 0 through 65535");
   if (!Number.isInteger(slowDurationMs) || slowDurationMs < 1 || slowDurationMs > 10000) throw new TypeError("Slow download duration must be from 1 through 10000 milliseconds");
+  if (!Number.isInteger(partialDurationMs) || partialDurationMs < 1 || partialDurationMs > 10000) throw new TypeError("Partial download duration must be from 1 through 10000 milliseconds");
   const sessions = new Set();
   const state = {
     downloads: 0,
     slowDownloads: 0,
+    partialDownloads: 0,
     rangeDownloads: 0,
     uploads: 0,
     upload: { verified: false, filename: "", sha256: "", bytes: 0 },
@@ -113,51 +134,49 @@ export async function start({ port = 0, slowDurationMs = 2100 } = {}) {
       if (method === "GET" && url.pathname === "/") {
         send(200, page("Fluxion browsing fixture", `<a id="download-link" href="/download-slow" download="${DOWNLOAD_FILENAME}">Download reference</a>${uploadForm}${loginForm}
 <p id="js-result">Waiting for page JavaScript</p><script nonce="fluxion-fixture">document.documentElement.dataset.fixtureScript="executed";document.getElementById("js-result").textContent="Page JavaScript executed";</script>`));
-      } else if (method === "GET" && ["/download", "/download-slow"].includes(url.pathname)) {
+      } else if (method === "GET" && ["/download", "/download-slow", "/download-partial"].includes(url.pathname)) {
         state.downloads += 1;
-        const etag = `"${DOWNLOAD_SHA256}"`;
+        const partial = url.pathname === "/download-partial";
+        const sourceBytes = partial ? PARTIAL_BYTES : DOWNLOAD_BYTES;
+        const filename = partial ? PARTIAL_FILENAME : DOWNLOAD_FILENAME;
+        const etag = `"${partial ? PARTIAL_SHA256 : DOWNLOAD_SHA256}"`;
         let start = 0;
-        let end = DOWNLOAD_BYTES.length - 1;
+        let end = sourceBytes.length - 1;
         let status = 200;
         if (request.headers.range && (!request.headers["if-range"] || request.headers["if-range"] === etag)) {
           const range = request.headers.range.match(/^bytes=(\d*)-(\d*)$/);
           if (range && (range[1] || range[2])) {
-            if (!range[1]) start = Math.max(0, DOWNLOAD_BYTES.length - Number(range[2]));
+            if (!range[1]) start = Math.max(0, sourceBytes.length - Number(range[2]));
             else {
               start = Number(range[1]);
               if (range[2]) end = Math.min(end, Number(range[2]));
             }
           }
           if (!range || !(range[1] || range[2]) || !Number.isSafeInteger(start) ||
-              !Number.isSafeInteger(end) || start >= DOWNLOAD_BYTES.length || end < start ||
+              !Number.isSafeInteger(end) || start >= sourceBytes.length || end < start ||
               (!range[1] && Number(range[2]) === 0)) {
-            send(416, "", { "Content-Range": `bytes */${DOWNLOAD_BYTES.length}` });
+            send(416, "", { "Content-Range": `bytes */${sourceBytes.length}` });
             return;
           }
           status = 206;
           state.rangeDownloads += 1;
         }
-        const payload = DOWNLOAD_BYTES.subarray(start, end + 1);
+        const payload = sourceBytes.subarray(start, end + 1);
         const headers = {
           "Content-Type": "application/octet-stream",
           "Content-Length": String(payload.length),
-          "Content-Disposition": `attachment; filename="${DOWNLOAD_FILENAME}"`,
+          "Content-Disposition": `attachment; filename="${filename}"`,
           "Cache-Control": "no-store",
           "Accept-Ranges": "bytes",
           ETag: etag,
         };
-        if (status === 206) headers["Content-Range"] = `bytes ${start}-${end}/${DOWNLOAD_BYTES.length}`;
-        if (url.pathname === "/download-slow") {
+        if (status === 206) headers["Content-Range"] = `bytes ${start}-${end}/${sourceBytes.length}`;
+        if (partial) {
+          state.partialDownloads += 1;
+          streamDownload(response, status, headers, payload, partialDurationMs, 4);
+        } else if (url.pathname === "/download-slow") {
           state.slowDownloads += 1;
-          response.writeHead(status, headers);
-          const first = Math.max(1, Math.floor(payload.length / 3));
-          const second = Math.min(payload.length, first * 2);
-          response.write(payload.subarray(0, first));
-          const timers = [
-            setTimeout(() => response.write(payload.subarray(first, second)), Math.floor(slowDurationMs / 2)),
-            setTimeout(() => response.end(payload.subarray(second)), slowDurationMs),
-          ];
-          response.once("close", () => timers.forEach(clearTimeout));
+          streamDownload(response, status, headers, payload, slowDurationMs, 3);
         } else send(status, payload, headers);
       } else if (method === "GET" && url.pathname === "/upload") {
         send(200, page("Fluxion upload form", uploadForm));
@@ -195,7 +214,7 @@ export async function start({ port = 0, slowDurationMs = 2100 } = {}) {
         send(303, "", { Location: "/", "Set-Cookie": "fluxion_fixture_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict" });
       } else if (method === "GET" && url.pathname === "/state") {
         send(200, JSON.stringify(state), { "Content-Type": "application/json" });
-      } else if (["/", "/download", "/download-slow", "/upload", "/login", "/account", "/logout", "/state"].includes(url.pathname)) {
+      } else if (["/", "/download", "/download-slow", "/download-partial", "/upload", "/login", "/account", "/logout", "/state"].includes(url.pathname)) {
         send(405, "Method not allowed");
       } else send(404, "Fixture endpoint not found");
     } catch (error) {
@@ -220,6 +239,7 @@ export async function start({ port = 0, slowDurationMs = 2100 } = {}) {
   return {
     origin, port: address.port, close,
     download: { filename: DOWNLOAD_FILENAME, text: DOWNLOAD_TEXT, sha256: DOWNLOAD_SHA256, bytes: DOWNLOAD_BYTES.length, path: "/download-slow" },
+    partialDownload: { filename: PARTIAL_FILENAME, sha256: PARTIAL_SHA256, bytes: PARTIAL_BYTES.length, path: "/download-partial" },
   };
 }
 
@@ -231,7 +251,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exitCode = 64;
   } else {
     const fixture = await start({ port: value === undefined ? 0 : Number(value) });
-    process.stdout.write(`${JSON.stringify({ origin: fixture.origin, port: fixture.port, download: fixture.download })}\n`);
+    process.stdout.write(`${JSON.stringify({ origin: fixture.origin, port: fixture.port, download: fixture.download, partialDownload: fixture.partialDownload })}\n`);
     const stop = () => fixture.close().catch(error => { process.stderr.write(`${error.message}\n`); process.exitCode = 1; });
     process.once("SIGINT", stop);
     process.once("SIGTERM", stop);

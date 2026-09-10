@@ -109,18 +109,30 @@
     const unfinishedTarget = PathUtils.join(PathUtils.profileDir, "fluxion-unfinished.txt");
     const partialPath = `${unfinishedTarget}.part`;
     const unfinished = await Downloads.createDownload({
-      source: `${origin}/download-slow`, target: { path: unfinishedTarget, partFilePath: partialPath },
+      source: `${origin}/download-partial`, target: { path: unfinishedTarget, partFilePath: partialPath },
     });
     unfinished.tryToKeepPartialData = true;
     await list.add(unfinished);
     await window.FluxionLibrary.refresh();
     const unfinishedRow = await waitFor(() => libraryRow("fluxion-unfinished.txt"), "Library omitted the unfinished transfer");
     const unfinishedTransfer = unfinished.start().catch(() => {});
-    await waitFor(async () => {
-      if (unfinished.stopped || unfinished.currentBytes <= 0 || !rowAction(unfinishedRow, "Cancel")) return false;
+    try {
+      await waitFor(async () => {
+        if (unfinished.stopped || unfinished.currentBytes <= 0 || !rowAction(unfinishedRow, "Cancel")) return false;
+        const partial = await IOUtils.stat(partialPath).catch(() => null);
+        return partial?.size > 0;
+      }, "Unfinished transfer did not create real partial file bytes");
+    } catch (error) {
       const partial = await IOUtils.stat(partialPath).catch(() => null);
-      return partial?.size > 0;
-    }, "Unfinished transfer did not create real partial file bytes");
+      report.partialFailure = {
+        stopped: unfinished.stopped, succeeded: unfinished.succeeded, canceled: unfinished.canceled,
+        error: unfinished.error?.message || null, currentBytes: unfinished.currentBytes,
+        totalBytes: unfinished.totalBytes, hasPartialData: unfinished.hasPartialData,
+        partFileExists: Boolean(partial), partFileSize: partial?.size ?? null,
+        targetExists: await IOUtils.exists(unfinishedTarget),
+      };
+      throw error;
+    }
     rowAction(unfinishedRow, "Remove").click();
     await waitFor(async () => !(await list.getAll()).includes(unfinished) &&
       !libraryRow("fluxion-unfinished.txt") && !(await IOUtils.exists(partialPath)),
@@ -151,8 +163,8 @@
     const response = await window.fetch(`${origin}/state`);
     assert(response.ok, "Fixture did not expose server-side browsing evidence");
     report.server = await response.json();
-    assert(report.server.downloads >= 3 && report.server.slowDownloads >= 3,
-      "Server did not observe initial, retried, and removed HTTP transfers");
+    assert(report.server.downloads >= 3 && report.server.slowDownloads >= 2 && report.server.partialDownloads >= 1,
+      "Server did not observe initial, retried, and removed partial HTTP transfers");
     assert(report.server.uploads === 1 && report.server.upload?.verified &&
       report.server.upload.filename === "fluxion-download.txt" && report.server.upload.sha256 === expectedHash &&
       report.server.upload.bytes === expectedSize, "Server did not receive exact multipart file bytes");
