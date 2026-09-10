@@ -41,6 +41,37 @@
     let baseline = rows(), closeButtons = new Map([...baseline].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
     const input = document.getElementById("urlbar-input");
     input.focus(); tree.scrollTop = 400; await settle();
+    const snapshot = destination => ({ activeId: document.activeElement?.id || "",
+      activeTag: document.activeElement?.localName || "", inputFocused: document.activeElement === input,
+      destinationBrowserFocused: document.activeElement === destination.linkedBrowser,
+      activeWindow: Services.focus.activeWindow === window, scrollTop: tree.scrollTop,
+      savedUrlbarFocus: Boolean(window.gURLBar.getBrowserState(destination.linkedBrowser).urlbarFocused),
+      selected: gBrowser.selectedTab === destination });
+    assert(document.activeElement === input, `Could not establish initial URLbar focus: ${JSON.stringify(snapshot(fixtures[0]))}`);
+    const cold = fixtures[1];
+    report.coldSelection = { before: snapshot(cold) };
+    ui.selectTab(cold);
+    report.coldSelection.immediate = snapshot(cold);
+    await settle();
+    const nativeOwner = () => window.gURLBar.getBrowserState(cold.linkedBrowser).urlbarFocused ? input : cold.linkedBrowser;
+    try {
+      await wait(() => document.activeElement === nativeOwner(), "Cold selection did not restore Gecko's saved destination focus policy");
+    } finally { report.coldSelection.final = snapshot(cold); }
+    assert(!document.activeElement?.closest?.("#fluxion-flow"), "Flow stole focus after cold native selection");
+    assert(Math.abs(tree.scrollTop - report.coldSelection.before.scrollTop) <= 1,
+      `Cold native selection scrolled Flow: ${JSON.stringify(report.coldSelection)}`);
+    // Native Gecko remembers URLbar focus per tab. Establish that state by
+    // actually visiting and focusing each destination, never changing its store.
+    for (const tab of fixtures.slice(0, 33)) {
+      ui.selectTab(tab); await settle(); input.focus(); await settle();
+      assert(document.activeElement === input, `Could not prime native URLbar focus: ${JSON.stringify(snapshot(tab))}`);
+    }
+    ui.selectTab(fixtures[0]); await settle();
+    await wait(() => document.activeElement === input, "Primed native tab did not restore URLbar focus");
+    tree.scrollTop = 400; await settle();
+    baseline = rows();
+    closeButtons = new Map([...baseline].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
+    report.focusContract = "One cold Gecko-policy selection, then 33 tabs primed by real selection+input.focus before 30 measured selections";
     const scroll = tree.scrollTop;
     observer = new window.MutationObserver(records => mutations.push(...records));
     observer.observe(flow, { attributes: true, attributeOldValue: true, childList: true, characterData: true, subtree: true });
@@ -92,11 +123,14 @@
     };
     for (let i = 1; i <= 30; i++) {
       const previous = gBrowser.selectedTab, next = fixtures[i];
-      const start = window.performance.now(); ui.selectTab(next); await frame();
+      const evidence = { index: i, before: snapshot(next) };
+      report.lastSelection = evidence;
+      const start = window.performance.now(); ui.selectTab(next);
+      evidence.immediate = snapshot(next); await frame();
       latencies.push(window.performance.now() - start);
-      await settle(); verify(new Set([previous, next]));
+      await settle(); evidence.final = snapshot(next); verify(new Set([previous, next]));
       assert(document.activeElement === input && Math.abs(tree.scrollTop - scroll) <= 1,
-        "Background native selection stole input focus or scrolled Flow");
+        `Background native selection stole input focus or scrolled Flow: ${JSON.stringify(evidence)}`);
       report.selections++;
     }
     const selected = gBrowser.selectedTab;
