@@ -26,7 +26,8 @@ static int same_process(const struct proc_bsdinfo *a, const struct proc_bsdinfo 
 
 int main(int argc, char **argv) {
   char *end = NULL;
-  if (argc != 2) { fputs("usage: file-picker-owner OWNED_BROWSER_PID\n", stderr); return 64; }
+  int authorized_only = argc == 3 && !strcmp(argv[2], "--authorized");
+  if (argc != 2 && !authorized_only) { fputs("usage: file-picker-owner OWNED_BROWSER_PID [--authorized]\n", stderr); return 64; }
   errno = 0;
   long parsed = strtol(argv[1], &end, 10);
   if (errno || !end || *end || parsed <= 1 || parsed > INT_MAX) return 64;
@@ -45,10 +46,13 @@ int main(int argc, char **argv) {
   count = proc_listallpids(pids, (int)(capacity * sizeof(*pids)));
   if (count <= 0 || (size_t)count >= capacity) { free(pids); return 1; }
   const char *expected = "/System/Library/Frameworks/AppKit.framework/Versions/C/XPCServices/com.apple.appkit.xpc.openAndSavePanelService.xpc/Contents/MacOS/com.apple.appkit.xpc.openAndSavePanelService";
-  printf("{\"ownedPID\":%d,\"ownerResponsiblePID\":%d,\"ownerStart\":\"%llu.%06llu\",\"candidates\":[",
+  if (!authorized_only) printf("{\"ownedPID\":%d,\"ownerResponsiblePID\":%d,\"ownerStart\":\"%llu.%06llu\",\"candidates\":[",
     owner, responsible(owner), (unsigned long long)owner_before.pbi_start_tvsec,
     (unsigned long long)owner_before.pbi_start_tvusec);
   int emitted = 0;
+  int approved_count = 0;
+  pid_t approved = 0;
+  struct proc_bsdinfo approved_info = {0};
   for (int i = 0; i < count; ++i) {
     char path[PROC_PIDPATHINFO_MAXSIZE] = {0};
     if (proc_pidpath(pids[i], path, sizeof(path)) <= 0 || strcmp(path, expected)) continue;
@@ -56,7 +60,8 @@ int main(int argc, char **argv) {
     if (!info(pids[i], &before) || before.pbi_uid != owner_before.pbi_uid) continue;
     pid_t attribution = responsible(pids[i]);
     if (!info(pids[i], &after) || !same_process(&before, &after)) continue;
-    printf("%s{\"pid\":%d,\"responsiblePID\":%d,\"start\":\"%llu.%06llu\",\"authorized\":%s}",
+    if (attribution == owner) { approved_count++; approved = pids[i]; approved_info = after; }
+    if (!authorized_only) printf("%s{\"pid\":%d,\"responsiblePID\":%d,\"start\":\"%llu.%06llu\",\"authorized\":%s}",
       emitted++ ? "," : "", pids[i], attribution,
       (unsigned long long)before.pbi_start_tvsec, (unsigned long long)before.pbi_start_tvusec,
       attribution == owner ? "true" : "false");
@@ -65,6 +70,13 @@ int main(int argc, char **argv) {
   if (!info(owner, &owner_after) || !same_process(&owner_before, &owner_after)) {
     fputs("\nOwned browser identity changed during attribution\n", stderr); return 1;
   }
-  puts("]}");
+  if (authorized_only) {
+    struct proc_bsdinfo approved_after;
+    if (approved_count != 1 || !info(approved, &approved_after) ||
+        !same_process(&approved_info, &approved_after) || responsible(approved) != owner) {
+      fputs("No unique live AppKit panel service attributed to the owned browser\n", stderr); return 1;
+    }
+    printf("%d\n", approved);
+  } else puts("]}");
   return 0;
 }

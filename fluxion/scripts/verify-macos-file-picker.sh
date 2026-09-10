@@ -3,20 +3,41 @@ set -euo pipefail
 
 [[ "$(uname -s)" == Darwin ]] || { printf 'The native file-picker verifier requires macOS.\n' >&2; exit 69; }
 fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-app="${1:-$fluxion_root/../.runtime/Fluxion.app}"
+app_input="${1:-$fluxion_root/../.runtime/Fluxion.app}"
+app="$(CDPATH= cd -- "$app_input" && pwd -P)"
 launcher="$app/Contents/MacOS/Fluxion"
 [[ -x "$launcher" ]] || { printf 'Fluxion launcher is missing: %s\n' "$launcher" >&2; exit 69; }
 check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-file-picker-check.XXXXXX")"
 profile="$check_root/profile"
 server_log="$check_root/server.log"
 browser_log="$check_root/browser.log"
+browser_error="$check_root/browser-error.log"
 driver_log="$check_root/driver.log"
 driver_dir="$check_root/driver"
 server_pid=""
 browser_pid=""
+opener_pid=""
 artifact_dir="${FLUXION_FILE_PICKER_ARTIFACT_DIR:-}"
+owned_browser_pids() {
+  ps -axww -o pid= -o command= | node -e '
+    let input=""; process.stdin.on("data", chunk=>input+=chunk); process.stdin.on("end",()=>{
+      for(const line of input.split("\n")) {
+        const row=line.match(/^\s*(\d+)\s+(.*)$/); if(!row)continue;
+        if(row[2].startsWith(process.argv[1]+"/Contents/MacOS/firefox ") &&
+          (row[2].includes("--profile "+process.argv[2]+" ") || row[2].endsWith("--profile "+process.argv[2]))) console.log(row[1]);
+      }
+    });' "$app" "$profile"
+}
 cleanup() {
-  for pid in "$browser_pid" "$server_pid"; do
+  for pid in $(owned_browser_pids); do
+    kill "$pid" 2>/dev/null || true
+    for ((stop_attempt=0; stop_attempt<40; stop_attempt++)); do
+      kill -0 "$pid" 2>/dev/null || break
+      sleep 0.25
+    done
+    if kill -0 "$pid" 2>/dev/null && owned_browser_pids | grep -Fxq "$pid"; then kill -KILL "$pid" 2>/dev/null || true; fi
+  done
+  for pid in "$opener_pid" "$server_pid"; do
     if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
       kill "$pid" 2>/dev/null || true
       for ((stop_attempt=0; stop_attempt<40; stop_attempt++)); do
@@ -29,7 +50,7 @@ cleanup() {
   done
   if [[ -n "$artifact_dir" ]]; then
     mkdir -p "$artifact_dir"
-    for log in "$browser_log" "$server_log" "$driver_log"; do
+    for log in "$browser_log" "$browser_error" "$server_log" "$driver_log"; do
       [[ ! -f "$log" ]] || cp "$log" "$artifact_dir/file-picker-$(basename "$log")"
     done
     if [[ -f "$profile/prefs.js" ]]; then
@@ -68,11 +89,25 @@ upload_path="$(node -e '
 expected_hash="$(node -e 'console.log(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8").split("\n")[0]).filePicker.sha256)' "$server_log")"
 expected_size="$(node -e 'console.log(JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8").split("\n")[0]).filePicker.bytes)' "$server_log")"
 
-FLUXION_PROFILE="$profile" FLUXION_FILE_PICKER_TEST=1 FLUXION_FILE_PICKER_ORIGIN="$origin" \
-  FLUXION_FILE_PICKER_UPLOAD_PATH="$upload_path" FLUXION_FILE_PICKER_DRIVER_DIR="$driver_dir" \
-  FLUXION_FILE_PICKER_EXPECTED_SHA256="$expected_hash" FLUXION_FILE_PICKER_EXPECTED_SIZE="$expected_size" \
-  "$launcher" "$origin/file-picker" >"$browser_log" 2>&1 &
-browser_pid=$!
+/usr/bin/open -n -W -a "$app" \
+  --env "FLUXION_PROFILE=$profile" --env "FLUXION_FILE_PICKER_TEST=1" --env "FLUXION_FILE_PICKER_ORIGIN=$origin" \
+  --env "FLUXION_FILE_PICKER_UPLOAD_PATH=$upload_path" --env "FLUXION_FILE_PICKER_DRIVER_DIR=$driver_dir" \
+  --env "FLUXION_FILE_PICKER_EXPECTED_SHA256=$expected_hash" --env "FLUXION_FILE_PICKER_EXPECTED_SIZE=$expected_size" \
+  --stdout "$browser_log" --stderr "$browser_error" "$origin/file-picker" &
+opener_pid=$!
+for ((attempt=0; attempt<160; attempt++)); do
+  if [[ -f "$profile/prefs.js" ]]; then
+    browser_pid="$(node -e 'const t=require("node:fs").readFileSync(process.argv[1],"utf8"); const m=t.match(/user_pref\("fluxion\.filePicker\.pid", (\d+)\)/); if(m)console.log(m[1]);' "$profile/prefs.js")"
+    if [[ -n "$browser_pid" ]]; then
+      owned_browser_pids | grep -Fxq "$browser_pid" || { printf 'Reported browser PID does not own the exact app and profile.\n' >&2; exit 1; }
+      break
+    fi
+  fi
+  kill -0 "$opener_pid" 2>/dev/null || break
+  sleep 0.25
+done
+[[ -n "$browser_pid" ]] || { printf 'LaunchServices did not start the owned file-picker browser.\n' >&2; exit 1; }
+"$check_root/file-picker-owner" "$browser_pid" >>"$driver_log" 2>&1
 foreground_ready=false
 for ((attempt=0; attempt<480; attempt++)); do
   kill -0 "$browser_pid" 2>/dev/null && kill -0 "$server_pid" 2>/dev/null || break
@@ -86,7 +121,9 @@ for ((attempt=0; attempt<480; attempt++)); do
   driver_failed=false
   for action in cancel accept; do
     if [[ -f "$driver_dir/$action.ready" && ! -f "$driver_dir/$action.sent" ]]; then
-      if /usr/bin/osascript "$check_root/file-picker-driver.scpt" "$action" "$browser_pid" "$upload_path" >>"$driver_log" 2>&1; then
+      owned_browser_pids | grep -Fxq "$browser_pid" || { printf 'Owned file-picker browser identity changed.\n' >&2; break 2; }
+      if /usr/bin/osascript "$check_root/file-picker-driver.scpt" "$action" "$browser_pid" "$upload_path" "$check_root/file-picker-owner" >>"$driver_log" 2>&1; then
+        "$check_root/file-picker-owner" "$browser_pid" >>"$driver_log" 2>&1
         touch "$driver_dir/$action.sent"
       else
         printf 'Native file-picker driver failed during %s; no mock fallback is permitted.\n' "$action" >&2
@@ -116,7 +153,7 @@ if [[ -n "$artifact_dir" ]]; then
   /usr/sbin/screencapture -x "$artifact_dir/file-picker-failure.png" || true
 fi
 [[ ! -f "$profile/prefs.js" ]] || grep 'fluxion\.filePicker\.' "$profile/prefs.js" >&2 || true
-for log in "$driver_log" "$browser_log" "$server_log"; do
+for log in "$driver_log" "$browser_log" "$browser_error" "$server_log"; do
   [[ ! -f "$log" ]] || sed -n '1,160p' "$log" >&2
 done
 exit 1

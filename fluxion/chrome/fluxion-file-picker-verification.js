@@ -5,6 +5,7 @@
   const prefix = "fluxion.filePicker";
   if (Services.prefs.getBoolPref(`${prefix}.claimed`, false)) return;
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
+  Services.prefs.setIntPref(`${prefix}.pid`, Services.appinfo.processID);
   const origin = Services.env.get("FLUXION_FILE_PICKER_ORIGIN");
   const driver = Services.env.get("FLUXION_FILE_PICKER_DRIVER_DIR");
   const expectedHash = Services.env.get("FLUXION_FILE_PICKER_EXPECTED_SHA256");

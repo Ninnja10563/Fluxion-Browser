@@ -1,4 +1,15 @@
 -- Test-only OS input driver. No browser APIs, clipboard, or picker replacement.
+property resolverExecutable : ""
+property remotePanelPID : 0
+
+on requireNativeAction(ownedPID)
+  my requireFrontmost(ownedPID)
+  if remotePanelPID is not 0 then
+    set currentPID to (do shell script (quoted form of resolverExecutable) & " " & ownedPID & " --authorized") as integer
+    if currentPID is not remotePanelPID then error "Native panel's exact OS ownership changed"
+  end if
+end requireNativeAction
+
 on requireFrontmost(ownedPID)
   tell application "System Events"
     if (unix id of first application process whose frontmost is true) is not ownedPID then error "Owned file-picker process lost foreground focus"
@@ -34,6 +45,34 @@ on ownedSheet(ownedPID)
         end repeat
       end repeat
     end tell
+  end tell
+  -- A remote panel is accepted only after OS responsibility identifies one
+  -- exact protected-system helper owned by this browser, not its CI ancestor.
+  try
+    set candidatePID to (do shell script (quoted form of resolverExecutable) & " " & ownedPID & " --authorized") as integer
+  on error
+    return missing value
+  end try
+  tell application "System Events"
+    set remoteProcess to first application process whose unix id is candidatePID
+    repeat with candidateWindow in windows of remoteProcess
+      if (value of attribute "AXRole" of candidateWindow) is "AXSheet" then
+        set remotePanelPID to candidatePID
+        return contents of candidateWindow
+      end if
+      if (value of attribute "AXSubrole" of candidateWindow) is "AXDialog" then
+        set remotePanelPID to candidatePID
+        return contents of candidateWindow
+      end if
+      repeat with descendant in entire contents of candidateWindow
+        try
+          if (value of attribute "AXRole" of descendant) is "AXSheet" then
+            set remotePanelPID to candidatePID
+            return contents of descendant
+          end if
+        end try
+      end repeat
+    end repeat
   end tell
   return missing value
 end ownedSheet
@@ -84,6 +123,8 @@ end ownedWindowSummary
 on run arguments
   set actionName to item 1 of arguments
   set ownedPID to (item 2 of arguments) as integer
+  set resolverExecutable to item 4 of arguments
+  set remotePanelPID to 0
   if actionName is not "cancel" and actionName is not "accept" then error "Unknown file-picker driver action"
   tell application "System Events"
     set ownedProcess to first application process whose unix id is ownedPID
@@ -96,6 +137,7 @@ on run arguments
   delay 0.3
   my requireFrontmost(ownedPID)
   if my ownedSheet(ownedPID) is not missing value then error "Unexpected pre-existing sheet in owned fixture"
+  my requireNativeAction(ownedPID)
   tell application "System Events" to key code 49
   set pickerSheet to missing value
   repeat 100 times
@@ -106,11 +148,11 @@ on run arguments
   end repeat
   if pickerSheet is missing value then error "Native file picker did not expose an owned AX sheet: " & my ownedWindowSummary(ownedPID)
   if actionName is "cancel" then
-    my requireFrontmost(ownedPID)
+    my requireNativeAction(ownedPID)
     tell application "System Events" to key code 53
   else
     set selectedPath to item 3 of arguments
-    my requireFrontmost(ownedPID)
+    my requireNativeAction(ownedPID)
     tell application "System Events" to keystroke "g" using {command down, shift down}
     set pathControl to missing value
     repeat 100 times
@@ -137,9 +179,9 @@ on run arguments
       delay 0.1
     end repeat
     if pathControl is missing value then error "Go to Folder did not expose a focused editable AX path control"
-    my requireFrontmost(ownedPID)
+    my requireNativeAction(ownedPID)
     tell application "System Events" to set value of pathControl to selectedPath
-    my requireFrontmost(ownedPID)
+    my requireNativeAction(ownedPID)
     tell application "System Events" to key code 36
     -- Resolve the typed path first; press the native panel's enabled Open
     -- action, never a content control or an arbitrary default button.
@@ -169,13 +211,13 @@ on run arguments
     end repeat
     if pickerSheet is not missing value then
       if openButton is missing value then error "Native picker did not expose an enabled Open action"
-      my requireFrontmost(ownedPID)
+      my requireNativeAction(ownedPID)
       tell application "System Events" to perform action "AXPress" of openButton
     end if
   end if
   repeat 100 times
     my requireFrontmost(ownedPID)
-    if my ownedSheet(ownedPID) is missing value then return actionName & "-native-sheet-dismissed"
+    if my ownedSheet(ownedPID) is missing value then return actionName & "-native-sheet-dismissed; remotePanelPID=" & remotePanelPID
     delay 0.1
   end repeat
   error "Native file picker remained open after its requested action"
