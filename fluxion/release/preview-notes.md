@@ -8,10 +8,17 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
-Version 0.59 is an unpublished Memory privacy candidate. It closes encoded
+Version 0.59 is a published Memory privacy preview. It closes encoded
 sensitive-path bypasses and rechecks stored text/vector evidence against the
-same policy. No browsing URL is rewritten and ordinary history is retained.
-Native verification and full release staging are still required.
+same policy, including startup with Memory disabled. No browsing URL is
+rewritten and ordinary history is retained. Cleanup prepares exclusion rules
+once per batch; lists above 200 distinct domains are rejected without silent
+truncation. Detection remains heuristic and category exclusions are unfinished.
+
+All 668 regression tests and every native macOS release gate passed, including
+selective sensitive-vector cleanup and an independent disabled-Memory relaunch.
+The published DMG is the unchanged output of successful full staging. See
+[release provenance](provenance/v0.59.0-preview.1.md).
 
 Version 0.58 is a published stable-selection preview:
 

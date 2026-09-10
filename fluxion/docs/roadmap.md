@@ -94,7 +94,7 @@ controls work and its failure paths have been tested.
   vector deletion controls (implemented)
 - privacy-gated heading/body extraction and richer local metadata (implemented)
 - encoded sensitive-route classification and first-open cleanup of existing
-  evidence (0.59 candidate; native startup and release validation pending);
+  evidence (published in 0.59; native storage/startup and full release checks passed);
   user-configurable category exclusions remain unimplemented
 - inspectable Browser Memory answer evidence (implemented)
 - history-removal propagation and invalidation of pending extraction, embeddings,
