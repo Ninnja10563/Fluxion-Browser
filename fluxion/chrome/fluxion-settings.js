@@ -663,6 +663,10 @@
 
   const ai = section("ai", "AI", "Optional page tools. Ordinary browsing and Browser Memory remain fully functional when AI is disabled.");
   const initialAI = window.FluxionAI.config();
+  let aiMutationPending = false;
+  let aiTestPending = false;
+  let aiDisposed = false;
+  let aiSettingsRevision = 0;
   const aiProvider = select([
     ["disabled", "Disabled"],
     ["ollama", "Ollama (local)"],
@@ -685,6 +689,7 @@
   aiKey.placeholder = "Leave blank to keep this endpoint’s saved key";
   row(ai, "API key", "Stored in Firefox’s encrypted login store, never in Fluxion preferences or source code.", aiKey);
   aiProvider.addEventListener("change", () => {
+    if (aiMutationPending || aiDisposed) return;
     const defaults = FluxionAIProviders.DEFAULTS[aiProvider.value];
     aiEndpoint.disabled = aiProvider.value === "disabled";
     aiModel.disabled = aiProvider.value === "disabled";
@@ -693,46 +698,85 @@
       aiEndpoint.value = defaults.endpoint;
       aiModel.value = defaults.model;
     }
+    syncAIControls();
   });
-  aiProvider.dispatchEvent(new window.Event("change"));
   const saveAI = create("button", "fluxion-settings-button", "Save provider");
   saveAI.type = "button";
   saveAI.addEventListener("click", async () => {
-    saveAI.disabled = true;
+    if (aiMutationPending || aiDisposed) return;
+    aiSettingsRevision += 1;
+    aiMutationPending = true;
+    syncAIControls();
     try {
-      const next = await window.FluxionAI.configure({
+      await window.FluxionAI.configure({
         provider: aiProvider.value,
         endpoint: aiEndpoint.value,
         model: aiModel.value,
         ...(aiKey.value ? { secret: aiKey.value } : {}),
       });
-      aiEndpoint.value = next.endpoint;
-      aiModel.value = next.model;
+      if (aiDisposed) return;
+      const current = window.FluxionAI.config();
+      aiProvider.value = current.provider;
+      aiEndpoint.value = current.endpoint;
+      aiModel.value = current.model;
       aiKey.value = "";
-      setNote(next.provider === "disabled" ? "AI disabled." : `Saved ${next.provider} provider.`, "ai");
+      setNote(current.provider === "disabled" ? "AI disabled." : `Saved ${current.provider} provider.`, "ai");
     } catch (error) {
-      setNote(error.message, "ai");
-    } finally { saveAI.disabled = false; }
+      if (!aiDisposed) setNote(error.message, "ai");
+    } finally { aiMutationPending = false; syncAIControls(); }
   });
   row(ai, "Save connection", "Provider changes apply immediately without restarting Fluxion.", saveAI);
   const aiActions = create("div", "fluxion-settings-actions");
   const testAI = create("button", "fluxion-settings-button", "Test connection");
   testAI.type = "button";
   testAI.addEventListener("click", async () => {
-    testAI.disabled = true;
+    if (aiMutationPending || aiTestPending || aiDisposed) return;
+    aiTestPending = true;
+    const revision = aiSettingsRevision;
+    const configuration = JSON.stringify(window.FluxionAI.config());
+    const isCurrent = () => !aiDisposed && revision === aiSettingsRevision &&
+      configuration === JSON.stringify(window.FluxionAI.config());
+    syncAIControls();
     try {
       const result = await window.FluxionAI.testConnection();
-      setNote(result.detail, "ai");
-    } catch (error) { setNote(error.message, "ai"); }
-    finally { testAI.disabled = false; }
+      if (isCurrent()) setNote(result.detail, "ai");
+    } catch (error) { if (isCurrent()) setNote(error.message, "ai"); }
+    finally { aiTestPending = false; syncAIControls(); }
   });
-  const clearAIKey = create("button", "fluxion-settings-button danger", "Clear API key");
+  const clearAIKey = create("button", "fluxion-settings-button danger", "Clear saved key");
+  clearAIKey.setAttribute("aria-label", "Clear this endpoint’s saved API key");
+  clearAIKey.title = "Clear this endpoint’s saved API key";
   clearAIKey.type = "button";
   clearAIKey.addEventListener("click", async () => {
-    await window.FluxionAI.setSecret("");
-    aiKey.value = "";
-    setNote("Saved API key removed.", "ai");
+    syncAIControls();
+    if (clearAIKey.disabled || aiDisposed) return;
+    aiSettingsRevision += 1;
+    const expectedEndpoint = window.FluxionAI.config().endpoint;
+    aiMutationPending = true;
+    syncAIControls();
+    try {
+      await window.FluxionAI.setSecret("", { expectedEndpoint });
+      if (!aiDisposed) setNote("This endpoint’s saved API key was removed. Other endpoint keys are unchanged.", "ai");
+    } catch (error) {
+      if (!aiDisposed) setNote(`Could not clear this endpoint’s key: ${error.message}`, "ai");
+    } finally { aiMutationPending = false; syncAIControls(); }
   });
+  function syncAIControls() {
+    if (aiDisposed) return;
+    const saved = window.FluxionAI.config();
+    aiProvider.disabled = aiMutationPending;
+    aiEndpoint.disabled = aiMutationPending || aiProvider.value === "disabled";
+    aiModel.disabled = aiMutationPending || aiProvider.value === "disabled";
+    aiKey.disabled = aiMutationPending || aiProvider.value !== "openai-compatible";
+    saveAI.disabled = aiMutationPending;
+    testAI.disabled = aiMutationPending || aiTestPending || saved.provider === "disabled" || !saved.endpoint;
+    clearAIKey.disabled = aiMutationPending || saved.provider === "disabled" || !saved.endpoint ||
+      aiProvider.value !== saved.provider || aiEndpoint.value !== saved.endpoint || Boolean(aiKey.value);
+  }
+  for (const field of [aiEndpoint, aiModel, aiKey]) field.addEventListener("input", syncAIControls);
+  const aiPreferenceObserver = { observe() { aiSettingsRevision += 1; syncAIControls(); } };
+  Services.prefs.addObserver("fluxion.ai.", aiPreferenceObserver);
+  syncAIControls();
   aiActions.append(testAI, clearAIKey);
   row(ai, "Connection tools", "Tests the configured model service without sharing a webpage.", aiActions);
 
@@ -1069,6 +1113,7 @@
     document.documentElement.toggleAttribute("data-fluxion-settings-visible", visible);
     if (visible) {
       syncMemorySettings();
+      syncAIControls();
       const selectedBrowser = gBrowser.selectedBrowser;
       const spec = selectedBrowser.currentURI.spec;
       const remembered = tabSections.get(selectedBrowser);
@@ -1086,6 +1131,8 @@
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
+    aiDisposed = true;
+    Services.prefs.removeObserver("fluxion.ai.", aiPreferenceObserver);
     updateDisposed = true;
     gBrowser.removeTabsProgressListener(progressListener);
     gBrowser.tabContainer.removeEventListener("TabSelect", syncVisibility);

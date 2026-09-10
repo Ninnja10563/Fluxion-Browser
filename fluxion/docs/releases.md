@@ -1,7 +1,8 @@
 # Milestone release process
 
 `macOS integration diagnostics` is a separate, read-only-permission workflow
-for developing native Settings accessibility and external URL/file checks.
+for developing native Settings accessibility, external URL/file delivery, and
+AI credential/privacy checks.
 It builds the same locked runtime but does not contact the release-discovery
 API, create DMGs, upload applications, or publish releases. A diagnostic pass
 never replaces the complete release gates below. This allows native debugging

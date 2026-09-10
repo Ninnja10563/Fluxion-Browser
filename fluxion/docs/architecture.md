@@ -547,12 +547,30 @@ all remote endpoints require HTTPS. Requests explicitly omit browser cookies
 and HTTP authentication state, bypass the browser cache, have bounded payloads,
 refuse redirects, and use cancellable timeouts. OpenAI-compatible keys are stored under a
 synthetic origin in Firefox's Login Manager—not in preferences, source, or page
-storage—and enter only the outbound authorization header.
+storage—and enter only the outbound authorization header. Each canonical
+endpoint has its own login realm; changing endpoints never reuses another
+endpoint's key. A process-shared control queue serializes key/configuration
+writes across windows. Legacy unscoped keys are bound only to the endpoint
+already saved before migration; if no endpoint is known, the unbound key is
+removed and must be entered again rather than sent to a guessed destination.
 
 Ask Current Page reuses the narrow `FluxionMemoryPage` actor. Before extraction,
 and again after receiving its plain-data result, the chrome service applies the
 private-window, sensitive-route, password-form, scheme, and excluded-domain
-policy. A remote provider receives no page text until the user confirms sharing
+policy. The actor removes editable draft subtrees and derives headings from the
+same sanitized clone, rather than reading an independent unsanitized heading
+channel. Editable extraction roots and document-wide editing mode produce no
+evidence. Existing indexed evidence is not retroactively classified; users can
+erase it through Clear Browser Memory. Full-DOM cloning before output truncation
+still needs a separate traversal-budget performance improvement.
+Shared revision tracking and abort controllers invalidate pending AI
+work on provider, endpoint, model, key, or domain-exclusion changes, including
+changes in another window. Requests recheck eligibility after extraction,
+after consent, after credential lookup, and before returning results; a disable
+followed by re-enable cannot resurrect a previously queued request. Abort
+cannot retract bytes already sent to a provider, but stops further work and
+suppresses stale results.
+A remote provider receives no page text until the user confirms sharing
 with that endpoint. The provider prompt labels extracted page content as
 untrusted quoted data and requires answers to remain within it. The palette
 renders provider output only with `textContent` and always exposes the local

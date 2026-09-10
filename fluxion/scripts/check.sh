@@ -19,6 +19,7 @@ bash -n \
   scripts/verify-macos-updates.sh \
   scripts/verify-macos-external-open.sh \
   scripts/verify-macos-settings-accessibility.sh \
+  scripts/verify-macos-ai-privacy.sh \
   scripts/verify-macos-flow.sh \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-library.sh \
@@ -64,6 +65,8 @@ node --check chrome/fluxion-memory-privacy-verification.js
 node --check chrome/fluxion-update-verification.js
 node --check chrome/fluxion-external-open-verification.js
 node --check chrome/fluxion-settings-accessibility-verification.js
+node --check chrome/fluxion-ai-privacy-verification.js
+node --check scripts/ai-privacy-fixture.mjs
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-shortcuts.js
@@ -84,6 +87,7 @@ node --check modules/FluxionMemoryStore.sys.mjs
 node --check modules/FluxionNativeMemory.sys.mjs
 node --check modules/FluxionRelease.sys.mjs
 node --check modules/FluxionUpdates.sys.mjs
+node --check modules/FluxionAIControl.sys.mjs
 node --test tests/*.test.js
 python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-stub.py").read_text(encoding="utf-8"))'
 

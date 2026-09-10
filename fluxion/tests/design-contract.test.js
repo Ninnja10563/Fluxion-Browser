@@ -631,7 +631,9 @@ test("Browser Memory answers expose source evidence and never invent empty resul
 test("optional AI stays privileged, cancellable, and separate from ordinary browsing", () => {
   const ai = fs.readFileSync(path.join(root, "chrome/fluxion-ai.js"), "utf8");
   const providers = fs.readFileSync(path.join(root, "chrome/core/ai-providers.js"), "utf8");
-  assert.match(ai, /Services\.logins\.searchLoginsAsync/);
+  const aiControl = fs.readFileSync(path.join(root, "modules/FluxionAIControl.sys.mjs"), "utf8");
+  assert.match(ai, /resource:\/\/fluxion\/modules\/FluxionAIControl\.sys\.mjs/);
+  assert.match(aiControl, /Services\.logins\.searchLoginsAsync/);
   assert.match(ai, /FluxionMemoryPolicy\.canIndexPage/);
   assert.match(ai, /current\.remote/);
   assert.match(ai, /AbortController/);

@@ -304,7 +304,9 @@ memory or require a generative model.
 AI is also disabled by default. Open **Fluxion Settings → AI** to choose a
 local Ollama endpoint or an OpenAI-compatible endpoint and model. Loopback HTTP
 is allowed for local tools; non-local endpoints must use HTTPS. Compatible API
-keys are stored in Firefox's encrypted login manager rather than preferences.
+keys are stored in Firefox's encrypted login manager rather than preferences,
+separately for each endpoint. Switching endpoints never forwards a previous
+endpoint's key; clearing a key affects the currently saved endpoint only.
 After saving and testing the connection, run **Ask Current Page** from the
 command palette. Fluxion extracts a bounded, form-free page record through a
 Gecko content-process actor and shows the exact source beside the answer.

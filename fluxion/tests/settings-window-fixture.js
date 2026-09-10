@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai } = {}) {
   const preferences = new Map(saved);
   const elements = [];
   class Element {
@@ -16,7 +16,13 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
       this.classList = { add() {} };
       elements.push(this);
     }
-    append(...children) { this.children.push(...children); }
+    append(...children) {
+      this.children.push(...children);
+      if (this.tagName === "select") {
+        const selected = children.find(child => child.selected);
+        if (selected) this.value = selected.value;
+      }
+    }
     appendChild(child) { this.append(child); return child; }
     replaceChildren(...children) { this.children = children; }
     querySelector(selector) {
@@ -55,7 +61,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     document, FluxionMemory: memory, Event: class { constructor(type) { this.type = type; } },
     FluxionUI: { workspaces: () => [], currentWorkspace: () => "work", setTabWorkspace() {} },
     FluxionTheme: { current: () => "system" },
-    FluxionAI: { config: () => ({ provider: "disabled", endpoint: "", model: "" }) },
+    FluxionAI: ai || { config: () => ({ provider: "disabled", endpoint: "", model: "" }) },
     FluxionShortcuts: { actions: () => [] },
   });
   const errors = [];

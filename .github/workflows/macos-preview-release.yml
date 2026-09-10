@@ -155,6 +155,11 @@ jobs:
         shell: bash
         run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
 
+      - name: Verify native AI credential isolation and sharing revocation
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-ai-privacy.sh '.runtime/Fluxion.app'
+
       - name: Preserve update inspection snapshot
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

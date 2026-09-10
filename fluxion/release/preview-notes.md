@@ -19,7 +19,20 @@ Version 0.50 strengthens native macOS integration:
 - replace inherited document icons with Fluxion branding and remove the unused
   Mozilla privileged-updater registration;
 - connect Settings fields to their visible labels and help text for assistive
-  technology, with native Gecko accessible-name and description checks.
+  technology, with native Gecko accessible-name and description checks;
+- scope optional AI credentials to the configured endpoint, preventing a
+  provider switch from sending the previous provider's API key elsewhere;
+- cancel stale optional AI operations when configuration or domain exclusions
+  change, and recheck page-sharing eligibility immediately before requests;
+- omit editable drafts and their headings from new page extraction, including
+  rich-text editors and document-wide editing mode.
+
+AI key migration keeps an older key only when it can be bound to the previously
+saved endpoint. An unbound legacy key must be entered again. If you changed
+remote AI endpoints while retaining a key in an older preview, consider rotating
+that key: earlier versions could send it to the newly selected endpoint.
+Draft filtering applies to new extraction; use **Clear Browser Memory** if you
+want to remove previously indexed evidence as well.
 
 Version 0.49 adds explicit Fluxion update discovery:
 
