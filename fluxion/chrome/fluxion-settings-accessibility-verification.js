@@ -140,10 +140,12 @@
           await waitFor(() => ui.workspaces().some(item => item.name === "Long research workspace name"), "Narrow workspace form failed to create workspace");
           const rename = [...panel.querySelectorAll(".fluxion-settings-workspace-name")].find(node => node.value === "Long research workspace name");
           assert(rename, "Created workspace name field is missing");
-          rename.value = "Renamed narrow research workspace";
+          const renamedName = "Renamed narrow research lab";
+          assert(renamedName.length <= rename.maxLength, "Workspace fixture exceeds the real name field limit");
+          rename.value = renamedName;
           rename.dispatchEvent(new window.Event("input", { bubbles: true }));
           rename.dispatchEvent(new window.Event("change", { bubbles: true }));
-          await waitFor(() => ui.workspaces().some(item => item.name === "Renamed narrow research workspace"), "Narrow workspace rename failed");
+          await waitFor(() => ui.workspaces().some(item => item.name === renamedName), "Narrow workspace rename failed");
           geometry.workspaceEdit = "actual-create-form-and-rename-control-persisted";
         }
         let count = 0;
