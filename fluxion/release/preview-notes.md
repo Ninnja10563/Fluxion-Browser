@@ -18,6 +18,10 @@ Version 0.55 is an interaction-quality candidate in development:
   set, preserving exact/fuzzy scoring, confidence filtering, and stable ties;
 - validate live metadata so changed titles, URLs, workspaces, and group names
   cannot leave obsolete cached search results;
+- search visible workspace names, including renames made while the palette is
+  closed, and show compact workspace/group context without changing URL ranking;
+- keep General and Appearance controls current after toolbar or other-window
+  edits, while preserving an unsaved homepage draft;
 - retain the chosen split source and stacked orientation when closing the
   palette before executing its selected result;
 - extend native keyboard/menu and 1,000-tab search verification.
