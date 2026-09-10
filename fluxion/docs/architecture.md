@@ -644,7 +644,11 @@ The packager installs a narrowly scoped local chrome-manifest override for
 `chrome://browser/content/default-bookmarks.html`, registered during autoconfig
 before Places startup. The installer verifies the pinned archive resource but
 never rewrites Gecko's archive. Firefox's own import policy still decides when
-defaults are needed: fresh profiles, recovery without a usable backup, or an
+defaults are needed. Mozilla's [optimized JAR layout](https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_155_0_1_RELEASE/python/mozbuild/mozpack/mozjar.py)
+is validated through a temporary read-only view with original local-file offsets
+and CRC checking; the packaged archive remains byte-for-byte unchanged. Native
+import policy covers
+fresh profiles, recovery without a usable backup, or an
 explicit restore-defaults action. Fluxion does not force an import preference
 or rename/delete existing bookmarks. A native two-launch test verifies fresh
 Fluxion defaults and preservation of existing GUIDs, titles, URLs, hierarchy,
