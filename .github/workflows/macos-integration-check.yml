@@ -49,3 +49,17 @@ jobs:
       - name: Check native AI privacy boundaries
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-ai-privacy.sh '.runtime/Fluxion.app'
+
+      - name: Check native Library keyboard and item menus
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_LIBRARY_SCREENSHOT: ${{ runner.temp }}/fluxion-library.png
+        run: ./fluxion/scripts/verify-macos-library.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Library diagnostic snapshot
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-Library-diagnostic
+          path: ${{ runner.temp }}/fluxion-library.png
+          if-no-files-found: warn

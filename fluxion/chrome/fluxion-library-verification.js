@@ -116,12 +116,40 @@
       assert(item && !item.disabled && item.getAttribute("aria-label") === `${action} ${title}`,
         `Native ${action} action is not bound to the chosen bookmark`);
     }
+    const describeFocus = () => {
+      const active = document.activeElement;
+      return { popupState: popup.state, documentFocused: document.hasFocus(),
+        activeWindowMatches: Services.focus.activeWindow === window,
+        focusedWindowMatches: Services.focus.focusedWindow === window,
+        activeElement: { tag: active?.localName, id: active?.id, className: String(active?.className || ""),
+          label: active?.getAttribute?.("aria-label"), connected: active?.isConnected },
+        expectedAnchorConnected: more(rows[0]).isConnected,
+        expectedAnchorFocused: active === more(rows[0]),
+        selectedURI: window.gBrowser.selectedBrowser.currentURI.spec };
+    };
+    report.nativeEscape = { beforeFocus: describeFocus(), events: [] };
+    const keyObserver = event => {
+      if (event.key === "Escape") report.nativeEscape.events.push({ type: event.type, trusted: event.isTrusted,
+        target: event.target?.localName, targetId: event.target?.id, prevented: event.defaultPrevented });
+    };
+    window.addEventListener("keydown", keyObserver, true);
+    window.addEventListener("keyup", keyObserver, true);
     window.focus();
+    report.nativeEscape.beforeDispatch = describeFocus();
     // Exercise Gecko's native popup key handling, not a synthetic DOM event
     // whose default action cannot close an operating-system-backed menu.
-    window.windowUtils.sendNativeKeyEvent(0, 0x35, 0, "\u001b", "\u001b");
-    await waitFor(() => popup.state === "closed" && document.activeElement === more(rows[0]),
-      "Native Escape did not dismiss the menu and restore its action-button focus");
+    try {
+      window.windowUtils.sendNativeKeyEvent(0, 0x35, 0, "\u001b", "\u001b");
+      await waitFor(() => popup.state === "closed" && document.activeElement === more(rows[0]),
+        "Native Escape did not dismiss the menu and restore its action-button focus");
+    } catch (error) {
+      report.nativeEscape.afterDispatch = describeFocus();
+      throw new Error(`${error.message}: ${JSON.stringify(report.nativeEscape)}`);
+    } finally {
+      window.removeEventListener("keydown", keyObserver, true);
+      window.removeEventListener("keyup", keyObserver, true);
+    }
+    report.nativeEscape.afterDispatch = describeFocus();
     key("F10", { shiftKey: true });
     await waitFor(() => popup.state === "open", "Native item menu did not reopen");
     await query("cedar", values => values.length === 1);

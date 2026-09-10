@@ -58,6 +58,10 @@ for ((attempt=0; attempt<720; attempt++)); do
   sleep 0.25
 done
 printf 'Packaged Library verification failed or timed out.\n' >&2
+if [[ -n "${FLUXION_LIBRARY_SCREENSHOT:-}" ]]; then
+  mkdir -p "$(dirname -- "$FLUXION_LIBRARY_SCREENSHOT")"
+  /usr/sbin/screencapture -x "$FLUXION_LIBRARY_SCREENSHOT" || true
+fi
 [[ ! -f "$profile/prefs.js" ]] || grep 'fluxion\.library\.verification\.' "$profile/prefs.js" >&2 || true
 sed -n '1,160p' "$browser_log" >&2
 exit 1
