@@ -49,5 +49,21 @@ test("actual palette tab records are reused but title, URI, workspace, group, se
   scope.mode = "split"; scope.splitSource = {};
   const split = scope.tabItems()[0]; assert.notEqual(split, updated);
   split.run(); assert.equal(splits[0][0], scope.splitSource); assert.equal(splits[0][1], tab);
+  const splitSource = scope.splitSource;
+  const extract = (begin, finish) => source.slice(source.indexOf(begin), source.indexOf(finish, source.indexOf(begin)));
+  Object.assign(scope, { activeIndex: 0, visibleItems: [split], layer: { hidden: false },
+    placesTimer: 0, memoryRequest: 0, aiRequest: 0, askController: null,
+    input: { value: "", removeAttribute() {} }, lastFocus: null, Cu: { reportError: error => { throw error; } } });
+  scope.window.clearTimeout = () => {};
+  scope.window.FluxionSplitViews.SIDE_BY_SIDE = "side-by-side";
+  vm.runInContext(extract("  function choose(", "  function setActive(") +
+    extract("  function close()", '  on(input, "input"'), scope);
+  scope.choose();
+  assert.equal(scope.layer.hidden, true); assert.equal(scope.splitSource, null);
+  assert.equal(scope.pendingSplitOrientation, "side-by-side");
+  assert.equal(splits[1][0], splitSource); assert.equal(splits[1][2].orientation, "stacked");
+  scope.splitSource = splitSource; scope.pendingSplitOrientation = "side-by-side";
+  const columns = scope.tabItems()[0]; assert.notEqual(columns, split);
+  columns.run(); assert.equal(splits[2][2].orientation, "side-by-side");
   scope.gBrowser.tabs = []; assert.equal(scope.tabItems().length, 0);
 });

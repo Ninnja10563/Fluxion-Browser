@@ -18,6 +18,8 @@ Version 0.55 is an interaction-quality candidate in development:
   set, preserving exact/fuzzy scoring, confidence filtering, and stable ties;
 - validate live metadata so changed titles, URLs, workspaces, and group names
   cannot leave obsolete cached search results;
+- retain the chosen split source and stacked orientation when closing the
+  palette before executing its selected result;
 - extend native keyboard/menu and 1,000-tab search verification.
 
 It has not passed release validation and has no published DMG. Local CPU-only

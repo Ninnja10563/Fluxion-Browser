@@ -507,6 +507,7 @@
 
   function tabItems() {
     const source = splitSource;
+    const orientation = pendingSplitOrientation;
     const tabs = mode === "split"
       ? [...gBrowser.tabs].filter(tab =>
           ui.tabWorkspace(tab) === ui.currentWorkspace() &&
@@ -515,9 +516,9 @@
       : [...gBrowser.tabs];
     return tabs.map(tab => {
       let cached = tabSearchItems.get(tab);
-      if (!cached || cached.source !== source) {
-        cached = { source, item: { run: () => source
-          ? ui.createSplitView(source, tab, { orientation: pendingSplitOrientation })
+      if (!cached || cached.source !== source || cached.orientation !== orientation) {
+        cached = { source, orientation, item: { run: () => source
+          ? ui.createSplitView(source, tab, { orientation })
           : ui.selectTab(tab) } };
         tabSearchItems.set(tab, cached);
       }

@@ -232,11 +232,37 @@
     await query("cafe revised unique target", target.label);
     await settle();
     assert(labels()[0] === target.label, "A late query replaced the newest tab-search result");
+    const splitSource = fixtures[6], splitTarget = fixtures[7];
+    splitTarget.setAttribute("label", "Unique stacked picker destination");
+    changed(splitTarget, ["label"]);
+    window.FluxionPalette.close();
+    ui.selectTab(splitSource);
+    window.FluxionPalette.open("all");
+    await waitFor(() => document.activeElement === input, "Split command palette did not focus input");
+    const enter = () => input.dispatchEvent(new window.KeyboardEvent("keydown", {
+      key: "Enter", bubbles: true, cancelable: true,
+    }));
+    input.value = "Open stacked split";
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    assert(labels()[0] === "Open stacked split", "Actual stacked split command was not found");
+    enter();
+    await waitFor(() => document.activeElement === input && input.placeholder.includes("bottom pane"),
+      "Stacked command did not open its actual picker");
+    input.value = splitTarget.label;
+    input.dispatchEvent(new window.Event("input", { bubbles: true }));
+    assert(labels()[0] === splitTarget.label, "Stacked picker did not find the chosen native tab");
+    enter();
+    await waitFor(() => splitSource.splitview && splitSource.splitview === splitTarget.splitview,
+      "Choosing a palette result did not create the native split pair", 5000);
+    assert(window.FluxionSplitViews.orientationOf(splitSource.splitview) === window.FluxionSplitViews.STACKED,
+      "Closing the picker reset its requested stacked orientation before activation");
+    assert(document.getElementById("fluxion-palette-layer").hidden, "Split picker did not close after choosing its result");
     const sorted = [...searchLatencies].sort((a, b) => a - b);
     const percentile = fraction => sorted[Math.ceil(sorted.length * fraction) - 1];
     const report = { fixtureTabs: fixtures.length, nativeTabs: gBrowser.tabs.length, samples: sorted.length,
       inputToFrameMs: { p50: percentile(.5), p95: percentile(.95), max: sorted.at(-1) },
-      latenciesMs: searchLatencies, input: "Gecko DOM input events; not OS typing or a high-refresh-rate guarantee" };
+      latenciesMs: searchLatencies, stackedPicker: "native-pair-stacked-after-palette-close",
+      input: "Gecko DOM input events; not OS typing or a high-refresh-rate guarantee" };
     Services.prefs.setStringPref(`${prefix}.tabSearch.metrics`, JSON.stringify(report));
     // Hosted-runner regression guard, not a frame-rate performance target.
     assert(report.inputToFrameMs.p95 < 500 && report.inputToFrameMs.max < 1500,
