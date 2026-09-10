@@ -67,7 +67,9 @@ controls work and its failure paths have been tested.
   (implemented; two-window packaged verification passed); adjustable
   expanded/Focus-overlay width with pointer cancellation, keyboard access,
   draft-safe Settings, shared preferences and responsive bounds is implemented
-  in the 0.56 candidate, with native validation pending
+  in the 0.56 candidate, with packaged pointer-capture, native keyboard,
+  narrow-window geometry and clean-relaunch validation passed; physical OS
+  pointer and assistive-technology audits remain
 - Settings-owned shortcut capture and collision-aware customized-map loading,
   including valid swaps/cycles and cross-window preference synchronization
   (implemented; packaged DOM-event integration gate added)

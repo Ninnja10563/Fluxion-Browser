@@ -11,7 +11,8 @@ support, then replaces the primary tab interaction with Fluxion's compact
 The 0.56 candidate adds adjustable Flow width: drag its inner edge, use the
 keyboard separator, or enter a pixel width in Appearance. Changes persist across
 windows and launches, while narrower windows limit only the displayed width.
-Native verification is pending; this candidate has no published DMG yet.
+All 598 regression tests and native diagnostics passed; full release staging
+is next. This candidate has no published DMG yet.
 
 ## Published preview
 
