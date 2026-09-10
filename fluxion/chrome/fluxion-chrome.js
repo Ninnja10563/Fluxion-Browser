@@ -3615,14 +3615,23 @@
       const contrast = (Math.max(foregroundLight, backgroundLight) + 0.05) /
         (Math.min(foregroundLight, backgroundLight) + 0.05);
       const rect = icon?.getBoundingClientRect();
-      const contextFill = iconStyle?.getPropertyValue("-moz-context-properties").split(/\s*,\s*/).includes("fill");
-      const valid = window.FluxionTheme?.current() === "dark" && rect?.width >= 16 && rect?.height >= 16 &&
+      const contextProperties = iconStyle?.getPropertyValue("-moz-context-properties") || "";
+      const contextFill = contextProperties.split(/\s*,\s*/).includes("fill");
+      const theme = window.FluxionTheme?.current();
+      const valid = theme === "dark" && rect?.width >= 16 && rect?.height >= 16 &&
         iconStyle.fill === buttonStyle.color && contextFill && contrast >= 4.5;
-      Services.prefs.setStringPref("fluxion.toolbarMenu.icon.report", JSON.stringify({
-        fill: iconStyle?.fill, color: buttonStyle.color, background, contextFill, contrast,
-      }));
+      const diagnostics = JSON.stringify({
+        theme, scheme: window.getComputedStyle(document.documentElement).colorScheme,
+        iconPresent: Boolean(icon), iconParent: icon?.parentNode?.id || "",
+        iconColor: iconStyle?.color, fill: iconStyle?.fill, buttonFill: buttonStyle.fill,
+        color: buttonStyle.color, background, contextProperties, contextFill, contrast,
+        iconWidth: rect?.width, iconHeight: rect?.height,
+        iconDisplay: iconStyle?.display, iconVisibility: iconStyle?.visibility,
+      });
+      Services.prefs.setStringPref("fluxion.toolbarMenu.icon.report", diagnostics);
       if (valid) Services.prefs.setStringPref("fluxion.toolbarMenu.icon.health", "dark-context-fill-and-contrast-verified");
-      else Services.prefs.setStringPref("fluxion.toolbarMenu.visual.error", "Toolbar bolt failed native dark-mode context-fill or contrast verification");
+      else Services.prefs.setStringPref("fluxion.toolbarMenu.visual.error",
+        `Toolbar bolt failed native dark-mode context-fill or contrast verification: ${diagnostics}`);
       Services.prefs.savePrefFile(null);
     }, { once: true });
     window.setTimeout(() => {

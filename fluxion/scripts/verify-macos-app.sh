@@ -194,11 +194,16 @@ done
 printf '%s\n' \
   'Fluxion.app did not complete every required browser integration check.' \
   'The build is invalid and will not be presented as successful.' >&2
+if [[ -n "${FLUXION_CAPTURE_PATH:-}" ]] && command -v screencapture >/dev/null 2>&1; then
+  # Preserve the failed native layout for inspection without changing the gate.
+  screencapture -x "$FLUXION_CAPTURE_PATH" || true
+fi
 if [[ -f "$profile/prefs.js" ]]; then
   printf 'Observed Fluxion health markers:\n' >&2
   grep 'user_pref("fluxion\..*\.health"' "$profile/prefs.js" >&2 || true
   printf 'Observed fixture errors:\n' >&2
   grep 'user_pref("fluxion\..*\.error"' "$profile/prefs.js" >&2 || true
+  grep 'user_pref("fluxion\.toolbarMenu\.icon\.report"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.enrichment\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.scheduler\.\(stage\|error\)"' "$profile/prefs.js" >&2 || true
   grep 'user_pref("fluxion\.memory\.embeddingSettings\.error"' "$profile/prefs.js" >&2 || true

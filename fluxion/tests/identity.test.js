@@ -11,6 +11,12 @@ const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf
 const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
 const runtime = fs.readFileSync(path.join(root, "runtime/fluxion.cfg"), "utf8");
 
+test("release workflow defaults agree with the product package and tag", () => {
+  const workflow = fs.readFileSync(path.join(root, "../.github/workflows/macos-preview-release.yml"), "utf8");
+  const defaults = [...workflow.matchAll(/^\s+default: (v?\d[^\s]*)$/gm)].map(match => match[1]);
+  assert.deepEqual(defaults, [packageData.version, `v${packageData.version}`]);
+});
+
 test("About Fluxion presents the current product version without remote scripts", () => {
   const productVersion = packageData.version.split("-")[0];
   assert.match(settings, new RegExp(`PRODUCT_VERSION = "${productVersion.replaceAll(".", "\\.")}"`));
