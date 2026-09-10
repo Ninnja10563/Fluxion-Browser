@@ -57,8 +57,15 @@
     );
     for (const sap of ["urlbar", "smartbar"]) {
       const registry = ProvidersManager.getInstanceForSap(sap);
-      assert(!registry.getProvider("SemanticHistorySearch") && registry.getProvider("Places"),
-        `${sap}: native semantic provider was not isolated while retaining ordinary Places`);
+      const state = {
+        sap,
+        semanticPresent: Boolean(registry.getProvider("UrlbarProviderSemanticHistorySearch")),
+        legacySemanticPresent: Boolean(registry.getProvider("SemanticHistorySearch")),
+        ordinaryPlacesRetained: Boolean(registry.getProvider("UrlbarProviderPlaces")),
+      };
+      report.checks.push({ label: "native-provider-registry", ...state });
+      assert(!state.semanticPresent && !state.legacySemanticPresent && state.ordinaryPlacesRetained,
+        `${sap}: native semantic provider was not isolated while retaining ordinary Places: ${JSON.stringify(state)}`);
     }
     report.checks.push({ label: "native-semantic-provider-isolated-before-memory-enable", ordinaryPlacesRetained: true });
     // Session restoration does not finish fresh-profile Places initialization.

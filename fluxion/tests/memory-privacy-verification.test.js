@@ -6,7 +6,17 @@ const path = require("node:path");
 const vm = require("node:vm");
 
 const settle = () => new Promise(resolve => setImmediate(resolve));
-function fixture({ semanticRegistered = false, missingPlaces = false } = {}) {
+function fixture({ semanticRegistered = false, legacySemanticRegistered = false, missingPlaces = false } = {}) {
+  // Firefox 155's base provider derives its registry name from the class.
+  class UrlbarProvider { get name() { return this.constructor.name; } }
+  class UrlbarProviderPlaces extends UrlbarProvider {}
+  class UrlbarProviderSemanticHistorySearch extends UrlbarProvider {}
+  const providers = new Map();
+  for (const provider of [
+    ...(!missingPlaces ? [new UrlbarProviderPlaces()] : []),
+    ...(semanticRegistered ? [new UrlbarProviderSemanticHistorySearch()] : []),
+    ...(legacySemanticRegistered ? [{ name: "SemanticHistorySearch" }] : []),
+  ]) providers.set(provider.name, provider);
   const startup = { _placesBrowserInitComplete: false };
   const prefs = new Map(), timers = [], imports = [];
   let opened = 0, now = 0;
@@ -29,7 +39,7 @@ function fixture({ semanticRegistered = false, missingPlaces = false } = {}) {
     ChromeUtils: { importESModule(name) {
       imports.push(name);
       if (name.endsWith("UrlbarProvidersManager.sys.mjs")) return { ProvidersManager: { getInstanceForSap() {
-        return { getProvider: provider => provider === "Places" ? !missingPlaces : semanticRegistered };
+        return { getProvider: name => providers.get(name) };
       } } };
       assert.match(name, /PlacesBrowserStartup/);
       return { PlacesBrowserStartup: startup };
@@ -59,10 +69,15 @@ test("native privacy verification waits for Places startup before companion or s
 });
 
 test("privacy gate rejects unfiltered semantic providers or missing ordinary Places before any storage or companion", async () => {
-  for (const option of ["semanticRegistered", "missingPlaces"]) {
+  for (const option of ["semanticRegistered", "legacySemanticRegistered", "missingPlaces"]) {
     const f = fixture({ [option]: true }); await settle();
     assert.equal(f.opened(), 0);
     assert.match(f.prefs.get("fluxion.memory.privacy.error"), /native semantic provider was not isolated/);
+    const report = JSON.parse(f.prefs.get("fluxion.memory.privacy.report"));
+    const registry = report.checks.find(check => check.label === "native-provider-registry");
+    assert.equal(registry.semanticPresent, option === "semanticRegistered");
+    assert.equal(registry.legacySemanticPresent, option === "legacySemanticRegistered");
+    assert.equal(registry.ordinaryPlacesRetained, option !== "missingPlaces");
     assert.equal(f.prefs.has("fluxion.memory.privacy.health"), false);
   }
 });

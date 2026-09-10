@@ -1,4 +1,4 @@
-const PROVIDER_NAME = "SemanticHistorySearch";
+const PROVIDER_NAMES = ["UrlbarProviderSemanticHistorySearch", "SemanticHistorySearch"];
 const MODERN_URI = "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs";
 const LEGACY_URI = "resource:///modules/UrlbarProvidersManager.sys.mjs";
 
@@ -36,12 +36,14 @@ function ensurePolicyBoundary() {
       }
     }
     for (const { sap, manager } of targets) {
-      const provider = manager.getProvider(PROVIDER_NAME);
-      if (provider) {
-        if (provider.name !== PROVIDER_NAME) throw incompatible(`${sap} returned an unexpected provider`);
-        manager.unregisterProvider(provider);
+      for (const name of PROVIDER_NAMES) {
+        const provider = manager.getProvider(name);
+        if (provider) {
+          if (provider.name !== name) throw incompatible(`${sap} returned an unexpected provider`);
+          manager.unregisterProvider(provider);
+        }
       }
-      if (manager.getProvider(PROVIDER_NAME)) throw incompatible(`${sap} retained the semantic provider after removal`);
+      if (PROVIDER_NAMES.some(name => manager.getProvider(name))) throw incompatible(`${sap} retained the semantic provider after removal`);
     }
     return true;
   } catch (error) {

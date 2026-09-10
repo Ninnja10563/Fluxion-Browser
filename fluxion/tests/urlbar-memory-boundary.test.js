@@ -8,10 +8,21 @@ const source = fs.readFileSync(path.join(__dirname, "../modules/FluxionUrlbarMem
   .replace("export const FluxionUrlbarMemory =", "globalThis.FluxionUrlbarMemory =");
 const modernURI = "moz-src:///browser/components/urlbar/UrlbarProvidersManager.sys.mjs";
 const legacyURI = "resource:///modules/UrlbarProvidersManager.sys.mjs";
-function registry({ absent = false, refuses = false } = {}) {
-  const semantic = { name: "SemanticHistorySearch", get semanticManager() { throw Error("Must not initialize ML"); },
-    isActive() { throw Error("Must not activate provider"); }, startQuery() { throw Error("Must not run provider"); } };
-  const ordinary = [{ name: "Places" }, { name: "InputHistory" }, { name: "SemanticHistorySearchOther" }, { name: "SearchSuggestions" }];
+function registry({ absent = false, refuses = false, legacy = false } = {}) {
+  // Firefox 155's base provider derives the public name from its constructor.
+  class UrlbarProvider { get name() { return this.constructor.name; } }
+  class UrlbarProviderSemanticHistorySearch extends UrlbarProvider {
+    get semanticManager() { throw Error("Must not initialize ML"); }
+    isActive() { throw Error("Must not activate provider"); }
+    startQuery() { throw Error("Must not run provider"); }
+  }
+  class UrlbarProviderPlaces extends UrlbarProvider {}
+  class UrlbarProviderInputHistory extends UrlbarProvider {}
+  class UrlbarProviderSearchSuggestions extends UrlbarProvider {}
+  const semantic = new UrlbarProviderSemanticHistorySearch();
+  if (legacy) Object.defineProperty(semantic, "name", { value: "SemanticHistorySearch" });
+  const ordinary = [new UrlbarProviderPlaces(), new UrlbarProviderInputHistory(),
+    { name: "SemanticHistorySearchOther" }, new UrlbarProviderSearchSuggestions()];
   const providers = [...ordinary, ...(absent ? [] : [semantic])];
   const notifications = new Set(providers), removed = [];
   return { providers, ordinary, semantic, notifications, removed,
@@ -52,7 +63,7 @@ test("pinned registries remove only semantic provider objects and retain ordinar
 
 test("supported legacy singleton works on modern export or verified ESR resource path", () => {
   for (const fallback of [false, true]) {
-    const manager = registry();
+    const manager = registry({ legacy: true });
     const h = load(uri => {
       if (fallback && uri === modernURI) throw Error("URI unavailable on ESR");
       assert.equal(uri, fallback ? legacyURI : modernURI);
@@ -61,6 +72,25 @@ test("supported legacy singleton works on modern export or verified ESR resource
     assert.equal(h.api.ensurePolicyBoundary(), true);
     assert.deepEqual(manager.removed, [manager.semantic]);
     assert.deepEqual(h.imports, fallback ? [modernURI, legacyURI] : [modernURI]);
+  }
+});
+
+test("both exact semantic names are removed when present together, and neither alias may remain", () => {
+  for (const retainedName of [null, "UrlbarProviderSemanticHistorySearch", "SemanticHistorySearch"]) {
+    const modern = registry(), legacy = registry({ legacy: true });
+    const providers = [...modern.ordinary, modern.semantic, legacy.semantic], removed = [];
+    const manager = {
+      getProvider: name => providers.find(provider => provider.name === name),
+      unregisterProvider(provider) {
+        assert.ok(provider === modern.semantic || provider === legacy.semantic);
+        removed.push(provider);
+        if (provider.name !== retainedName) providers.splice(providers.indexOf(provider), 1);
+      },
+    };
+    const h = load(() => ({ UrlbarProvidersManager: manager }));
+    if (retainedName) assert.throws(() => h.api.ensurePolicyBoundary(), /retained the semantic provider/);
+    else { assert.equal(h.api.ensurePolicyBoundary(), true); assert.deepEqual(providers, modern.ordinary); }
+    assert.deepEqual(removed, [modern.semantic, legacy.semantic]);
   }
 });
 
