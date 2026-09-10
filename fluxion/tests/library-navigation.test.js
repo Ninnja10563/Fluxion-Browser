@@ -54,6 +54,20 @@ test("100 Library rows have one entry point with clamped arrows and direct Home/
   assert.equal(f.document.activeElement, f.list.children[0].primary);
 });
 
+test("explicit view reset starts at the first new result without moving external focus", () => {
+  const f = fixture();
+  f.list.children[99].primary.focus();
+  const search = {};
+  f.document.activeElement = search;
+  f.controller.reset();
+  f.list.children = [];
+  f.controller.sync();
+  f.list.children = Array.from({ length: 100 }, (_, index) => f.row(`new-${index}`));
+  f.controller.sync();
+  assert.deepEqual(f.tabStops(), [f.list.children[0].primary]);
+  assert.equal(f.document.activeElement, search);
+});
+
 test("secondary actions are reachable without adding tab stops or intercepting native activation", () => {
   const f = fixture();
   const row = f.list.children[37];

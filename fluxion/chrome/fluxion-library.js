@@ -74,9 +74,10 @@
     .fluxion-library-nav button[aria-current="true"] { color: var(--fluxion-ink); background: var(--fluxion-selected); font-weight: 600; }
     .fluxion-library-content {
       box-sizing: border-box; flex: 0 1 820px; min-width: 420px;
-      padding: 26px 30px 70px; overflow: auto;
+      padding: 0 30px 70px; overflow: auto;
     }
-    .fluxion-library-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+    .fluxion-library-content:has(> .fluxion-library-pagination:not([hidden])) { scroll-padding-block-start: 56px; }
+    .fluxion-library-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; padding-top: 26px; margin-bottom: 16px; }
     .fluxion-library-section-head h2 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
     .fluxion-library-section-tools { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: 6px; }
     .fluxion-library-summary { margin-inline-end: 4px; color: var(--fluxion-muted); font-size: 11px; }
@@ -88,7 +89,6 @@
     .fluxion-library-row {
       min-height: 50px; display: grid; grid-template-columns: minmax(0, 1fr) auto;
       align-items: center; gap: 14px; border-bottom: 1px solid var(--fluxion-line); padding: 7px 2px;
-      scroll-margin-block-start: 56px;
     }
     .fluxion-library-instructions { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
     .fluxion-library-open { min-width: 0; border: 0; padding: 0; color: inherit; background: transparent; text-align: start; font: inherit; }
@@ -825,6 +825,7 @@
   }
 
   function resetPaging() {
+    libraryNavigation.reset();
     pageCursor = null;
     previousCursors.length = 0;
     nextCursor = null;
@@ -906,6 +907,7 @@
       previousCursors.push(pageCursor);
       pageCursor = nextCursor;
     } else pageCursor = previousCursors.pop();
+    libraryNavigation.reset();
     invalidateQuery({ reset: false });
     // Page controls remain stable during requests. If the clicked control
     // becomes disabled on the first/last page, focus the results deliberately.

@@ -179,6 +179,35 @@ test("editable root, editable ancestor and designMode yield no evidence", () => 
   assert.equal(extract(el("body", {}, "Draft"), { designMode: "ON" }), null);
 });
 
+test("choosing main/article inside excluded ancestors cannot bypass subtree privacy rules", () => {
+  for (const tag of ["form", "nav", "footer", "button", "noscript"]) {
+    for (const root of ["main", "article"]) {
+      const source = el(root, {}, el("h1", {}, "Secret heading"), "Secret body");
+      assert.equal(extract(el("body", {}, el(tag, {}, el("div", {}, source)))), null);
+      assert.equal(source.reads.visited, 0, "excluded source must be rejected before reading evidence");
+    }
+  }
+});
+
+test("XHTML CDATA retains readable evidence with the same bounded text reads and exclusions", () => {
+  class CDATA extends Text { get nodeType() { return 4; } }
+  const heading = new CDATA("XHTML heading");
+  const text = new CDATA("Readable XHTML article");
+  const secret = new CDATA("Secret CDATA draft");
+  const result = extract(el("body", {}, el("main", {}, el("h1", {}, heading),
+    el("p", {}, text), el("form", {}, secret))));
+  assert.deepEqual([...result.headings], ["XHTML heading"]);
+  assert.match(result.text, /Readable XHTML article/);
+  assert.doesNotMatch(result.text, /Secret/);
+  assert.equal(secret.reads.length, 0);
+
+  const huge = new CDATA("c".repeat(1000000)), tail = el("p", {}, "Unvisited tail");
+  const bounded = extract(el("body", {}, el("main", {}, huge, tail)));
+  assert.equal(bounded.text.length, 24000);
+  assert.deepEqual(huge.reads, [{ offset: 0, count: 23999 }]);
+  assert.equal(tail.reads.visited, 0);
+});
+
 test("non-editable content remains usable while original form and control stripping survives", () => {
   const result = extract(el("body", {}, el("main", {},
     el("div", { contenteditable: "FALSE" }, el("h2", {}, "Published section"), "Public text"),

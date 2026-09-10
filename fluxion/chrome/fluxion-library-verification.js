@@ -112,8 +112,8 @@
     const endScroll = content.scrollTop;
     key("Home");
     await waitFor(() => document.activeElement === primary(rows[0]) && content.scrollTop < endScroll &&
-      primary(rows[0]).getBoundingClientRect().top >= content.getBoundingClientRect().top,
-      "Home did not return to the first Library result");
+      primary(rows[0]).getBoundingClientRect().top >= root.querySelector(".fluxion-library-pagination").getBoundingClientRect().bottom,
+      "Home did not reveal the first Library result below the sticky pager");
     key("ArrowRight");
     assert(document.activeElement === more(rows[0]), "Right arrow did not focus the row action control");
     key("ArrowLeft");
@@ -121,6 +121,8 @@
     key("ArrowRight");
     key("F10", { shiftKey: true });
     await waitFor(() => popup.state === "open", "Shift+F10 did not open the native item popup");
+    assert(primary(rows[0]).getBoundingClientRect().top >= root.querySelector(".fluxion-library-pagination").getBoundingClientRect().bottom,
+      "Opening row actions scrolled the selected result behind the sticky pager");
     const title = rows[0].querySelector(".fluxion-library-row-title").textContent;
     for (const action of ["Open", "Rename", "Move", "Remove"]) {
       const item = [...popup.querySelectorAll("menuitem")].find(node => node.getAttribute("label") === action);
@@ -138,7 +140,7 @@
         expectedAnchorFocused: active === more(rows[0]),
         selectedURI: window.gBrowser.selectedBrowser.currentURI.spec };
     };
-    report.nativeEscape = { beforeFocus: describeFocus(), events: [] };
+    report.nativeEscape = { transport: "system-events-key-code-53", beforeFocus: describeFocus(), events: [] };
     const keyObserver = event => {
       if (event.key === "Escape") report.nativeEscape.events.push({ type: event.type, trusted: event.isTrusted,
         target: event.target?.localName, targetId: event.target?.id, prevented: event.defaultPrevented });
@@ -146,11 +148,16 @@
     window.addEventListener("keydown", keyObserver, true);
     window.addEventListener("keyup", keyObserver, true);
     report.nativeEscape.beforeDispatch = describeFocus();
-    // Exercise Gecko's native popup key handling, not a synthetic DOM event
-    // whose default action cannot close an operating-system-backed menu.
+    // Cocoa menus own a separate event loop. The shell posts a real system key
+    // only while this fixture is frontmost, rather than targeting the browser
+    // NSWindow and bypassing the menu's event handling.
     try {
-      window.windowUtils.sendNativeKeyEvent(0, 0x35, 0, "\u001b", "\u001b");
-      await waitFor(() => popup.state === "closed" && document.activeElement === more(rows[0]),
+      const escapeAck = Services.env.get("FLUXION_LIBRARY_ESCAPE_ACK");
+      assert(escapeAck, "Library native Escape handshake path is missing");
+      Services.prefs.setStringPref(`${prefix}.escape`, "requested");
+      Services.prefs.savePrefFile(null);
+      await waitFor(async () => await IOUtils.exists(escapeAck) &&
+        popup.state === "closed" && document.activeElement === more(rows[0]),
         "Native Escape did not dismiss the menu and restore its action-button focus");
     } catch (error) {
       report.nativeEscape.afterDispatch = describeFocus();

@@ -16,8 +16,12 @@ Version 0.51 improves Library interaction and page-extraction efficiency:
   Home/End, and reach item actions with Right/Left or Shift+F10;
 - keep focus stable across refreshes and dismiss stale menus when queries or
   sections change, without affecting Downloads' live transfer controls;
+- start new searches and pages at their first keyboard result and keep focused
+  titles clear of the sticky pager;
 - bound page-evidence walking to 4,096 nodes and 24,000 characters, avoiding
   full-DOM cloning and unbounded text reads while preserving draft exclusions;
+- reject extraction sources nested inside excluded form/navigation regions and
+  retain readable XHTML CDATA within the same evidence limits;
 - verify native menu dismissal, contextual actions, keyboard focus, pagination,
   and protected folders in the packaged macOS app.
 

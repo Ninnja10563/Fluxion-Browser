@@ -11,6 +11,7 @@ profile="$check_root/profile"
 browser_log="$check_root/browser.log"
 browser_pid=""
 foreground_requested=false
+escape_requested=false
 artifact_dir="${FLUXION_LIBRARY_ARTIFACT_DIR:-}"
 cleanup() {
   if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
@@ -36,7 +37,8 @@ cleanup() {
 }
 trap cleanup EXIT
 
-FLUXION_PROFILE="$profile" FLUXION_LIBRARY_SCALE_TEST=1 FLUXION_LIBRARY_FOREGROUND_ACK="$check_root/foreground-ready" \
+FLUXION_PROFILE="$profile" FLUXION_LIBRARY_SCALE_TEST=1 \
+  FLUXION_LIBRARY_FOREGROUND_ACK="$check_root/foreground-ready" FLUXION_LIBRARY_ESCAPE_ACK="$check_root/escape-sent" \
   "$launcher" about:blank >"$browser_log" 2>&1 &
 browser_pid=$!
 for ((attempt=0; attempt<720; attempt++)); do
@@ -49,6 +51,16 @@ for ((attempt=0; attempt<720; attempt++)); do
       }
       touch "$check_root/foreground-ready"
       foreground_requested=true
+    fi
+    if [[ "$escape_requested" == false ]] && grep -Fq 'user_pref("fluxion.library.verification.escape", "requested")' "$profile/prefs.js"; then
+      /usr/bin/osascript \
+        -e 'tell application "System Events"' \
+        -e "if unix id of first application process whose frontmost is true is not $browser_pid then error \"Library fixture is no longer frontmost\"" \
+        -e 'key code 53' -e 'end tell' || {
+        printf 'Could not send native Escape to the owned Library fixture.\n' >&2; break;
+      }
+      touch "$check_root/escape-sent"
+      escape_requested=true
     fi
     if grep -Fq 'user_pref("fluxion.library.verification.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.library.verification.health", "full-places-search-and-pagination-verified")' "$profile/prefs.js"; then

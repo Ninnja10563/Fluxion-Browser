@@ -77,7 +77,11 @@
     }
     list.addEventListener("focusin", focusIn);
     list.addEventListener("keydown", keyDown);
-    return Object.freeze({ sync, destroy() {
+    return Object.freeze({ sync, reset() {
+      if (destroyed) return;
+      activeId = null;
+      activeIndex = 0;
+    }, destroy() {
       destroyed = true;
       list.removeEventListener("focusin", focusIn);
       list.removeEventListener("keydown", keyDown);

@@ -6,6 +6,7 @@ const EDITABLE = '[contenteditable]:not([contenteditable="false" i])';
 const EXCLUDED = new Set([
   "script", "style", "noscript", "nav", "footer", "form", "input", "textarea", "select", "button",
 ]);
+const EXCLUDED_ANCESTOR = [...EXCLUDED].join(", ");
 const BLOCKS = new Set([
   "h1", "h2", "h3", "h4", "h5", "h6", "p", "li", "dt", "dd", "blockquote", "pre",
   "section", "article", "main", "div", "br", "tr", "td", "th",
@@ -33,7 +34,7 @@ function readableEvidence(source, nodeLimit = MAX_NODES, textLimit = MAX_TEXT) {
     if (!frame.entered) {
       visited++;
       frame.entered = true;
-      if (node.nodeType === 3) {
+      if (node.nodeType === 3 || node.nodeType === 4) {
         // CharacterData.substringData bounds the native read itself, unlike
         // reading an arbitrarily large data/textContent value and slicing it.
         append(node.substringData(0, textLimit - length));
@@ -81,7 +82,7 @@ export class FluxionMemoryPageChild extends JSWindowActorChild {
     // Native source/password selectors remain document-wide. Evidence walking
     // itself is bounded, and editable ancestors reject read-only draft islands.
     const source = document.querySelector("article, main") || document.body;
-    if (!source || source.isContentEditable || source.closest(EDITABLE)) return null;
+    if (!source || source.isContentEditable || source.closest(EDITABLE) || source.closest(EXCLUDED_ANCESTOR)) return null;
 
     const description = document.querySelector('meta[name="description" i]')?.content ||
       document.querySelector('meta[property="og:description" i]')?.content || "";

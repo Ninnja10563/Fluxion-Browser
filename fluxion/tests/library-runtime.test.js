@@ -282,6 +282,25 @@ test("actual Library menu binds the selected row and invokes its native Open com
   assert.deepEqual(h.errors, []);
 });
 
+test("explicit search and paging reset the roving entry while observer refresh retains it", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("first", 101)); await settle();
+  h.list.children[99].firstChild.focus();
+  h.placesChanged([{ type: "page-title-changed" }]);
+  h.flush(); await settle();
+  h.queries[1].resolve(rows("first", 101)); await settle();
+  assert.equal(h.list.children[99].firstChild.tabIndex, 0, "background refresh retains the reading position");
+  h.type("different"); h.flush(); await settle();
+  h.queries[2].resolve(rows("different", 101)); await settle();
+  assert.equal(h.list.children[0].firstChild.tabIndex, 0, "new search starts at its first result");
+  assert.equal(h.document.activeElement, h.input);
+  h.list.children[78].firstChild.focus();
+  h.next.focus(); h.next.click(); await settle();
+  h.queries[3].resolve(rows("next page", 101)); await settle();
+  assert.equal(h.list.children[0].firstChild.tabIndex, 0, "explicit page advance starts at its first result");
+  assert.equal(h.document.activeElement, h.next);
+});
+
 test("new search dismisses the shared menu without focus theft and invalidates captured old commands", async () => {
   const h = harness(); await settle();
   h.queries[0].resolve(rows("old menu")); await settle();
