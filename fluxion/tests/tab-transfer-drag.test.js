@@ -40,6 +40,17 @@ test("unbounded and unavailable transfer data fail closed", () => {
   assert.equal(Drag.write({}, [{}]), false);
   assert.equal(Drag.write(dataTransfer(), []), false);
 });
+test("a serialization failure removes the partial selection instead of moving its prefix", () => {
+  const items = [], source = {}, tabs = [{ ownerGlobal: source }, { ownerGlobal: source }];
+  const transfer = {
+    get mozItemCount() { return items.length; },
+    mozSetDataAt(type, tab, index) { if (index === 1) throw Error("serialization failed"); items[index] = tab; },
+    mozClearDataAt(type, index) { if (index < items.length) items.splice(index, 1); },
+    mozGetDataAt(type, index) { return items[index]; },
+  };
+  assert.equal(Drag.write(transfer, tabs), false);
+  assert.deepEqual(Drag.read(transfer, tab => tabs.includes(tab)), []);
+});
 const drop = {
   trusted: true, canceled: false, effect: "none", screenX: 1500, screenY: 200,
   windows: [{ left: 0, top: 0, width: 700, height: 500 }, { left: 720, top: 0, width: 600, height: 500 }],

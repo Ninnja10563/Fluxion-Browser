@@ -9,7 +9,15 @@
       tabs.forEach((tab, index) => transfer.mozSetDataAt(TYPE, tab, index));
       transfer.effectAllowed = "move";
       return true;
-    } catch (_) { return false; }
+    } catch (_) {
+      // Never expose a successfully written prefix as a smaller selection if
+      // Gecko rejects a later item during serialization.
+      for (let index = tabs.length - 1; index >= 0; index--) {
+        try { transfer.mozClearDataAt?.(TYPE, index); } catch (_) {}
+      }
+      try { transfer.clearData?.(TYPE); } catch (_) {}
+      return false;
+    }
   }
 
   function read(transfer, isBrowserTab) {

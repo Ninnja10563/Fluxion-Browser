@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 const script = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-tab-transfer.js"), "utf8");
 
-function fixture() {
+function fixture({ newTabURL = "about:newtab" } = {}) {
   const windows = [], calls = [], errors = [];
   function createWindow(isPrivate = false) {
     const listeners = new Set();
@@ -84,7 +84,7 @@ function fixture() {
   const source = createWindow(), target = createWindow();
   source.addTab(); target.addTab("about:blank");
   vm.runInNewContext(script, { window: source, ChromeUtils: { importESModule: () => ({ PrivateBrowsingUtils: { isWindowPrivate: win => win.isPrivate } }) },
-    Services: { wm: { getEnumerator: () => windows }, prefs: { getStringPref: (_key, fallback) => fallback } },
+    Services: { wm: { getEnumerator: () => windows }, prefs: { getStringPref: (key, fallback) => key === "fluxion.newtab.url" ? newTabURL : fallback } },
     SessionStore: { getCustomTabValue: (tab, key) => tab.getAttribute(key), deleteCustomTabValue: (tab, key) => tab.removeAttribute(key) },
     Cu: { reportError: error => errors.push(error) },
   });
@@ -226,4 +226,24 @@ test("missing grouped-split ungroup capability is rejected before adoption", asy
   delete f.target.gBrowser.ungroupSplitView;
   assert.equal((await f.api.move([a], f.target, { targetTab })).complete, false);
   assert.equal(f.calls.length, 0);
+});
+
+test("detach cleans the exact configured Fluxion new-tab page but preserves navigation and custom homepages", async () => {
+  const newTabURL = "file:///Applications/Fluxion.app/Contents/Resources/fluxion/newtab/index.html";
+  for (const change of ["unchanged", "navigation", "same-url-history", "same-url-document", "homepage"]) {
+    const f = fixture({ newTabURL });
+    f.source.onNewWindow = target => {
+      const initial = target.gBrowser.tabs[0];
+      initial.linkedBrowser.currentURI.spec = change === "homepage" ? "https://homepage.example/" : newTabURL;
+      target.afterAdopt = () => {
+        if (change === "navigation") initial.linkedBrowser.currentURI.spec = "https://keep.example/";
+        if (change === "same-url-history") initial.linkedBrowser.browsingContext.sessionHistory.count = 2;
+        if (change === "same-url-document") initial.linkedBrowser.browsingContext.currentWindowGlobal = {};
+      };
+    };
+    const result = await f.api.detach(f.source.gBrowser.tabs);
+    assert.equal(result.complete, true, change);
+    assert.equal(result.window.gBrowser.tabs.length, change === "unchanged" ? 1 : 2, change);
+    assert.equal(f.calls.some(([kind]) => kind === "remove"), change === "unchanged", change);
+  }
 });

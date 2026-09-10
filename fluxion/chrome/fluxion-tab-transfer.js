@@ -164,9 +164,10 @@
     const initialBrowser = initial?.linkedBrowser;
     const initialGlobal = initialBrowser?.browsingContext?.currentWindowGlobal;
     const initialURI = initialBrowser?.currentURI?.spec;
+    const emptyURIs = new Set(["about:blank", "about:newtab", Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab")]);
     const result = await move(moving, target, { selectTab, workspaceId });
     if (result.complete && liveTab(initial, target) && !result.tabs.includes(initial) &&
-        ["about:blank", "about:newtab"].includes(initialURI) && initialBrowser.currentURI.spec === initialURI &&
+        emptyURIs.has(initialURI) && initialBrowser.currentURI.spec === initialURI &&
         initialBrowser.browsingContext?.currentWindowGlobal === initialGlobal &&
         initialBrowser.browsingContext?.sessionHistory?.count === 1 &&
         !initial.pinned && !initial.group && !initial.splitview && !initial.hasAttribute("busy")) {

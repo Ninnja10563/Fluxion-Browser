@@ -1963,8 +1963,8 @@
     item.setAttribute(
       "aria-keyshortcuts",
       role === "tab"
-        ? "ArrowLeft ArrowRight Home End Delete M"
-        : "ArrowUp ArrowDown Home End ArrowLeft Delete M",
+        ? "ArrowLeft ArrowRight Home End Delete M Shift+F10"
+        : "ArrowUp ArrowDown Home End ArrowLeft Delete M Shift+F10",
     );
     const favicon = fallbackIcon();
     const title = create("span", "fluxion-title");
@@ -2182,7 +2182,7 @@
     heading.setAttribute("aria-level", "1");
     heading.setAttribute(
       "aria-keyshortcuts",
-      "ArrowUp ArrowDown Home End ArrowLeft ArrowRight Enter Space",
+      "ArrowUp ArrowDown Home End ArrowLeft ArrowRight Enter Space Shift+F10",
     );
     heading.classList.toggle("has-active", tabs.includes(gBrowser.selectedTab));
     heading.setAttribute("aria-expanded", String(!group.collapsed));
@@ -2215,6 +2215,14 @@
       scheduleRender();
     });
     heading.addEventListener("keydown", event => {
+      if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) {
+        event.preventDefault();
+        event.stopPropagation();
+        contextGroup = group;
+        focusFlowItem(heading);
+        groupMenu.openPopup(heading, "after_start", 0, 0, true);
+        return;
+      }
       if (FluxionFlowNavigation.handlesRovingKey(event.key)) {
         event.preventDefault();
         event.stopPropagation();
@@ -2964,6 +2972,7 @@
     closedTabCount,
     closedTabs,
     contextTabs,
+    groupContextTabs: () => contextGroup?.isConnected ? [...contextGroup.tabs] : [],
     createGroup: () => createGroupForTab(gBrowser.selectedTab),
     createSuggestedGroup: (tabs, name) => createNamedGroup(tabs, name),
     createSplitView,

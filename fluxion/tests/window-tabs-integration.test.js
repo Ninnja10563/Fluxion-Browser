@@ -66,6 +66,7 @@ function fixture() {
     const list = flow.appendChild(new Node("div", document)); list.setAttribute("class", "fluxion-tabs");
     const status = flow.appendChild(new Node("div", document)); status.setAttribute("role", "status");
     const context = document.root.appendChild(new Node("menupopup", document)); context.setAttribute("id", "fluxion-tab-context");
+    const groupContext = document.root.appendChild(new Node("menupopup", document)); groupContext.setAttribute("id", "fluxion-group-context");
     const reindex = () => window.gBrowser.tabs.forEach((tab, index) => { tab._tPos = index; });
     window.addTab = (label = "Page", workspace = "a") => {
       const tab = new Node("tab", document);
@@ -87,9 +88,16 @@ function fixture() {
         const next = window.addTab(old.label); next.linkedBrowser = old.linkedBrowser;
         old.ownerGlobal.gBrowser.removeTab(old); return next;
       },
+      adoptTabGroup(group, options) {
+        const tabs = group.tabs.map(tab => this.adoptTab(tab, options));
+        const adoptedGroup = { tabs, id: group.id, label: group.label, color: group.color, collapsed: false };
+        tabs.forEach(tab => { tab.group = adoptedGroup; });
+        return adoptedGroup;
+      },
     };
     window.FluxionUI = { currentWorkspace: () => "a", workspaces: () => [{ id: "a", name: "Focus" }, { id: "b", name: "Build" }],
       tabWorkspace: tab => tab.getAttribute("fluxion-workspace"), contextTabs: () => window.contextTabs || [],
+      groupContextTabs: () => window.groupContextTabs || [],
       withWorkspaceReconciliationPaused: callback => callback(), reconcileTransferredTabs() {},
       setTabWorkspace: (tab, id) => tab.setAttribute("fluxion-workspace", id),
       selectTab: tab => { window.gBrowser.selectedTab = tab; },
@@ -101,7 +109,7 @@ function fixture() {
       SessionStore: { getCustomTabValue: (tab, key) => tab.getAttribute(key), deleteCustomTabValue: (tab, key) => tab.removeAttribute(key) } });
     scripts.forEach(script => vm.runInContext(script, scope));
     window.row = tab => { const row = list.appendChild(new Node("button", document)); row.setAttribute("class", "fluxion-tab"); row._fluxionTab = tab; return row; };
-    Object.assign(window, { flow, list, status, context }); return window;
+    Object.assign(window, { flow, list, status, context, groupContext }); return window;
   }
   const sourceWindow = createWindow(), target = createWindow();
   const sourceTab = sourceWindow.addTab("Original"), targetTab = target.addTab("Destination", "b");
@@ -205,4 +213,31 @@ test("queued drop revalidates a removed destination tab before mutating native t
   fire(f.target.row(f.targetTab), "drop", { dataTransfer: dataTransfer([f.sourceTab]), clientX: 20, clientY: 100 });
   f.target.gBrowser.removeTab(f.targetTab); await flush();
   assert.equal(f.adoptions.length, 0); assert.match(f.alerts[0], /destination tab/);
+});
+
+test("group menu snapshots every member independently of selected tabs and later context changes", async () => {
+  const f = fixture(), second = f.sourceWindow.addTab("Grouped second");
+  const members = [f.sourceTab, second], outside = f.sourceWindow.gBrowser.tabs[1];
+  const group = { tabs: members, id: "research-group", label: "Research", color: "green", collapsed: true };
+  members.forEach(tab => { tab.group = group; });
+  f.sourceWindow.gBrowser.selectedTab = outside;
+  f.sourceWindow.gBrowser.selectedTabs = [outside];
+  f.sourceWindow.contextTabs = [outside];
+  f.sourceWindow.groupContextTabs = members;
+  fire(f.sourceWindow.groupContext, "popupshowing");
+  // A later heading/context change cannot retarget the already-open menu.
+  f.sourceWindow.groupContextTabs = [outside];
+  fire(f.sourceWindow.context, "popupshowing");
+  const popup = f.sourceWindow.document.getElementById("fluxion-move-group-window-popup");
+  assert.ok(popup); fire(popup, "popupshowing");
+  const item = popup.children.find(node => node.hasAttribute("data-fluxion-window-target")); assert.ok(item);
+  f.target.FluxionUI.currentWorkspace = () => "b";
+  fire(item, "command"); await flush();
+  assert.deepEqual(f.adoptions.map(item => item.old), members);
+  assert.ok(f.sourceWindow.gBrowser.tabs.includes(outside));
+  const adopted = f.target.gBrowser.tabs.filter(tab => tab.group);
+  assert.equal(adopted.length, 2); assert.equal(adopted[0].group, adopted[1].group);
+  assert.equal(adopted[0].group.label, "Research"); assert.equal(adopted[0].group.color, "green");
+  assert.equal(adopted[0].group.collapsed, true);
+  assert.ok(adopted.every(tab => tab.getAttribute("fluxion-workspace") === "a"), "destination workspace is also captured at menu creation");
 });

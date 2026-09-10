@@ -75,10 +75,23 @@
     assert(moved.pinned && Number(moved.getAttribute("usercontextid")) === 1 &&
       moved.linkedBrowser.contentPrincipal.originAttributes.userContextId === 1,
     "Pinned or container identity was lost");
-    moved.linkedBrowser.goBack();
+    report.navigation = {
+      mode: "programmatic unactivated pushState entries; native goBack(false)/goForward(false)",
+      before: {
+        parentURI: moved.linkedBrowser.currentURI.spec,
+        actorURI: (await read(moved)).url,
+        canGoBack: moved.linkedBrowser.canGoBack,
+        canGoBackIgnoringUserInteraction: moved.linkedBrowser.canGoBackIgnoringUserInteraction,
+      },
+    };
+    write("report", JSON.stringify(report));
+    // Seed's programmatic pushState is not a user gesture. Gecko 155's default
+    // toolbar navigation intentionally skips unactivated entries; explicitly
+    // traverse this fixture's entries without changing production preferences.
+    moved.linkedBrowser.goBack(false);
     await waitFor(() => moved.linkedBrowser.currentURI.spec === `${origin}/transfer`, "Adopted back history is broken");
     sameDocument(source.state, await read(moved));
-    moved.linkedBrowser.goForward();
+    moved.linkedBrowser.goForward(false);
     await waitFor(() => moved.linkedBrowser.currentURI.spec === `${origin}/transfer?step=1`, "Adopted forward history is broken");
     sameDocument(source.state, await read(moved));
     assert(await loads() === initialLoads, "Adoption or history traversal reloaded the source URL");

@@ -66,6 +66,44 @@ explicit multi-profile path.
 Retaining these systems is deliberate. Reimplementing them would reduce
 security and compatibility while producing no product differentiation.
 
+### Cross-window tab adoption
+
+`fluxion-tab-transfer.js` is the privileged transfer adapter;
+`fluxion-window-tabs.js` supplies native tab/group menu actions and Flow drag
+interaction. Both use real Gecko tabs, not URL recreation. The locked Gecko
+155 API accepts options objects for `adoptTab`, `adoptTabGroup`, and
+`adoptSplitView`. These signatures and native old/new `TabOpen` mappings must
+be re-audited when updating Gecko. Whole selected groups use native group
+adoption; split selections expand to both panes and use native split adoption.
+A split placed beside an existing group is ungrouped through Gecko's wrapper
+API, never by pulling its panes out individually.
+
+Eligibility revalidates live tab/window membership, matching private modes,
+destination tabs, workspace IDs, and required native capabilities before
+mutation. Temporary Peeks require explicit promotion first. Typed drag data
+contains privileged native tab objects, not a URL, selector, or caller-supplied
+tab identifier. The UI additionally validates system principals and window
+membership; rejected drops inside browser windows cannot trigger detachment.
+Escape and untrusted drag-end events cannot create windows.
+
+Both windows pause workspace-selection reconciliation during synchronous
+adoption. The returned native nodes receive explicit workspace state, pinned
+state, and split orientation before final selection/reconciliation. A window
+menu captures the destination workspace shown to the user; a new window keeps
+source workspace membership by default. Moving all tabs leaves a real new tab
+in the source window. Detachment removes only its untouched initial blank or
+configured Fluxion new-tab document, never a navigated page or custom homepage.
+Partial native failures report surviving adopted nodes and leave remaining
+source tabs alone; the adapter does not promise atomic rollback or close pages
+to disguise a failed move.
+
+The packaged macOS transfer gate checks live page state, unsaved text, native
+history, container/pin/workspace identity, groups, stacked splits, private
+boundaries, and the shipped menu command. Its programmatic `pushState` fixture
+traverses unactivated entries explicitly; it does not change Gecko's normal
+user-interaction filtering for Back/Forward. Menu-event integration and unit
+drag tests are not claims of physical OS pointer-gesture verification.
+
 ## Custom components
 
 ```text

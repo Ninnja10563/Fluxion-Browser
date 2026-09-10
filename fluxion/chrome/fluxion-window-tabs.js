@@ -13,7 +13,7 @@
   const status = flow.querySelector('[role="status"]');
   let dragging = [];
   let marker = null;
-  let contextSnapshot = [];
+  const menus = [];
   const browserWindows = () => [...Services.wm.getEnumerator("navigator:browser")]
     .filter(candidate => !candidate.closed && candidate.gBrowser && candidate.FluxionUI);
   function isBrowserTab(tab, memberships = null) {
@@ -143,46 +143,55 @@
     for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value);
     return node;
   };
-  const menu = xul("menu", { id: "fluxion-move-window-menu", label: "Move to Window" });
-  const popup = xul("menupopup", { id: "fluxion-move-window-popup" });
-  menu.appendChild(popup);
-  context.insertBefore(menu, context.lastElementChild?.previousElementSibling || null);
-  function addItem(label, action, attributes = {}) {
-    const item = xul("menuitem", { label, ...attributes });
-    if (action) item.addEventListener("command", action);
-    popup.appendChild(item);
-    return item;
-  }
-  on(context, "popupshowing", event => {
-    if (event.target === context) contextSnapshot = [...ui.contextTabs()];
-  });
-  on(popup, "popupshowing", event => {
-    if (event.target !== popup) return;
-    popup.replaceChildren();
-    const tabs = [...contextSnapshot];
-    if (!tabs.length || tabs.some(tab => !isBrowserTab(tab) || tab.ownerGlobal !== window)) {
-      addItem("These tabs are no longer available", null, { disabled: "true" });
-      return;
+  function installMoveMenu(context, readContextTabs, group = false) {
+    let contextSnapshot = [];
+    const menu = xul("menu", { id: group ? "fluxion-move-group-window-menu" : "fluxion-move-window-menu", label: "Move to Window" });
+    const popup = xul("menupopup", { id: group ? "fluxion-move-group-window-popup" : "fluxion-move-window-popup" });
+    menu.appendChild(popup);
+    menus.push(menu);
+    context.insertBefore(menu, context.lastElementChild?.previousElementSibling || null);
+    function addItem(label, action, attributes = {}) {
+      const item = xul("menuitem", { label, ...attributes });
+      if (action) item.addEventListener("command", action);
+      popup.appendChild(item);
+      return item;
     }
-    if (tabs.some(tab => window.FluxionPeek?.isPeek(tab))) {
-      addItem("Keep Peek as Tab before moving", null, { disabled: "true" });
-      return;
-    }
-    addItem("New Window", () => run(() => transfer.detach(tabs)), { id: "fluxion-move-new-window" });
-    const targets = transfer.eligibleWindows(tabs);
-    if (targets.length) popup.appendChild(xul("menuseparator"));
-    targets.forEach((target, index) => {
-      const page = target.gBrowser.selectedTab?.label || "Untitled";
-      const workspaceId = target.FluxionUI.currentWorkspace();
-      const workspace = target.FluxionUI.workspaces().find(item => item.id === workspaceId)?.name;
-      addItem(`${index + 1}. ${workspace ? `${workspace} — ` : ""}${page.slice(0, 90)}`,
-        () => run(() => transfer.move(tabs, target, { workspaceId })), { "data-fluxion-window-target": String(index) });
+    on(context, "popupshowing", event => {
+      if (event.target === context) contextSnapshot = [...readContextTabs()];
     });
-  });
-  on(context, "popuphidden", event => { if (event.target === context) contextSnapshot = []; });
+    on(popup, "popupshowing", event => {
+      if (event.target !== popup) return;
+      popup.replaceChildren();
+      const tabs = [...contextSnapshot];
+      if (!tabs.length || tabs.some(tab => !isBrowserTab(tab) || tab.ownerGlobal !== window)) {
+        addItem("These tabs are no longer available", null, { disabled: "true" });
+        return;
+      }
+      if (tabs.some(tab => window.FluxionPeek?.isPeek(tab))) {
+        addItem("Keep Peek as Tab before moving", null, { disabled: "true" });
+        return;
+      }
+      addItem("New Window", () => run(() => transfer.detach(tabs)), {
+        id: group ? "fluxion-move-group-new-window" : "fluxion-move-new-window",
+      });
+      const targets = transfer.eligibleWindows(tabs);
+      if (targets.length) popup.appendChild(xul("menuseparator"));
+      targets.forEach((target, index) => {
+        const page = target.gBrowser.selectedTab?.label || "Untitled";
+        const workspaceId = target.FluxionUI.currentWorkspace();
+        const workspace = target.FluxionUI.workspaces().find(item => item.id === workspaceId)?.name;
+        addItem(`${index + 1}. ${workspace ? `${workspace} — ` : ""}${page.slice(0, 90)}`,
+          () => run(() => transfer.move(tabs, target, { workspaceId })), { "data-fluxion-window-target": String(index) });
+      });
+    });
+    on(context, "popuphidden", event => { if (event.target === context) contextSnapshot = []; });
+  }
+  installMoveMenu(context, () => ui.contextTabs());
+  const groupContext = document.getElementById("fluxion-group-context");
+  if (groupContext && ui.groupContextTabs) installMoveMenu(groupContext, () => ui.groupContextTabs(), true);
   on(window, "unload", () => {
     while (cleanups.length) cleanups.pop()();
-    menu.remove();
+    for (const menu of menus) menu.remove();
     delete window.FluxionWindowTabs;
   }, { once: true });
   window.FluxionWindowTabs = Object.freeze({ ready: true });
