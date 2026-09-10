@@ -150,6 +150,11 @@ jobs:
         shell: bash
         run: ./fluxion/scripts/verify-macos-external-open.sh '.runtime/Fluxion.app'
 
+      - name: Verify native Settings accessible names and descriptions
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
+
       - name: Preserve update inspection snapshot
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

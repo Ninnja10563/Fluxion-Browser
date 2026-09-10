@@ -17,7 +17,9 @@ Version 0.50 strengthens native macOS integration:
 - derive local application versions from the repository's package version and
   rebuild cached bundles when that version changes;
 - replace inherited document icons with Fluxion branding and remove the unused
-  Mozilla privileged-updater registration.
+  Mozilla privileged-updater registration;
+- connect Settings fields to their visible labels and help text for assistive
+  technology, with native Gecko accessible-name and description checks.
 
 Version 0.49 adds explicit Fluxion update discovery:
 

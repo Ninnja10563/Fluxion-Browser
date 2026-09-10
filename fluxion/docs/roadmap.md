@@ -75,6 +75,7 @@ controls work and its failure paths have been tested.
   native tab-status descriptions, static reduced-motion loading state, and
   live System/Light/Dark Gecko theme selection implemented; pointer-close
   stability now prevents shifted rows from receiving accidental repeat clicks;
+  Settings fields expose their visible labels and help text to accessibility;
   broader platform audit remains)
 - cross-platform command access after replacing PanelUI (native Fluxion Page
   and Tools menus with Gecko find/save/print/zoom/fullscreen/extensions and

@@ -26,6 +26,7 @@ function settingsFixture(initialURL = "about:preferences", saved = []) {
       return this.children.find(child => child.value === value) || null;
     }
     setAttribute(key, value) { this.attributes.set(key, value); }
+    getAttribute(key) { return this.attributes.get(key) ?? null; }
     hasAttribute(key) { return this.attributes.has(key); }
     removeAttribute(key) { this.attributes.delete(key); }
     toggleAttribute(key, value) { if (value) this.setAttribute(key, ""); else this.removeAttribute(key); }
@@ -39,7 +40,7 @@ function settingsFixture(initialURL = "about:preferences", saved = []) {
   const document = {
     documentElement: new Element(),
     getElementById: id => elements.find(element => element.id === id),
-    createElementNS: () => new Element(),
+    createElementNS: (_ns, tag) => Object.assign(new Element(), { tagName: tag }),
   };
   const firstBrowser = { currentURI: { spec: initialURL } };
   let progress;

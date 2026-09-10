@@ -1,0 +1,47 @@
+name: macOS integration diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Check native macOS integration without publishing
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Check product code and regressions
+        run: ./fluxion/scripts/check.sh
+
+      - name: Download and verify the locked Gecko runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          node ./fluxion/scripts/download-gecko.mjs "$RUNNER_TEMP/firefox.dmg"
+          mkdir -p "$RUNNER_TEMP/firefox-volume" "$RUNNER_TEMP/firefox-source"
+          hdiutil attach "$RUNNER_TEMP/firefox.dmg" \
+            -mountpoint "$RUNNER_TEMP/firefox-volume" -nobrowse -readonly
+          ditto "$RUNNER_TEMP/firefox-volume/Firefox.app" \
+            "$RUNNER_TEMP/firefox-source/Firefox.app"
+          hdiutil detach "$RUNNER_TEMP/firefox-volume"
+          codesign --verify --deep --strict "$RUNNER_TEMP/firefox-source/Firefox.app"
+
+      - name: Build diagnostic Fluxion application
+        id: build
+        env:
+          FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
+          FLUXION_TARGET_ARCH: universal2
+          FLUXION_SKIP_LAUNCH_CHECK: "1"
+        run: ./fluxion/scripts/build-macos.sh --clean
+
+      - name: Check native Settings accessibility
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
+
+      - name: Check native external link and file delivery
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-external-open.sh '.runtime/Fluxion.app'

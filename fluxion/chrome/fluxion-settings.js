@@ -230,10 +230,33 @@
     return panel;
   }
 
+  let settingRowId = 0;
   function row(panel, title, description, control) {
     const wrapper = create("div", "fluxion-setting");
     const copy = create("div", "fluxion-setting-copy");
-    copy.append(create("b", "", title), create("small", "", description));
+    const label = create("b", "", title);
+    const help = create("small", "", description);
+    const identity = `fluxion-setting-${++settingRowId}`;
+    label.id = `${identity}-label`;
+    help.id = `${identity}-description`;
+    copy.append(label, help);
+    const tag = (control.localName || control.tagName || "").toLowerCase();
+    const field = tag === "label" ? control.querySelector("input") : control;
+    if (field) {
+      const fieldTag = (field.localName || field.tagName || "").toLowerCase();
+      // Action buttons keep their precise visible/explicit action names. Field
+      // labels identify the setting, rather than announcing only "Enabled".
+      if (!["button", "a"].includes(fieldTag) &&
+          !field.hasAttribute("aria-label") && !field.hasAttribute("aria-labelledby")) {
+        field.setAttribute("aria-labelledby", label.id);
+      }
+      const descriptions = new Set((field.getAttribute("aria-describedby") || "").split(/\s+/).filter(Boolean));
+      descriptions.add(help.id);
+      field.setAttribute("aria-describedby", [...descriptions].join(" "));
+      if (!["input", "select", "textarea", "button", "a"].includes(fieldTag) && !field.hasAttribute("role")) {
+        field.setAttribute("role", "group");
+      }
+    }
     control.classList.add("fluxion-settings-control");
     wrapper.append(copy, control);
     panel.appendChild(wrapper);
@@ -659,7 +682,7 @@
   const aiKey = create("input");
   aiKey.type = "password";
   aiKey.autocomplete = "new-password";
-  aiKey.placeholder = "Leave blank to keep saved key";
+  aiKey.placeholder = "Leave blank to keep this endpoint’s saved key";
   row(ai, "API key", "Stored in Firefox’s encrypted login store, never in Fluxion preferences or source code.", aiKey);
   aiProvider.addEventListener("change", () => {
     const defaults = FluxionAIProviders.DEFAULTS[aiProvider.value];
