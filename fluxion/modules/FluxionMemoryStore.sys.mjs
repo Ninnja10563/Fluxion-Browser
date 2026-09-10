@@ -4,6 +4,7 @@ import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
 import * as GeckoEmbeddings from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
 import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
 import { FluxionMemorySearch } from "resource://fluxion/modules/FluxionMemorySearch.sys.mjs";
+import { FluxionMemoryPolicy } from "resource://fluxion/modules/FluxionMemoryPolicy.sys.mjs";
 
 const FILE_NAME = "fluxion_memory.sqlite";
 const SCHEMA_VERSION = 3;
@@ -54,6 +55,41 @@ function vectorFrom(result, expectedSize) {
   if (!Array.isArray(value) && !ArrayBuffer.isView(value)) throw new Error("Fluxion embedding returned no vector");
   if (value.length !== expectedSize) throw new Error(`Fluxion embedding dimension ${value.length} did not match ${expectedSize}`);
   return value;
+}
+
+function excludedDomains() {
+  return FluxionMemoryPolicy.parseExcludedDomains(
+    Services.prefs.getStringPref("fluxion.memory.excludedDomains", "[]"),
+  );
+}
+
+async function pruneBlocked(db, domains) {
+  // Keyset batches bound chrome-thread work and keep the cursor stable while
+  // rows are deleted. The same policy guards new evidence and old profiles.
+  let after = 0;
+  const limit = 256;
+  for (;;) {
+    const rows = await db.executeCached(
+      "SELECT id,url FROM pages WHERE id > :after ORDER BY id LIMIT :limit", { after, limit },
+    );
+    if (!rows.length) return;
+    const blocked = rows.filter(row => !FluxionMemoryPolicy.canIndexPage(
+      { url: row.getResultByName("url") }, domains ?? excludedDomains(),
+    ));
+    if (blocked.length) {
+      await db.executeTransaction(async () => {
+        for (const row of blocked) {
+          const rowid = row.getResultByName("id");
+          await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
+          await db.executeCached("DELETE FROM pages WHERE id=:rowid", { rowid });
+        }
+      });
+    }
+    after = rows.at(-1).getResultByName("id");
+    if (rows.length < limit) return;
+    await new Promise(resolve => setTimeout(resolve, 0));
+    if (shutdownStarted) throw new Error("Fluxion Memory policy cleanup interrupted by shutdown");
+  }
 }
 
 async function connection() {
@@ -122,6 +158,10 @@ async function connection() {
           });
         }
         if (version === 1 || version === 2) await FluxionMemorySearch.migrateV2(db);
+        // Re-evaluate policy on every first open, including upgrades. Failure
+        // leaves the connection unexposed and is retried on the next launch.
+        shutdownStep = "Removing excluded evidence";
+        await pruneBlocked(db);
         shutdownStep = "Database open";
         return db;
       } catch (error) {
@@ -248,6 +288,7 @@ export const FluxionMemoryStore = Object.freeze({
     await historyDeletion;
     const db = await connection();
     if (expectedRevision !== revision) return false;
+    if (!FluxionMemoryPolicy.canIndexPage(page, excludedDomains())) return false;
     const parameters = {
       url: page.url,
       title: page.title,
@@ -340,22 +381,14 @@ export const FluxionMemoryStore = Object.freeze({
   },
 
   async deleteBlocked(domains) {
-    await removeEvidence(async db => {
-      const rows = await db.execute("SELECT id,url FROM pages");
-      const blocked = rows.filter(item => domains.some(domain => {
-        try {
-          const host = new URL(item.getResultByName("url")).hostname.toLowerCase().replace(/\.$/, "");
-          return host === domain || host.endsWith(`.${domain}`);
-        } catch (_) { return true; }
-      }));
-      await db.executeTransaction(async () => {
-        for (const item of blocked) {
-          const rowid = item.getResultByName("id");
-          await db.executeCached("DELETE FROM page_vectors WHERE rowid=:rowid", { rowid });
-          await db.executeCached("DELETE FROM pages WHERE id=:rowid", { rowid });
-        }
-      });
-    });
+    await removeEvidence(db => pruneBlocked(db, domains));
+  },
+
+  async pruneExisting() {
+    // Opting out must not strand old sensitive evidence, but a never-enabled
+    // profile must not acquire a database just to perform an empty cleanup.
+    if (!connectionPromise && !await IOUtils.exists(PathUtils.join(PathUtils.profileDir, FILE_NAME))) return;
+    await this.deleteBlocked(excludedDomains());
   },
 
   async deleteURLs(urls) {

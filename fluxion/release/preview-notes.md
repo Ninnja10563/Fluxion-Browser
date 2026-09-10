@@ -8,6 +8,11 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.59 is an unpublished Memory privacy candidate. It closes encoded
+sensitive-path bypasses and rechecks stored text/vector evidence against the
+same policy. No browsing URL is rewritten and ordinary history is retained.
+Native verification and full release staging are still required.
+
 Version 0.58 is a published stable-selection preview:
 
 - preserve Flow row/control identity during ordinary same-workspace selection;

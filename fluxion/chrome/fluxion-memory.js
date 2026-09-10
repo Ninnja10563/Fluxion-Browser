@@ -509,6 +509,9 @@
     indexBrowser,
     indexingStatus: () => indexScheduler.status(),
   });
+  if (!PrivateBrowsingUtils.isWindowPrivate(window)) {
+    FluxionMemoryStore.pruneExisting().catch(Cu.reportError);
+  }
   if (enabled() && !PrivateBrowsingUtils.isWindowPrivate(window)) {
     enable().catch(Cu.reportError);
   }

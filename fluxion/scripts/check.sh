@@ -116,6 +116,9 @@ node --check actors/FluxionTabTransferVerificationChild.sys.mjs
 node --check actors/FluxionTabTransferVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --check modules/FluxionMemorySearch.sys.mjs
+node --check modules/FluxionMemoryPolicy.sys.mjs
+node --check chrome/fluxion-memory-policy-verification.js
+bash -n scripts/verify-macos-memory-policy.sh
 node --check modules/FluxionNativeMemory.sys.mjs
 node --check modules/FluxionRelease.sys.mjs
 node --check modules/FluxionUpdates.sys.mjs

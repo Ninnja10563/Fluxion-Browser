@@ -20,7 +20,7 @@ function fixture(saved = new Map()) {
     exclusionRows: [], cachedWrites: [], qualified: true, failExclusion: false, ownedExclusions: [], beforeCached: null,
     beforeStorage: null, failStorage: false, storageOpens: 0, storageReady: false,
     beforeInference: null, inferenceCalls: 0, searchCalls: 0, beforeEnriched: null,
-    nativeResults: [], keywords: [], windows: [], upserts: [], enrichedResults: { lexical: [], semantic: [] } };
+    nativeResults: [], keywords: [], windows: [], upserts: [], pruneCalls: 0, enrichedResults: { lexical: [], semantic: [] } };
   // Model the relevant native converter contract in a separate ESM-like
   // realm: Array.isArray crosses realms, instanceof Float32Array does not.
   const tensorToSQLBindable = vm.runInNewContext(`value => {
@@ -101,6 +101,7 @@ function fixture(saved = new Map()) {
   const adapter = context.FluxionNativeMemory;
   const FluxionMemoryStore = {
     revision: 0,
+    async pruneExisting() { state.pruneCalls++; },
     async upsert(page) { state.upserts.push(page); return true; },
     async clearVectors() { state.enriched = 0; },
     async clear() { state.enriched = 0; },
@@ -141,6 +142,79 @@ function fixture(saved = new Map()) {
     expireTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
   };
 }
+
+test("startup prunes existing owned evidence while disabled but private windows never initiate cleanup", async () => {
+  const f = fixture();
+  f.chromeWindow({ isPrivate: true }); await settle();
+  assert.equal(f.state.pruneCalls, 0);
+  f.chromeWindow(); await settle();
+  assert.equal(f.state.pruneCalls, 1);
+  assert.equal(f.factoryCalls(), 0, "disabled cleanup must not initialize the native model");
+  assert.equal(f.state.searchCalls, 0);
+  f.chromeWindow({ isPrivate: true }); await settle();
+  assert.equal(f.state.pruneCalls, 1);
+});
+
+test("encoded sensitive indexing is rejected before extraction and again after actor evidence arrives", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  await api.setEmbeddingProvider("disabled"); await api.enable();
+  let actorCalls = 0;
+  let extractedURL = "https://example.org/%61ccount";
+  const browser = { currentURI: { spec: extractedURL }, browsingContext: { currentWindowGlobal: {
+    getActor: () => ({ sendQuery: async () => {
+      actorCalls++;
+      return { url: extractedURL, title: "Evidence", text: "Long readable evidence. ".repeat(10) };
+    } }),
+  } } };
+  f.state.windows[0].gBrowser.getTabForBrowser = () => null;
+  await api.indexBrowser(browser);
+  assert.equal(actorCalls, 0); assert.equal(f.state.upserts.length, 0);
+  browser.currentURI.spec = "https://example.org/article";
+  await api.indexBrowser(browser);
+  assert.equal(actorCalls, 1); assert.equal(f.state.upserts.length, 0);
+  extractedURL = browser.currentURI.spec;
+  await api.indexBrowser(browser);
+  assert.equal(actorCalls, 2); assert.equal(f.state.upserts.length, 1);
+  assert.equal(f.state.upserts[0].url, extractedURL);
+});
+
+test("all Memory result sources and partial snapshots omit encoded sensitive evidence", async () => {
+  const f = fixture(), api = f.chromeWindow();
+  await api.enable(); await settle();
+  const blocked = "https://example.org/guide%252fbilling";
+  const safe = source => `https://example.org/guide-${source}`;
+  f.state.keywords = [blocked, safe("places")].map(uri => ({ uri, title: "Guide", time: 1000000, accessCount: 1 }));
+  f.state.enrichedResults.lexical = [blocked, safe("owned-keyword")].map(url => ({ url, title: "Guide", lastVisit: 1000 }));
+  f.state.enrichedResults.semantic = [blocked, safe("owned-semantic")].map(url => ({ url, title: "Guide", distance: 0.1 }));
+  f.state.nativeResults = [blocked, safe("native")].map(url => ({ url, title: "Guide", distance: 0.1 }));
+  const partials = [];
+  const result = await api.search("guide", "", { onPartial: value => partials.push(value) });
+  assert.equal(f.state.inferenceCalls, 1);
+  assert.equal(result.results.length, 4);
+  assert.deepEqual(new Set(result.results.map(row => row.url)), new Set([safe("places"), safe("owned-keyword"), safe("owned-semantic"), safe("native")]));
+  assert.ok(partials.length >= 2);
+  for (const snapshot of [...partials, result]) {
+    assert.equal(snapshot.results.some(row => row.url === blocked), false);
+    assert.equal(JSON.stringify(snapshot.answer).includes(blocked), false);
+  }
+});
+
+test("native exclusion mutations replace encoded sensitive vectors without changing safe neighbors", async () => {
+  const f = fixture();
+  f.state.exclusionRows = [
+    { rowid: 1, url: "https://example.org/%61ccount" },
+    { rowid: 2, url: "https://example.org/docs%255cwallet" },
+    { rowid: 3, url: "https://example.org/accounting" },
+    { rowid: 4, url: "https://example.org/caf%C3%A9" },
+  ];
+  await f.chromeWindow().enable(); await settle();
+  assert.deepEqual(f.state.cachedWrites.map(write => write.parameters.rowid), [1, 1, 2, 2]);
+  for (const write of f.state.cachedWrites.filter(item => item.sql.startsWith("INSERT"))) {
+    assert.deepEqual(Array.from(write.parameters.vector), [1, 0, 0]);
+  }
+  assert.equal(f.state.mapping, 2, "sentinel replacement must not delete mapping rows");
+  assert.deepEqual(f.errors, []);
+});
 
 test("Memory emits immediate grounded keyword and enriched partials while native connection is stalled", async () => {
   const f = fixture();

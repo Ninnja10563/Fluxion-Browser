@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.58.0-preview.1
+        default: 0.59.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.58.0-preview.1
+        default: v0.59.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -198,6 +198,11 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
         run: ./fluxion/scripts/verify-macos-memory-privacy.sh '.runtime/Fluxion.app'
+
+      - name: Verify disabled startup removes legacy sensitive Memory
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-memory-policy.sh '.runtime/Fluxion.app'
 
       - name: Preserve chrome inspection snapshot
         if: ${{ always() }}

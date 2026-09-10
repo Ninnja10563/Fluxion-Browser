@@ -21,6 +21,26 @@
     "wallet",
   ]);
 
+  function hasSensitivePath(pathname) {
+    // Classification only: servers may decode escaped separators or decode
+    // more than once. Never change the URL used for navigation. Bound work and
+    // exclude ambiguous/malformed paths rather than guessing server behavior.
+    if (pathname.length > 8192) return true;
+    let path = pathname;
+    for (let pass = 0; pass <= 4; pass += 1) {
+      const segments = path.toLowerCase().replace(/\\/g, "/").split("/");
+      if (segments.some(segment => SENSITIVE_PATH_SEGMENTS.includes(segment))) return true;
+      if (!path.includes("%")) return false;
+      if (pass === 4) return true;
+      try {
+        path = decodeURIComponent(path);
+      } catch (_) {
+        return true;
+      }
+    }
+    return true;
+  }
+
   function normaliseDomain(value) {
     const candidate = String(value || "").trim().toLocaleLowerCase();
     if (!candidate) return "";
@@ -68,11 +88,7 @@
       if (url.username || url.password) return true;
       const hostname = url.hostname.toLocaleLowerCase();
       if (SENSITIVE_HOST_PREFIXES.some(prefix => hostname.startsWith(prefix))) return true;
-      const segments = url.pathname
-        .toLocaleLowerCase()
-        .split("/")
-        .filter(Boolean);
-      return segments.some(segment => SENSITIVE_PATH_SEGMENTS.includes(segment));
+      return hasSensitivePath(url.pathname);
     } catch (_) {
       return true;
     }

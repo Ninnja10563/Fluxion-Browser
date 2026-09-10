@@ -650,6 +650,28 @@ cross the browser-chrome/module boundary for Gecko's tensor converter; a
 window-owned typed array fails its realm-specific `instanceof` check. Cleanup
 attempts both native scrubbing and enriched-evidence deletion, and reports
 failures rather than silently claiming success.
+
+Sensitive-path classification decodes percent escapes locally, checking each
+layer for sensitive segments and treating decoded slash/backslash characters
+as separators. It never rewrites the stored or navigated URL. Four decoding
+passes and an 8,192-code-unit path budget bound the work; malformed escapes,
+invalid UTF-8, remaining escapes beyond the limit, and oversized paths are
+ineligible for Memory. Ordinary encoded article names and Unicode remain
+eligible. This is a conservative heuristic, not a comprehensive classifier
+of financial, health, or other sensitive content. Category exclusions remain
+on the roadmap.
+
+The enriched store imports the same policy through a privileged module bridge.
+Before exposing its first connection on each launch, it removes blocked page
+text and vectors in transactional, 256-row keyset batches, yielding between
+full batches. Initialization failure closes the connection and prevents reads;
+the next launch retries the policy sweep. Non-private window startup also
+prunes an existing evidence database when Memory is disabled, without creating
+one in a never-enabled profile. Upserts recheck the current policy after their
+asynchronous storage barrier. Existing deletion revision/quarantine guards
+remain in force. These are logical SQLite deletions, not a promise of forensic
+erasure from storage media or backups; ordinary Places history is retained.
+
 Clearing Browser Memory disables its feature gates,
 deletes vector rows and mappings, and schedules the semantic database files for
 removal at the next startup. The same actions delete matching records and
@@ -688,8 +710,9 @@ private-window, sensitive-route, password-form, scheme, and excluded-domain
 policy. The actor skips editable draft subtrees and derives headings from the
 same bounded sanitized traversal, rather than reading an independent unsanitized heading
 channel. Editable extraction roots and document-wide editing mode produce no
-evidence. Existing indexed evidence is not retroactively classified; users can
-erase it through Clear Browser Memory. The iterative walker stops after 4,096
+evidence. Existing indexed evidence is not retroactively classified for edited
+page subtrees; users can erase it through Clear Browser Memory. URL policy is
+reapplied to stored evidence as described above. The iterative walker stops after 4,096
 visited nodes or 24,000 text characters, uses bounded `substringData` reads,
 and never clones the DOM or reads a whole subtree's text. Heading evidence is
 limited to 24 entries of 240 characters; title extraction has its own 64-node,

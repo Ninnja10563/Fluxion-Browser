@@ -95,9 +95,8 @@
     assert(tensor.length > 0, "Native embedding dimension is invalid");
     tensor[0] = 1;
     const vector = PlacesUtils.tensorToSQLBindable(tensor);
-    async function seed(label, id, seededVector = vector) {
+    async function seed(label, id, seededVector = vector, url = `https://memory-privacy-fixture.invalid/evidence/${id}`) {
       stage(label);
-      const url = `https://memory-privacy-fixture.invalid/evidence/${id}`;
       const inserted = await PlacesUtils.history.insert({ url, title: `Fluxion privacy verification evidence ${id}`,
         visits: [{ date: new Date(), transition: PlacesUtils.history.TRANSITIONS.TYPED }] });
       const canonical = await PlacesUtils.history.fetch(url, { includeVisits: true });
@@ -139,24 +138,83 @@
     const nonSentinel = new Array(tensor.length).fill(0);
     assert(nonSentinel.length > 1, "Native fixture needs at least two vector dimensions");
     nonSentinel[1] = 1;
-    const excludedURL = await seed("seed-before-provider-disable", 91047001,
-      PlacesUtils.tensorToSQLBindable(nonSentinel));
-    async function storedExcludedVector() {
+    async function storedVector(url) {
       const rows = await connection.execute(`SELECT v.embedding AS embedding
         FROM vec_history_mapping m JOIN vec_history v ON v.rowid = m.rowid
-        JOIN places.moz_places p ON p.url_hash = m.url_hash WHERE p.url = :url`, { url: excludedURL });
+        JOIN places.moz_places p ON p.url_hash = m.url_hash WHERE p.url = :url`, { url });
       assert(rows.length === 1, "Excluded-page mapping must remain paired with exactly one native vector");
       const bytes = Uint8Array.from(rows[0].getResultByName("embedding"));
       assert(bytes.byteLength === tensor.length * 4, "Native vector blob has an unexpected byte length");
       const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
       return Array.from({ length: tensor.length }, (_, index) => view.getFloat32(index * 4, true));
     }
-    const initialVector = await storedExcludedVector();
+    const blockedURL = "https://memory-privacy-fixture.invalid/%2561ccount/encoded-evidence";
+    const safeURL = "https://memory-privacy-fixture.invalid/guides/accounting-evidence";
+    const nonSentinelBlob = PlacesUtils.tensorToSQLBindable(nonSentinel);
+    await companion.FluxionMemory.setExcludedDomains([]);
+    await seed("seed-sensitive-native-path", 91047010, nonSentinelBlob, blockedURL);
+    await seed("seed-safe-native-neighbor", 91047011, nonSentinelBlob, safeURL);
+    assert((await storedVector(blockedURL)).every((value, i) => value === nonSentinel[i]), "Sensitive seed was already scrubbed");
+    stage("sensitive-path-policy-sweep");
+    await companion.FluxionMemory.setExcludedDomains([]);
+    assert((await storedVector(blockedURL)).every((value, i) => value === tensor[i]), "Encoded sensitive path retained native vector evidence");
+    assert((await storedVector(safeURL)).every((value, i) => value === nonSentinel[i]), "Sensitive-path sweep changed safe same-host vector bytes");
+    for (const url of [blockedURL, safeURL]) assert((await PlacesUtils.history.fetch(url, { includeVisits: true }))?.visits?.length > 0,
+      "Memory privacy sweep removed ordinary Places history");
+    const filtered = await companion.FluxionMemory.search("privacy verification");
+    assert(!filtered.results.some(item => item.url === blockedURL) && filtered.results.some(item => item.url === safeURL),
+      "Memory did not filter sensitive native history while retaining its ordinary neighbor");
+    report.checks.push({ label: "encoded-sensitive-native-scrub-safe-neighbor-retained", mappingRetained: true, placesRetained: true, resultFiltered: true });
+
+    const { FluxionMemoryStore } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionMemoryStore.sys.mjs");
+    const { Sqlite } = ChromeUtils.importESModule("resource://gre/modules/Sqlite.sys.mjs");
+    await FluxionMemoryStore.get(safeURL); // Finish schema opening before simulating old-build evidence.
+    const enriched = await Sqlite.openConnection({ path: window.PathUtils.join(window.PathUtils.profileDir, "fluxion_memory.sqlite"), extensions: ["vec"] });
+    try {
+      const schema = await enriched.execute("SELECT sql FROM sqlite_master WHERE name = 'page_vectors'");
+      const dimension = Number(schema[0]?.getResultByName("sql").match(/FLOAT\[(\d+)\]/i)?.[1]);
+      assert(dimension > 1 && dimension <= 4096, "Enriched native vector schema dimension is invalid");
+      const oldVector = new Array(dimension).fill(0); oldVector[1] = 1;
+      // Direct SQL intentionally bypasses the new upsert policy: these rows
+      // represent data retained by an older installed browser build.
+      for (const [id, url] of [[91047010, blockedURL], [91047011, safeURL]]) {
+        await enriched.execute(`INSERT INTO pages
+          (id,url,title,description,headings,content,workspace,workspace_name,tab_group,last_visit,visit_count,indexed_at,
+           search_title,search_url,search_description,search_headings,search_content)
+          VALUES (:id,:url,'Privacy verification','','','Legacy evidence','focus','','',:now,1,:now,
+           'privacy verification',:url,'','','legacy evidence')`, { id, url, now: Date.now() });
+        await enriched.execute("INSERT INTO page_vectors(rowid,embedding) VALUES(:id,:vector)",
+          { id, vector: PlacesUtils.tensorToSQLBindable(oldVector) });
+      }
+      const rawCounts = async id => {
+        const rows = await enriched.execute(`SELECT
+          (SELECT count(*) FROM pages WHERE id=:id) AS pages,
+          (SELECT count(*) FROM page_vectors WHERE rowid=:id) AS vectors`, { id });
+        return { pages: Number(rows[0].getResultByName("pages")), vectors: Number(rows[0].getResultByName("vectors")) };
+      };
+      for (const id of [91047010, 91047011]) {
+        const before = await rawCounts(id);
+        assert(before.pages === 1 && before.vectors === 1, "Old-build enriched fixture was not populated");
+      }
+      stage("pruning-old-enriched-sensitive-evidence");
+      await FluxionMemoryStore.pruneExisting();
+      const blocked = await rawCounts(91047010), safe = await rawCounts(91047011);
+      assert(blocked.pages === 0 && blocked.vectors === 0 && safe.pages === 1 && safe.vectors === 1,
+        `Existing enriched policy cleanup was not selective: ${JSON.stringify({ blocked, safe })}`);
+      assert(await FluxionMemoryStore.get(blockedURL) === null && (await FluxionMemoryStore.get(safeURL))?.url === safeURL,
+        "Enriched store still exposed sensitive evidence or lost its safe neighbor");
+      for (const url of [blockedURL, safeURL]) assert((await PlacesUtils.history.fetch(url, { includeVisits: true }))?.visits?.length > 0,
+        "Enriched privacy cleanup removed Places history");
+      report.checks.push({ label: "old-enriched-sensitive-text-and-vector-deleted", blocked, safe });
+    } finally { await enriched.close(); }
+
+    const excludedURL = await seed("seed-before-provider-disable", 91047001, nonSentinelBlob);
+    const initialVector = await storedVector(excludedURL);
     assert(initialVector[0] === 0 && initialVector[1] === 1, "Exclusion fixture was already a sentinel");
     stage("excluding-native-evidence-from-other-window");
     await companion.FluxionMemory.setExcludedDomains(["memory-privacy-fixture.invalid"]);
     settingsMatch("other-window-exclusion-reflected", true, "gecko-local", "memory-privacy-fixture.invalid");
-    const scrubbed = await storedExcludedVector();
+    const scrubbed = await storedVector(excludedURL);
     assert(scrubbed[0] === 1 && scrubbed.slice(1).every(value => value === 0),
       "Other-window domain exclusion did not scrub actual native vector bytes");
     report.checks.push({ label: "other-window-exclusion-scrub", mappingRetained: true,

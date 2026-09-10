@@ -146,6 +146,15 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-memory.sh '.runtime/Fluxion.app'
 
+      - name: Check native Memory privacy cleanup and sensitive URLs
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-memory-privacy.sh '.runtime/Fluxion.app'
+
+      - name: Check disabled startup removes legacy sensitive Memory
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-memory-policy.sh '.runtime/Fluxion.app'
+
       - name: Check adopted tabs after real restart and crash recovery
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-session.sh '.runtime/Fluxion.app'

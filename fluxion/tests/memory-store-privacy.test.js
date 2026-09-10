@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
 const FluxionMemorySearch = require("../chrome/core/memory-search.js");
+const FluxionMemoryPolicy = require("../chrome/core/memory-policy.js");
 
 function deferred() {
   let resolve;
@@ -14,7 +15,7 @@ function deferred() {
   return { promise, resolve };
 }
 
-function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDimension = 2) {
+function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDimension = 2, options = {}) {
   const embedding = deferred();
   const embeddingStarted = deferred();
   const writes = [];
@@ -23,6 +24,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   const timers = new Map();
   let timerID = 0;
   let embeddingCalls = 0;
+  let opens = 0, closes = 0, yields = 0;
   let historyObserver;
   const db = {
     async getSchemaVersion() { return 3; },
@@ -42,16 +44,17 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
       return [];
     },
     async executeTransaction(callback) { await callback(); },
-    async close() {},
+    async close() { closes++; },
   };
   const createEngine = () => ({
     embeddingSize: 2,
     embed() { embeddingCalls += 1; embeddingStarted.resolve(); return embedding.promise; },
   });
   const context = vm.createContext({
-    Sqlite: { openConnection: async () => db },
+    Sqlite: { openConnection: async () => { opens++; return db; } },
     AsyncShutdown: { profileBeforeChange: { addBlocker() {} } },
     PathUtils: { profileDir: "/profile", join: (...parts) => parts.join("/") },
+    IOUtils: { exists: async () => options.existingFile ?? true },
     PlacesUtils: { tensorToSQLBindable: vector => vector },
     GeckoEmbeddings: factoryStyle === "current"
       ? { embeddingsGeneratorFactory: { forPlaces: createEngine }, EmbeddingsGenerator: {} }
@@ -59,10 +62,15 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     Cu: { reportError: error => errors.push(error) },
     URL,
     FluxionMemorySearch,
-    setTimeout(callback) { timers.set(++timerID, callback); return timerID; },
+    FluxionMemoryPolicy,
+    setTimeout(callback, delay) {
+      if (delay === 0) { yields++; queueMicrotask(callback); return ++timerID; }
+      timers.set(++timerID, callback); return timerID;
+    },
     clearTimeout(id) { timers.delete(id); },
     Services: { prefs: {
       getBoolPref: (key, fallback) => persistedPrefs.get(key) ?? fallback,
+      getStringPref: (key, fallback) => persistedPrefs.get(key) ?? fallback,
       setBoolPref: (key, value) => persistedPrefs.set(key, value),
       savePrefFile() {},
     } },
@@ -76,6 +84,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     .replace("export const FluxionMemoryStore", "globalThis.FluxionMemoryStore");
   vm.runInContext(source, context);
   return { store: context.FluxionMemoryStore, embedding, embeddingStarted, writes, db, operations, errors,
+    opens: () => opens, closes: () => closes, yields: () => yields,
     embeddingCalls: () => embeddingCalls,
     expireEmbeddingWait: () => { for (const callback of timers.values()) callback(); },
     notifyHistory: events => historyObserver(events) };
@@ -251,10 +260,10 @@ test("domain removal erases dotted DNS aliases and their vectors without deletin
   const urls = ["https://example.com/article", "https://example.com./article",
     "https://docs.example.com./guide", "https://notexample.com./article",
     "https://example.com.evil.invalid./article"];
-  const execute = db.execute;
-  db.execute = async sql => sql === "SELECT id,url FROM pages"
+  const execute = db.executeCached;
+  db.executeCached = async (sql, parameters) => sql.startsWith("SELECT id,url FROM pages WHERE id >")
     ? urls.map((url, index) => ({ getResultByName: name => name === "url" ? url : index + 1 }))
-    : execute(sql);
+    : execute(sql, parameters);
   await store.deleteBlocked(["example.com"]);
   for (const table of ["pages", "page_vectors"]) {
     assert.deepEqual(operations.filter(item => item.sql.startsWith(`DELETE FROM ${table} WHERE`))
@@ -425,4 +434,126 @@ test("enriched lexical rows are emitted once before the bounded embedding wait",
   assert.equal(final.lexical[0].url, "https://example.com/plant");
   assert.equal(final.semantic.length, 0);
   f.embedding.resolve([0.5, 0.5]);
+});
+
+function persistedEvidence(urls, prefs = new Map(), options = {}) {
+  const f = fixture(prefs, "legacy", 2, options);
+  const pages = new Map(urls.map((url, index) => [index + 1, {
+    id: index + 1, url, title: `Saved evidence ${index}`, description: "description",
+    headings: "headings", content: `preexisting extracted text ${index}`,
+  }]));
+  const vectors = new Map([...pages.keys()].map(id => [id, [0.3, 0.7]]));
+  const batches = [];
+  let transaction = false, failDeletion = false;
+  const cached = f.db.executeCached;
+  f.db.executeCached = async (sql, parameters = {}) => {
+    if (/SELECT id,\s*url FROM pages WHERE id\s*>/i.test(sql)) {
+      const result = [...pages.values()].filter(page => page.id > parameters.after)
+        .sort((a, b) => a.id - b.id).slice(0, parameters.limit);
+      batches.push({ after: parameters.after, limit: parameters.limit, count: result.length });
+      return result.map(page => ({ getResultByName: name => page[name] }));
+    }
+    if (sql.startsWith("DELETE FROM page_vectors WHERE rowid=:rowid")) {
+      assert.equal(transaction, true, "vectors must be removed inside the page transaction");
+      vectors.delete(parameters.rowid);
+    }
+    if (sql.startsWith("DELETE FROM pages WHERE id=:rowid")) {
+      assert.equal(transaction, true);
+      if (failDeletion) throw Error("policy deletion failed");
+      pages.delete(parameters.rowid);
+    }
+    if (sql.startsWith("SELECT url,title,description,headings,content FROM pages WHERE url=:url")) {
+      const page = [...pages.values()].find(page => page.url === parameters.url);
+      return page ? [{ getResultByName: name => page[name] }] : [];
+    }
+    return cached(sql, parameters);
+  };
+  f.db.executeTransaction = async callback => {
+    const savedPages = new Map(pages), savedVectors = new Map(vectors);
+    transaction = true;
+    try { return await callback(); }
+    catch (error) {
+      pages.clear(); for (const entry of savedPages) pages.set(...entry);
+      vectors.clear(); for (const entry of savedVectors) vectors.set(...entry);
+      throw error;
+    } finally { transaction = false; }
+  };
+  return { ...f, pages, vectors, batches, failDeletion: () => { failDeletion = true; } };
+}
+
+test("first open removes preexisting encoded sensitive text and vectors before exposing safe evidence", async () => {
+  const urls = ["https://example.org/%61ccount", "https://example.org/docs%2Flogin",
+    "https://example.org/%2562illing", "https://example.org/docs/security-accounting"];
+  const f = persistedEvidence(urls);
+  const safe = await f.store.get(urls[3]);
+  assert.equal(safe.url, urls[3]); assert.match(safe.content, /preexisting extracted text/);
+  assert.deepEqual([...f.pages.keys()], [4]); assert.deepEqual([...f.vectors.keys()], [4]);
+  for (const url of urls.slice(0, 3)) assert.equal(await f.store.get(url), null);
+  assert.equal(f.writes.some(sql => /DELETE.*moz_(places|historyvisits)/i.test(sql)), false,
+    "Memory cleanup must not delete ordinary Places browsing history");
+});
+
+test("startup pruning includes current exclusions and does not create storage for a never-enabled profile", async () => {
+  const absent = fixture(new Map(), "legacy", 2, { existingFile: false });
+  await absent.store.pruneExisting();
+  assert.equal(absent.opens(), 0); assert.deepEqual(absent.writes, []);
+  const prefs = new Map([["fluxion.memory.enabled", false],
+    ["fluxion.memory.excludedDomains", '["blocked.example"]']]);
+  const f = persistedEvidence(["https://blocked.example/article", "https://safe.example/article"], prefs);
+  await f.store.pruneExisting();
+  assert.deepEqual([...f.pages.keys()], [2]); assert.deepEqual([...f.vectors.keys()], [2]);
+  assert.equal(f.opens(), 1, "existing disabled Memory is still pruned");
+});
+
+test("policy scan advances by scanned IDs across safe batches and yields at bounded page sizes", async () => {
+  const urls = Array.from({ length: 520 }, (_, id) => `https://safe.example/article-${id}`);
+  urls[260] = "https://safe.example/%61uth";
+  urls[519] = "https://safe.example/docs%2Fwallet";
+  const f = persistedEvidence(urls);
+  await f.store.get(urls[0]);
+  assert.deepEqual(f.batches, [
+    { after: 0, limit: 256, count: 256 }, { after: 256, limit: 256, count: 256 },
+    { after: 512, limit: 256, count: 8 },
+  ]);
+  assert.equal(f.yields(), 2);
+  assert.equal(f.pages.size, 518); assert.equal(f.vectors.size, 518);
+  assert.equal(f.pages.has(261), false); assert.equal(f.pages.has(520), false);
+});
+
+test("startup sweep failure rolls back vector deletion and rejects every read until restart", async () => {
+  const f = persistedEvidence(["https://example.org/%61ccount", "https://safe.example/article"]);
+  f.failDeletion();
+  await assert.rejects(f.store.get("https://safe.example/article"), /policy deletion failed/);
+  assert.equal(f.pages.size, 2); assert.equal(f.vectors.size, 2);
+  assert.equal(f.closes(), 1);
+  await assert.rejects(f.store.search("evidence", 12, false), /policy deletion failed/);
+  const restarted = persistedEvidence([...f.pages.values()].map(page => page.url));
+  assert.ok(await restarted.store.get("https://safe.example/article"));
+  assert.equal(restarted.pages.size, 1); assert.equal(restarted.vectors.size, 1);
+});
+
+test("upsert rechecks sensitivity and live exclusions after asynchronous connection initialization", async () => {
+  const prefs = new Map(), f = fixture(prefs);
+  const opening = deferred(), reached = deferred();
+  const execute = f.db.execute;
+  f.db.execute = async sql => {
+    if (sql.startsWith("PRAGMA")) { reached.resolve(); await opening.promise; }
+    return execute(sql);
+  };
+  const pending = f.store.upsert({ url: "https://late.example/article", title: "must not persist" });
+  await reached.promise;
+  prefs.set("fluxion.memory.excludedDomains", '["late.example"]'); opening.resolve();
+  assert.equal(await pending, false);
+  assert.equal(await f.store.upsert({ url: "https://example.org/%61ccount" }), false);
+  assert.equal(f.operations.some(operation => operation.sql.startsWith("INSERT INTO pages")), false);
+  assert.equal(await f.store.upsert({ url: "https://safe.example/article" }), true);
+});
+
+test("explicit domain pruning also applies tightened sensitivity without deleting safe text or vectors", async () => {
+  const f = persistedEvidence(["https://safe.example/article"]);
+  await f.store.get("https://safe.example/article");
+  f.pages.set(10, { id: 10, url: "https://example.org/%61ccount", content: "old imported text" });
+  f.vectors.set(10, [0.2, 0.8]);
+  await f.store.deleteBlocked([]);
+  assert.deepEqual([...f.pages.keys()], [1]); assert.deepEqual([...f.vectors.keys()], [1]);
 });

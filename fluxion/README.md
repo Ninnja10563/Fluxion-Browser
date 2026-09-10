@@ -8,6 +8,11 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.59 is in development: encoded sensitive routes must remain excluded
+from Browser Memory, including saved evidence from older profiles. Packaged
+macOS privacy and restart checks are required before a new release. The latest
+download remains the verified 0.58 preview below.
+
 Fluxion 0.58 is published: ordinary tab switching preserves unchanged Flow rows
 and controls, native multi-selection stays synchronized, and workspace sessions
 avoid redundant writes and duplicate ownership reads. Broader resource profiling
