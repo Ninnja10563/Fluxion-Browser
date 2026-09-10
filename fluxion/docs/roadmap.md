@@ -31,8 +31,9 @@ controls work and its failure paths have been tested.
 - abrupt-process crash recovery gate with ordinary on-disk checkpoints, blank
   startup, two-window native layout/workspace restoration, and private evidence
   exclusion; real HTTP transfer, content upload/login forms, and native HTTP
-  Basic authentication acceptance/cancellation/reload gates (implemented;
-  OS file-picker gate implemented with native staging pending;
+  Basic authentication acceptance/cancellation/reload gates, plus a real macOS
+  file-picker cancellation, Unicode-path selection, and byte-verified upload
+  gate (implemented and passed in packaged macOS diagnostics;
   third-party authentication audits remain)
 - signed macOS application bundle and native application menus (custom Flow
   menu, distinct trailing toolbar menu, and About route implemented; Developer
