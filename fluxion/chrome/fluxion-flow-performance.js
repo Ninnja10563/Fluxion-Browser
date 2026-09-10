@@ -227,6 +227,23 @@
     assert(labels().includes(target.label), "Renamed native group metadata stayed stale in tab search");
     await query(otherWorkspace, null, true);
     assert(labels().includes(target.label), "Moved workspace metadata stayed stale in tab search");
+    const renameWorkspace = async name => {
+      window.FluxionPalette.close();
+      const workspaces = ui.workspaces().map(workspace => workspace.id === otherWorkspace ? { ...workspace, name } : workspace);
+      Services.prefs.setStringPref("fluxion.workspaces", JSON.stringify(workspaces));
+      await waitFor(() => ui.workspaces().find(workspace => workspace.id === otherWorkspace)?.name === name,
+        "Native workspace rename did not reach the live browser model");
+      window.FluxionPalette.open("tabs");
+      await waitFor(() => document.activeElement === input, "Renamed-workspace search did not refocus input");
+    };
+    await renameWorkspace("Aurora notebook enclave");
+    await query("Aurora notebook enclave", null, true);
+    assert(labels().includes(target.label), "Visible workspace name is not searchable");
+    await renameWorkspace("Orion notebook enclave");
+    await query("Orion notebook enclave", null, true);
+    assert(labels().includes(target.label), "Workspace renamed while the palette was closed stayed stale");
+    await query("Aurora notebook enclave", null, true);
+    assert(!labels().includes(target.label), "Previous workspace name remained cached after renaming");
     input.value = "earlier query must disappear";
     input.dispatchEvent(new window.Event("input", { bubbles: true }));
     await query("cafe revised unique target", target.label);
@@ -262,6 +279,7 @@
     const report = { fixtureTabs: fixtures.length, nativeTabs: gBrowser.tabs.length, samples: sorted.length,
       inputToFrameMs: { p50: percentile(.5), p95: percentile(.95), max: sorted.at(-1) },
       latenciesMs: searchLatencies, stackedPicker: "native-pair-stacked-after-palette-close",
+      workspaceNames: "live-native-rename-between-palette-openings-verified",
       input: "Gecko DOM input events; not OS typing or a high-refresh-rate guarantee" };
     Services.prefs.setStringPref(`${prefix}.tabSearch.metrics`, JSON.stringify(report));
     // Hosted-runner regression guard, not a frame-rate performance target.

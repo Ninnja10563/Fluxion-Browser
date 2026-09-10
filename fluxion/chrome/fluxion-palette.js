@@ -508,6 +508,7 @@
   function tabItems() {
     const source = splitSource;
     const orientation = pendingSplitOrientation;
+    const workspaceNames = new Map(ui.workspaces().map(workspace => [workspace.id, workspace.name]));
     const tabs = mode === "split"
       ? [...gBrowser.tabs].filter(tab =>
           ui.tabWorkspace(tab) === ui.currentWorkspace() &&
@@ -529,7 +530,11 @@
       item.detail = tab.linkedBrowser?.currentURI?.displaySpec || "";
       item.kind = mode === "split" ? "Split" : "Tab";
       item.boost = tab === gBrowser.selectedTab ? 18 : 0;
-      item.keywords = [ui.tabWorkspace(tab), tab.group?.label || ""];
+      const workspaceId = ui.tabWorkspace(tab);
+      const workspaceName = workspaceNames.get(workspaceId) || workspaceId;
+      const groupName = tab.group?.label || "";
+      item.keywords = [workspaceId, workspaceName, groupName];
+      item.contextLabel = [workspaceName, groupName].filter(Boolean).join(" / ");
       return item;
     });
   }
@@ -685,7 +690,9 @@
       const label = create("span", "fluxion-palette-result-label");
       label.textContent = item.label;
       const detail = create("span", "fluxion-palette-result-detail");
-      detail.textContent = item.detail || "";
+      // Display context separately from item.detail's exact URL search field.
+      detail.textContent = [item.contextLabel, item.detail].filter(Boolean).join(" · ");
+      detail.title = detail.textContent;
       const evidence = create("span", "fluxion-palette-result-evidence");
       evidence.textContent = item.evidence || "";
       const kind = create("span", "fluxion-palette-result-kind");
