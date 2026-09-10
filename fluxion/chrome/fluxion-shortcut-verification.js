@@ -22,6 +22,10 @@
     Services.prefs.setStringPref(`${prefix}.stage`, value);
     Services.prefs.savePrefFile(null);
   };
+  const focusControl = async (control, label) => {
+    control.focus();
+    await waitFor(() => document.activeElement === control, `${label} did not receive real DOM focus`);
+  };
   async function run() {
     await SessionStore.promiseAllWindowsRestored;
     await waitFor(() => window.FluxionUI && window.FluxionShortcuts, "Shortcut registry did not initialize");
@@ -30,7 +34,8 @@
     gBrowser.selectedTab = settingsTab;
     const panel = await waitFor(() => {
       const node = document.querySelector('.fluxion-settings-section[data-section="keyboard"]');
-      return node?.getBoundingClientRect().height > 0 && node;
+      return settingsTab.linkedBrowser.currentURI.spec === "about:preferences?fluxion=keyboard" &&
+        !settingsTab.hasAttribute("busy") && node?.getBoundingClientRect().height > 0 && node;
     }, "Keyboard Settings did not become visible");
     const button = label => panel.querySelector(`button[aria-label="Change ${label} shortcut"]`);
     const capture = button("Cycle Flow sidebar");
@@ -66,7 +71,9 @@
     companion = await waitFor(() => [...Services.wm.getEnumerator("navigator:browser")]
       .find(candidate => !before.has(candidate) && candidate.FluxionShortcuts), "Shortcut companion window did not initialize");
     window.focus();
-    capture.focus(); capture.click();
+    await waitFor(() => Services.focus.activeWindow === window && document.hasFocus(),
+      "Primary shortcut fixture window did not regain native focus");
+    await focusControl(capture, "Shortcut capture"); capture.click();
     key(capture, "KeyK", { altKey: true, shiftKey: true });
     const custom = "Accel+Alt+Shift+KeyK";
     assert(capture.dataset.capturing === "false" && window.FluxionShortcuts.get("sidebar") === custom &&
@@ -75,14 +82,18 @@
     "Shortcut editing did not save and propagate the binding");
     report.checks.push("settings-custom-save-cross-window-and-persisted-pref");
     stage("capture-exit-and-dispatch");
-    capture.focus(); capture.click(); key(capture, "Escape", { metaKey: false });
+    await focusControl(capture, "Escape capture"); capture.click(); key(capture, "Escape", { metaKey: false });
     assert(capture.dataset.capturing === "false", "Escape did not end shortcut capture");
     key(capture, "KeyK");
     assert(!document.getElementById("fluxion-palette-layer").hidden, "Normal palette shortcut was not restored after capture");
-    key(document.getElementById("fluxion-palette-input"), "Escape", { metaKey: false });
-    capture.focus(); capture.click();
-    button("Command palette").focus();
-    assert(capture.dataset.capturing === "false", "Blur did not end shortcut capture");
+    const paletteInput = document.getElementById("fluxion-palette-input");
+    await waitFor(() => document.activeElement === paletteInput, "Opened palette did not receive its scheduled input focus");
+    key(paletteInput, "Escape", { metaKey: false });
+    await waitFor(() => document.getElementById("fluxion-palette-layer").hidden && document.activeElement === capture,
+      "Palette close did not restore the prior shortcut control focus");
+    await focusControl(capture, "Blur capture"); capture.click();
+    await focusControl(button("Command palette"), "Blur destination");
+    await waitFor(() => capture.dataset.capturing === "false", "Blur did not end shortcut capture");
     report.checks.push("escape-blur-release-and-normal-palette-dispatch");
     companion.FluxionShortcuts.reset("sidebar");
     assert(window.FluxionShortcuts.get("sidebar") === "Accel+Shift+Backslash" &&
@@ -91,6 +102,9 @@
     Services.prefs.setStringPref(`${prefix}.health`, "packaged-settings-shortcut-capture-and-cross-window-save-verified");
   }
   run().catch(error => {
+    report.failureFocus = { documentFocused: document.hasFocus(), activeWindow: Services.focus.activeWindow === window,
+      activeTag: document.activeElement?.localName, activeId: document.activeElement?.id,
+      activeClass: document.activeElement?.className, settingsURL: gBrowser.selectedBrowser?.currentURI?.spec };
     Services.prefs.setStringPref(`${prefix}.error`, `${error?.message || error}\n${error?.stack || ""}`);
     Cu.reportError(error);
   }).finally(() => {

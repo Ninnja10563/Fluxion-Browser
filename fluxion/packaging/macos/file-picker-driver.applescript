@@ -29,14 +29,25 @@ on ownedWindowSummary(ownedPID)
       set summary to "windows=" & (count of windows)
       repeat with candidateWindow in windows
         set summary to summary & "; sheets=" & (count of sheets of candidateWindow)
+        try
+          set summary to summary & "; windowRole=" & (value of attribute "AXRole" of candidateWindow)
+          set summary to summary & "; AXChildren=" & (count of (value of attribute "AXChildren" of candidateWindow))
+        on error errorText number errorNumber
+          set summary to summary & "; windowReadError=" & errorNumber & ":" & errorText
+        end try
         set roles to {}
-        repeat with descendant in entire contents of candidateWindow
+        set descendants to entire contents of candidateWindow
+        set summary to summary & "; descendants=" & (count of descendants)
+        set firstReadError to ""
+        repeat with descendant in descendants
           try
             set roleName to value of attribute "AXRole" of descendant
             if roles does not contain roleName then set end of roles to roleName
+          on error errorText number errorNumber
+            if firstReadError is "" then set firstReadError to errorNumber & ":" & errorText
           end try
         end repeat
-        set summary to summary & "; descendant roles=" & (roles as text)
+        set summary to summary & "; descendant roles=" & (roles as text) & "; firstReadError=" & firstReadError
       end repeat
       return summary
     end tell
@@ -49,6 +60,10 @@ on run arguments
   if actionName is not "cancel" and actionName is not "accept" then error "Unknown file-picker driver action"
   tell application "System Events"
     set frontmost of first application process whose unix id is ownedPID to true
+    -- Gecko's supported AT detection initializes its accessibility tree when
+    -- the application's role is read (accessible/mac/Platform.mm).
+    set applicationRole to value of attribute "AXRole" of first application process whose unix id is ownedPID
+    if applicationRole is not "AXApplication" then error "Owned fixture is not an AX application"
   end tell
   delay 0.3
   my requireFrontmost(ownedPID)
