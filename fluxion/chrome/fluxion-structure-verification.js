@@ -5,7 +5,7 @@
   const prefix = "fluxion.structure.verification";
   const { document, gBrowser, FluxionUI: ui } = window;
   const fixtures = [], original = gBrowser.selectedTab;
-  const report = { fixtureTabs: 1000, checks: [], unaffectedWrites: 0,
+  const report = { fixtureTabs: 1000, checks: [], baselines: [], unaffectedWrites: 0,
     input: "Native Gecko tab operations and chrome focus; not physical OS input" };
   let observer;
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
@@ -58,13 +58,20 @@
     }
     async function operation(name, affected, action, focusControl, movable = affected) {
       write("stage", name);
-      // Establish the control owner's keyboard entry through real selection,
-      // before measuring structure; do not manufacture tabindex/focus state.
-      ui.selectTab(focusControl.closest(".fluxion-tab")._fluxionTab);
-      await settle();
-      const before = rows(), close = new Map([...before].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
+      // Selection intentionally retains an existing focused Flow row. Establish
+      // the intended owner BEFORE selecting, so that prior fixture focus cannot
+      // defer a legitimate roving-entry change into the measured operation.
+      const focusRow = focusControl.closest(".fluxion-tab");
       focusControl.focus({ preventScroll: true });
-      assert(document.activeElement === focusControl, "Could not focus exact native close/audio control");
+      ui.selectTab(focusRow._fluxionTab);
+      await settle();
+      const baseline = { operation: name, owner: fixtures.indexOf(focusRow._fluxionTab),
+        selected: fixtures.indexOf(gBrowser.selectedTab), focused: document.activeElement === focusControl,
+        tabIndex: focusRow.tabIndex };
+      report.baselines.push(baseline);
+      assert(baseline.focused && gBrowser.selectedTab === focusRow._fluxionTab && focusRow.tabIndex === 0,
+        `Structure baseline did not establish exact focused keyboard owner: ${JSON.stringify(baseline)}`);
+      const before = rows(), close = new Map([...before].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
       drain();
       await action(); await settle();
       const after = rows();
@@ -78,6 +85,11 @@
         const row = element?.closest(".fluxion-tab");
         if (row && !affected.has(row._fluxionTab)) {
           report.unaffectedWrites++;
+          report.unexpectedMutation = { operation: name, row: fixtures.indexOf(row._fluxionTab),
+            type: change.type, attribute: change.attributeName, oldValue: change.oldValue,
+            currentValue: change.attributeName ? element.getAttribute(change.attributeName) : null,
+            selected: fixtures.indexOf(gBrowser.selectedTab),
+            focusOwner: fixtures.indexOf(document.activeElement?.closest(".fluxion-tab")?._fluxionTab) };
           throw new Error(`${name} rewrote unaffected row: ${change.type}/${change.attributeName || "children"}`);
         }
         if (change.type === "childList" && (change.target === tree || change.target === pinned)) {

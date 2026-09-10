@@ -447,3 +447,37 @@ test("existing pinned controls keep focus and identity while membership and pin 
   assert.equal(f.row(added).getAttribute("aria-posinset"), null);
   assert.equal(f.row(added).getAttribute("aria-setsize"), null);
 });
+
+test("structural measurements must establish focused-owner roving state before collecting mutations", () => {
+  const stale = fixture(30);
+  stale.gBrowser.selectedTab = stale.tabs[13]; stale.flush();
+  stale.row(stale.tabs[13])._fluxionParts.close.focus();
+  stale.gBrowser.selectedTab = stale.tabs[2]; stale.flush();
+  assert.equal(stale.row(stale.tabs[13]).tabIndex, 0, "native selection preserves the existing focused tree entry");
+  assert.equal(stale.row(stale.tabs[2]).tabIndex, -1);
+  stale.row(stale.tabs[2])._fluxionParts.close.focus();
+  const beforeStale = stale.row(stale.tabs[13]).writes;
+  stale.tabs[20].pinned = true;
+  stale.context.scheduleRender({ type: "TabPinned", target: stale.tabs[20] }); stale.flush();
+  assert.equal(stale.row(stale.tabs[13]).writes, beforeStale + 1,
+    "focusing after selection defers legitimate roving reconciliation into the next render");
+
+  const ready = fixture(30);
+  ready.gBrowser.selectedTab = ready.tabs[13]; ready.flush();
+  ready.row(ready.tabs[13])._fluxionParts.close.focus();
+  const owner = ready.tabs[2], control = ready.row(owner)._fluxionParts.close;
+  control.focus();
+  ready.gBrowser.selectedTab = owner; ready.flush();
+  assert.equal(ready.document.activeElement, control);
+  assert.equal(ready.gBrowser.selectedTab, owner);
+  assert.equal(ready.row(owner).tabIndex, 0, "focus-before-selection settles the exact measured keyboard entry");
+  const original = ready.nodes().map(row => [row, row.writes]);
+  ready.tabs[20].pinned = true;
+  ready.context.scheduleRender({ type: "TabPinned", target: ready.tabs[20] }); ready.flush();
+  for (const [row, writes] of original) {
+    if (row._fluxionTab === ready.tabs[20]) continue;
+    assert.equal(ready.row(row._fluxionTab), row);
+    assert.equal(row.writes, writes);
+  }
+  assert.equal(ready.document.activeElement, control);
+});
