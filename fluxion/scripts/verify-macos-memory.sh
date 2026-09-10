@@ -38,14 +38,18 @@ FLUXION_PROFILE="$profile" FLUXION_SEMANTIC_MODEL_TEST=1 \
 process_id=$!
 for (( attempt = 0; attempt < 1280; attempt += 1 )); do
   if [[ -f "$profile/prefs.js" ]]; then
-    if grep -q 'user_pref("fluxion.memory.semantic.health", "gecko-model-generated-vectors-and-recalled-nonliteral-evidence")' "$profile/prefs.js"; then
+    if grep -q 'user_pref("fluxion.memory.semantic.health", "gecko-model-generated-vectors-and-recalled-nonliteral-evidence")' "$profile/prefs.js" &&
+       grep -Fq 'user_pref("fluxion.memory.migration.health", "native-v1-migration-preserved-evidence-and-vec0-bytes")' "$profile/prefs.js"; then
       grep -Fq 'user_pref("fluxion.memory.ranking.health", "old-exact-page-recalled-beyond-native-candidate-cap")' "$profile/prefs.js" || {
         printf 'Integrated exact-match ranking evidence is missing.\n' >&2; exit 1;
       }
-      printf 'Verified old exact-match recall, real Gecko model vectors, and semantic-only plant evidence retrieval.\n' >&2
+      grep -Fq 'user_pref("fluxion.memory.unicode.health", "normalized-body-only-recall-preserves-original-evidence")' "$profile/prefs.js" || {
+        printf 'Integrated normalized body-only recall evidence is missing.\n' >&2; exit 1;
+      }
+      printf 'Verified old exact-match and normalized body-only recall, real Gecko model vectors, and semantic-only plant evidence retrieval.\n' >&2
       exit 0
     fi
-    if grep -q 'user_pref("fluxion.memory.semantic.error",' "$profile/prefs.js"; then break; fi
+    if grep -Eq 'user_pref\("fluxion.memory.(semantic|migration).error",' "$profile/prefs.js"; then break; fi
   fi
   if ! kill -0 "$process_id" 2>/dev/null; then break; fi
   sleep 0.25
@@ -53,7 +57,7 @@ done
 
 printf 'The real local semantic model gate failed; keyword fallback does not pass this check.\n' >&2
 if [[ -f "$profile/prefs.js" ]]; then
-  grep -E 'user_pref\("fluxion.memory.(semantic|ranking)\.' "$profile/prefs.js" >&2 || true
+  grep -E 'user_pref\("fluxion.memory.(semantic|ranking|unicode|migration)\.' "$profile/prefs.js" >&2 || true
 fi
 sed -n '1,160p' "$log" >&2
 exit 1

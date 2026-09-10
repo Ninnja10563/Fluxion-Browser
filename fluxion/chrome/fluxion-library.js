@@ -270,9 +270,10 @@
     else itemMenu.openPopup(anchor, "after_start", 0, 0, false, false, event);
   }
 
+  const pendingSections = new WeakMap();
   function isLibraryTab(tab) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
-    return url.startsWith("about:downloads") ||
+    return /^about:downloads(?:[?#]|$)/.test(url) ||
       (url === "about:blank" && tab?.hasAttribute("fluxion-library-section"));
   }
 
@@ -282,9 +283,14 @@
 
   function tabSection(tab) {
     if (!tab) return "history";
-    const stored = tab.getAttribute("fluxion-library-section");
-    if (stored) return FluxionLibraryData.section(stored);
-    const hash = tab.linkedBrowser?.currentURI?.spec.split("#")[1];
+    const browser = tab.linkedBrowser;
+    const url = browser?.currentURI?.spec || "";
+    const pending = pendingSections.get(browser);
+    if (pending && url === pending.from) return pending.section;
+    // Only an owned, not-yet-committed tab needs the persisted attribute. Once
+    // Gecko has a URL, its fragment must win over stale restored chrome state.
+    if (url === "about:blank") return FluxionLibraryData.section(tab.getAttribute("fluxion-library-section"));
+    const hash = url.split("#")[1];
     return hash ? FluxionLibraryData.section(hash) : "downloads";
   }
 
@@ -856,11 +862,29 @@
     render();
   }
 
-  function selectSection(id, { preserveSearch = false } = {}) {
+  function selectSection(id, { preserveSearch = false, navigate = true } = {}) {
     currentSection = FluxionLibraryData.section(id);
     const tab = selectedLibraryTab();
     tab?.setAttribute("fluxion-library-section", currentSection);
     if (tab) tab.label = `Library · ${currentSection[0].toUpperCase()}${currentSection.slice(1)}`;
+    if (tab && navigate) {
+      const browser = tab.linkedBrowser;
+      const target = `about:downloads#${currentSection}`;
+      if (browser.currentURI.spec !== target || pendingSections.has(browser)) {
+        pendingSections.set(browser, { from: browser.currentURI.spec, section: currentSection });
+        try {
+          browser.loadURI(Services.io.newURI(target), {
+            triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+          });
+        } catch (error) {
+          pendingSections.delete(browser);
+          Cu.reportError(error);
+          currentSection = tabSection(tab);
+          tab.setAttribute("fluxion-library-section", currentSection);
+          tab.label = `Library · ${currentSection[0].toUpperCase()}${currentSection.slice(1)}`;
+        }
+      }
+    }
     window.FluxionUI.refresh();
     if (!preserveSearch) search.value = "";
     invalidateQuery();
@@ -947,7 +971,7 @@
       // about:downloads. Its section has not changed: retain live rows/focus.
       const changed = tab !== visibleTab || tabSection(tab) !== currentSection;
       visibleTab = tab;
-      if (changed) selectSection(tabSection(tab));
+      if (changed) selectSection(tabSection(tab), { navigate: false });
       else if (!wasVisible) refreshAll();
     } else {
       refreshToken += 1;
@@ -974,18 +998,21 @@
     rememberSelectedPage();
     const id = FluxionLibraryData.section(section);
     let tab = [...gBrowser.tabs].find(isLibraryTab);
+    const created = !tab;
     if (!tab) {
       tab = gBrowser.addTrustedTab(`about:downloads#${id}`);
       window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     }
     tab.setAttribute("fluxion-library-section", id);
     window.FluxionUI.selectTab(tab);
-    syncVisibility();
+    if (created) syncVisibility();
+    else selectSection(id);
   }
 
   gBrowser.tabContainer.addEventListener("TabSelect", handleTabSelect);
   const progressListener = {
     onLocationChange(browser) {
+      pendingSections.delete(browser);
       if (browser === gBrowser.selectedBrowser) handleTabSelect();
     },
   };

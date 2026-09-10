@@ -57,8 +57,9 @@ controls work and its failure paths have been tested.
 ## Phase 4 — local semantic history
 
 - source-duplication-invariant ranking and old exact-title/URL candidate
-  retention before limits (implemented; consistent accent/Unicode candidate
-  normalization and historical-versus-current workspace/group semantics remain)
+  retention before limits, with shared accent/Unicode candidate normalization
+  and transactional migration of existing evidence (implemented;
+  historical-versus-current workspace/group semantics remain)
 - opt-in Gecko-local embeddings, independently selectable keyword-only recall,
   sensitive-origin/domain exclusions, hybrid history ranker, and complete
   vector deletion controls (implemented)

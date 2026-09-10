@@ -2,14 +2,8 @@
 (function exposeMemoryRanking(scope) {
   "use strict";
 
-  function normalise(value) {
-    return String(value || "")
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLocaleLowerCase()
-      .trim()
-      .replace(/\s+/g, " ");
-  }
+  const { fold: normalise } = typeof module !== "undefined" && module.exports
+    ? require("./memory-search.js") : scope.FluxionMemorySearch;
 
   function lexicalStrength(query, row) {
     const needle = normalise(query);

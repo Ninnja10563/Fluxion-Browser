@@ -76,6 +76,59 @@
     report.pages.push({ section, uniqueRows: seen.size, pageCount: Math.ceil(count / 100), stableFirstPage: true, keyboardFocusPreserved: true });
   }
 
+  async function sectionRouting() {
+    const tab = window.gBrowser.selectedTab;
+    const browser = tab.linkedBrowser;
+    const labels = { history: "History", bookmarks: "Bookmarks", folders: "Bookmark Folders" };
+    const navButton = section => [...root.querySelectorAll(".fluxion-library-nav button")]
+      .find(button => button.textContent === (section === "folders" ? "Folders" : labels[section]));
+    const settled = async section => {
+      const url = `about:downloads#${section}`;
+      await waitFor(() => !root.hidden && ready() && browser.currentURI.spec === url &&
+        window.gURLBar.untrimmedValue === url && navButton(section)?.getAttribute("aria-current") === "true" &&
+        root.querySelector(".fluxion-library-section-head h2")?.textContent === labels[section] &&
+        !tab.hasAttribute("busy"), `Library URL, address field, and visible ${section} section did not agree`);
+      assert(window.gBrowser.selectedTab === tab && tab.linkedBrowser === browser,
+        "Section navigation replaced the user's Library tab or browser");
+    };
+    await settled("history");
+    const global = browser.browsingContext.currentWindowGlobal;
+    navButton("bookmarks").click();
+    await settled("bookmarks");
+    assert(titles().length === 100 && titles().every(title => title.includes("bookmark")),
+      "Bookmark route did not display real bookmark records");
+    assert(browser.browsingContext.currentWindowGlobal === global,
+      "A Library section change reloaded the underlying document");
+    navButton("folders").click();
+    await settled("folders");
+    assert(titles().includes("Fluxion Archive Research"), "Folder route omitted the seeded folder");
+    assert(browser.canGoBack, "Section navigation did not enter native session history");
+    browser.goBack();
+    await settled("bookmarks");
+    assert(browser.canGoForward, "Native Back lost forward Library history");
+    browser.goForward();
+    await settled("folders");
+    browser.loadURI(Services.io.newURI("about:downloads#history"), {
+      triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+    });
+    await settled("history");
+    navButton("bookmarks").click();
+    navButton("history").click();
+    await settled("history");
+    const other = window.gBrowser.addTrustedTab("about:blank");
+    try {
+      window.gBrowser.selectedTab = other;
+      await waitFor(() => root.hidden, "Library stayed visible over a different tab");
+      window.FluxionUI.selectTab(tab);
+      await settled("history");
+    } finally {
+      window.gBrowser.removeTab(other, { animate: false });
+    }
+    report.assertions.push("native-section-url-and-address-agreement", "same-document-section-navigation",
+      "native-library-back-forward", "direct-fragment-and-tab-return-routing", "rapid-section-return");
+    Services.prefs.setStringPref(`${prefix}.routingHealth`, "native-section-address-and-history-verified");
+  }
+
   async function keyboardAndMenus(PlacesUtils, folderGuid) {
     // The shell activates only this fixture's owned PID. Request that before
     // opening any menu: app activation can itself dismiss an existing popup.
@@ -251,6 +304,7 @@
     assert(input, "Library search input is unavailable");
     await query("Fluxion Archive", rows => rows.length === 100);
     await pages("history", 360);
+    await sectionRouting();
     await query("cedar", rows => rows.length === 1 && rows[0] === historyTarget);
     report.assertions.push("old-history-outside-300-record-cap");
     await query("école mémoire café", rows => rows.length === 1 && rows[0] === historyTarget);

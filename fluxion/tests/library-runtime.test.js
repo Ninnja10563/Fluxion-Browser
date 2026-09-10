@@ -92,7 +92,8 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const tab = new Element();
   tab.setAttribute("fluxion-library-section", section);
   tab.linkedBrowser = { currentURI: { spec: initialURI } };
-  const queries = [], errors = [], opened = [], timers = new Map();
+  const queries = [], errors = [], opened = [], navigations = [], timers = new Map();
+  tab.linkedBrowser.loadURI = (uri, options) => navigations.push({ uri: uri.spec, options });
   let nextTimer = 0;
   let observerRemoved = false;
   let placesObserver;
@@ -117,14 +118,23 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
     ChromeUtils: { importESModule: () => ({ PlacesUtils, Downloads, PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
     SessionStore: { persistTabAttribute() {} },
     Cu: { reportError: error => errors.push(error) },
-    Services: { env: { get: () => "" }, prefs: { setStringPref() {}, savePrefFile() {} } },
+    Services: { env: { get: () => "" }, prefs: { setStringPref() {}, savePrefFile() {} },
+      io: { newURI: spec => ({ spec }) }, scriptSecurityManager: { getSystemPrincipal: () => ({ system: true }) } },
   });
+  window.FluxionUI.selectTab = selected => {
+    context.gBrowser.selectedTab = selected;
+    context.gBrowser.selectedBrowser = selected.linkedBrowser;
+    context.gBrowser.tabContainer.dispatch("TabSelect");
+  };
   for (const file of ["core/url.js", "core/library-data.js", "core/library-query.js", "core/library-changes.js", "core/library-downloads.js", "core/library-navigation.js", "fluxion-library.js"]) {
     vm.runInContext(fs.readFileSync(path.join(__dirname, "../chrome", file), "utf8"), context, { filename: file });
   }
   const byClass = name => elements.find(node => node.className === name);
   const input = byClass("fluxion-library-search");
-  return { window, document, queries, errors, timers, input, opened,
+  return { window, document, queries, errors, timers, input, opened, navigations, tab,
+    selectCurrent: () => window.FluxionUI.selectTab(tab),
+    sectionButton: label => elements.find(node => node.parentNode?.className === "fluxion-library-nav" && node.textContent === label),
+    location: browser => progressListener.onLocationChange(browser),
     menu: document.getElementById("fluxion-library-item-menu"),
     placesChanged(events) { placesObserver(events); },
     commitURI(uri) { tab.linkedBrowser.currentURI.spec = uri; progressListener.onLocationChange(tab.linkedBrowser); },
@@ -144,6 +154,96 @@ function rows(title, count = 1) {
     return { getResultByName: name => row[name] };
   });
 }
+
+test("Library section controls navigate Gecko's canonical fragment and its commit retains search and focus", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("history")); await settle();
+  h.sectionButton("Downloads").click(); await settle();
+  assert.equal(h.navigations.length, 1);
+  assert.equal(h.navigations[0].uri, "about:downloads#downloads");
+  assert.equal(h.navigations[0].options.triggeringPrincipal.system, true);
+  h.selectCurrent(); await settle();
+  assert.equal(h.sectionButton("Downloads").getAttribute("aria-current"), "true",
+    "TabSelect before fragment commit must not undo explicit section intent");
+  h.type("retained download filter"); h.flush(); await settle();
+  h.commitURI("about:downloads#downloads"); await settle();
+  assert.equal(h.input.value, "retained download filter");
+  assert.ok(h.document.activeElement === h.input);
+  assert.equal(h.navigations.length, 1, "location notification must not echo a second navigation");
+  assert.deepEqual(h.errors, []);
+});
+
+test("direct and back-forward fragments override persisted section metadata without echo navigation", async () => {
+  const h = harness({ section: "downloads", initialURI: "about:downloads#history" }); await settle();
+  assert.equal(h.sectionButton("History").getAttribute("aria-current"), "true");
+  h.queries[0].resolve(rows("first history")); await settle();
+  h.commitURI("about:downloads#downloads"); await settle();
+  assert.equal(h.sectionButton("Downloads").getAttribute("aria-current"), "true");
+  h.commitURI("about:downloads#history"); await settle();
+  assert.equal(h.queries.length, 2);
+  h.queries[1].resolve(rows("returned history")); await settle();
+  assert.equal(h.sectionButton("History").getAttribute("aria-current"), "true");
+  assert.equal(h.tab.getAttribute("fluxion-library-section"), "history");
+  assert.equal(h.navigations.length, 0);
+  h.location({ currentURI: { spec: "about:downloads#bookmarks" } }); await settle();
+  assert.equal(h.sectionButton("History").getAttribute("aria-current"), "true");
+  assert.equal(h.queries.length, 2, "background-browser navigation must not change the selected Library");
+});
+
+test("Library.open on an existing tab requests the selected section's shareable URL", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("history")); await settle();
+  h.window.FluxionLibrary.open("downloads"); await settle();
+  assert.equal(h.navigations[0].uri, "about:downloads#downloads");
+  assert.equal(h.opened.length, 0);
+  h.commitURI("about:downloads#downloads"); await settle();
+  assert.equal(h.sectionButton("Downloads").getAttribute("aria-current"), "true");
+});
+
+test("rapid section requests follow each real intermediate commit and finally the latest URI without echo", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("initial history")); await settle();
+  h.sectionButton("Downloads").click(); await settle();
+  h.sectionButton("History").click(); await settle();
+  assert.deepEqual(h.navigations.map(item => item.uri), ["about:downloads#downloads", "about:downloads#history"]);
+  h.commitURI("about:downloads#downloads"); await settle();
+  assert.equal(h.sectionButton("Downloads").getAttribute("aria-current"), "true");
+  h.commitURI("about:downloads#history"); await settle();
+  assert.equal(h.sectionButton("History").getAttribute("aria-current"), "true");
+  assert.equal(h.tab.getAttribute("fluxion-library-section"), "history");
+  assert.equal(h.navigations.length, 2, "committed intermediate and final locations must not echo navigation");
+});
+
+test("selecting the already committed section does not issue a duplicate Gecko navigation", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("history")); await settle();
+  h.sectionButton("History").click(); await settle();
+  assert.equal(h.navigations.length, 0);
+  h.sectionButton("Downloads").click(); await settle();
+  h.commitURI("about:downloads#downloads"); await settle();
+  h.sectionButton("Downloads").click(); await settle();
+  assert.equal(h.navigations.length, 1, "the settled pending request must not cause another load");
+});
+
+test("a failed fragment navigation keeps the rendered section tied to Gecko's real URL", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("history")); await settle();
+  h.tab.linkedBrowser.loadURI = () => { throw new Error("navigation refused"); };
+  h.sectionButton("Downloads").click(); await settle();
+  h.queries[1].resolve(rows("still history")); await settle();
+  assert.equal(h.tab.getAttribute("fluxion-library-section"), "history");
+  assert.equal(h.sectionButton("History").getAttribute("aria-current"), "true");
+  assert.equal(h.errors.length, 1);
+  assert.match(h.errors[0].message, /navigation refused/);
+});
+
+test("lookalike about URLs do not expose the privileged Library overlay", async () => {
+  for (const initialURI of ["about:downloads-unrelated#history", "about:downloadsspoof#history"]) {
+    const h = harness({ initialURI }); await settle();
+    assert.equal(h.root.hidden, true);
+    assert.equal(h.queries.length, 0);
+  }
+});
 
 test("initial about:downloads commit retains native download rows and focused controls during progress", async () => {
   const download = { target: { path: "/profile/transfer.txt" }, source: { url: "http://127.0.0.1/transfer" },

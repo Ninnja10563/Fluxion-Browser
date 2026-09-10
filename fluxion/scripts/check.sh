@@ -48,6 +48,7 @@ node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js
 node --check chrome/core/memory-content.js
+node --check chrome/core/memory-search.js
 node --check chrome/core/memory-ranking.js
 node --check chrome/core/memory-grounding.js
 node --check chrome/core/peek.js
@@ -65,6 +66,7 @@ node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
+node --check chrome/fluxion-memory-migration-verification.js
 node --check chrome/fluxion-update-verification.js
 node --check chrome/fluxion-external-open-verification.js
 node --check chrome/fluxion-settings-accessibility-verification.js
@@ -88,6 +90,7 @@ node --check actors/FluxionMemoryPageParent.sys.mjs
 node --check actors/FluxionBrowsingVerificationChild.sys.mjs
 node --check actors/FluxionBrowsingVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
+node --check modules/FluxionMemorySearch.sys.mjs
 node --check modules/FluxionNativeMemory.sys.mjs
 node --check modules/FluxionRelease.sys.mjs
 node --check modules/FluxionUpdates.sys.mjs

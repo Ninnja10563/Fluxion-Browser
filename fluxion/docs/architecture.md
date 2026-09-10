@@ -434,7 +434,20 @@ not guarantees on disk latency or the total search duration.
 Enriched keyword retrieval matches each query term across title, URL,
 description, headings, and body before hybrid ranking. Exact title/URL matches
 precede whole-phrase matches before bounding candidates, so recent partial
-matches cannot exclude an older exact record. Embedding calls are single-flight
+matches cannot exclude an older exact record. Schema v2 keeps five normalized
+search-field copies alongside unchanged source evidence. Candidate queries and
+the ranker share NFKD decomposition, combining-mark removal, locale-independent
+lowercasing, and whitespace normalization; this is not transliteration or
+language-aware stemming. Existing v1 records are backfilled in 50-row keyset
+batches within one transaction, yielding between batches. The version advances
+only after completion; interruption rolls back the migration. Pending privacy
+recovery runs first, and page IDs and existing vectors are preserved.
+The native upgrade gate creates a separate disposable v1 database with real
+Gecko `vec0` storage, verifies interruption rollback and a bounded retry, and
+compares stored vector bytes before migration and after reopening. Its synthetic
+four-value vector proves storage preservation, not model inference; the separate
+local-model retrieval gate must also pass.
+Embedding calls are single-flight
 with a 10-second indexing wait and a 1.5-second query wait. Gecko has no
 per-request cancellation here: a timed-out model request may finish internally,
 but cannot write a late vector or accumulate more model requests. Other pages
@@ -469,7 +482,8 @@ ranking advantage over a weaker semantic neighbour. A URL receives lexical
 strength once and only its strongest semantic similarity, independent of how
 many sources return it. Lexical placeholder distances are not reported as
 semantic evidence. The native gate first recalls an old exact record omitted
-by Places' frecency candidate cap, then generates real local model vectors and
+by Places' frecency candidate cap and recalls accented body-only evidence absent
+from native title/URL matches. It then generates real local model vectors and
 verifies nonliteral retrieval independently.
 
 Page indexing crosses a separate scheduling boundary before extraction or
@@ -634,6 +648,16 @@ against the existing Places connection; mutations use `PlacesUtils.history`
 and `PlacesUtils.bookmarks` after explicit confirmation. Bookmark URLs pass
 through Fluxion's safe navigation policy so a stored script-bearing scheme is
 never executed from privileged chrome.
+
+Section controls navigate the real internal tab to a fixed
+`about:downloads#history`, `#bookmarks`, `#folders`, or `#downloads` URL through
+Gecko. These fragment navigations retain the underlying document and participate
+in native Back/Forward history. Committed URLs are authoritative over restored
+tab attributes; attributes only bridge an owned tab's initial `about:blank`
+state. An explicit pending section bridges pre-commit selection notifications,
+but real navigation notifications always reconcile to Gecko's current URI.
+Same-section commits retain live search/focus state without re-querying. No
+content script can invoke the privileged Library controller.
 
 Library history and bookmark search is applied inside Places before the page
 limit. Pages use a descending native microsecond timestamp and record-ID cursor,

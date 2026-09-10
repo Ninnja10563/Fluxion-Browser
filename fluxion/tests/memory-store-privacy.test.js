@@ -6,6 +6,7 @@ const fs = require("node:fs");
 const vm = require("node:vm");
 const path = require("node:path");
 const { spawnSync } = require("node:child_process");
+const FluxionMemorySearch = require("../chrome/core/memory-search.js");
 
 function deferred() {
   let resolve;
@@ -24,7 +25,8 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   let embeddingCalls = 0;
   let historyObserver;
   const db = {
-    async getSchemaVersion() { return 1; },
+    async getSchemaVersion() { return 2; },
+    async setSchemaVersion(version) { writes.push(`SCHEMA ${version}`); },
     async execute(sql) {
       writes.push(sql);
       return [];
@@ -35,6 +37,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
       if (sql.startsWith("SELECT sql FROM sqlite_master")) {
         return [{ getResultByName: () => `CREATE VIRTUAL TABLE page_vectors USING vec0(embedding FLOAT[${storedDimension}] distance_metric=cosine)` }];
       }
+      if (sql.startsWith("SELECT id,")) return [];
       if (sql.startsWith("SELECT id")) return [{ getResultByName: () => 1 }];
       return [];
     },
@@ -55,6 +58,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
       : { EmbeddingsGenerator: { forPlaces: createEngine } },
     Cu: { reportError: error => errors.push(error) },
     URL,
+    FluxionMemorySearch,
     setTimeout(callback) { timers.set(++timerID, callback); return timerID; },
     clearTimeout(id) { timers.delete(id); },
     Services: { prefs: {
@@ -87,12 +91,12 @@ import json, sqlite3, sys
 data = json.load(sys.stdin)
 db = sqlite3.connect(':memory:')
 db.row_factory = sqlite3.Row
-db.execute('CREATE TABLE pages (url TEXT, title TEXT, description TEXT, headings TEXT, content TEXT, last_visit INTEGER)')
+db.execute('CREATE TABLE pages (url TEXT, title TEXT, description TEXT, headings TEXT, content TEXT, last_visit INTEGER, search_title TEXT, search_url TEXT, search_description TEXT, search_headings TEXT, search_content TEXT)')
 for page in data['pages']:
-    db.execute('INSERT INTO pages VALUES (?,?,?,?,?,?)', [page.get(key, 0 if key == 'last_visit' else '') for key in ['url','title','description','headings','content','last_visit']])
+    db.execute('INSERT INTO pages VALUES (?,?,?,?,?,?,?,?,?,?,?)', [page.get(key, 0 if key == 'last_visit' else '') for key in ['url','title','description','headings','content','last_visit','search_title','search_url','search_description','search_headings','search_content']])
 rows = db.execute(data['statement']['sql'], data['statement']['parameters'])
 print(json.dumps([row['url'] for row in rows]))
-`], { input: JSON.stringify({ statement, pages }), encoding: "utf8" });
+`], { input: JSON.stringify({ statement, pages: pages.map(page => ({ ...page, ...FluxionMemorySearch.foldedFields(page) })) }), encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
   return JSON.parse(result.stdout);
 }
@@ -148,6 +152,71 @@ test("candidate ties are deterministic and exact tier treats wildcard characters
   ];
   assert.deepEqual(await lexicalURLs("50% a_b", pages, 2), ["https://a.example/", "https://b.example/"]);
   assert.deepEqual(await lexicalURLs("50% a_b", pages.toReversed(), 2), ["https://a.example/", "https://b.example/"]);
+});
+
+test("Unicode and accent folding retrieve body-only evidence with the same semantics as ranking", async () => {
+  for (const [query, content] of [
+    ["cafe", "A CAFÉ with mountain views"], ["CAFÉ", "A cafe\u0301 with mountain views"],
+    ["МОСКВА", "Прогулка: москва"], ["ΑΘΗΝΑ", "αθηνα"],
+    ["office", "An oﬃce guide"], ["timer", "A ＴＩＭＥＲ guide"],
+  ]) {
+    assert.deepEqual(await lexicalURLs(query, [{ url: "https://body.example/", title: "Saved page", content }]),
+      ["https://body.example/"], query);
+  }
+  assert.deepEqual(await lexicalURLs("cafe МОСКВА", [
+    { url: "https://distributed.example/", title: "Café", headings: "москва" },
+    { url: "https://irrelevant.example/", title: "Café", headings: "Paris" },
+  ]), ["https://distributed.example/"]);
+});
+
+test("old normalized-exact title survives newer accent-folded phrase candidates", async () => {
+  const rows = await lexicalURLs("CAFE GUIDE", [
+    ...Array.from({ length: 30 }, (_, index) => ({ url: `https://partial.example/${index}`, title: `Café guide notes ${index}`, last_visit: 100 + index })),
+    { url: "https://exact.example/", title: "Cafe\u0301 Guide", last_visit: 1 },
+  ], 18);
+  assert.equal(rows[0], "https://exact.example/");
+});
+
+test("store recovers pending deletion before migrating v1 and exposes no unmigrated query", async () => {
+  const { store, db, writes } = fixture(new Map([["fluxion.memory.pendingRemoval", true]]));
+  db.getSchemaVersion = async () => 1;
+  await store.search("cafe", 12, false);
+  const recovery = writes.indexOf("DELETE FROM pages");
+  const migration = writes.findIndex(sql => sql.startsWith("ALTER TABLE pages"));
+  const ready = writes.indexOf("SCHEMA 2");
+  const query = writes.findIndex(sql => sql.startsWith("SELECT *,"));
+  assert.ok(recovery >= 0 && recovery < migration);
+  assert.ok(migration < ready && ready < query);
+  assert.equal(writes.filter(sql => sql.startsWith("ALTER TABLE pages")).length, 5);
+});
+
+test("store rejects reads when v1 migration fails and closes the unready connection", async () => {
+  const { store, db, writes } = fixture();
+  db.getSchemaVersion = async () => 1;
+  const execute = db.execute;
+  let closed = false;
+  db.close = async () => { closed = true; };
+  db.execute = async sql => {
+    if (sql.startsWith("ALTER TABLE pages")) throw new Error("migration disk failure");
+    return execute(sql);
+  };
+  await assert.rejects(store.search("cafe", 12, false), /migration disk failure/);
+  assert.equal(closed, true);
+  assert.equal(writes.some(sql => sql.startsWith("SELECT *,")), false);
+});
+
+test("store upsert writes folded fields alongside unchanged original evidence", async () => {
+  const { store, operations } = fixture();
+  await store.upsert({ url: "https://example.org/Original", title: "Café", description: "Été",
+    headings: "МОСКВА", text: "oﬃce ＧＵＩＤＥ", workspace: "dev", tabGroup: "Research", lastVisit: 100, indexedAt: 200 });
+  const statement = operations.find(operation => operation.sql.startsWith("INSERT INTO pages"));
+  assert.equal(statement.parameters.title, "Café");
+  assert.equal(statement.parameters.content, "oﬃce ＧＵＩＤＥ");
+  assert.equal(statement.parameters.url, "https://example.org/Original");
+  assert.equal(statement.parameters.search_title, "cafe");
+  assert.equal(statement.parameters.search_content, "office guide");
+  assert.equal(statement.parameters.search_headings, "москва");
+  assert.equal(statement.parameters.search_url, "https://example.org/original");
 });
 
 test("embedding timeout releases indexing, prevents request buildup, and discards late vectors", async () => {

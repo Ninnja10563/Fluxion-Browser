@@ -627,9 +627,12 @@
       await window.FluxionMemory.enable();
       const rankingQuery = "fluxion exact recall fixture";
       const exactURL = "https://memory-ranking-fixture.invalid/exact";
+      const unicodeURL = "https://memory-ranking-fixture.invalid/body-evidence";
       const now = Date.now();
       const rankingPages = [
         { url: exactURL, title: rankingQuery, time: now - 7 * 86400000, exact: true },
+        { url: unicodeURL, title: "Saved reading notes", time: now - 86400000, exact: true,
+          text: "ÉCOLE MÉMOIRE Cafe\u0301 — documentation remembered from a visit." },
         ...Array.from({ length: 30 }, (_, index) => ({
           url: `https://memory-ranking-fixture.invalid/partial-${index}`,
           title: `Discussion about ${rankingQuery} examples ${index}`,
@@ -646,7 +649,7 @@
           });
           if (!(await FluxionMemoryStore.upsert({
             url: page.url, title: page.title, description: "", headings: "",
-            text: "Saved source for candidate ordering verification.", workspace: "", tabGroup: "",
+            text: page.text || "Saved source for candidate ordering verification.", workspace: "", tabGroup: "",
             lastVisit: page.time, indexedAt: now,
           }))) throw new Error("Ranking fixture evidence was not stored");
         }
@@ -666,15 +669,27 @@
             recalled.answer?.sourceURL !== exactURL) {
           throw new Error("Integrated keyword-only Memory did not rank the old exact page first");
         }
+        stage("checking-normalized-body-only-recall");
+        for (const query of ["ecole memoire cafe", "école mémoire café"]) {
+          if (keywordRows(query).length) throw new Error("Unicode fixture unexpectedly matched native title/URL history");
+          const recalledBody = await window.FluxionMemory.search(query);
+          if (recalledBody.state !== "keyword-only" || recalledBody.results[0]?.url !== unicodeURL ||
+              recalledBody.answer?.sourceURL !== unicodeURL ||
+              !recalledBody.results[0]?.content.includes("ÉCOLE MÉMOIRE Cafe\u0301")) {
+            throw new Error("Normalized body-only Memory recall failed or rewrote its source evidence");
+          }
+        }
       } finally {
         stage("cleaning-exact-ranking-fixtures");
         for (const page of rankingPages) await PlacesUtils.history.remove(page.url);
         await FluxionMemoryStore.deleteURLs(rankingPages.map(page => page.url));
       }
-      if (keywordRows(rankingQuery).length || await FluxionMemoryStore.get(exactURL)) {
+      if (keywordRows(rankingQuery).length || await FluxionMemoryStore.get(exactURL) ||
+          await FluxionMemoryStore.get(unicodeURL)) {
         throw new Error("Ranking fixture cleanup retained history or extracted evidence");
       }
       Services.prefs.setStringPref("fluxion.memory.ranking.health", "old-exact-page-recalled-beyond-native-candidate-cap");
+      Services.prefs.setStringPref("fluxion.memory.unicode.health", "normalized-body-only-recall-preserves-original-evidence");
       Services.prefs.savePrefFile(null);
 
       const deadline = Date.now() + 240000;

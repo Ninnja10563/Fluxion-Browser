@@ -67,6 +67,9 @@ for ((attempt=0; attempt<720; attempt++)); do
       grep -Fq 'user_pref("fluxion.library.verification.interactionHealth", "roving-list-and-native-item-menu-verified")' "$profile/prefs.js" || {
         printf 'Native Library keyboard/menu evidence is missing.\n' >&2; break;
       }
+      grep -Fq 'user_pref("fluxion.library.verification.routingHealth", "native-section-address-and-history-verified")' "$profile/prefs.js" || {
+        printf 'Native Library section/address/session-history evidence is missing.\n' >&2; break;
+      }
       printf 'Verified full Places search, folder filtering, deterministic pagination, and latest-query results.\n'
       grep 'fluxion\.library\.verification\.report' "$profile/prefs.js"
       if [[ -n "${FLUXION_LIBRARY_SCREENSHOT:-}" ]]; then

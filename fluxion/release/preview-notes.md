@@ -23,7 +23,11 @@ Version 0.52 improves workspace continuity and exact Memory recall:
 - rank each Memory URL once across duplicate sources, with one strongest
   semantic signal and explicit priority for exact title/URL matches;
 - keep older exact matches eligible before candidate limits, with native
-  integrated recall tests in addition to genuine local-model retrieval.
+  integrated recall tests in addition to genuine local-model retrieval;
+- find accented or decomposed page text with consistently normalized search,
+  migrating existing records while retaining original evidence and vectors;
+- keep Library sections aligned with their real address, including native
+  Back/Forward and direct fragment navigation without reloading the document.
 
 Version 0.51 improves Library interaction and page-extraction efficiency:
 

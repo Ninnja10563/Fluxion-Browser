@@ -71,6 +71,8 @@ The current preview is runnable and includes:
   workspace relevance;
 - duplicate-source-invariant Memory scoring and exact title/URL candidate
   priority so older exact matches are not hidden by recent partial matches;
+- accent-normalized page-evidence search, with transactional migration of older
+  records that preserves original text and existing vectors;
 - independent Browser Memory embedding control: **Keywords only** keeps local
   titles and page evidence searchable with ML and vectors disabled, while
   **Gecko on-device semantic** restores private local meaning search;
@@ -328,7 +330,8 @@ page. It never chooses tabs or reorganises them automatically.
 Run **Open history**, **Open bookmarks**, or **Open downloads** from the command
 palette to enter Fluxion Library. History and bookmarks are read from the real
 Places database; downloads update from Gecko's live download list and remain
-separate in private windows. Finished files can be opened or revealed, active
+separate in private windows. Sections have their own real address fragments and
+participate in native Back/Forward navigation. Finished files can be opened or revealed, active
 downloads canceled, interrupted downloads retried, and list entries removed.
 The Bookmarks section can save the last ordinary webpage, filter by a nested
 folder, rename bookmarks, and move them between folders. Titles open items;

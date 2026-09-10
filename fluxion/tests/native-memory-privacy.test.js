@@ -129,7 +129,7 @@ function fixture(saved = new Map()) {
         PlacesUtils, PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate } }) },
     });
     for (const file of ["core/settings.js", "core/index-scheduler.js", "core/memory-policy.js",
-      "core/memory-content.js", "core/memory-ranking.js", "core/memory-grounding.js", "fluxion-memory.js"]) {
+      "core/memory-content.js", "core/memory-search.js", "core/memory-ranking.js", "core/memory-grounding.js", "fluxion-memory.js"]) {
       vm.runInContext(fs.readFileSync(path.join(__dirname, "../chrome", file), "utf8"), ctx, { filename: file });
     }
     return window.FluxionMemory;

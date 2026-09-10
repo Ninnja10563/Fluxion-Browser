@@ -3,9 +3,10 @@ import { AsyncShutdown } from "resource://gre/modules/AsyncShutdown.sys.mjs";
 import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
 import * as GeckoEmbeddings from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
 import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
+import { FluxionMemorySearch } from "resource://fluxion/modules/FluxionMemorySearch.sys.mjs";
 
 const FILE_NAME = "fluxion_memory.sqlite";
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 let connectionPromise;
 let embedder;
 let pendingEmbedding;
@@ -73,7 +74,9 @@ async function connection() {
               id INTEGER PRIMARY KEY, url TEXT NOT NULL UNIQUE, title TEXT NOT NULL,
               description TEXT NOT NULL, headings TEXT NOT NULL, content TEXT NOT NULL,
               workspace TEXT NOT NULL, tab_group TEXT NOT NULL, last_visit INTEGER NOT NULL,
-              visit_count INTEGER NOT NULL DEFAULT 1, indexed_at INTEGER NOT NULL
+              visit_count INTEGER NOT NULL DEFAULT 1, indexed_at INTEGER NOT NULL,
+              search_title TEXT NOT NULL, search_url TEXT NOT NULL,
+              search_description TEXT NOT NULL, search_headings TEXT NOT NULL, search_content TEXT NOT NULL
             )`);
             await db.execute(`CREATE VIRTUAL TABLE page_vectors USING vec0(
               embedding FLOAT[${engine.embeddingSize}] distance_metric=cosine
@@ -110,6 +113,13 @@ async function connection() {
             await db.execute("DELETE FROM pages");
           });
           if (!pendingRemovals) persistRemovalPending(false);
+        }
+        if (version === 1) {
+          shutdownStep = "Migrating normalized search fields";
+          await FluxionMemorySearch.migrateV1(db, async () => {
+            await new Promise(resolve => setTimeout(resolve, 0));
+            if (shutdownStarted) throw new Error("Fluxion Memory migration interrupted by shutdown");
+          });
         }
         shutdownStep = "Database open";
         return db;
@@ -247,14 +257,20 @@ export const FluxionMemoryStore = Object.freeze({
       tabGroup: page.tabGroup,
       lastVisit: page.lastVisit,
       indexedAt: page.indexedAt,
+      ...FluxionMemorySearch.foldedFields({ ...page, content: page.text }),
     };
     await db.executeCached(`INSERT INTO pages
-        (url,title,description,headings,content,workspace,tab_group,last_visit,indexed_at)
-        VALUES (:url,:title,:description,:headings,:content,:workspace,:tabGroup,:lastVisit,:indexedAt)
+        (url,title,description,headings,content,workspace,tab_group,last_visit,indexed_at,
+         search_title,search_url,search_description,search_headings,search_content)
+        VALUES (:url,:title,:description,:headings,:content,:workspace,:tabGroup,:lastVisit,:indexedAt,
+         :search_title,:search_url,:search_description,:search_headings,:search_content)
         ON CONFLICT(url) DO UPDATE SET title=excluded.title, description=excluded.description,
         headings=excluded.headings, content=excluded.content, workspace=excluded.workspace,
         tab_group=excluded.tab_group, last_visit=excluded.last_visit,
-        visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at`, parameters);
+        visit_count=pages.visit_count+1, indexed_at=excluded.indexed_at,
+        search_title=excluded.search_title, search_url=excluded.search_url,
+        search_description=excluded.search_description, search_headings=excluded.search_headings,
+        search_content=excluded.search_content`, parameters);
     return expectedRevision === revision;
   },
 
@@ -263,14 +279,15 @@ export const FluxionMemoryStore = Object.freeze({
   },
 
   async search(query, limit = 12, includeSemantic = true, { onLexical } = {}) {
-    const terms = [...new Set(String(query || "").trim().split(/\s+/).filter(Boolean))].slice(0, 16);
+    const normalizedQuery = FluxionMemorySearch.fold(query);
+    const terms = [...new Set(normalizedQuery.split(/\s+/).filter(Boolean))].slice(0, 16);
     if (!terms.length) return { lexical: [], semantic: [] };
     const startedAt = revision;
     await historyDeletion;
     const db = await connection();
     const escapeLike = text => `%${text.replace(/[\\%_]/g, value => `\\${value}`)}%`;
-    const parameters = { exact: String(query).trim(), pattern: escapeLike(String(query).trim()), limit };
-    const fields = ["title", "url", "description", "headings", "content"];
+    const parameters = { exact: normalizedQuery, pattern: escapeLike(normalizedQuery), limit };
+    const fields = FluxionMemorySearch.fields.map(field => `search_${field}`);
     const matches = terms.map((term, index) => {
       parameters[`term${index}`] = escapeLike(term);
       return `(${fields.map(field => `${field} LIKE :term${index} ESCAPE '\\'`).join(" OR ")})`;
@@ -278,10 +295,10 @@ export const FluxionMemoryStore = Object.freeze({
     const lexical = await db.executeCached(`SELECT *, 0.0 AS distance FROM pages
       WHERE ${matches.join(" AND ")}
       ORDER BY CASE
-        WHEN title = :exact COLLATE NOCASE OR url = :exact COLLATE NOCASE THEN 0
-        WHEN title LIKE :pattern ESCAPE '\\' OR url LIKE :pattern ESCAPE '\\' THEN 1
-        WHEN headings LIKE :pattern ESCAPE '\\' OR description LIKE :pattern ESCAPE '\\' THEN 2
-        WHEN content LIKE :pattern ESCAPE '\\' THEN 3 ELSE 4 END,
+        WHEN search_title = :exact OR search_url = :exact THEN 0
+        WHEN search_title LIKE :pattern ESCAPE '\\' OR search_url LIKE :pattern ESCAPE '\\' THEN 1
+        WHEN search_headings LIKE :pattern ESCAPE '\\' OR search_description LIKE :pattern ESCAPE '\\' THEN 2
+        WHEN search_content LIKE :pattern ESCAPE '\\' THEN 3 ELSE 4 END,
         last_visit DESC, url ASC LIMIT :limit`, parameters);
     const row = item => Object.fromEntries(["url","title","description","headings","content","workspace","tab_group","last_visit","visit_count","distance"].map(name => [name === "tab_group" ? "group" : name === "last_visit" ? "lastVisit" : name === "visit_count" ? "visitCount" : name, item.getResultByName(name)]));
     if (startedAt === revision && typeof onLexical === "function") {
