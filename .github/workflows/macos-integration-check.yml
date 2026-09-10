@@ -42,6 +42,10 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-settings-accessibility.sh '.runtime/Fluxion.app'
 
+      - name: Check fresh-profile defaults and existing bookmarks
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-default-bookmarks.sh '.runtime/Fluxion.app'
+
       - name: Check native external link and file delivery
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-external-open.sh '.runtime/Fluxion.app'

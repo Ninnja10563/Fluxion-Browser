@@ -640,6 +640,16 @@ working service behind them.
 
 ## Fluxion Library boundary
 
+The packager installs a narrowly scoped local chrome-manifest override for
+`chrome://browser/content/default-bookmarks.html`, registered during autoconfig
+before Places startup. The installer verifies the pinned archive resource but
+never rewrites Gecko's archive. Firefox's own import policy still decides when
+defaults are needed: fresh profiles, recovery without a usable backup, or an
+explicit restore-defaults action. Fluxion does not force an import preference
+or rename/delete existing bookmarks. A native two-launch test verifies fresh
+Fluxion defaults and preservation of existing GUIDs, titles, URLs, hierarchy,
+and order, including user-created bookmarks with Firefox-like names.
+
 Fluxion Library is a privileged product surface projected when a real
 `about:downloads` tab is selected. The underlying internal tab remains
 Gecko-owned and session-restorable, while the visible interface is independent

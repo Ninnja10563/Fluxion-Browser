@@ -182,7 +182,7 @@ fi
 runtime_parent="$fluxion_root/../.runtime"
 runtime_app="$runtime_parent/Fluxion.app"
 stamp="$runtime_parent/.fluxion-macos-stamp"
-signature="$target_arch|$(runtime_product_identity "$fluxion_root/package.json" "$app_version")|$requested|$upstream_identity|$(runtime_file_digest "${BASH_SOURCE[0]}")|$(runtime_file_digest "$fluxion_root/scripts/install-update-policy.py")|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
+signature="$target_arch|$(runtime_product_identity "$fluxion_root/package.json" "$app_version")|$requested|$upstream_identity|$(runtime_file_digest "${BASH_SOURCE[0]}")|$(runtime_file_digest "$fluxion_root/scripts/install-update-policy.py")|$(runtime_file_digest "$fluxion_root/scripts/install-default-bookmarks.py")|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
 
 if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
@@ -212,6 +212,8 @@ if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp
   cp "$fluxion_root/runtime/fluxion.cfg" "$resources/fluxion.cfg"
   python3 "$fluxion_root/scripts/install-update-policy.py" "$resources/distribution" \
     "$fluxion_root/runtime/distribution/policies.json"
+  python3 "$fluxion_root/scripts/install-default-bookmarks.py" "$resources" \
+    "$fluxion_root/assets/default-bookmarks.html"
 
   bundled_root="$resources/fluxion"
   mkdir -p "$bundled_root"

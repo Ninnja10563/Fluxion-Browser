@@ -27,7 +27,9 @@ Version 0.52 improves workspace continuity and exact Memory recall:
 - find accented or decomposed page text with consistently normalized search,
   migrating existing records while retaining original evidence and vectors;
 - keep Library sections aligned with their real address, including native
-  Back/Forward and direct fragment navigation without reloading the document.
+  Back/Forward and direct fragment navigation without reloading the document;
+- give fresh profiles Fluxion help/release bookmarks instead of Firefox's
+  promotional defaults, without renaming or deleting existing user bookmarks.
 
 Version 0.51 improves Library interaction and page-extraction efficiency:
 

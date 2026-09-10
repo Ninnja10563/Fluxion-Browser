@@ -24,6 +24,7 @@ bash -n \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-library.sh \
   scripts/verify-macos-workspaces.sh \
+  scripts/verify-macos-default-bookmarks.sh \
   scripts/verify-macos-session.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
@@ -67,6 +68,7 @@ node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-library-verification.js
 node --check chrome/fluxion-memory-privacy-verification.js
 node --check chrome/fluxion-memory-migration-verification.js
+node --check chrome/fluxion-default-bookmarks-verification.js
 node --check chrome/fluxion-update-verification.js
 node --check chrome/fluxion-external-open-verification.js
 node --check chrome/fluxion-settings-accessibility-verification.js

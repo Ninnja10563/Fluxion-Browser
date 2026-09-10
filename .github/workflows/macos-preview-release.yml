@@ -103,6 +103,10 @@ jobs:
         shell: bash
         run: ./fluxion/scripts/verify-macos-flow.sh '.runtime/Fluxion.app'
 
+      - name: Verify fresh-profile defaults and existing bookmarks
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: ./fluxion/scripts/verify-macos-default-bookmarks.sh '.runtime/Fluxion.app'
+
       - name: Verify real transfers and content form navigation
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash

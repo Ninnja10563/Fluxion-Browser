@@ -6,12 +6,13 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function startupFixture(selectedURL, saved = []) {
+function startupFixture(selectedURL, saved = [], options = {}) {
   const preferences = new Map(saved);
   const defaults = new Map();
   const loadedScripts = [];
   const navigations = [];
   const errors = [];
+  const registeredManifests = [];
   const AboutNewTab = {};
   let startupObserver;
   class File {
@@ -19,10 +20,11 @@ function startupFixture(selectedURL, saved = []) {
     initWithPath(filePath) { this.path = filePath; }
     clone() { return new File(this.path); }
     append(part) { this.path += `/${part}`; }
-    exists() { return true; }
+    exists() { return !(options.missingDefaults && this.path.endsWith("/chrome.manifest")); }
     isFile() { return true; }
   }
   const Services = {
+    dirsvc: { get: key => { assert.equal(key, "GreD"); return new File("/app"); } },
     env: { get: name => name === "FLUXION_ROOT" ? "/app/fluxion" : "" },
     io: {
       newFileURI: file => ({ spec: `file://${file.path}` }),
@@ -48,6 +50,10 @@ function startupFixture(selectedURL, saved = []) {
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../runtime/fluxion.cfg"), "utf8"), {
     Services,
+    Components: { manager: { QueryInterface: () => ({ autoRegister(file) {
+      assert.equal(startupObserver, undefined, "Defaults must register before browser startup observation");
+      registeredManifests.push(file.path);
+    } }) } },
     Ci: {}, Cc: { "@mozilla.org/file/local;1": { createInstance: () => new File() } },
     Cu: { reportError: error => errors.push(error) },
     ChromeUtils: { registerWindowActor() {}, importESModule: () => ({ AboutNewTab }) },
@@ -63,8 +69,23 @@ function startupFixture(selectedURL, saved = []) {
     gBrowser: { selectedBrowser, selectedTab, tabs: [selectedTab], loadURI(...args) { navigations.push(args); } },
   };
   startupObserver.observe(window, "browser-delayed-startup-finished");
-  return { preferences, defaults, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser };
+  return { preferences, defaults, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser };
 }
+
+test("only the bundled default-bookmark resource registers before Places startup", () => {
+  const h = startupFixture("about:blank");
+  assert.deepEqual(h.registeredManifests, ["/app/fluxion-defaults/chrome.manifest"]);
+  assert.equal(h.preferences.has("browser.places.importBookmarksHTML"), false);
+  assert.equal(h.preferences.has("browser.bookmarks.restore_default_bookmarks"), false);
+});
+
+test("missing packaged defaults is reported without navigating or editing the profile", () => {
+  const h = startupFixture("https://example.com/restored", [], { missingDefaults: true });
+  assert.match(h.preferences.get("fluxion.defaults.error"), /manifest is missing/);
+  assert.equal(h.registeredManifests.length, 0);
+  assert.equal(h.window.__fluxionLoaded, true);
+  assert.deepEqual(h.navigations, []);
+});
 
 for (const homepage of ["https://example.com/home", "about:blank", "file:///Users/test/home.html"]) {
   test(`startup retains the user's homepage ${homepage} and bookmarks choice`, () => {

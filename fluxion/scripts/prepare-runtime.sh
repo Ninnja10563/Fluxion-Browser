@@ -23,7 +23,7 @@ fi
 source_dir="$(dirname -- "$resolved")"
 runtime_dir="$fluxion_root/../.runtime/firefox"
 stamp="$runtime_dir/.fluxion-stamp"
-signature="$resolved|$(stat -c '%Y:%s' "$resolved")|$(sha256sum "$fluxion_root/runtime/fluxion.cfg" "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" "$fluxion_root/runtime/distribution/policies.json" "$fluxion_root/scripts/install-update-policy.py" "$0")"
+signature="$resolved|$(stat -c '%Y:%s' "$resolved")|$(sha256sum "$fluxion_root/runtime/fluxion.cfg" "$fluxion_root/runtime/defaults/pref/fluxion-autoconfig.js" "$fluxion_root/runtime/distribution/policies.json" "$fluxion_root/scripts/install-update-policy.py" "$fluxion_root/scripts/install-default-bookmarks.py" "$fluxion_root/assets/default-bookmarks.html" "$0")"
 
 if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_dir" in
@@ -65,6 +65,8 @@ if [[ ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   fi
   python3 "$fluxion_root/scripts/install-update-policy.py" "$runtime_dir/distribution" \
     "$fluxion_root/runtime/distribution/policies.json"
+  python3 "$fluxion_root/scripts/install-default-bookmarks.py" "$runtime_dir" \
+    "$fluxion_root/assets/default-bookmarks.html"
   printf '%s' "$signature" > "$stamp"
 fi
 
