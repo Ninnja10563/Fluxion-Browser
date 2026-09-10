@@ -68,6 +68,20 @@ jobs:
           FLUXION_SELECTION_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-selection-evidence
         run: ./fluxion/scripts/verify-macos-selection.sh '.runtime/Fluxion.app'
 
+      - name: Check keyed Flow structural changes in large sessions
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_STRUCTURE_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-structure-evidence
+        run: ./fluxion/scripts/verify-macos-structure.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Flow structure evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-structure-evidence
+          path: ${{ runner.temp }}/fluxion-structure-evidence
+          if-no-files-found: warn
+
       - name: Preserve Flow selection evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7
