@@ -10,6 +10,8 @@ interface is built out incrementally.
 
 Version 0.42 improves privacy and search correctness:
 
+- restore startup compatibility with Gecko's trusted script-loading policy by
+  using Fluxion's registered bundle resource path;
 - prevent delayed extraction or embedding work from restoring Browser Memory
   records after clearing data, excluding a site, or disabling embeddings;
 - propagate Gecko history deletion into Fluxion's extracted page evidence and

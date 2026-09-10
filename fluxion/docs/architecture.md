@@ -62,6 +62,11 @@ into windows whose chrome document is `browser.xhtml`. The Flow sidebar is
 inserted beside Firefox's browser deck. It renders state from native tabs; it
 does not create a parallel rendering or navigation stack.
 
+Bundled scripts load through the registered `resource://fluxion/` mapping after
+their local files are checked. Current Gecko requires a trusted scheme for
+privileged subscripts; Fluxion does not enable unsafe script loading or relax
+the browser's content security preferences.
+
 Flow separates layout ownership from its visible surface. Expanded and Compact
 give the outer rail a 232px or 44px layout width. Focus reduces that rail to 3px
 and positions the same 232px Flow surface over Gecko's browser deck with a
