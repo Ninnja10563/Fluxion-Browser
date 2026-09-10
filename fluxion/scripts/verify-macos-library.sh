@@ -55,7 +55,7 @@ for ((attempt=0; attempt<720; attempt++)); do
     if [[ "$escape_requested" == false ]] && grep -Fq 'user_pref("fluxion.library.verification.escape", "requested")' "$profile/prefs.js"; then
       /usr/bin/osascript \
         -e 'tell application "System Events"' \
-        -e "if unix id of first application process whose frontmost is true is not $browser_pid then error \"Library fixture is no longer frontmost\"" \
+        -e "if (unix id of (first application process whose frontmost is true)) is not $browser_pid then error \"Library fixture is no longer frontmost\"" \
         -e 'key code 53' -e 'end tell' || {
         printf 'Could not send native Escape to the owned Library fixture.\n' >&2; break;
       }
