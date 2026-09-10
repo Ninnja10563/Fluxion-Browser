@@ -1321,47 +1321,70 @@
       setActive(index);
       input.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
       const verifyDialog = (attempt = 0) => {
-        const frameWindow = window.gDialogBox?.dialog?.frameContentWindow;
-        const dialogDocument = frameWindow?.document;
-        const dialog = dialogDocument?.querySelector("dialog");
-        const categoryGroup = dialogDocument?.getElementById("clearPrivateDataGroupbox");
-        const categories = categoryGroup?.querySelectorAll("checkbox");
-        const duration = dialogDocument?.getElementById("sanitizeDurationChoice");
-        const cancel = dialog?.getButton("cancel");
-        const accept = dialog?.getButton("accept");
-        if (!window.gDialogBox?.isOpen || !dialog || !duration || categories?.length < 5 || !cancel || !accept) {
-          if (attempt < 50) {
-            window.setTimeout(() => verifyDialog(attempt + 1), 100);
+        const state = { attempt };
+        let failed = false;
+        let cancelTimeout = null;
+        const fail = error => {
+          if (failed) return;
+          failed = true;
+          window.clearTimeout(cancelTimeout);
+          Services.prefs.setStringPref("fluxion.dataClearing.visual.error",
+            `${error?.message || error}\n${error?.stack || ""}\n${JSON.stringify(state)}`);
+          Services.prefs.savePrefFile(null);
+        };
+        try {
+          const frameWindow = window.gDialogBox?.dialog?.frameContentWindow;
+          const dialogDocument = frameWindow?.document;
+          state.uri = String(dialogDocument?.documentURI || "").slice(0, 240);
+          state.readyState = dialogDocument?.readyState || "missing";
+          state.open = Boolean(window.gDialogBox?.isOpen);
+          const dialog = dialogDocument?.querySelector("dialog");
+          state.dialogType = dialog?.localName || "missing";
+          state.getButtonType = typeof dialog?.getButton;
+          const categoryGroup = dialogDocument?.getElementById("clearPrivateDataGroupbox");
+          const categories = categoryGroup?.querySelectorAll("checkbox");
+          state.categories = categories?.length || 0;
+          const duration = dialogDocument?.getElementById("sanitizeDurationChoice");
+          const cancel = typeof dialog?.getButton === "function" ? dialog.getButton("cancel") : null;
+          const accept = typeof dialog?.getButton === "function" ? dialog.getButton("accept") : null;
+          state.duration = Boolean(duration);
+          state.cancel = Boolean(cancel);
+          state.accept = Boolean(accept);
+          if (!state.open || !dialog || !duration || !(categories?.length >= 5) || !cancel || !accept) {
+            if (attempt < 50) {
+              window.setTimeout(() => verifyDialog(attempt + 1), 100);
+              return;
+            }
+            fail(new Error("Native dialog did not settle"));
             return;
           }
           Services.prefs.setStringPref(
-            "fluxion.dataClearing.visual.error",
-            `Native dialog did not settle (open=${window.gDialogBox?.isOpen} categories=${categories?.length || 0})`,
+            "fluxion.dataClearing.surface.health",
+            "time-range-categories-and-actions-visible",
           );
           Services.prefs.savePrefFile(null);
-          return;
-        }
-        Services.prefs.setStringPref(
-          "fluxion.dataClearing.surface.health",
-          "time-range-categories-and-actions-visible",
-        );
-        Services.prefs.savePrefFile(null);
-        on(window, "FluxionDataClearingDialogClosed", event => {
-          if (event.detail?.result !== "cancel") {
-            Services.prefs.setStringPref(
-              "fluxion.dataClearing.visual.error",
-              `Native dialog closed with ${event.detail?.result || "no result"}`,
-            );
-          } else {
-            Services.prefs.setStringPref(
-              "fluxion.dataClearing.cancel.health",
-              "native-dialog-cancelled-without-clearing",
-            );
-            window.dispatchEvent(new window.CustomEvent("FluxionDataClearingVisualReady"));
-          }
-          Services.prefs.savePrefFile(null);
-        }, { once: true });
-        cancel.click();
+          cancelTimeout = window.setTimeout(() => fail(new Error("Native dialog cancellation was not observed")), 5000);
+          on(window, "FluxionDataClearingDialogClosed", event => {
+            window.clearTimeout(cancelTimeout);
+            if (failed) return;
+            try {
+              if (event.detail?.result !== "cancel") {
+                Services.prefs.setStringPref(
+                  "fluxion.dataClearing.visual.error",
+                  `Native dialog closed with ${event.detail?.result || "no result"}`,
+                );
+              } else {
+                Services.prefs.setStringPref(
+                  "fluxion.dataClearing.cancel.health",
+                  "native-dialog-cancelled-without-clearing",
+                );
+                window.dispatchEvent(new window.CustomEvent("FluxionDataClearingVisualReady"));
+              }
+              Services.prefs.savePrefFile(null);
+            } catch (error) { fail(error); }
+          }, { once: true });
+          cancel.click();
+        } catch (error) { fail(error); }
       };
       window.setTimeout(() => verifyDialog(), 100);
     };
