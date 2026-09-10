@@ -232,14 +232,35 @@
     if (!primary || !companion || primary === companion) {
       throw new Error("restored window identities were not distinct");
     }
-    primary.FluxionUI.switchWorkspace("focus");
-    await wait(100);
-    if (tabURL(primary.gBrowser.selectedTab) !== FluxionSessionRecovery.URLS.focusActive) {
-      throw new Error("Focus did not resume its active page after restart");
-    }
-    primary.FluxionUI.switchWorkspace("build");
-    await wait(100);
-    result = FluxionSessionRecovery.validateWindowSet(normalSnapshots());
+    // Capture the native identities before selection causes Gecko to restore a
+    // lazy browser. Its currentURI can briefly be about:blank during that swap.
+    const expectedTab = (browserWindow, url) => {
+      const tab = [...browserWindow.gBrowser.tabs].find(candidate => tabURL(candidate) === url);
+      if (!tab) throw new Error(`restored native tab was missing before workspace switch: ${url}`);
+      return tab;
+    };
+    const focusActive = expectedTab(primary, FluxionSessionRecovery.URLS.focusActive);
+    const buildActive = expectedTab(primary, FluxionSessionRecovery.URLS.splitA);
+    const companionBuild = expectedTab(companion, FluxionSessionRecovery.URLS.companionBuild);
+    const companionLife = expectedTab(companion, FluxionSessionRecovery.URLS.companionLife);
+    const switchAndRestore = async (browserWindow, workspace, tab, url) => {
+      browserWindow.FluxionUI.switchWorkspace(workspace);
+      const assertIdentity = () => {
+        if (browserWindow.FluxionUI.currentWorkspace() !== workspace ||
+            browserWindow.gBrowser.selectedTab !== tab || !tab.parentNode) {
+          throw new Error(`${workspace} did not immediately select and retain its remembered native tab`);
+        }
+      };
+      assertIdentity();
+      const restored = await waitFor(() => {
+        assertIdentity();
+        return { ok: tabURL(tab) === url };
+      });
+      if (!restored.ok) throw new Error(`${workspace} selected the right tab but its page did not restore: ${tabURL(tab)}`);
+    };
+    await switchAndRestore(primary, "focus", focusActive, FluxionSessionRecovery.URLS.focusActive);
+    await switchAndRestore(primary, "build", buildActive, FluxionSessionRecovery.URLS.splitA);
+    result = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
     if (!result.ok) throw new Error(`workspace resume invalid: ${result.reasons.join("; ")}`);
     if (
       companion.FluxionUI.currentWorkspace() !== "life" ||
@@ -247,6 +268,13 @@
     ) {
       throw new Error("operating the primary window changed the companion workspace");
     }
+    await switchAndRestore(companion, "build", companionBuild, FluxionSessionRecovery.URLS.companionBuild);
+    await switchAndRestore(companion, "life", companionLife, FluxionSessionRecovery.URLS.companionLife);
+    if (primary.FluxionUI.currentWorkspace() !== "build" || primary.gBrowser.selectedTab !== buildActive) {
+      throw new Error("operating the companion window changed the primary workspace or selected tab");
+    }
+    result = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
+    if (!result.ok) throw new Error(`companion workspace resume invalid: ${result.reasons.join("; ")}`);
     write("fluxion.recovery.restore.health", "two-window-workspaces-tabs-groups-stacked-split-restored");
     for (const browserWindow of normalWindows()) {
       await flushTabs([...browserWindow.gBrowser.tabs], browserWindow);
