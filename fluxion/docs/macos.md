@@ -103,7 +103,12 @@ and accessibility permissions. Missing permission or ambiguous dialog ownership
 fails the check; no replacement picker or file-list injection is used.
 
 macOS renders its open panel in an AppKit helper process. The test builds a
-read-only ownership resolver with Xcode's `clang` into its temporary directory.
+ownership resolver and fixed-fixture Unicode keyboard driver with Xcode's
+`clang` into its temporary directory. Attribution and focus-inspection modes
+are read-only; the input mode accepts only the existing same-user verification
+file under the dedicated temporary fixture directory. It posts paired native
+UTF-16 key events to the exact browser PID, avoiding keyboard-layout conversion
+of the Unicode filename, clipboard changes, and file-list injection.
 It dynamically resolves a private macOS responsibility-PID function and accepts
 only the exact system helper attributed to this browser process, never a shared
 Terminal/CI ancestor. An unavailable function fails closed. This test helper

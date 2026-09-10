@@ -1,4 +1,5 @@
-/* Test-only, read-only AppKit helper attribution. Never authorizes a process
+/* Test-only AppKit helper attribution and fixed-fixture Unicode key input.
+ * Attribution/focus modes are read-only. Never authorizes a process
  * based on its name alone or a shared shell/runner ancestor. The responsibility
  * SPI is intentionally dynamically resolved and fails closed when unavailable.
  * This executable is built into the verifier's temporary directory, not shipped.
@@ -12,6 +13,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/proc_info.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 typedef pid_t (*responsible_pid_fn)(pid_t);
@@ -72,11 +74,70 @@ static int same_process(const struct proc_bsdinfo *a, const struct proc_bsdinfo 
     a->pbi_start_tvsec == b->pbi_start_tvsec && a->pbi_start_tvusec == b->pbi_start_tvusec;
 }
 
+static int type_fixture_path(const char *path, pid_t owner, pid_t approved,
+    const struct proc_bsdinfo *owner_identity, const struct proc_bsdinfo *panel_identity,
+    responsible_pid_fn responsible) {
+  const char *leaf = strrchr(path, '/');
+  char canonical[PATH_MAX], temporary[PATH_MAX];
+  const char *temp_root = getenv("TMPDIR");
+  struct stat file_info;
+  if (!leaf || strcmp(leaf + 1, "Fluxion caf\xc3\xa9 upload.txt") ||
+      !realpath(path, canonical) || !realpath(temp_root && *temp_root ? temp_root : "/tmp", temporary) ||
+      lstat(path, &file_info) || !S_ISREG(file_info.st_mode) || file_info.st_uid != getuid() || file_info.st_size != 87) {
+    fputs("Refusing a non-fixture Unicode input path\n", stderr); return 1;
+  }
+  size_t root_length = strlen(temporary);
+  const char *prefix = "/fluxion-file-picker-check.";
+  const char *suffix = canonical + root_length;
+  if (strncmp(canonical, temporary, root_length) || strncmp(suffix, prefix, strlen(prefix))) {
+    fputs("Unicode input path is outside the owned temporary fixture namespace\n", stderr); return 1;
+  }
+  suffix += strlen(prefix);
+  size_t nonce = strcspn(suffix, "/");
+  if (nonce != 6 || !suffix[nonce] || strchr(suffix + nonce + 1, '/')) return 1;
+  for (size_t i = 0; i < nonce; ++i) {
+    if ((suffix[i] < 'A' || suffix[i] > 'Z') && (suffix[i] < 'a' || suffix[i] > 'z') &&
+        (suffix[i] < '0' || suffix[i] > '9')) return 1;
+  }
+  if (!CGPreflightPostEventAccess()) { fputs("Native keyboard event permission is unavailable\n", stderr); return 1; }
+  CFStringRef text = CFStringCreateWithCString(NULL, path, kCFStringEncodingUTF8);
+  if (!text) return 1;
+  CFIndex length = CFStringGetLength(text);
+  for (CFIndex i = 0; i < length; ++i) {
+    struct proc_bsdinfo owner_now, panel_now;
+    if (!info(owner, &owner_now) || !same_process(owner_identity, &owner_now) ||
+        !info(approved, &panel_now) || !same_process(panel_identity, &panel_now) || responsible(approved) != owner) {
+      CFRelease(text); fputs("Native keyboard target ownership changed\n", stderr); return 1;
+    }
+    UniChar character = CFStringGetCharacterAtIndex(text, i);
+    CGEventRef down = CGEventCreateKeyboardEvent(NULL, 0, true);
+    CGEventRef up = CGEventCreateKeyboardEvent(NULL, 0, false);
+    if (!down || !up) {
+      if (down) CFRelease(down);
+      if (up) CFRelease(up);
+      CFRelease(text); return 1;
+    }
+    CGEventSetFlags(down, 0);
+    CGEventSetFlags(up, 0);
+    CGEventKeyboardSetUnicodeString(down, 1, &character);
+    CGEventKeyboardSetUnicodeString(up, 1, &character);
+    CGEventPostToPid(owner, down);
+    CGEventPostToPid(owner, up);
+    CFRelease(down);
+    CFRelease(up);
+    usleep(5000);
+  }
+  CFRelease(text);
+  printf("Native UTF-16 keyboard path input sent to owned browser %d\n", owner);
+  return 0;
+}
+
 int main(int argc, char **argv) {
   char *end = NULL;
   int focused = argc == 3 && !strcmp(argv[2], "--focused");
-  int authorized_only = focused || (argc == 3 && !strcmp(argv[2], "--authorized"));
-  if (argc != 2 && !authorized_only) { fputs("usage: file-picker-owner OWNED_BROWSER_PID [--authorized|--focused]\n", stderr); return 64; }
+  int type_path = argc == 4 && !strcmp(argv[2], "--type-path");
+  int authorized_only = focused || type_path || (argc == 3 && !strcmp(argv[2], "--authorized"));
+  if (argc != 2 && !authorized_only) { fputs("usage: file-picker-owner OWNED_BROWSER_PID [--authorized|--focused|--type-path FIXTURE_PATH]\n", stderr); return 64; }
   errno = 0;
   long parsed = strtol(argv[1], &end, 10);
   if (errno || !end || *end || parsed <= 1 || parsed > INT_MAX) return 64;
@@ -126,6 +187,7 @@ int main(int argc, char **argv) {
       fputs("No unique live AppKit panel service attributed to the owned browser\n", stderr); return 1;
     }
     if (focused) return focused_info(approved, owner, responsible);
+    if (type_path) return type_fixture_path(argv[3], owner, approved, &owner_after, &approved_after, responsible);
     printf("%d\n", approved);
   } else puts("]}");
   return 0;

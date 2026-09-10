@@ -55,7 +55,7 @@ on run arguments
     tell application "System Events" to keystroke "g" using {command down, shift down}
     delay 0.4
     my requireNativeAction(ownedPID)
-    tell application "System Events" to keystroke selectedPath
+    do shell script (quoted form of resolverExecutable) & " " & ownedPID & " --type-path " & (quoted form of selectedPath)
     delay 0.2
     my requireNativeAction(ownedPID)
     tell application "System Events" to key code 36
