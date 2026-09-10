@@ -85,6 +85,16 @@ bytes, a guarantee of upstream security currency, or an automatic installer.
    pages to render, and verifies credential reuse on reload. Server evidence
    records only counters, never Authorization headers or submitted credentials.
    This is native Basic authentication coverage, not OAuth or passkey coverage.
+   A separate required macOS file-picker gate opens the real system panel with
+   native keyboard input in an isolated profile. It cancels once, then selects
+   a file whose path contains spaces and Unicode. Exact OS process attribution
+   and foreground checks scope every panel-directed key; content focus and
+   observed file-input state decide whether a separate Open confirmation is
+   needed. The gate requires trusted cancel/input/change events, restored
+   browser focus, no upload before explicit submission, and matching multipart
+   bytes at the loopback server. It never injects a File object. Process
+   attribution does not by itself prove the panel remains open; input dispatch
+   still has the ordinary observation-to-key race of native UI automation.
    An isolated Library gate seeds 360 native Places history records and 550
    bookmarks in one folder, plus a wrong-folder decoy. It traverses bounded pages
    without omissions or duplicates, returns to the exact first page under tied

@@ -83,6 +83,8 @@
     } while (Date.now() < settleUntil);
     report.pathConfirmation = "selected-with-first-return";
     if (!pending.files.length && !pending.events.change) {
+      assert(pending.events.cancel === 1 && pending.events.input === 0 && pending.events.untrusted === 0,
+        "Native path entry produced unexpected events before confirmation");
       assert(!document.hasFocus(), "Native path entry returned to content without selecting a file");
       report.pathConfirmation = "separate-native-open-confirmation";
       await requestPicker("open");
@@ -94,6 +96,8 @@
       selected.files[0].size === expectedSize, "Native picker returned an unexpected file or event sequence");
     await waitFor(() => Services.focus.activeWindow === window && document.hasFocus(),
       "Native picker selection did not restore browser focus");
+    assert((await serverState()).filePickerUploads === 0,
+      "Native picker confirmation unexpectedly submitted the upload form");
     report.selection = selected;
     stage("submitting-real-multipart-upload");
     await command("Submit");
