@@ -120,6 +120,8 @@ run_stage \
   'normal session restoration' \
   FLUXION_SESSION_RESTORE_TEST \
   'user_pref("fluxion.recovery.restore.health", "two-window-workspaces-tabs-groups-stacked-split-restored")'
+grep -Fq 'user_pref("fluxion.recovery.seed.transfer", "native-group-stacked-split-and-container-pin-adopted-before-checkpoint")' "$profile/prefs.js"
+grep -Fq 'user_pref("fluxion.recovery.restore.transfer", "adopted-container-pin-group-and-stacked-split-restored-with-unique-ownership")' "$profile/prefs.js"
 run_stage \
   'private-window boundary' \
   FLUXION_PRIVATE_ISOLATION_TEST \
@@ -156,7 +158,10 @@ run_stage \
   'abrupt crash recovery' \
   FLUXION_CRASH_RESTORE_TEST \
   'user_pref("fluxion.recovery.crashRestore.health", "sigkill-session-restored-native-layout-with-private-evidence-excluded")'
+grep -Fq 'user_pref("fluxion.recovery.seed.transfer", "native-group-stacked-split-and-container-pin-adopted-before-checkpoint")' "$profile/prefs.js"
+grep -Fq 'user_pref("fluxion.recovery.crashRestore.transfer", "adopted-container-pin-group-and-stacked-split-restored-with-unique-ownership")' "$profile/prefs.js"
 
 printf 'Verified: two normal windows retained distinct SessionStore-owned workspaces and active pages with native tabs, pins, groups, stacked split orientation, workspace metadata, and keyword-only Browser Memory startup state restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2
+printf 'Native-adopted container pin, collapsed colored group, and stacked split retained unique window ownership after both clean relaunch and SIGKILL recovery.\n' >&2
 printf 'Verified: custom homepage and blank startup choices were honored by Gecko on separate launches; the homepage preference survived both startup modes, and the native bookmarks toolbar visibly rendered its saved bookmark in both.\n' >&2
 printf 'Verified: SIGKILL recovery restored two normal windows, workspace active pages, tabs, pins, groups and stacked split from a periodic disk checkpoint; private windows/history/Memory stayed excluded, with blank startup and resume-session-once disabled.\n' >&2

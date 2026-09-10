@@ -103,8 +103,11 @@ The packaged macOS transfer gate checks live page state, unsaved text, native
 history, container/pin/workspace identity, groups, stacked splits, private
 boundaries, and the shipped menu command. Its programmatic `pushState` fixture
 traverses unactivated entries explicitly; it does not change Gecko's normal
-user-interaction filtering for Back/Forward. Menu-event integration and unit
-drag tests are not claims of physical OS pointer-gesture verification.
+user-interaction filtering for Back/Forward. Menu-event integration and native
+DataTransfer DOM tests are not claims of physical OS pointer-gesture
+verification. The separate session gate adopts grouped/split/pinned-container
+pages before checkpointing and requires unique ownership and their native
+metadata after both clean relaunch and abrupt-process crash recovery.
 
 ## Custom components
 

@@ -33,14 +33,14 @@ test("crash checkpoint rejects private windows and private URLs even in closed h
 
 function normalSnapshot(overrides = {}) {
   const tabs = [
-    { url: Recovery.URLS.groupA, workspace: "build", group: "Recovery Lab" },
-    { url: Recovery.URLS.groupB, workspace: "build", group: "Recovery Lab" },
+    { url: Recovery.URLS.groupA, workspace: "build", group: "Recovery Lab", groupId: "recovery-group", groupColor: "green", groupCollapsed: true },
+    { url: Recovery.URLS.groupB, workspace: "build", group: "Recovery Lab", groupId: "recovery-group", groupColor: "green", groupCollapsed: true },
     {
       url: Recovery.URLS.splitA, workspace: "build", split: "pair-a",
       splitOrientation: "stacked", active: true, selected: true,
     },
     { url: Recovery.URLS.splitB, workspace: "build", split: "pair-a", splitOrientation: "stacked" },
-    { url: Recovery.URLS.pinned, workspace: "build", pinned: true },
+    { url: Recovery.URLS.pinned, workspace: "build", pinned: true, userContextId: 1 },
     { url: Recovery.URLS.focusIdle, workspace: "focus" },
     { url: Recovery.URLS.focusActive, workspace: "focus", active: true },
   ];
@@ -86,6 +86,27 @@ test("normal recovery requires the persisted stacked split orientation", () => {
   const result = Recovery.validateNormal(broken);
   assert.equal(result.ok, false);
   assert.match(result.reasons.join("\n"), /stacked split orientation/);
+});
+
+test("adopted recovery rejects lost container and group metadata after restoration", () => {
+  const broken = normalSnapshot();
+  broken.tabs.find(tab => tab.url === Recovery.URLS.pinned).userContextId = 0;
+  broken.tabs.find(tab => tab.url === Recovery.URLS.groupA).groupCollapsed = false;
+  broken.tabs.find(tab => tab.url === Recovery.URLS.groupB).groupColor = "blue";
+  broken.tabs.find(tab => tab.url === Recovery.URLS.groupB).groupId = "different-group-with-same-label";
+  const result = Recovery.validateNormal(broken);
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join("\n"), /pinned container identity/);
+  assert.match(result.reasons.join("\n"), /group color or collapse/);
+  assert.match(result.reasons.join("\n"), /native tab group/);
+});
+
+test("adopted fixtures must not reappear in both source and destination after restart", () => {
+  const broken = windowSet();
+  broken[1].tabs.push({ ...broken[0].tabs.find(tab => tab.url === Recovery.URLS.pinned) });
+  const result = Recovery.validateWindowSet(broken);
+  assert.equal(result.ok, false);
+  assert.match(result.reasons.join("\n"), /unique restored ownership.*pinned/);
 });
 
 test("normal recovery requires one remembered active page per workspace", () => {

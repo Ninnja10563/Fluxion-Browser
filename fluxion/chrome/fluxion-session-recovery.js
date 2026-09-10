@@ -73,7 +73,11 @@
           url: tabURL(tab),
           workspace: browserWindow.FluxionUI.tabWorkspace(tab),
           pinned: tab.pinned,
+          userContextId: Number(tab.getAttribute("usercontextid") || 0),
           group: tab.group?.label || "",
+          groupId: tab.group?.id || "",
+          groupColor: tab.group?.color || "",
+          groupCollapsed: Boolean(tab.group?.collapsed),
           split,
           splitOrientation: tab.splitview ? browserWindow.FluxionUI.splitOrientation(tab) : "",
           active: browserWindow.FluxionUI.workspaceTabActive(tab),
@@ -156,33 +160,56 @@
     window.OpenBrowserWindow();
     const companionResult = await waitFor(() => {
       const candidate = normalWindows().find(browserWindow => !windowsBefore.has(browserWindow));
-      return { ok: Boolean(candidate?.FluxionUI), candidate };
+      return { ok: Boolean(candidate?.FluxionUI && candidate?.FluxionTabTransfer && window.FluxionTabTransfer), candidate };
     });
     const companion = companionResult.candidate;
     if (!companion) throw new Error("companion Fluxion window did not open");
     window.FluxionUI.switchWorkspace("build");
 
-    const makeTab = (browserWindow, url, workspace = "build") => {
-      const tab = browserWindow.gBrowser.addTrustedTab(url, { skipAnimation: true });
+    const makeTab = (browserWindow, url, workspace = "build", userContextId = 0) => {
+      const tab = browserWindow.gBrowser.addTrustedTab(url, { skipAnimation: true, userContextId });
       browserWindow.FluxionUI.setTabWorkspace(tab, workspace);
       return tab;
     };
-    const groupTabs = [makeTab(window, urls.groupA), makeTab(window, urls.groupB)];
-    const splitTabs = [makeTab(window, urls.splitA), makeTab(window, urls.splitB)];
-    const pinned = makeTab(window, urls.pinned);
+    let groupTabs = [makeTab(companion, urls.groupA), makeTab(companion, urls.groupB)];
+    let splitTabs = [makeTab(companion, urls.splitA), makeTab(companion, urls.splitB)];
+    let pinned = makeTab(companion, urls.pinned, "build", 1);
     const focusTabs = [
       makeTab(window, urls.focusIdle, "focus"),
       makeTab(window, urls.focusActive, "focus"),
     ];
-    const group = window.gBrowser.addTabGroup(groupTabs, {
+    const group = companion.gBrowser.addTabGroup(groupTabs, {
       label: "Recovery Lab", color: "green", insertBefore: groupTabs[0],
     });
     if (!group || group.tabs.length !== 2) throw new Error("native recovery group was not created");
-    const split = window.FluxionUI.createSplitView(splitTabs[0], splitTabs[1], {
+    const split = companion.FluxionUI.createSplitView(splitTabs[0], splitTabs[1], {
       orientation: "stacked",
     });
     if (!split || split.tabs.length !== 2) throw new Error("native recovery split was not created");
-    window.gBrowser.pinTab(pinned);
+    companion.gBrowser.pinTab(pinned);
+    group.collapsed = true;
+    const originals = [...groupTabs, ...splitTabs, pinned];
+    const sourceReady = await waitFor(() => ({ ok: originals.every(tab =>
+      !tab.hasAttribute("busy") && [urls.groupA, urls.groupB, urls.splitA, urls.splitB, urls.pinned].includes(tabURL(tab))) }));
+    if (!sourceReady.ok) throw new Error("source recovery pages did not finish loading before adoption");
+    const transferred = await companion.FluxionTabTransfer.move(originals, window, {
+      workspaceId: "build", selectTab: splitTabs[0],
+    });
+    if (!transferred.complete || transferred.tabs.length !== originals.length ||
+        originals.some(tab => companion.gBrowser.tabs.includes(tab))) {
+      throw new Error(`recovery fixtures were not natively adopted: ${transferred.error || "incomplete ownership"}`);
+    }
+    // Native pinning changes tab order. Resolve returned tabs by actual URL,
+    // rather than assuming input order.
+    const adoptedReady = await waitFor(() => ({ ok: [urls.groupA, urls.groupB, urls.splitA, urls.splitB, urls.pinned]
+      .every(url => transferred.tabs.some(tab => tabURL(tab) === url)) }));
+    if (!adoptedReady.ok) throw new Error("adopted recovery fixture URLs did not finish navigating");
+    const adopted = url => transferred.tabs.find(tab => tabURL(tab) === url);
+    groupTabs = [adopted(urls.groupA), adopted(urls.groupB)];
+    splitTabs = [adopted(urls.splitA), adopted(urls.splitB)];
+    pinned = adopted(urls.pinned);
+    if ([...groupTabs, ...splitTabs, pinned].some(tab => !tab)) throw new Error("adopted recovery fixture identities are incomplete");
+    write("fluxion.recovery.seed.transfer", "native-group-stacked-split-and-container-pin-adopted-before-checkpoint");
     window.FluxionUI.switchWorkspace("focus");
     window.gBrowser.selectedTab = focusTabs[1];
     await wait(100);
@@ -317,6 +344,8 @@
     }
     result = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
     if (!result.ok) throw new Error(`companion workspace resume invalid: ${result.reasons.join("; ")}`);
+    write(`fluxion.recovery.${crash ? "crashRestore" : "restore"}.transfer`,
+      "adopted-container-pin-group-and-stacked-split-restored-with-unique-ownership");
     if (crash) {
       const absence = FluxionSessionRecovery.validatePrivateAbsence(normalSnapshots());
       if (!absence.ok) throw new Error(absence.reasons.join("; "));

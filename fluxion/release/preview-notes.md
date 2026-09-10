@@ -18,6 +18,10 @@ workflow before a DMG is published.
   coherently during transfer;
 - reject transfers across normal/private window boundaries;
 - require a temporary Peek page to become a normal tab before it can move;
+- open detached pages in a clean native destination without an extra new-tab
+  placeholder, while preserving any destination page the user has edited;
+- verify adopted tabs again after clean relaunch and abrupt-process recovery,
+  including unique window ownership, container identity, and group metadata;
 - add a required packaged-app transfer gate alongside all existing browsing,
   session, privacy, shortcut, and native macOS file-picker checks.
 

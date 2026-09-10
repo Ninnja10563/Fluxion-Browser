@@ -142,3 +142,40 @@ test("deleted workspace focus falls back only when the workspace strip owned foc
     assert.equal(f.map.has("b"), false);
   }
 });
+
+test("Flow tab and group context keys anchor the native menu to the focused item without selecting or collapsing", () => {
+  for (const grouped of [false, true]) {
+    for (const key of ["ContextMenu", "F10"]) {
+      const listeners = {}, popupCalls = [], focusCalls = [];
+      const tab = {}, group = { collapsed: true }, oldTab = {}, oldGroup = {};
+      const anchor = { closest: () => null, addEventListener: (type, listener) => { listeners[type] = listener; } };
+      const context = vm.createContext({ item: anchor, heading: anchor, tab, group,
+        contextTab: oldTab, contextGroup: oldGroup,
+        contextMenu: { openPopup: (...args) => popupCalls.push(args) },
+        groupMenu: { openPopup: (...args) => popupCalls.push(args) },
+        focusFlowItem: node => focusCalls.push(node),
+        FluxionFlowNavigation: require("../chrome/core/flow-navigation.js"),
+        select: () => assert.fail("Opening a context menu must not select a tab"),
+        scheduleRender: () => assert.fail("Opening a group menu must not rebuild its anchor"),
+        activateTabAudio: () => assert.fail("Context key must not activate audio"),
+      });
+      const node = grouped ? "heading" : "item";
+      vm.runInContext(block(`    ${node}.addEventListener("keydown", event => {`,
+        `    ${node}.addEventListener("contextmenu", event => {`), context);
+      let prevented = 0, stopped = 0;
+      listeners.keydown({ key, shiftKey: key === "F10",
+        preventDefault() { prevented++; }, stopPropagation() { stopped++; } });
+      assert.equal(prevented, 1); assert.equal(stopped, 1);
+      assert.deepEqual(focusCalls, [anchor]);
+      assert.deepEqual(popupCalls, [[anchor, "after_start", 0, 0, true]]);
+      assert.equal(context.contextTab, grouped ? oldTab : tab);
+      assert.equal(context.contextGroup, grouped ? group : oldGroup);
+      assert.equal(group.collapsed, true);
+      popupCalls.length = 0; focusCalls.length = 0;
+      listeners.keydown({ key: "F10", shiftKey: false,
+        preventDefault() { assert.fail("Plain F10 belongs to native menu navigation"); },
+        stopPropagation() { assert.fail("Plain F10 must propagate"); } });
+      assert.equal(popupCalls.length, 0); assert.equal(focusCalls.length, 0);
+    }
+  }
+});

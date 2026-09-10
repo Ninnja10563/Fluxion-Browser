@@ -57,7 +57,11 @@
       url: clean(tab?.url),
       workspace: clean(tab?.workspace, 80),
       pinned: Boolean(tab?.pinned),
+      userContextId: Number(tab?.userContextId || 0),
       group: clean(tab?.group, 120),
+      groupId: clean(tab?.groupId, 160),
+      groupColor: clean(tab?.groupColor, 24),
+      groupCollapsed: Boolean(tab?.groupCollapsed),
       split: clean(tab?.split, 4096),
       splitOrientation: clean(tab?.splitOrientation, 24),
       active: Boolean(tab?.active),
@@ -82,9 +86,14 @@
     }
     const pinned = tabs.find(tab => tab.url === URLS.pinned);
     if (!pinned?.pinned) reasons.push("pinned tab state was not restored");
+    if (pinned?.userContextId !== 1) reasons.push("adopted pinned container identity was not restored");
     const grouped = [URLS.groupA, URLS.groupB].map(url => tabs.find(tab => tab.url === url));
-    if (grouped.some(tab => !tab || tab.group !== "Recovery Lab")) {
+    if (grouped.some(tab => !tab || tab.group !== "Recovery Lab" || !tab.groupId) ||
+        grouped[0]?.groupId !== grouped[1]?.groupId) {
       reasons.push("native tab group was not restored");
+    }
+    if (grouped.some(tab => tab?.groupColor !== "green" || !tab.groupCollapsed)) {
+      reasons.push("adopted group color or collapse state was not restored");
     }
     const split = [URLS.splitA, URLS.splitB].map(url => tabs.find(tab => tab.url === url));
     if (split.some(tab => !tab?.split) || split[0]?.split !== split[1]?.split) {
@@ -120,6 +129,10 @@
     const windows = Array.isArray(snapshots) ? snapshots : [];
     const reasons = [];
     if (windows.length !== 2) reasons.push(`expected 2 restored normal windows, found ${windows.length}`);
+    for (const url of [...EXPECTED_NORMAL_URLS, URLS.companionBuild, URLS.companionLife]) {
+      const count = windows.flatMap(item => item?.tabs || []).filter(tab => clean(tab?.url) === url).length;
+      if (count !== 1) reasons.push(`expected unique restored ownership for ${url}, found ${count}`);
+    }
     const primary = windows.find(snapshot =>
       (snapshot?.tabs || []).some(tab => clean(tab?.url) === URLS.groupA)
     );
