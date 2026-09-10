@@ -162,6 +162,15 @@
     const detached = await window.FluxionTabTransfer.detach([detachable.tab], { workspaceId: "build", selectTab: detachable.tab });
     assert(detached.window && detached.complete && detached.tabs.length === 1, "New-window detach did not complete");
     ownedWindows.push(detached.window); ownedTabs.push(...detached.tabs);
+    report.detach = [...detached.window.gBrowser.tabs].map(tab => ({
+      adopted: detached.tabs.includes(tab), uri: tab.linkedBrowser.currentURI.spec,
+      historyCount: tab.linkedBrowser.browsingContext?.sessionHistory?.count,
+      busy: tab.hasAttribute("busy"), pinned: tab.pinned,
+      grouped: Boolean(tab.group), split: Boolean(tab.splitview),
+      documentURI: tab.linkedBrowser.browsingContext?.currentWindowGlobal?.documentURI?.spec,
+      workspace: detached.window.FluxionUI.tabWorkspace(tab),
+    }));
+    write("report", JSON.stringify(report));
     assert(detached.window.gBrowser.tabs.length === 1,
       "Successful detach retained the untouched default new-tab placeholder");
     assert(detached.window !== window && detached.window.gBrowser.tabs.includes(detached.tabs[0]) &&

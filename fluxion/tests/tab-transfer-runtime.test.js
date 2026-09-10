@@ -69,7 +69,8 @@ function fixture({ newTabURL = "about:newtab" } = {}) {
       reconcileTransferredTabs() { calls.push(["reconcile", window]); },
     };
     window.OpenBrowserWindow = options => {
-      const target = createWindow(options.private); target.addTab("about:blank");
+      calls.push(["window", options]);
+      const target = createWindow(options.private); target.addTab(options.args?.data || "https://homepage.example/");
       window.onNewWindow?.(target); return target;
     };
     window.addTab = addTab;
@@ -88,6 +89,7 @@ function fixture({ newTabURL = "about:newtab" } = {}) {
     Services: { wm: { getEnumerator: () => windows }, prefs: { getStringPref: (key, fallback) => key === "fluxion.newtab.url" ? newTabURL : fallback } },
     SessionStore: { getCustomTabValue: (tab, key) => tab.getAttribute(key), deleteCustomTabValue: (tab, key) => tab.removeAttribute(key) },
     Cu: { reportError: error => errors.push(error) },
+    Cc: { "@mozilla.org/supports-string;1": { createInstance: () => ({ data: "" }) } }, Ci: { nsISupportsString: {} },
   });
   return { source, target, api: source.FluxionTabTransfer, createWindow, calls, errors, makeSplit, makeGroup };
 }
@@ -233,13 +235,18 @@ test("missing grouped-split ungroup capability is rejected before adoption", asy
   assert.equal(f.calls.length, 0);
 });
 
-test("detach cleans the exact configured Fluxion new-tab page but preserves navigation and custom homepages", async () => {
+test("detach explicitly opens blank and preserves any changed page, history or document", async () => {
   const newTabURL = "file:///Applications/Fluxion.app/Contents/Resources/fluxion/newtab/index.html";
-  for (const change of ["unchanged", "navigation", "same-url-history", "same-url-document", "homepage"]) {
+  for (const change of ["unchanged", "zero-history", "unknown-history", "no-document", "address-draft", "navigation", "same-url-history", "same-url-document", "homepage", "configured-newtab"]) {
     const f = fixture({ newTabURL });
     f.source.onNewWindow = target => {
       const initial = target.gBrowser.tabs[0];
-      initial.linkedBrowser.currentURI.spec = change === "homepage" ? "https://homepage.example/" : newTabURL;
+      if (change === "homepage") initial.linkedBrowser.currentURI.spec = "https://homepage.example/";
+      if (change === "configured-newtab") initial.linkedBrowser.currentURI.spec = newTabURL;
+      if (change === "zero-history") initial.linkedBrowser.browsingContext.sessionHistory.count = 0;
+      if (change === "unknown-history") delete initial.linkedBrowser.browsingContext.sessionHistory;
+      if (change === "no-document") initial.linkedBrowser.browsingContext.currentWindowGlobal = null;
+      if (change === "address-draft") initial.linkedBrowser.userTypedValue = "keep this unfinished address";
       target.afterAdopt = () => {
         if (change === "navigation") initial.linkedBrowser.currentURI.spec = "https://keep.example/";
         if (change === "same-url-history") initial.linkedBrowser.browsingContext.sessionHistory.count = 2;
@@ -248,7 +255,9 @@ test("detach cleans the exact configured Fluxion new-tab page but preserves navi
     };
     const result = await f.api.detach(f.source.gBrowser.tabs);
     assert.equal(result.complete, true, change);
-    assert.equal(result.window.gBrowser.tabs.length, change === "unchanged" ? 1 : 2, change);
-    assert.equal(f.calls.some(([kind]) => kind === "remove"), change === "unchanged", change);
+    assert.equal(f.calls.find(([kind]) => kind === "window")[1].args.data, "about:blank");
+    const pristine = change === "unchanged" || change === "zero-history";
+    assert.equal(result.window.gBrowser.tabs.length, pristine ? 1 : 2, change);
+    assert.equal(f.calls.some(([kind]) => kind === "remove"), pristine, change);
   }
 });

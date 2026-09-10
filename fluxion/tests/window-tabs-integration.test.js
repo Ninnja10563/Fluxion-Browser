@@ -105,8 +105,18 @@ function fixture() {
       selectTab: tab => { window.gBrowser.selectedTab = tab; },
     };
     window.FluxionPeek = { isPeek: tab => tab.hasAttribute("fluxion-peek") };
-    window.OpenBrowserWindow = options => { const target = createWindow(options.private); target.addTab("about:blank"); created.push(target); return target; };
+    const supportsString = Symbol("nsISupportsString");
+    window.OpenBrowserWindow = options => {
+      assert.equal(options.args.interface, supportsString);
+      assert.equal(options.args.data, "about:blank", "detach must override a configured homepage");
+      const target = createWindow(options.private);
+      target.addTab(options.args.data); created.push(target); return target;
+    };
     const scope = vm.createContext({ window, Services, Cu: { reportError: error => errors.push(error) },
+      Ci: { nsISupportsString: supportsString },
+      Cc: { "@mozilla.org/supports-string;1": { createInstance(type) {
+        assert.equal(type, supportsString); return { interface: type, data: "" };
+      } } },
       ChromeUtils: { importESModule: () => ({ PrivateBrowsingUtils: { isWindowPrivate: candidate => candidate.isPrivate } }) },
       SessionStore: { getCustomTabValue: (tab, key) => tab.getAttribute(key), deleteCustomTabValue: (tab, key) => tab.removeAttribute(key) } });
     scripts.forEach(script => vm.runInContext(script, scope));

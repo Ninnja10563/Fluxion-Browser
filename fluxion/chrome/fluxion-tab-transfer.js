@@ -1,4 +1,4 @@
-/* global ChromeUtils, Services, SessionStore, Cu */
+/* global ChromeUtils, Services, SessionStore, Cc, Ci, Cu */
 (function initialiseTabTransfer(window) {
   "use strict";
   if (!window.FluxionUI || window.FluxionTabTransfer) return;
@@ -154,24 +154,39 @@
       return { tabs: [], selectedTab: null, complete: false, error: "Only live, permanent tabs can move to a new window." };
     }
     let target;
-    try { target = source.OpenBrowserWindow({ private: PrivateBrowsingUtils.isWindowPrivate(source) }); }
+    try {
+      // A detach needs an empty destination, not the user's homepage(s).
+      // Native delayed startup only guarantees initial loads have started;
+      // an explicit blank avoids racing a file/network/private welcome page.
+      const args = Cc["@mozilla.org/supports-string;1"].createInstance(Ci.nsISupportsString);
+      args.data = "about:blank";
+      target = source.OpenBrowserWindow({ private: PrivateBrowsingUtils.isWindowPrivate(source), args });
+    }
     catch (cause) { return { tabs: [], selectedTab: null, complete: false, error: cause?.message || String(cause) }; }
     if (!target) return { tabs: [], selectedTab: null, complete: false, error: "The new browser window could not be opened." };
     const deadline = Date.now() + 20000;
+    let initial = null;
+    const captureInitialTab = () => {
+      if (!initial && target.gBrowser?.tabs.length === 1) initial = target.gBrowser.tabs[0];
+    };
+    captureInitialTab();
     while (!target.closed && (!target.gBrowserInit?.delayedStartupFinished || !target.FluxionUI)) {
       if (Date.now() >= deadline || source.closed) return { tabs: [], selectedTab: null, complete: false, window: target, error: "The new window did not finish starting." };
+      captureInitialTab();
       await new Promise(resolve => window.setTimeout(resolve, 50));
     }
-    const initial = target.gBrowser?.tabs.length === 1 ? target.gBrowser.tabs[0] : null;
+    captureInitialTab();
     const initialBrowser = initial?.linkedBrowser;
     const initialGlobal = initialBrowser?.browsingContext?.currentWindowGlobal;
     const initialURI = initialBrowser?.currentURI?.spec;
-    const emptyURIs = new Set(["about:blank", "about:newtab", Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab")]);
+    const initialHistoryCount = initialBrowser?.browsingContext?.sessionHistory?.count;
     const result = await move(moving, target, { selectTab, workspaceId });
     if (result.complete && liveTab(initial, target) && !result.tabs.includes(initial) &&
-        emptyURIs.has(initialURI) && initialBrowser.currentURI.spec === initialURI &&
+        initial.linkedBrowser === initialBrowser && initialGlobal && !initialBrowser.userTypedValue &&
+        initialURI === "about:blank" && initialBrowser.currentURI.spec === initialURI &&
         initialBrowser.browsingContext?.currentWindowGlobal === initialGlobal &&
-        initialBrowser.browsingContext?.sessionHistory?.count === 1 &&
+        (initialHistoryCount === 0 || initialHistoryCount === 1) &&
+        initialBrowser.browsingContext?.sessionHistory?.count === initialHistoryCount &&
         !initial.pinned && !initial.group && !initial.splitview && !initial.hasAttribute("busy")) {
       target.gBrowser.removeTab(initial, { skipSessionStore: true, animate: false });
     }

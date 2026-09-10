@@ -91,8 +91,10 @@ adoption. The returned native nodes receive explicit workspace state, pinned
 state, and split orientation before final selection/reconciliation. A window
 menu captures the destination workspace shown to the user; a new window keeps
 source workspace membership by default. Moving all tabs leaves a real new tab
-in the source window. Detachment removes only its untouched initial blank or
-configured Fluxion new-tab document, never a navigated page or custom homepage.
+in the source window. Detachment explicitly requests a native blank destination
+instead of loading the user's homepage. It removes only that same untouched
+initial blank document with a known, unchanged zero- or one-entry history,
+never a navigated page, typed address draft, or replacement tab.
 Partial native failures report surviving adopted nodes and leave remaining
 source tabs alone; the adapter does not promise atomic rollback or close pages
 to disguise a failed move.

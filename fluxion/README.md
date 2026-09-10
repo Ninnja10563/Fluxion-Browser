@@ -273,6 +273,19 @@ workspace name or symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
 
+In the 0.54 candidate, right-click a Flow tab or group heading and choose
+**Move to Window**. Choose an existing window or **New Window**; the existing
+window's workspace is shown in the menu. Command-click (Ctrl-click on
+Windows/Linux) to select several tabs first. Keyboard users can focus a tab or
+group heading and press **Shift+F10** to open the same menu.
+
+Tabs can also be dragged onto another window's Flow tab edge, workspace button,
+or empty tab-list area. Dragging outside browser windows opens a new window;
+Escape cancels the drag. Split panes move together, and a complete selected
+group retains its heading. Private tabs can only move to private windows.
+Choose **Keep Peek as Tab** for a temporary Peek before moving it. This candidate's
+release verification is still pending; see GitHub Releases for available DMGs.
+
 Collapsing a native tab group keeps its currently selected page visible as one
 compact row and labels the remaining hidden members as `+N`. Arrow navigation
 continues through that row into neighbouring pages. Gecko remains authoritative

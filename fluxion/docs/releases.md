@@ -3,8 +3,8 @@
 `macOS integration diagnostics` is a separate, read-only-permission workflow
 for developing native Settings accessibility, external URL/file delivery,
 AI credential/privacy checks, real transfers and native website authentication,
-Library keyboard/menu interaction, workspace restoration/editing, and integrated
-exact/semantic Memory retrieval.
+Library keyboard/menu interaction, workspace restoration/editing, native
+cross-window tab adoption, and integrated exact/semantic Memory retrieval.
 It builds the same locked runtime but does not contact the release-discovery
 API, create DMGs, upload applications, or publish releases. A diagnostic pass
 never replaces the complete release gates below. This allows native debugging
@@ -193,6 +193,14 @@ bytes, a guarantee of upstream security currency, or an automatic installer.
    assigns a native tab to the new workspace, and deletes it through the shared
    controller. Packaging stops unless the workspace disappears from both UI
    and persistence while the live tab migrates to the adjacent destination.
+   A separate required cross-window transfer gate adopts real Gecko documents
+   with unsaved Unicode text, JavaScript state, native back/forward entries,
+   container identity, pins, groups, and stacked splits. It rejects private-mode
+   boundary crossings and temporary Peeks, checks blank-destination detachment,
+   and routes the shipped Flow menu and drag listeners with native Gecko
+   DataTransfer objects. These DOM events do not claim physical OS drag/menu
+   input. The workflow preserves the isolated fixture's report and logs as a
+   transfer-evidence artifact even on failure; no user profile is collected.
    A toolbar-menu gate then requires Firefox PanelUI to be absent from the
    visible toolbar, checks the mounted Fluxion control and its full concise
    command set, executes New Tab through the actual menu listener, verifies the

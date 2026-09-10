@@ -88,7 +88,17 @@ jobs:
 
       - name: Check native cross-window tab transfer and privacy boundaries
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_TAB_TRANSFER_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-tab-transfer-evidence
         run: ./fluxion/scripts/verify-macos-tab-transfer.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native tab transfer evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-tab-transfer-diagnostic
+          path: ${{ runner.temp }}/fluxion-tab-transfer-evidence
+          if-no-files-found: warn
 
       - name: Check exact and real semantic Memory retrieval
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
