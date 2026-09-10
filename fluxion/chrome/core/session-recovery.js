@@ -18,6 +18,20 @@
     URLS.groupA, URLS.groupB, URLS.splitA, URLS.splitB, URLS.pinned,
     URLS.focusIdle, URLS.focusActive,
   ]);
+  const CRASH_CHECKPOINT_KEY = "fluxion-crash-checkpoint";
+
+  function validateCrashCheckpoint(state, token) {
+    const windows = state?.windows || [];
+    const reasons = [];
+    if (windows.length !== 2 || windows.some(item => item.isPrivate)) reasons.push("checkpoint must contain two normal windows");
+    if (!token || !windows.some(item => item.extData?.[CRASH_CHECKPOINT_KEY] === token)) reasons.push("latest checkpoint marker was not saved");
+    const urls = new Set(windows.flatMap(item => (item.tabs || []).flatMap(tab => (tab.entries || []).map(entry => entry.url))));
+    for (const url of [...EXPECTED_NORMAL_URLS, URLS.companionBuild, URLS.companionLife]) {
+      if (!urls.has(url)) reasons.push(`checkpoint missing ${url}`);
+    }
+    if (JSON.stringify(state || {}).includes(URLS.privateOnly)) reasons.push("private URL entered the on-disk checkpoint");
+    return Object.freeze({ ok: reasons.length === 0, reasons: Object.freeze(reasons) });
+  }
   const EXPECTED_WORKSPACES = Object.freeze({
     [URLS.groupA]: "build",
     [URLS.groupB]: "build",
@@ -178,6 +192,7 @@
     EXPECTED_NORMAL_URLS, EXPECTED_WORKSPACES, EXPECTED_WORKSPACE_LIST, URLS,
     clean, normaliseTab, validateNormal, validateWindowSet,
     validatePrivate, validatePrivateAbsence,
+    CRASH_CHECKPOINT_KEY, validateCrashCheckpoint,
   });
   scope.FluxionSessionRecovery = api;
   if (typeof module !== "undefined" && module.exports) module.exports = api;

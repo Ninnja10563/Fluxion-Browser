@@ -69,6 +69,29 @@ run_stage() {
     return 1
   fi
 
+  if [[ "$environment" == "FLUXION_CRASH_SEED_TEST" ]]; then
+    if [[ ! -s "$profile/sessionstore-backups/recovery.jsonlz4" || -e "$profile/sessionstore.jsonlz4" ]]; then
+      printf 'Crash seed did not leave only a live recovery checkpoint.\n' >&2
+      return 1
+    fi
+    # The launcher execs Gecko, so this is the exact browser parent we own.
+    # No quit request is sent: shutdown handlers cannot write a clean session.
+    kill -KILL "$process_id"
+    local crash_status=0
+    wait "$process_id" || crash_status=$?
+    process_id=""
+    if (( crash_status != 137 )); then
+      printf 'Expected SIGKILL exit137, received %s.\n' "$crash_status" >&2
+      return 1
+    fi
+    if [[ -e "$profile/sessionstore.jsonlz4" ]]; then
+      printf 'A clean session file unexpectedly appeared after SIGKILL.\n' >&2
+      return 1
+    fi
+    printf 'Verified owned Gecko process terminated by SIGKILL after its periodic checkpoint.\n' >&2
+    return 0
+  fi
+
   attempt=0
   while kill -0 "$process_id" 2>/dev/null && (( attempt < 240 )); do
     sleep 0.25
@@ -123,5 +146,17 @@ run_stage \
   FLUXION_STARTUP_BLANK_TEST \
   'user_pref("fluxion.recovery.blank.health", "blank-startup-honored-with-homepage-retained")'
 
+# Isolate crash evidence from every previous orderly shutdown and startup mode.
+profile="$check_root/crash-profile"
+run_stage \
+  'abrupt crash checkpoint seed' \
+  FLUXION_CRASH_SEED_TEST \
+  'user_pref("fluxion.recovery.crashSeed.health", "periodic-session-checkpoint-ready-with-private-window-open")'
+run_stage \
+  'abrupt crash recovery' \
+  FLUXION_CRASH_RESTORE_TEST \
+  'user_pref("fluxion.recovery.crashRestore.health", "sigkill-session-restored-native-layout-with-private-evidence-excluded")'
+
 printf 'Verified: two normal windows retained distinct SessionStore-owned workspaces and active pages with native tabs, pins, groups, stacked split orientation, workspace metadata, and keyword-only Browser Memory startup state restored; private tabs were excluded from session, Places, and Browser Memory.\n' >&2
 printf 'Verified: custom homepage and blank startup choices were honored by Gecko on separate launches; the homepage preference survived both startup modes, and the native bookmarks toolbar visibly rendered its saved bookmark in both.\n' >&2
+printf 'Verified: SIGKILL recovery restored two normal windows, workspace active pages, tabs, pins, groups and stacked split from a periodic disk checkpoint; private windows/history/Memory stayed excluded, with blank startup and resume-session-once disabled.\n' >&2

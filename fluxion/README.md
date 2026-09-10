@@ -28,6 +28,10 @@ The current preview is runnable and includes:
   per-window active workspaces, pinned tabs, native groups, and split views,
   including two normal windows restored to different workspaces while private
   tabs remain excluded from the session;
+- separate abrupt-process crash verification from Gecko's periodic checkpoint,
+  with private windows and evidence excluded from recovery;
+- live Downloads rows that retain controls and focus during progress, safely
+  finalize unfinished transfers on removal, and retain completed files;
 - Gecko-native named tab groups with collapse, reorder, colour, group-to-
   workspace movement, and crash/session restoration; a collapsed group keeps
   its active page visible, reports the remaining hidden pages as `+N`, and

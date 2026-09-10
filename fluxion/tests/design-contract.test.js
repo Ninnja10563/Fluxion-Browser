@@ -479,7 +479,7 @@ test("Fluxion Library owns visible history, bookmark, and download workflows", (
   assert.match(library, /Downloads\.PRIVATE/);
   assert.match(library, /download\.launch\(\)/);
   assert.match(library, /download\.showContainingDirectory\(\)/);
-  assert.match(library, /downloadList\.remove\(download\)/);
+  assert.match(library, /FluxionLibraryDownloads\.remove\(download, downloadList\)/);
   assert.match(library, /PlacesUtils\.history\.remove/);
   assert.match(library, /PlacesUtils\.bookmarks\.remove/);
   assert.match(library, /PlacesUtils\.bookmarks\.insert/);

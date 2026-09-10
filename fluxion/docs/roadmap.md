@@ -22,6 +22,10 @@ controls work and its failure paths have been tested.
   groups, split views, persistent restore-on-startup choice, Places, and Browser
   Memory (implemented), plus product-owned recently-closed menus and palette
   recovery over Gecko SessionStore (implemented)
+- abrupt-process crash recovery gate with ordinary on-disk checkpoints, blank
+  startup, two-window native layout/workspace restoration, and private evidence
+  exclusion; real HTTP transfer and content upload/login form gates (implemented;
+  OS file-picker and third-party authentication audits remain)
 - signed macOS application bundle and native application menus (custom Flow
   menu, distinct trailing toolbar menu, and About route implemented; Developer
   ID signing remains)

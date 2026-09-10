@@ -11,6 +11,8 @@
     ["homepage", "FLUXION_STARTUP_HOMEPAGE_TEST"],
     ["blankSeed", "FLUXION_STARTUP_BLANK_SEED_TEST"],
     ["blank", "FLUXION_STARTUP_BLANK_TEST"],
+    ["crashSeed", "FLUXION_CRASH_SEED_TEST"],
+    ["crashRestore", "FLUXION_CRASH_RESTORE_TEST"],
   ].find(([, environment]) => Services.env.get(environment) === "1")?.[0];
   if (!mode || !window.FluxionUI || !window.FluxionMemory) return;
 
@@ -120,12 +122,18 @@
     await wait(400);
   }
 
-  async function seedNormalSession() {
+  async function seedNormalSession({ crash = false } = {}) {
     const urls = FluxionSessionRecovery.URLS;
     write("fluxion.recovery.seed.progress", "starting");
-    Services.prefs.setIntPref("browser.startup.page", 3);
+    Services.prefs.setIntPref("browser.startup.page", crash ? 0 : 3);
     Services.prefs.setBoolPref("browser.sessionstore.resume_from_crash", true);
-    Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", true);
+    Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", !crash);
+    if (crash) {
+      // Hosted runners are idle. Exercise the normal periodic writer at its
+      // active cadence instead of waiting for its long idle interval.
+      Services.prefs.setIntPref("browser.sessionstore.interval.idle",
+        Services.prefs.getIntPref("browser.sessionstore.interval", 15000));
+    }
     await window.FluxionMemory.setEmbeddingProvider("disabled");
     const memoryCapability = await window.FluxionMemory.enable();
     if (
@@ -207,12 +215,46 @@
     write("fluxion.recovery.seed.progress", "sessionstore-projected");
     const validation = FluxionSessionRecovery.validateWindowSet(normalSnapshots());
     if (!validation.ok) throw new Error(`seed state invalid: ${validation.reasons.join("; ")}`);
+    if (crash) {
+      await validatePrivateWindow({ leaveOpen: true });
+      const token = String(Date.now());
+      SessionStore.setCustomWindowValue(window, FluxionSessionRecovery.CRASH_CHECKPOINT_KEY, token);
+      const { SessionFile } = ChromeUtils.importESModule("resource:///modules/sessionstore/SessionFile.sys.mjs");
+      // Observe a normal periodic checkpoint; never force a write or clean quit.
+      const checkpoint = await waitFor(async () => {
+        try {
+          const state = JSON.parse(await IOUtils.readUTF8(SessionFile.Paths.recovery, { decompress: true }));
+          return FluxionSessionRecovery.validateCrashCheckpoint(state, token);
+        } catch (error) {
+          return { ok: false, reasons: [String(error)] };
+        }
+      }, 60000);
+      if (!checkpoint.ok) throw new Error(`crash checkpoint invalid: ${checkpoint.reasons.join("; ")}`);
+      write("fluxion.recovery.crashSeed.health", "periodic-session-checkpoint-ready-with-private-window-open");
+      return;
+    }
     write("fluxion.recovery.seed.health", "two-window-workspaces-tabs-groups-stacked-split-seeded");
     await quit();
   }
 
-  async function validateRestoredSession() {
+  async function validateRestoredSession({ crash = false } = {}) {
     await SessionStore.promiseAllWindowsRestored;
+    if (crash) {
+      const { SessionStartup } = ChromeUtils.importESModule("resource:///modules/sessionstore/SessionStartup.sys.mjs");
+      if (SessionStartup.previousSessionCrashed !== true || SessionStartup.sessionType !== SessionStartup.RECOVER_SESSION ||
+          Services.prefs.getIntPref("browser.startup.page", -1) !== 0 ||
+          Services.prefs.getBoolPref("browser.sessionstore.resume_session_once", false)) {
+        throw new Error("Gecko did not take its crash recovery path with blank startup and resume-once disabled");
+      }
+      if ([...Services.wm.getEnumerator("navigator:browser")].some(candidate => PrivateBrowsingUtils.isWindowPrivate(candidate))) {
+        throw new Error("A private window returned after process crash");
+      }
+      const { FluxionMemoryStore } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionMemoryStore.sys.mjs");
+      if (await PlacesUtils.history.fetch(FluxionSessionRecovery.URLS.privateOnly) ||
+          await FluxionMemoryStore.get(FluxionSessionRecovery.URLS.privateOnly)) {
+        throw new Error("Private evidence survived the process crash in history or Memory");
+      }
+    }
     if (
       !window.FluxionMemory.enabled() ||
       window.FluxionMemory.embeddingProvider() !== "disabled" ||
@@ -275,14 +317,20 @@
     }
     result = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
     if (!result.ok) throw new Error(`companion workspace resume invalid: ${result.reasons.join("; ")}`);
-    write("fluxion.recovery.restore.health", "two-window-workspaces-tabs-groups-stacked-split-restored");
+    if (crash) {
+      const absence = FluxionSessionRecovery.validatePrivateAbsence(normalSnapshots());
+      if (!absence.ok) throw new Error(absence.reasons.join("; "));
+      write("fluxion.recovery.crashRestore.health", "sigkill-session-restored-native-layout-with-private-evidence-excluded");
+    } else {
+      write("fluxion.recovery.restore.health", "two-window-workspaces-tabs-groups-stacked-split-restored");
+    }
     for (const browserWindow of normalWindows()) {
       await flushTabs([...browserWindow.gBrowser.tabs], browserWindow);
     }
     await quit();
   }
 
-  async function validatePrivateWindow() {
+  async function validatePrivateWindow({ leaveOpen = false } = {}) {
     await SessionStore.promiseAllWindowsRestored;
     const restored = await waitFor(() => FluxionSessionRecovery.validateWindowSet(normalSnapshots()));
     if (!restored.ok) throw new Error(`pre-private window restore invalid: ${restored.reasons.join("; ")}`);
@@ -316,6 +364,11 @@
     });
     if (!result.ok) throw new Error(`private boundary invalid: ${result.reasons.join("; ")}`);
     write("fluxion.recovery.private.health", "private-memory-boundary-enforced");
+    if (leaveOpen) {
+      const loaded = await waitFor(() => ({ ok: tabURL(tab) === privateURL && !tab.hasAttribute("busy") }));
+      if (!loaded.ok) throw new Error("private crash fixture did not finish its HTTPS navigation");
+      return privateBrowserWindow;
+    }
     privateBrowserWindow.close();
     const closed = await waitFor(() => ({ ok: privateBrowserWindow.closed }), 8000);
     if (!closed.ok) throw new Error("private Fluxion window did not close");
@@ -450,6 +503,8 @@
       homepage: validateHomepageStartup,
       blankSeed: seedBlankStartup,
       blank: validateBlankStartup,
+      crashSeed: () => seedNormalSession({ crash: true }),
+      crashRestore: () => validateRestoredSession({ crash: true }),
     };
     const task = tasks[mode]();
     task.catch(fail);

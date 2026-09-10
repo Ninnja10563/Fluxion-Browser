@@ -209,6 +209,16 @@ Recently Closed views similarly project a bounded display model from
 `SessionStore.getClosedTabDataForWindow` and restore by the original index.
 Fluxion stores no duplicate session record; Gecko continues to own navigation,
 group, private-window, form, scroll, and crash-recovery state.
+
+Crash verification uses a separate profile with blank startup and
+`resume_session_once=false`. The fixture observes Gecko's periodic compressed
+recovery file, then the harness sends SIGKILL to its owned browser process.
+The next launch must report Gecko's crash-recovery startup type and restore
+two windows' native layout and workspace state. A private window is open at
+termination; its URL must be absent from the disk checkpoint, restored tabs,
+Places, and Browser Memory. No clean shutdown or forced SessionStore write
+can satisfy this gate.
+
 Palette web searches are resolved at execution time through Gecko
 `SearchService`, including its private default, engine-provided URI, POST body,
 and change notifications. Fluxion classifies input but stores no provider
@@ -507,6 +517,18 @@ cancel, retry, and remove commands delegate to the native `Download` object;
 removing a list entry never deletes its completed file. Fluxion does not
 implement networking, file writing, quarantine metadata, reputation checks, or
 content analysis. Those remain in Gecko's download stack.
+
+Download progress has its own bounded refresh queue; it never reruns Places
+history or bookmark queries. Download rows and their action buttons retain
+native-object identity across progress, cancellation, retry and completion.
+Controls read the live Download object, and a disappearing focused control
+returns focus to its row. Removing a record delegates to Gecko's
+[`Download.finalize(true)`](https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_155_0_1_RELEASE/toolkit/components/downloads/DownloadCore.sys.mjs)
+before list removal, preventing concurrent restart and clearing partial data
+without deleting completed files. Retained reputation-blocked downloads use
+Gecko's exact-item confirmation dialog, not an ordinary retry. The decision
+is rechecked against current native state after the dialog returns. Parental
+and content-analysis blocks receive no new override path.
 
 ## Tab sleeping boundary
 

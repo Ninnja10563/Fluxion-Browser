@@ -8,6 +8,18 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.46 strengthens everyday browsing reliability:
+
+- keep Downloads rows and controls stable during transfer progress instead of
+  rebuilding Library and requerying browsing history;
+- clean up partial download data when removing unfinished transfers while
+  leaving completed files untouched, and surface blocked files for native review;
+- verify actual HTTP download bytes, native Library actions, content multipart
+  upload, and cookie-backed login/redirect behavior against a loopback fixture;
+- require real SIGKILL crash recovery from Gecko's periodic disk checkpoint,
+  restoring two windows' workspaces, tabs, pins, groups, and stacked split layout
+  while private-window evidence stays excluded.
+
 Version 0.45 improves sustained many-tab interaction:
 
 - refresh changed tab content in place instead of rebuilding the entire Flow

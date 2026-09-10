@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, ChromeUtils, FluxionLibraryData, FluxionUrl, Ci, Cu */
+/* global gBrowser, Services, SessionStore, ChromeUtils, FluxionLibraryData, FluxionLibraryDownloads, FluxionUrl, Ci, Cu */
 (function initialiseFluxionLibrary(window) {
   "use strict";
 
@@ -56,7 +56,7 @@
     }
     .fluxion-library-search:focus-visible, .fluxion-library-nav button:focus-visible,
     .fluxion-library-open:focus-visible, .fluxion-library-action:focus-visible,
-    .fluxion-library-folder-select:focus-visible {
+    .fluxion-library-folder-select:focus-visible, .fluxion-library-row:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: 1px;
     }
     .fluxion-library-private { color: var(--fluxion-muted); font-size: 11px; }
@@ -99,6 +99,7 @@
       color: var(--fluxion-muted); background: var(--fluxion-bg); font: inherit; font-size: 11px;
     }
     .fluxion-library-action:hover { color: var(--fluxion-ink); background: var(--fluxion-hover); }
+    .fluxion-library-action[hidden] { display: none !important; }
     .fluxion-library-empty { padding: 48px 8px; color: var(--fluxion-muted); text-align: center; }
     .fluxion-library-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 11px; }
     @media (max-width: 820px) {
@@ -155,6 +156,10 @@
   let refreshToken = 0;
   let downloadList = null;
   let downloadView = null;
+  let downloadsReady = null;
+  let destroyed = false;
+  let downloadRefreshToken = 0;
+  const downloadRows = new Map();
 
   function isLibraryTab(tab) {
     const url = tab?.linkedBrowser?.currentURI?.spec || "";
@@ -184,14 +189,7 @@
   }
 
   function downloadStatus(download) {
-    if (download.succeeded) return "Finished";
-    if (download.error) return "Failed";
-    if (download.canceled) return "Canceled";
-    if (download.stopped) return download.hasPartialData ? "Paused" : "Stopped";
-    if (download.hasProgress && download.totalBytes > 0) {
-      return `${Math.round((download.currentBytes / download.totalBytes) * 100)}%`;
-    }
-    return "Downloading";
+    return FluxionLibraryDownloads.describe(download).status;
   }
 
   async function queryHistory() {
@@ -284,18 +282,23 @@
   }
 
   async function initialiseDownloads() {
-    const type = PrivateBrowsingUtils.isWindowPrivate(window) ? Downloads.PRIVATE : Downloads.PUBLIC;
-    downloadList = await Downloads.getList(type);
-    downloadView = {
-      onDownloadAdded: scheduleRefresh,
-      onDownloadChanged: scheduleRefresh,
-      onDownloadRemoved: scheduleRefresh,
-    };
-    await downloadList.addView(downloadView);
+    if (!downloadsReady) downloadsReady = (async () => {
+      const type = PrivateBrowsingUtils.isWindowPrivate(window) ? Downloads.PRIVATE : Downloads.PUBLIC;
+      downloadList = await Downloads.getList(type);
+      if (destroyed) return;
+      downloadView = {
+        onDownloadAdded: downloadRefresh.schedule,
+        onDownloadChanged: downloadRefresh.schedule,
+        onDownloadRemoved: downloadRefresh.schedule,
+      };
+      await downloadList.addView(downloadView);
+      if (destroyed) downloadList.removeView(downloadView);
+    })().catch(error => { downloadsReady = null; throw error; });
+    return downloadsReady;
   }
 
   async function queryDownloads() {
-    if (!downloadList) await initialiseDownloads();
+    await initialiseDownloads();
     const downloads = await downloadList.getAll();
     return downloads.sort((a, b) => (b.startTime?.getTime() || 0) - (a.startTime?.getTime() || 0))
       .slice(0, 300).map((download, index) => {
@@ -315,23 +318,31 @@
 
   async function refreshAll() {
     const token = ++refreshToken;
+    const downloadsToken = ++downloadRefreshToken;
     const [history, bookmarks, folders, downloads] = await Promise.all([
       queryHistory(), queryBookmarks(), queryFolders(), queryDownloads(),
     ]);
-    if (token !== refreshToken) return;
+    if (destroyed || token !== refreshToken) return;
     data.history = history;
     data.bookmarks = bookmarks;
     data.folders = folders;
-    data.downloads = downloads;
+    if (downloadsToken === downloadRefreshToken) data.downloads = downloads;
     refreshFolderSelect();
     render();
   }
 
-  let refreshTimer = 0;
-  function scheduleRefresh() {
-    window.clearTimeout(refreshTimer);
-    refreshTimer = window.setTimeout(() => refreshAll().catch(Cu.reportError), 100);
-  }
+  const downloadRefresh = FluxionLibraryDownloads.createRefreshQueue({
+    setTimer: (callback, delay) => window.setTimeout(callback, delay),
+    clearTimer: timer => window.clearTimeout(timer),
+    reportError: Cu.reportError,
+    refresh: async () => {
+      const token = ++downloadRefreshToken;
+      const downloads = await queryDownloads();
+      if (destroyed || token !== downloadRefreshToken) return;
+      data.downloads = downloads;
+      if (!root.hidden && currentSection === "downloads") render();
+    },
+  });
 
   async function openURL(url) {
     if (!url) return;
@@ -348,7 +359,7 @@
     button.type = "button";
     button.addEventListener("click", event => {
       event.stopPropagation();
-      Promise.resolve(handler()).catch(error => {
+      Promise.resolve().then(handler).catch(error => {
         note.textContent = error.message || String(error);
         Cu.reportError(error);
       });
@@ -471,19 +482,34 @@
     const actions = create("div", "fluxion-library-actions");
     if (item.kind === "downloads") {
       const download = item.raw;
-      primary.disabled = !download?.succeeded;
-      primary.addEventListener("click", () => download.launch());
-      if (download?.succeeded) {
-        actions.append(action("Open", () => download.launch()), action("Reveal", () => download.showContainingDirectory()));
-      } else if (!download?.stopped) {
-        actions.append(action("Cancel", () => download.cancel()));
-      } else {
-        actions.append(action("Retry", () => download.start()));
-      }
-      actions.append(action("Remove", async () => {
-        if (!download.stopped) await download.cancel();
-        await downloadList.remove(download);
+      row.tabIndex = -1;
+      row._fluxionDownload = download;
+      const openFile = () => download.launch();
+      primary.addEventListener("click", () => Promise.resolve().then(openFile).catch(error => {
+        note.textContent = error.message || String(error); Cu.reportError(error);
       }));
+      const controls = {
+        open: action("Open", openFile),
+        reveal: action("Reveal", () => download.showContainingDirectory()),
+        cancel: action("Cancel", () => download.cancel()),
+        retry: action("Retry", () => download.start()),
+        review: action("Review", async () => {
+          const { DownloadsCommon } = ChromeUtils.importESModule("resource:///modules/DownloadsCommon.sys.mjs");
+          const result = await FluxionLibraryDownloads.review(download, {
+            confirm: options => DownloadsCommon.confirmUnblockDownload({ ...options, window }),
+          });
+          if (result === "stale" || result === "unavailable") note.textContent = "This download changed while being reviewed. No decision was applied.";
+        }),
+        remove: action("Remove", async () => {
+          await FluxionLibraryDownloads.remove(download, downloadList);
+          note.textContent = download.succeeded
+            ? "Removed from the list. The downloaded file is unchanged."
+            : "Removed from the list and cleared unfinished download data.";
+        }),
+      };
+      actions.append(...Object.values(controls));
+      row._fluxionParts = { primary, title, detail, controls };
+      updateDownloadRow(row, item);
     } else if (item.kind === "folders") {
       const viewFolder = () => {
         currentBookmarkFolder = item.id;
@@ -513,6 +539,56 @@
     return row;
   }
 
+  function updateDownloadRow(row, item) {
+    const { primary, title, detail, controls } = row._fluxionParts;
+    const state = FluxionLibraryDownloads.describe(item.raw);
+    const text = `${item.detail}${item.url ? ` · ${item.url}` : ""}`;
+    if (title.textContent !== item.title) title.textContent = item.title;
+    if (detail.textContent !== text) detail.textContent = text;
+    if (!state.open && document.activeElement === primary) row.focus({ preventScroll: true });
+    if (primary.disabled !== !state.open) primary.disabled = !state.open;
+    const accessibleName = `${item.title}, ${state.status}`;
+    if (row.getAttribute("aria-label") !== accessibleName) row.setAttribute("aria-label", accessibleName);
+    const visible = { open: state.open, reveal: state.open, cancel: state.cancel,
+      retry: state.retry, review: state.review, remove: true };
+    for (const [name, button] of Object.entries(controls)) {
+      if (!visible[name] && document.activeElement === button) row.focus({ preventScroll: true });
+      if (button.hidden !== !visible[name]) button.hidden = !visible[name];
+    }
+    if (controls.retry.textContent !== state.retryLabel) controls.retry.textContent = state.retryLabel;
+  }
+
+  function renderDownloads(items) {
+    const activeElement = document.activeElement;
+    const activeDownload = activeElement?.closest?.(".fluxion-library-row")?._fluxionDownload;
+    const activeIndex = [...listNode.children].findIndex(row => row._fluxionDownload === activeDownload);
+    const retained = new Set(items.map(item => item.raw));
+    for (const [download, row] of downloadRows) {
+      if (!retained.has(download)) { row.remove(); downloadRows.delete(download); }
+    }
+    // Empty-state or other-section nodes are not part of the retained list.
+    for (const child of [...listNode.children]) if (!child._fluxionDownload) child.remove();
+    let previous = null;
+    for (const item of items) {
+      let row = downloadRows.get(item.raw);
+      if (!row) { row = renderRow(item); downloadRows.set(item.raw, row); }
+      else updateDownloadRow(row, item);
+      const expected = previous ? previous.nextSibling : listNode.firstChild;
+      if (row !== expected) listNode.insertBefore(row, expected);
+      previous = row;
+    }
+    if (activeDownload && !retained.has(activeDownload)) {
+      const next = items[Math.max(0, Math.min(activeIndex, items.length - 1))];
+      if (next) downloadRows.get(next.raw)?.focus({ preventScroll: true });
+      else search.focus({ preventScroll: true });
+    } else if (activeDownload && activeElement?.isConnected &&
+        !activeElement.hidden && !activeElement.disabled && document.activeElement !== activeElement) {
+      // Restart changes Gecko's startTime and can reorder a connected row.
+      // insertBefore preserves identity but does not preserve DOM focus.
+      activeElement.focus({ preventScroll: true });
+    }
+  }
+
   function render() {
     if (root.hidden) return;
     currentSection = tabSection(selectedLibraryTab());
@@ -529,10 +605,11 @@
       : data[currentSection];
     const items = FluxionLibraryData.filter(sourceItems, search.value, 300);
     summary.textContent = `${items.length}${items.length !== sourceItems.length ? ` of ${sourceItems.length}` : ""} items`;
-    listNode.replaceChildren();
+    if (currentSection === "downloads") renderDownloads(items);
+    else { downloadRows.clear(); listNode.replaceChildren(); }
     if (!items.length) {
       listNode.appendChild(create("div", "fluxion-library-empty", search.value ? "No matching items" : `No ${labels[currentSection].toLocaleLowerCase()} yet`));
-    } else {
+    } else if (currentSection !== "downloads") {
       const fragment = document.createDocumentFragment();
       for (const item of items) fragment.appendChild(renderRow(item));
       listNode.appendChild(fragment);
@@ -637,7 +714,8 @@
   gBrowser.addTabsProgressListener(progressListener);
   search.addEventListener("input", render);
   window.addEventListener("unload", () => {
-    window.clearTimeout(refreshTimer);
+    destroyed = true;
+    downloadRefresh.close();
     gBrowser.tabContainer.removeEventListener("TabSelect", handleTabSelect);
     gBrowser.removeTabsProgressListener(progressListener);
     if (downloadList && downloadView) downloadList.removeView(downloadView);

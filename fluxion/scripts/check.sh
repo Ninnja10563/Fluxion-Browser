@@ -15,9 +15,11 @@ bash -n \
   scripts/verify-macos-app.sh \
   scripts/verify-macos-memory.sh \
   scripts/verify-macos-flow.sh \
+  scripts/verify-macos-browsing.sh \
   scripts/verify-macos-session.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
+node --check scripts/browsing-fixture.mjs
 node --check chrome/core/url.js
 node --check chrome/core/search.js
 node --check chrome/core/flow-navigation.js
@@ -25,6 +27,7 @@ node --check chrome/core/flow-tab-content.js
 node --check chrome/core/index-scheduler.js
 node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js
+node --check chrome/core/library-downloads.js
 node --check chrome/core/data-clearing.js
 node --check chrome/core/theme.js
 node --check chrome/core/permissions.js
@@ -47,6 +50,7 @@ node --check chrome/core/workspaces.js
 node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-flow-performance.js
+node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-shortcuts.js
@@ -61,6 +65,8 @@ node --check chrome/fluxion-tab-sleeping.js
 node --check chrome/fluxion-palette.js
 node --check actors/FluxionMemoryPageChild.sys.mjs
 node --check actors/FluxionMemoryPageParent.sys.mjs
+node --check actors/FluxionBrowsingVerificationChild.sys.mjs
+node --check actors/FluxionBrowsingVerificationParent.sys.mjs
 node --check modules/FluxionMemoryStore.sys.mjs
 node --test tests/*.test.js
 python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-stub.py").read_text(encoding="utf-8"))'

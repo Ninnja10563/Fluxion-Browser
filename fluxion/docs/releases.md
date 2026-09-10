@@ -50,6 +50,14 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    Flow render, requires a single roving tab stop, drives ArrowDown, verifies
    selected-tab and DOM focus identity after rerender, and removes the fixture
    before capture.
+   A loopback-only browsing gate performs a real Gecko HTTP download, checks
+   its bytes and Library controls, and submits that downloaded file through a
+   content document's multipart form. A content login form must produce a
+   server redirect and an HttpOnly cookie-backed session. A fixed-command test
+   actor is registered only when this fixture is explicitly enabled, matches
+   loopback HTTP, and checks the exact origin and port on every command;
+   it accepts no content-initiated privileged requests. This does not automate
+   the operating system file picker or claim arbitrary third-party login coverage.
    A separate fresh-profile Flow gate repeats 24 batches of 20 native title/audio
    updates across 200 visible tabs. It requires stable row and control identity,
    scroll, focus, selection, workspace controls, and no structural removals;
@@ -174,6 +182,13 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    Publication is blocked if the windows merge, either active workspace falls
    back to the profile-wide default, any workspace metadata changes, or the
    private URL appears in restored tabs, Gecko Places, or Browser Memory.
+   Four more launches exercise saved homepage/blank startup choices and the
+   bookmarks toolbar. Finally, a separate profile seeds the native two-window
+   layout with a private window still open, observes a periodic disk checkpoint,
+   and is terminated by SIGKILL. Its relaunch must report actual crash recovery
+   with blank startup and resume-once disabled, restore the native layout and
+   workspace choices, and exclude private evidence. No clean-session file may
+   be present at the crash boundary.
 2. Inspect the checks and screenshot. Fix the source instead of editing an
    already-built artifact.
 3. Run the same commit and version with `publish=true`. Only that verified pass

@@ -4,6 +4,33 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const Recovery = require("../chrome/core/session-recovery.js");
 
+function crashCheckpoint() {
+  return { windows: [
+    {
+      extData: { [Recovery.CRASH_CHECKPOINT_KEY]: "new-checkpoint" },
+      tabs: Recovery.EXPECTED_NORMAL_URLS.map(url => ({ entries: [{ url }] })),
+    },
+    { tabs: [Recovery.URLS.companionBuild, Recovery.URLS.companionLife].map(url => ({ entries: [{ url }] })) },
+  ] };
+}
+
+test("crash readiness requires the latest periodic checkpoint with every normal page", () => {
+  const checkpoint = crashCheckpoint();
+  assert.equal(Recovery.validateCrashCheckpoint(checkpoint, "new-checkpoint").ok, true);
+  assert.equal(Recovery.validateCrashCheckpoint(checkpoint, "older-checkpoint").ok, false);
+  checkpoint.windows[1].tabs.pop();
+  assert.equal(Recovery.validateCrashCheckpoint(checkpoint, "new-checkpoint").ok, false);
+});
+
+test("crash checkpoint rejects private windows and private URLs even in closed history", () => {
+  const checkpoint = crashCheckpoint();
+  checkpoint.windows[0].isPrivate = true;
+  assert.equal(Recovery.validateCrashCheckpoint(checkpoint, "new-checkpoint").ok, false);
+  delete checkpoint.windows[0].isPrivate;
+  checkpoint._closedWindows = [{ tabs: [{ entries: [{ url: Recovery.URLS.privateOnly }] }] }];
+  assert.equal(Recovery.validateCrashCheckpoint(checkpoint, "new-checkpoint").ok, false);
+});
+
 function normalSnapshot(overrides = {}) {
   const tabs = [
     { url: Recovery.URLS.groupA, workspace: "build", group: "Recovery Lab" },
