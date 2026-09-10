@@ -4,6 +4,7 @@
  * This executable is built into the verifier's temporary directory, not shipped.
  */
 #include <dlfcn.h>
+#include <ApplicationServices/ApplicationServices.h>
 #include <errno.h>
 #include <limits.h>
 #include <libproc.h>
@@ -14,6 +15,53 @@
 #include <unistd.h>
 
 typedef pid_t (*responsible_pid_fn)(pid_t);
+
+static int focused_info(pid_t approved, pid_t owner, responsible_pid_fn responsible) {
+  AXUIElementRef system = AXUIElementCreateSystemWide();
+  AXUIElementSetMessagingTimeout(system, 1.0);
+  CFTypeRef raw = NULL;
+  AXError error = AXUIElementCopyAttributeValue(system, kAXFocusedUIElementAttribute, &raw);
+  CFRelease(system);
+  printf("{\"axTrusted\":%s,\"focusError\":%d,\"authorizedHelperPID\":%d",
+    AXIsProcessTrusted() ? "true" : "false", error, approved);
+  if (error != kAXErrorSuccess || !raw || CFGetTypeID(raw) != AXUIElementGetTypeID()) {
+    if (raw) CFRelease(raw);
+    puts("}"); return 1;
+  }
+  AXUIElementRef node = (AXUIElementRef)raw;
+  AXUIElementSetMessagingTimeout(node, 1.0);
+  pid_t focused_pid = 0;
+  error = AXUIElementGetPid(node, &focused_pid);
+  printf(",\"focusedPID\":%d,\"pidError\":%d", focused_pid, error);
+  // No names, roles, attributes or parents from an unrelated focused element.
+  if (error != kAXErrorSuccess || focused_pid != approved || responsible(approved) != owner) {
+    CFRelease(node); puts("}"); return 1;
+  }
+  printf(",\"lineage\":[");
+  for (int depth = 0; depth < 12; ++depth) {
+    pid_t node_pid = 0;
+    if (AXUIElementGetPid(node, &node_pid) != kAXErrorSuccess || node_pid != approved || responsible(approved) != owner) break;
+    CFTypeRef role = NULL;
+    error = AXUIElementCopyAttributeValue(node, kAXRoleAttribute, &role);
+    char role_text[96] = {0};
+    if (role && CFGetTypeID(role) == CFStringGetTypeID()) CFStringGetCString((CFStringRef)role, role_text, sizeof(role_text), kCFStringEncodingUTF8);
+    // AX roles are platform identifiers. Refuse unexpected JSON metacharacters.
+    for (size_t i = 0; role_text[i]; ++i) if ((role_text[i] < 'A' || role_text[i] > 'Z') && (role_text[i] < 'a' || role_text[i] > 'z')) role_text[i] = '_';
+    printf("%s{\"pid\":%d,\"role\":\"%s\",\"error\":%d}", depth ? "," : "", node_pid, role_text, error);
+    if (role) CFRelease(role);
+    CFTypeRef parent = NULL;
+    error = AXUIElementCopyAttributeValue(node, kAXParentAttribute, &parent);
+    if (error != kAXErrorSuccess || !parent || CFGetTypeID(parent) != AXUIElementGetTypeID()) {
+      if (parent) CFRelease(parent);
+      break;
+    }
+    CFRelease(node);
+    node = (AXUIElementRef)parent;
+  }
+  CFRelease(node);
+  puts("]}");
+  return 0;
+}
 
 static int info(pid_t pid, struct proc_bsdinfo *result) {
   return proc_pidinfo(pid, PROC_PIDTBSDINFO, 0, result, sizeof(*result)) == (int)sizeof(*result);
@@ -26,8 +74,9 @@ static int same_process(const struct proc_bsdinfo *a, const struct proc_bsdinfo 
 
 int main(int argc, char **argv) {
   char *end = NULL;
-  int authorized_only = argc == 3 && !strcmp(argv[2], "--authorized");
-  if (argc != 2 && !authorized_only) { fputs("usage: file-picker-owner OWNED_BROWSER_PID [--authorized]\n", stderr); return 64; }
+  int focused = argc == 3 && !strcmp(argv[2], "--focused");
+  int authorized_only = focused || (argc == 3 && !strcmp(argv[2], "--authorized"));
+  if (argc != 2 && !authorized_only) { fputs("usage: file-picker-owner OWNED_BROWSER_PID [--authorized|--focused]\n", stderr); return 64; }
   errno = 0;
   long parsed = strtol(argv[1], &end, 10);
   if (errno || !end || *end || parsed <= 1 || parsed > INT_MAX) return 64;
@@ -76,6 +125,7 @@ int main(int argc, char **argv) {
         !same_process(&approved_info, &approved_after) || responsible(approved) != owner) {
       fputs("No unique live AppKit panel service attributed to the owned browser\n", stderr); return 1;
     }
+    if (focused) return focused_info(approved, owner, responsible);
     printf("%d\n", approved);
   } else puts("]}");
   return 0;

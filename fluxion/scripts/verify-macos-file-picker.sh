@@ -65,7 +65,7 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$driver_dir"
 /usr/bin/osacompile -o "$check_root/file-picker-driver.scpt" "$fluxion_root/packaging/macos/file-picker-driver.applescript"
-/usr/bin/xcrun clang -Wall -Wextra -Werror -O2 "$fluxion_root/packaging/macos/file-picker-owner.c" -o "$check_root/file-picker-owner"
+/usr/bin/xcrun clang -Wall -Wextra -Werror -O2 "$fluxion_root/packaging/macos/file-picker-owner.c" -framework ApplicationServices -o "$check_root/file-picker-owner"
 node "$fluxion_root/scripts/browsing-fixture.mjs" 0 >"$server_log" 2>&1 &
 server_pid=$!
 for ((attempt=0; attempt<80; attempt++)); do
@@ -148,6 +148,7 @@ printf 'Native file-picker verification failed or timed out.\n' >&2
 # Read-only evidence only: no driver action uses a process-name match. This
 # resolver must establish exact OS attribution before remote AX can be scoped.
 "$check_root/file-picker-owner" "$browser_pid" >>"$driver_log" 2>&1 || true
+"$check_root/file-picker-owner" "$browser_pid" --focused >>"$driver_log" 2>&1 || true
 if [[ -n "$artifact_dir" ]]; then
   mkdir -p "$artifact_dir"
   /usr/sbin/screencapture -x "$artifact_dir/file-picker-failure.png" || true
