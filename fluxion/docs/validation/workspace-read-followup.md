@@ -1,8 +1,8 @@
 # Workspace read reduction — experimental follow-up
 
 This was developed separately from the first 0.58 release candidate and merged
-only after all native diagnostics passed. It has not yet been published in a
-DMG or verified by a complete native release staging run.
+only after all native diagnostics passed. It is now included in published
+0.58; see [release provenance](../../release/provenance/v0.58.0-preview.1.md).
 
 The prior marker-write optimization retained two workspace SessionStore reads
 per candidate: lookup followed immediately by the setter's comparison. This
@@ -30,4 +30,5 @@ selection, cross-window transfer and clean/crash/private recovery. The 1,000-tab
 selection gate retained all row identities with zero unrelated/no-op/structural
 mutations. Hosted p50 was 18.04 ms and p95 33.01 ms; different runs are not a
 controlled before/after timing comparison. Both authoritative reconciliation
-passes are intentionally retained. Full release staging remains required.
+passes are intentionally retained. Full release staging 34531228585 subsequently
+passed all 631 tests and every native gate before publication.

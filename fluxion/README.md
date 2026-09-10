@@ -8,14 +8,18 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.58 candidate targets stable tab switching in large sessions: updating
-selection without rebuilding unchanged Flow rows and avoiding redundant
-workspace-session marker writes and duplicate ownership reads. All 631 tests
-pass. Native diagnostics passed; full staging is being repeated after fixing
-competing test-fixture ownership and strengthening native menu evidence.
-The published DMG remains 0.57.
+Fluxion 0.58 is published: ordinary tab switching preserves unchanged Flow rows
+and controls, native multi-selection stays synchronized, and workspace sessions
+avoid redundant writes and duplicate ownership reads. Broader resource profiling
+and platform accessibility audits remain on the roadmap.
 
 ## Latest published changes
+
+Fluxion 0.58 verifies selection with 1,000 actual Gecko tabs, including native
+multi-selection, clicks, keyboard activation, pinned tabs, groups and splits.
+Instrumented workspace/session reads fall from 6,010 to 4,006 per 1,000-tab
+selection without caching across restoration events. These are read counts,
+not a hardware latency guarantee.
 
 Fluxion 0.57 adapts every Settings section to narrow windows, including workspace
 editing, permission decisions and keyboard shortcuts. Permission expiry remains
@@ -28,16 +32,17 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.57](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.57.0-preview.1)
+[Fluxion 0.58](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.58.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 The adjustable sidebar retains compact/Focus rail geometry and cancels an
 unfinished resize with Escape. It includes 0.55's menu, search and Settings
 interaction improvements and 0.54's live cross-window tab transfers.
 
-All 601 regression tests and every native release gate passed, including
-all ten Settings sections at 320/600 pixel root widths, actual workspace edits,
-visible permission expiry and native accessible reset names. See
-[verified release provenance](release/provenance/v0.57.0-preview.1.md).
+All 631 regression tests and every native release gate passed, including
+stable 1,000-tab selection, OS-native tab/group menu navigation, clean/crash
+recovery, private-data exclusion, responsive Settings and actual anonymous
+update discovery. See
+[verified release provenance](release/provenance/v0.58.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 

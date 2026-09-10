@@ -126,9 +126,13 @@ controls work and its failure paths have been tested.
   content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
 - preserve Flow row identity during ordinary same-workspace tab selection
-  (remaining: TabSelect/TabMultiSelect currently trigger structural rebuilding;
-  existing content-update and palette timing gates do not cover repeated
-  selection; collapsed-group and split projections need explicit fallbacks)
+  (implemented in published 0.58: 1,000-tab native selection/identity/mutation
+  gate, correct native multi-selection event target, pinned/group/split state
+  and collapsed-group structural fallback; broader hardware profiling remains)
+- reduce redundant workspace-session work (0.58 avoids unchanged marker writes
+  and duplicate same-call ownership reads, reducing the instrumented 1,000-tab
+  selection path from 6,010 to 4,006 reads; authoritative passes and O(N) scans
+  remain, with no cache across restoration events)
 - bounded page evidence traversal without DOM cloning or full text-node reads,
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)

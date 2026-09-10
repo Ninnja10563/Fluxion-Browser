@@ -8,11 +8,20 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
-Version 0.58 is an unreleased tab-selection candidate. It targets unchanged
-Flow row identity during ordinary selection and fewer redundant workspace
-session writes and reads. All 631 tests pass, and native diagnostics passed the
-packaged 1,000-tab selection gate. Full staging is being repeated after fixture
-ownership and native menu evidence improvements; 0.57 remains the latest DMG.
+Version 0.58 is a published stable-selection preview:
+
+- preserve Flow row/control identity during ordinary same-workspace selection;
+- observe native multi-selection at Gecko's actual event target;
+- update group/split indicators and independent pinned/tree keyboard entries;
+- avoid unchanged session-marker writes and duplicate workspace reads while
+  retaining authoritative restoration and failed-read repair.
+
+All 631 tests and every native release gate passed. The 1,000-tab selection
+check recorded no unrelated row writes, redundant attributes or list rebuilding.
+Instrumented session reads fell from 6,010 to 4,006 per selection; hosted timing
+is not a physical input or high-refresh-rate guarantee. The published DMG is the
+unchanged output of the successful staging run. See
+[release provenance](provenance/v0.58.0-preview.1.md).
 
 Version 0.57 is a published Settings-layout preview:
 
