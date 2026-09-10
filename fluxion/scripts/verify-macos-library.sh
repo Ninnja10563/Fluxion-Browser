@@ -10,6 +10,7 @@ check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-library-check.XXXXXX")"
 profile="$check_root/profile"
 browser_log="$check_root/browser.log"
 browser_pid=""
+foreground_requested=false
 artifact_dir="${FLUXION_LIBRARY_ARTIFACT_DIR:-}"
 cleanup() {
   if [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null; then
@@ -35,11 +36,20 @@ cleanup() {
 }
 trap cleanup EXIT
 
-FLUXION_PROFILE="$profile" FLUXION_LIBRARY_SCALE_TEST=1 \
+FLUXION_PROFILE="$profile" FLUXION_LIBRARY_SCALE_TEST=1 FLUXION_LIBRARY_FOREGROUND_ACK="$check_root/foreground-ready" \
   "$launcher" about:blank >"$browser_log" 2>&1 &
 browser_pid=$!
 for ((attempt=0; attempt<720; attempt++)); do
   if [[ -f "$profile/prefs.js" ]]; then
+    if [[ "$foreground_requested" == false ]] && grep -Fq 'user_pref("fluxion.library.verification.foreground", "requested")' "$profile/prefs.js"; then
+      # Activate only the process created above, before the fixture opens its
+      # native menu. Never select a user application by name or bundle id.
+      /usr/bin/osascript -e "tell application \"System Events\" to set frontmost of first application process whose unix id is $browser_pid to true" || {
+        printf 'Could not activate the owned Library fixture process.\n' >&2; break;
+      }
+      touch "$check_root/foreground-ready"
+      foreground_requested=true
+    fi
     if grep -Fq 'user_pref("fluxion.library.verification.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.library.verification.health", "full-places-search-and-pagination-verified")' "$profile/prefs.js"; then
       grep -Fq 'user_pref("fluxion.library.verification.interactionHealth", "roving-list-and-native-item-menu-verified")' "$profile/prefs.js" || {

@@ -1,4 +1,4 @@
-/* global Services, SessionStore, ChromeUtils, Cu */
+/* global Services, SessionStore, ChromeUtils, Cu, IOUtils */
 (function initialiseFluxionLibraryVerification(window) {
   "use strict";
 
@@ -11,7 +11,7 @@
   const waitFor = async (predicate, message) => {
     const deadline = Date.now() + 20000;
     do {
-      if (predicate()) return;
+      if (await predicate()) return;
       await delay(25);
     } while (Date.now() < deadline);
     throw new Error(message);
@@ -77,6 +77,17 @@
   }
 
   async function keyboardAndMenus(PlacesUtils, folderGuid) {
+    // The shell activates only this fixture's owned PID. Request that before
+    // opening any menu: app activation can itself dismiss an existing popup.
+    Services.prefs.setStringPref(`${prefix}.foreground`, "requested");
+    Services.prefs.savePrefFile(null);
+    const foregroundAck = Services.env.get("FLUXION_LIBRARY_FOREGROUND_ACK");
+    assert(foregroundAck, "Library foreground handshake path is missing");
+    await waitFor(async () => await IOUtils.exists(foregroundAck) &&
+      Services.focus.activeWindow === window && document.hasFocus(),
+      "The isolated Library application did not receive native foreground focus");
+    Services.prefs.setStringPref(`${prefix}.foreground`, "confirmed");
+    Services.prefs.savePrefFile(null);
     const rows = [...root.querySelectorAll(".fluxion-library-row")];
     const list = root.querySelector(".fluxion-library-list");
     const content = root.querySelector(".fluxion-library-content");
@@ -134,7 +145,6 @@
     };
     window.addEventListener("keydown", keyObserver, true);
     window.addEventListener("keyup", keyObserver, true);
-    window.focus();
     report.nativeEscape.beforeDispatch = describeFocus();
     // Exercise Gecko's native popup key handling, not a synthetic DOM event
     // whose default action cannot close an operating-system-backed menu.
