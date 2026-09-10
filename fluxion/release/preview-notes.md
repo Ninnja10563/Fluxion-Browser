@@ -18,6 +18,8 @@ Version 0.52 improves workspace continuity and exact Memory recall:
   text selection through cross-window changes until the user commits the edit;
 - retain usable focus during workspace reordering and move it safely after a
   focused workspace is deleted;
+- preserve newer workspace edits made while deletion confirmation is open,
+  and stop deletion if its agreed tab destination changes;
 - rank each Memory URL once across duplicate sources, with one strongest
   semantic signal and explicit priority for exact title/URL matches;
 - keep older exact matches eligible before candidate limits, with native

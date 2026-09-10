@@ -145,7 +145,7 @@ test("Workspace settings mutate the shared controller and prove safe native-tab 
   assert.match(settings, /FluxionWorkspacesChanged/);
   assert.match(palette, /Workspace settings/);
   assert.match(chrome, /Services\.wm\.getEnumerator\("navigator:browser"\)/);
-  assert.match(chrome, /migrateWorkspaceTabs\(id, result\.fallbackId\)/);
+  assert.match(chrome, /migrateWorkspaceTabs\(id, latest\.fallbackId\)/);
   assert.match(chrome, /Services\.prefs\.addObserver\(PREF_WORKSPACES/);
   assert.match(macVerifier, /FLUXION_VISUAL_WORKSPACE_SETTINGS_TEST=1/);
   assert.match(macVerifier, /live-controls-persisted-and-tabs-migrated/);

@@ -1247,11 +1247,20 @@
         : `Delete “${workspace.name}”?`,
     );
     if (!confirmed) return false;
-    for (const browserWindow of Services.wm.getEnumerator("navigator:browser")) {
-      browserWindow.FluxionUI?.migrateWorkspaceTabs(id, result.fallbackId);
+    // Native confirmation runs a nested event loop: another window may edit
+    // workspaces before it returns. Keep fresh definitions and require the
+    // same migration destination the user agreed to.
+    const latest = FluxionWorkspaces.removeWorkspace(workspaces, id);
+    if (!latest || latest.fallbackId !== result.fallbackId) {
+      if (options.confirm !== false) Services.prompt.alert(window, "Workspaces Changed",
+        "The workspace or its destination changed while confirmation was open. Review the workspaces and try again.");
+      return false;
     }
-    if (currentWorkspace === id) currentWorkspace = result.fallbackId;
-    saveWorkspaces(result.items);
+    for (const browserWindow of Services.wm.getEnumerator("navigator:browser")) {
+      browserWindow.FluxionUI?.migrateWorkspaceTabs(id, latest.fallbackId);
+    }
+    if (currentWorkspace === id) currentWorkspace = latest.fallbackId;
+    saveWorkspaces(latest.items);
     switchWorkspace(currentWorkspace);
     return true;
   }
