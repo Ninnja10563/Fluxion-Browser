@@ -383,7 +383,8 @@ test("Appearance switches live Gecko themes and stays searchable from the palett
   assert.match(theme, /applyChain\.catch\(\(\) => \{\}\)\.then/);
   assert.match(settings, /id = "fluxion-theme-choice"/);
   assert.match(settings, /FluxionTheme\.set\(value\)/);
-  assert.match(chrome, /--fluxion-flow-layout-width: 232px/);
+  assert.match(chrome, /--fluxion-sidebar-width: 232px/);
+  assert.match(chrome, /--fluxion-flow-layout-width: var\(--fluxion-sidebar-width\)/);
   assert.match(chrome, /--fluxion-flow-layout-width: 44px/);
   assert.match(chrome, /--fluxion-flow-layout-width: 3px/);
   assert.match(settings, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);

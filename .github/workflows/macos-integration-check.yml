@@ -46,6 +46,20 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-flow.sh '.runtime/Fluxion.app'
 
+      - name: Check native sidebar resizing and saved width
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_SIDEBAR_WIDTH_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-sidebar-width-evidence
+        run: ./fluxion/scripts/verify-macos-sidebar-width.sh '.runtime/Fluxion.app'
+
+      - name: Preserve sidebar sizing evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-sidebar-width-diagnostic
+          path: ${{ runner.temp }}/fluxion-sidebar-width-evidence
+          if-no-files-found: warn
+
       - name: Check packaged Settings shortcut capture and cross-window saves
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: ./fluxion/scripts/verify-macos-shortcuts.sh '.runtime/Fluxion.app'

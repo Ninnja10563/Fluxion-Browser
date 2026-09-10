@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.55.0";
-  const PRODUCT_RELEASE = "0.55.0-preview.1";
+  const PRODUCT_VERSION = "0.56.0";
+  const PRODUCT_RELEASE = "0.56.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -39,6 +39,7 @@
       position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
       inset-inline-end: 0; z-index: 3; min-width: 0;
       display: flex; color: var(--fluxion-ink); background: var(--fluxion-bg-raised); overflow: hidden;
+      container: fluxion-settings / inline-size;
       font: menu; font-size: 13px;
     }
     .fluxion-settings-nav {
@@ -90,6 +91,7 @@
     .fluxion-shortcut-key[data-capturing="true"] { border-color: var(--fluxion-accent); color: var(--fluxion-muted); }
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    #fluxion-sidebar-width-controls { grid-template-columns: minmax(0, 1fr) auto; }
     .fluxion-workspace-create {
       display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 7px;
       align-items: center; margin-bottom: 18px;
@@ -167,6 +169,21 @@
       .fluxion-settings-workspace-actions { grid-column: 1 / -1; }
       .fluxion-permission-row { grid-template-columns: minmax(100px, 1fr) auto auto; }
       .fluxion-permission-expiry { display: none; }
+    }
+    /* Flow changes the usable Settings width independently of the window.
+       Keep these after viewport fallbacks so a wide rail cannot clip fields. */
+    @container fluxion-settings (max-width: 700px) {
+      .fluxion-settings-nav { flex-basis: 140px; width: 140px; min-width: 140px; padding-inline: 10px; }
+      .fluxion-settings-main { min-width: 0; padding-inline: 20px; }
+      .fluxion-setting { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+      .fluxion-setting-copy { min-width: 0; overflow-wrap: anywhere; }
+      .fluxion-switch { justify-self: start; }
+    }
+    @container fluxion-settings (max-width: 480px) {
+      .fluxion-settings-nav button { height: auto; min-height: 31px; padding-block: 6px; }
+      .fluxion-settings-nav { flex-basis: 120px; width: 120px; min-width: 120px; padding-inline: 6px; }
+      .fluxion-settings-main { padding-inline: 12px; }
+      .fluxion-settings-nav button { padding-inline: 6px; }
     }
     @media (prefers-reduced-motion: reduce) { #fluxion-settings * { scroll-behavior: auto !important; } }
   `;
@@ -378,6 +395,60 @@
   ], FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")), value => {
     window.FluxionUI.setSidebarState(value);
   }));
+  const widthService = window.FluxionSidebarWidth;
+  const widthBounds = widthService?.bounds || { min: 180, max: 420, default: 232 };
+  const widthControls = create("div", "fluxion-settings-actions");
+  widthControls.id = "fluxion-sidebar-width-controls";
+  const widthChoice = create("input", "fluxion-settings-control");
+  widthChoice.id = "fluxion-sidebar-width-choice";
+  widthChoice.type = "number";
+  widthChoice.min = String(widthBounds.min);
+  widthChoice.max = String(widthBounds.max);
+  widthChoice.step = "1";
+  widthChoice.setAttribute("aria-label", "Sidebar width");
+  const widthReset = create("button", "fluxion-settings-button", "Reset");
+  widthReset.id = "fluxion-sidebar-width-reset";
+  widthReset.type = "button";
+  widthReset.setAttribute("aria-label", `Reset sidebar width to ${widthBounds.default} pixels`);
+  widthChoice.disabled = widthReset.disabled = !widthService;
+  widthControls.append(widthChoice, widthReset);
+  row(appearance, "Sidebar width", `Expanded Flow width in pixels (${widthBounds.min}–${widthBounds.max}). Narrow windows may display a smaller width.`, widthControls);
+  widthChoice.setAttribute("aria-describedby", widthControls.getAttribute("aria-describedby"));
+  let widthDraft = false;
+  function syncSidebarWidth() {
+    if (!widthDraft) widthChoice.value = String(widthService?.preferredWidth() ?? widthBounds.default);
+  }
+  widthChoice.addEventListener("input", () => { widthDraft = true; });
+  widthChoice.addEventListener("change", () => {
+    const raw = widthChoice.value.trim(), value = Number(raw);
+    widthDraft = false;
+    if (!raw || !Number.isInteger(value) || value < widthBounds.min || value > widthBounds.max || widthChoice.validity?.badInput) {
+      syncSidebarWidth();
+      setNote(`Enter a whole number from ${widthBounds.min} to ${widthBounds.max} pixels.`, "appearance");
+      return;
+    }
+    try {
+      widthService.setWidth(value);
+      setNote("Sidebar width saved.", "appearance");
+    }
+    catch (error) { setNote(`Sidebar width could not be saved: ${error.message}`, "appearance"); }
+    syncSidebarWidth();
+  });
+  widthChoice.addEventListener("keydown", event => {
+    if (event.key !== "Escape") return;
+    event.preventDefault(); event.stopPropagation();
+    widthDraft = false;
+    syncSidebarWidth();
+  });
+  widthReset.addEventListener("click", () => {
+    widthDraft = false;
+    try {
+      widthService.resetWidth();
+      setNote(`Sidebar width reset to ${widthBounds.default} pixels.`, "appearance");
+    }
+    catch (error) { setNote(`Sidebar width could not be reset: ${error.message}`, "appearance"); }
+    syncSidebarWidth();
+  });
   const densityChoice = row(appearance, "Tab density", "Adjust the vertical rhythm of tabs in Flow.", select([
     ["compact", "Compact"], ["standard", "Standard"], ["roomy", "Roomy"],
   ], FluxionSettings.normaliseDensity(pref.string("fluxion.tabs.density", "standard")), value => {
@@ -389,7 +460,7 @@
   }));
 
   const livePreferenceNames = ["browser.startup.page", "browser.startup.homepage", "fluxion.newtab.url",
-    "browser.link.open_newwindow", "fluxion.sidebar.state", "fluxion.tabs.density", "fluxion.animations.enabled"];
+    "browser.link.open_newwindow", "fluxion.sidebar.state", "fluxion.sidebar.width", "fluxion.tabs.density", "fluxion.animations.enabled"];
   const lastDisplayed = new WeakMap();
   let livePreferencesDisposed = false;
   function syncChoice(control, value) {
@@ -405,6 +476,7 @@
     if (livePreferencesDisposed) return;
     syncChoice(startupChoice, FluxionSettings.startupPage(pref.int("browser.startup.page", 1)));
     syncChoice(sidebarChoice, FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")));
+    syncSidebarWidth();
     syncChoice(densityChoice, FluxionSettings.normaliseDensity(pref.string("fluxion.tabs.density", "standard")));
     linksChoice.querySelector("input").checked = pref.int("browser.link.open_newwindow", 3) !== 2;
     motionChoice.querySelector("input").checked = pref.bool("fluxion.animations.enabled", true);

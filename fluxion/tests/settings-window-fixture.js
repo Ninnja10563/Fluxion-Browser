@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth } = {}) {
   const preferences = new Map(saved);
   const elements = [];
   class Element {
@@ -70,6 +70,13 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     getBoolPref: (_, fallback) => fallback, getIntPref: (_, fallback) => fallback,
     getStringPref: (key, fallback) => preferences.get(key) ?? fallback,
     setStringPref: (key, value) => preferences.set(key, value), savePrefFile() {},
+  };
+  window.FluxionSidebarWidth = sidebarWidth || {
+    bounds: { min: 180, max: 420, default: 232 },
+    preferredWidth: () => prefs.getIntPref("fluxion.sidebar.width", 232),
+    effectiveWidth: () => 232,
+    setWidth: value => prefs.setIntPref?.("fluxion.sidebar.width", value),
+    resetWidth: () => prefs.setIntPref?.("fluxion.sidebar.width", 232),
   };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,

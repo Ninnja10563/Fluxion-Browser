@@ -994,6 +994,29 @@ tabs, repeats a click at the exact coordinates, and blocks packaging unless
 only the intended tab closes, the following row stays fixed until movement,
 and the held row then compresses away.
 
+## Sidebar sizing ownership
+
+`core/sidebar-width.js` defines the preferred-width bounds and direction-aware
+keyboard arithmetic. `fluxion-sidebar-width.js` owns the privileged separator,
+pointer capture, shared preference observation and responsive geometry. The
+saved preference is distinct from the effective width of each window: reducing
+available page space never writes a narrower global preference.
+
+Pointer previews update one CSS width variable at most once per animation
+frame and do not save preferences. A matching trusted release commits once;
+Escape, capture loss, deactivation, mode changes, external preference edits and
+teardown discard the preview. Gesture identity invalidates queued frames.
+The final pointer width is resolved before ordinary width transitions resume.
+Only the system-principal handle can initiate a gesture; no webpage-facing
+API or content actor is added.
+
+Expanded Flow and its non-reflowing Focus overlay use the same width. Compact
+and Focus rails retain their separate fixed geometry. Settings and Library
+offsets follow the layout width, and named CSS container queries adapt their
+controls to the space actually left beside Flow, rather than viewport width
+alone. The dedicated packaged gate checks native keys, Gecko-routed pointer
+capture, cross-window geometry, narrow content bounds and clean relaunch.
+
 ## Native tab-status ownership
 
 Flow derives page activity exclusively from Gecko's native tab state:

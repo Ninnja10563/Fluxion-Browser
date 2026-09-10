@@ -8,6 +8,20 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.56 is an unreleased sidebar-sizing candidate:
+
+- resize expanded Flow or its revealed Focus overlay from a narrow inner edge;
+- preview pointer movement without writing preferences until release, and
+  cancel with Escape or when the gesture loses ownership;
+- resize with arrow keys, Home and End, including right-to-left interfaces;
+- enter a saved width in Appearance or reset to the 232 pixel default;
+- synchronize saved widths across windows while preserving active field drafts;
+- retain the preferred width when a smaller window temporarily limits layout;
+- keep compact and hidden Focus rail sizes unchanged.
+
+This candidate must pass the new packaged pointer/keyboard, geometry and
+relaunch gate alongside every existing release check before publication.
+
 Version 0.55 is a published interaction-quality preview:
 
 - retain the original tab selection for a menu command, refusing stale tabs,

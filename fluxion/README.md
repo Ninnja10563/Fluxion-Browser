@@ -8,6 +8,13 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+The 0.56 candidate adds adjustable Flow width: drag its inner edge, use the
+keyboard separator, or enter a pixel width in Appearance. Changes persist across
+windows and launches, while narrower windows limit only the displayed width.
+Native verification is pending; this candidate has no published DMG yet.
+
+## Published preview
+
 [Fluxion 0.55](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.55.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 Menu commands retain their original targets and refuse stale ones; tab search
@@ -279,6 +286,15 @@ Use the `+` beside the workspace strip to create a workspace. Right-click a
 workspace name or symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
+
+In the 0.56 candidate, drag Flow's inner edge to resize the expanded sidebar
+or its revealed Focus overlay. Release to save; Escape cancels the current
+drag. Double-click the edge to reset to 232 pixels. The keyboard-focusable
+separator supports Left/Right (8 pixels), Shift+Left/Right (24 pixels), Home
+(minimum) and End (available maximum); arrows follow the interface direction.
+Appearance also provides **Sidebar width** and **Reset** controls, with a
+180–420 pixel saved range. Compact and Focus retain their 44/3 pixel rails.
+Narrowing a window does not overwrite your saved width.
 
 Right-click a Flow tab or group heading and choose
 **Move to Window**. Choose an existing window or **New Window**; the existing

@@ -44,6 +44,7 @@
       position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
       inset-inline-end: 0; z-index: 3; min-width: 0; display: flex; flex-direction: column;
       color: var(--fluxion-ink); background: var(--fluxion-bg-raised); font: menu; font-size: 13px;
+      container: fluxion-library / inline-size;
     }
     .fluxion-library-header {
       min-height: 62px; display: grid; grid-template-columns: auto minmax(180px, 420px) auto;
@@ -111,10 +112,25 @@
     .fluxion-library-page-label { color: var(--fluxion-muted); font-size: 11px; }
     .fluxion-library-empty { padding: 48px 8px; color: var(--fluxion-muted); text-align: center; }
     .fluxion-library-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 11px; }
-    @media (max-width: 820px) {
-      .fluxion-library-header { grid-template-columns: 1fr; gap: 8px; padding: 12px 18px; }
-      .fluxion-library-nav { flex-basis: 130px; min-width: 130px; }
-      .fluxion-library-content { min-width: 360px; padding-inline: 20px; }
+    @container fluxion-library (max-width: 700px) {
+      .fluxion-library-header { grid-template-columns: auto minmax(0, 1fr); gap: 8px 12px; padding: 12px 16px; }
+      .fluxion-library-search { min-width: 0; }
+      .fluxion-library-private { grid-column: 1 / -1; }
+      .fluxion-library-nav { flex-basis: 120px; min-width: 120px; padding: 20px 8px; }
+      .fluxion-library-content { min-width: 0; padding-inline: 16px; }
+      .fluxion-library-section-tools { max-width: 100%; }
+      .fluxion-library-folder-select { min-width: 0; max-width: 100%; }
+      .fluxion-library-pagination { gap: 6px; }
+    }
+    @container fluxion-library (max-width: 480px) {
+      .fluxion-library-nav button { height: auto; min-height: 32px; padding-block: 6px; }
+      .fluxion-library-header { gap: 10px; padding-inline: 12px; }
+      .fluxion-library-nav { flex-basis: 112px; min-width: 112px; padding-inline: 6px; }
+      .fluxion-library-content { padding-inline: 12px; }
+      .fluxion-library-row:has(.fluxion-library-actions .fluxion-library-action:not([hidden])) {
+        grid-template-columns: minmax(0, 1fr); gap: 7px;
+      }
+      .fluxion-library-actions { flex-wrap: wrap; }
     }
   `;
   document.documentElement.appendChild(style);

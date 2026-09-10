@@ -65,7 +65,9 @@ controls work and its failure paths have been tested.
   remain)
 - live General/Appearance preference controls with unsaved-draft preservation
   (implemented; two-window packaged verification passed); adjustable
-  expanded sidebar width remains unimplemented
+  expanded/Focus-overlay width with pointer cancellation, keyboard access,
+  draft-safe Settings, shared preferences and responsive bounds is implemented
+  in the 0.56 candidate, with native validation pending
 - Settings-owned shortcut capture and collision-aware customized-map loading,
   including valid swaps/cycles and cross-window preference synchronization
   (implemented; packaged DOM-event integration gate added)
