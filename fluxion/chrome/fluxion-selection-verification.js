@@ -12,6 +12,10 @@
   const original = gBrowser.selectedTab;
   const report = { selections: 0, untouchedRowWrites: 0, unchangedAttributeWrites: 0, rowStructuralChanges: 0, checks: [] };
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
+  function isRovingDemotion({ type, attribute, before, after, target, previous, destination, selected }) {
+    return type === "attributes" && attribute === "tabindex" && before === "0" && after === "-1" &&
+      target === previous && target !== selected && destination === selected && selected?.tabIndex === 0;
+  }
   const frame = () => new Promise((resolve, reject) => {
     const timer = window.setTimeout(() => reject(new Error("Selection frame exceeded 2 seconds")), 2000);
     window.requestAnimationFrame(() => { window.clearTimeout(timer); resolve(); });
@@ -76,15 +80,23 @@
     observer = new window.MutationObserver(records => mutations.push(...records));
     observer.observe(flow, { attributes: true, attributeOldValue: true, childList: true, characterData: true, subtree: true });
     const drain = () => { mutations.push(...observer.takeRecords()); const records = mutations; mutations = []; return records; };
+    const containerOf = element => element?.closest(".fluxion-pinned-tabs") || tree;
+    const rovingSnapshot = () => new Map([tree, flow.querySelector(".fluxion-pinned-tabs")].filter(Boolean)
+      .map(container => [container, [...container.querySelectorAll('[role="treeitem"], .fluxion-tab')]
+        .find(element => element.tabIndex === 0 && !element.closest("[hidden]"))]));
+    let previousRoving = rovingSnapshot();
     const rebase = async () => {
       await settle(); drain(); baseline = rows();
       closeButtons = new Map([...baseline].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
+      previousRoving = rovingSnapshot();
     };
     const verify = changed => {
       const current = rows();
       assert([...baseline].every(([tab, row]) => current.get(tab) === row && row.querySelector(".fluxion-close") === closeButtons.get(tab)),
         "Selection replaced native Flow row or close-control identity");
       const records = drain(), values = new Map(), afterValues = new Map();
+      const currentRoving = rovingSnapshot(), selectedRow = current.get(gBrowser.selectedTab);
+      const destinationContainer = containerOf(selectedRow);
       // Reconstruct each write, not merely its final batch value: a legitimate
       // false→true→false sequence must not be mistaken for a no-op write.
       for (let i = records.length - 1; i >= 0; i--) {
@@ -98,7 +110,13 @@
       for (const mutation of records) {
         const element = mutation.target.nodeType === 1 ? mutation.target : mutation.target.parentElement;
         const row = element?.closest?.(".fluxion-tab");
-        if (row && !changed.has(row._fluxionTab)) {
+        const rovingDemotion = row && element === row && containerOf(row) === destinationContainer && isRovingDemotion({
+          type: mutation.type, attribute: mutation.attributeName, before: mutation.oldValue, after: afterValues.get(mutation),
+          target: row, previous: previousRoving.get(destinationContainer), destination: currentRoving.get(destinationContainer), selected: selectedRow,
+        });
+        if (rovingDemotion) (report.rovingDemotions ||= []).push({ from: fixtures.indexOf(row._fluxionTab),
+          to: fixtures.indexOf(gBrowser.selectedTab), container: destinationContainer === tree ? "tree" : "pinned", before: "0", after: "-1" });
+        if (row && !changed.has(row._fluxionTab) && !rovingDemotion) {
           report.untouchedRowWrites++;
           report.firstUntouchedMutation ||= { type: mutation.type, attribute: mutation.attributeName, label: row._fluxionTab?.label,
             target: element?.localName, className: String(element?.className || "") };
@@ -127,6 +145,7 @@
       assert(stops.length === 1, "Selection broke the tree's single roving tab stop");
       const pinned = [...flow.querySelectorAll(".fluxion-pinned-tabs .fluxion-tab")];
       if (pinned.length) assert(pinned.filter(node => node.tabIndex === 0).length === 1, "Pinned strip lost its independent roving stop");
+      previousRoving = currentRoving;
     };
     for (let i = 1; i <= 30; i++) {
       const previous = gBrowser.selectedTab, next = fixtures[i];
