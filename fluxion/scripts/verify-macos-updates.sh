@@ -47,6 +47,7 @@ for ((attempt=0; attempt<240; attempt++)); do
   sleep 0.25
 done
 printf 'Native update verification failed.\n' >&2
+if [[ -n "${FLUXION_UPDATES_SCREENSHOT:-}" ]]; then screencapture -x "$FLUXION_UPDATES_SCREENSHOT" || true; fi
 [[ ! -f "$profile/prefs.js" ]] || grep 'fluxion\.updateVerification\.' "$profile/prefs.js" >&2 || true
 sed -n '1,160p' "$log" >&2
 exit 1

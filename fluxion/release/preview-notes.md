@@ -18,6 +18,8 @@ Version 0.49 adds explicit Fluxion update discovery:
   referrer, with bounded response size and a timeout;
 - show rate-limit and connection failures honestly, preserve a manual releases
   link, and never download or install an update automatically;
+- honor GitHub retry/reset advice across windows so repeated checks during a
+  rate-limit cooldown do not send more requests;
 - verify the actual About action against GitHub in the packaged macOS browser.
 
 Version 0.48 improves live settings and Memory search interaction:

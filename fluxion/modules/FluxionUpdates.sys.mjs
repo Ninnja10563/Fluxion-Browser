@@ -11,6 +11,34 @@ const RELEASES_URL = "https://api.github.com/repos/Ninnja10563/Fluxion-Browser/r
 const MAX_BYTES = 4 * 1024 * 1024;
 const DEADLINE_MS = 10000;
 let inFlight;
+let rateLimit;
+
+function rateLimitAdvice(response) {
+  const now = Date.now();
+  const deadlines = [];
+  const future = deadline => Number.isSafeInteger(deadline) && deadline > now && deadline <= 8640000000000000;
+  const retry = response.headers.get("retry-after")?.trim();
+  if (retry && retry.length <= 128) {
+    const deadline = /^\d+$/.test(retry) ? now + Number(retry) * 1000 : Date.parse(retry);
+    if (future(deadline)) deadlines.push(deadline);
+  }
+  if (response.headers.get("x-ratelimit-remaining")?.trim() === "0") {
+    const reset = response.headers.get("x-ratelimit-reset")?.trim();
+    if (reset && reset.length <= 128 && /^\d+$/.test(reset)) {
+      const deadline = Number(reset) * 1000;
+      if (future(deadline)) deadlines.push(deadline);
+    }
+  }
+  // Store a timestamp, not a timer. Valid long server backoffs cost no resources
+  // and must not be shortened; expiration only permits a later manual check.
+  return { error: "rate-limit", status: response.status,
+    retryAt: deadlines.length ? Math.max(...deadlines) : now + 60000 };
+}
+
+function unavailable(result, installed) {
+  return { state: "unavailable", installed, reason: result.error,
+    ...(result.retryAt ? { retryAt: result.retryAt, status: result.status } : {}) };
+}
 
 async function fetchReleases() {
   const controller = new AbortController();
@@ -24,8 +52,12 @@ async function fetchReleases() {
       headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
     });
     if (timedOut) return { error: "timeout" };
-    if (response.status === 403 || response.status === 429) return { error: "rate-limit" };
-    if (response.status !== 200 || response.redirected || response.url !== RELEASES_URL) return { error: "http" };
+    if (response.redirected || response.url !== RELEASES_URL) return { error: "http" };
+    if (response.status === 403 || response.status === 429) {
+      rateLimit = rateLimitAdvice(response);
+      return rateLimit;
+    }
+    if (response.status !== 200) return { error: "http" };
     const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
     if (!["application/json", "application/vnd.github+json"].includes(type)) return { error: "invalid-response" };
     const length = response.headers.get("content-length");
@@ -64,11 +96,13 @@ async function fetchReleases() {
 export const FluxionUpdates = Object.freeze({
   check(installedRelease, platform = "Darwin") {
     if (platform !== "Darwin") return Promise.resolve(FluxionRelease.select([], installedRelease, platform));
+    if (rateLimit?.retryAt > Date.now()) return Promise.resolve(unavailable(rateLimit, installedRelease));
+    rateLimit = null;
     // Importing this singleton performs no network IO. Only an explicit check
     // starts a request; concurrent browser windows share its bounded response.
     if (!inFlight) inFlight = fetchReleases().finally(() => { inFlight = null; });
     return inFlight.then(result => result.error
-      ? { state: "unavailable", installed: installedRelease, reason: result.error }
+      ? unavailable(result, installedRelease)
       : FluxionRelease.select(result.releases, installedRelease, platform));
   },
 });

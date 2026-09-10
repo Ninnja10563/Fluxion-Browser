@@ -311,8 +311,11 @@ process-shared module; importing it performs no network request. A user action
 fetches only the fixed public GitHub releases endpoint, omitting credentials and
 referrer, rejecting redirects, and bounding the streamed response to 4 MiB and
 100 records. A 10-second deadline aborts the request, including response-body
-reads. Concurrent checks share one request; failures are not cached or retried
-automatically. Rate-limit, malformed-response, and network failures are not
+reads. Concurrent checks share one request; failures are not retried
+automatically. Rate-limit responses create a shared cooldown using GitHub's
+retry/reset advice (one minute when no valid future advice is supplied); checks
+during that interval return the retry time without another network request.
+Other failures are not cached. Rate-limit, malformed-response, and network failures are not
 reported as being up to date.
 
 The pure `FluxionRelease` selector compares full `major.minor.patch-preview.N`

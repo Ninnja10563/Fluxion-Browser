@@ -11,7 +11,9 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 function fixture(fetchImpl, { realValidation = false } = {}) {
   const calls = [], timers = new Map(), selections = [];
   let timerId = 0;
-  const context = vm.createContext({ AbortController, TextDecoder,
+  let now = Date.UTC(2026, 8, 10, 12);
+  class Clock extends Date { static now() { return now; } }
+  const context = vm.createContext({ AbortController, TextDecoder, Date: Clock,
     fetch: (url, options) => { calls.push({ url, options }); return fetchImpl(url, options); },
     setTimeout(callback, delay) { assert.equal(delay, 10000); timers.set(++timerId, callback); return timerId; },
     clearTimeout(id) { timers.delete(id); },
@@ -29,6 +31,7 @@ function fixture(fetchImpl, { realValidation = false } = {}) {
     .replace(/^import .*;\n/gm, "").replace("export const FluxionUpdates", "globalThis.FluxionUpdates");
   vm.runInContext(source, context);
   return { check: context.FluxionUpdates.check, calls, selections, timers,
+    now: () => now, advance(ms) { now += ms; },
     expire() { for (const timer of [...timers.values()]) timer(); } };
 }
 function response(text = "[]", options = {}) {
@@ -73,8 +76,6 @@ test("actual network module and release validator expose only the verified newer
 });
 
 for (const [label, makeResponse, reason] of [
-  ["rate limit", () => response("[]", { status: 429 }), "rate-limit"],
-  ["forbidden", () => response("[]", { status: 403 }), "rate-limit"],
   ["server failure", () => response("[]", { status: 500 }), "http"],
   ["redirected response", () => response("[]", { redirected: true }), "http"],
   ["different final URL", () => response("[]", { url: "https://evil.test/releases" }), "http"],
@@ -118,3 +119,36 @@ test("fetch-stage timeout and unsupported platforms never imply a latest release
   pending.reject(new Error("abort"));
   assert.equal((await first).reason, "timeout"); assert.equal((await second).reason, "timeout");
 });
+
+for (const status of [403, 429]) {
+  test(`${status} applies shared fallback cooldown with no automatic retry`, async () => {
+    const f = fixture(async () => response("[]", { status }));
+    const first = await f.check("0.49.0-preview.1");
+    assert.equal(first.reason, "rate-limit"); assert.equal(first.status, status);
+    assert.equal(first.retryAt, f.now() + 60000);
+    const second = await f.check("0.48.0-preview.1");
+    assert.equal(second.retryAt, first.retryAt); assert.equal(second.installed, "0.48.0-preview.1");
+    assert.equal(f.calls.length, 1); assert.equal(f.timers.size, 0);
+    f.advance(59999); await f.check("0.49.0-preview.1"); assert.equal(f.calls.length, 1);
+    f.advance(1); await settle(); assert.equal(f.calls.length, 1, "expiry cannot fetch automatically");
+    await f.check("0.49.0-preview.1"); assert.equal(f.calls.length, 2);
+  });
+}
+
+for (const [label, headers, milliseconds] of [
+  ["seconds", { "retry-after": "120" }, 120000],
+  ["HTTP date", { "retry-after": "Thu, 10 Sep 2026 12:03:00 GMT" }, 180000],
+  ["later exhausted quota reset", { "retry-after": "120", "x-ratelimit-remaining": "0", "x-ratelimit-reset": String(Date.UTC(2026, 8, 10, 12, 5) / 1000) }, 300000],
+  ["nonexhausted quota ignored", { "x-ratelimit-remaining": "1", "x-ratelimit-reset": String(Date.UTC(2026, 8, 10, 12, 5) / 1000) }, 60000],
+  ["long valid advice honored", { "retry-after": "172800" }, 172800000],
+  ["invalid advice", { "retry-after": "not a date", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1e999" }, 60000],
+  ["out of Date range", { "retry-after": "86400000000000000000" }, 60000],
+  ["past advice", { "retry-after": "Wed, 09 Sep 2026 12:03:00 GMT", "x-ratelimit-remaining": "0", "x-ratelimit-reset": "1000" }, 60000],
+]) {
+  test(`rate-limit ${label} determines a validated future retry timestamp`, async () => {
+    const f = fixture(async () => response("[]", { status: 429, headers: new Headers(headers) }));
+    const result = await f.check("0.49.0-preview.1");
+    assert.equal(result.retryAt, f.now() + milliseconds);
+    assert.equal(result.reason, "rate-limit"); assert.equal(f.selections.length, 0);
+  });
+}

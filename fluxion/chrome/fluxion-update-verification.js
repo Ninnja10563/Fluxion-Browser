@@ -14,17 +14,24 @@
     do { if (predicate()) return; await pause(50); } while (Date.now() < deadline);
     throw new Error(message);
   };
-  const observer = { observe(subject) {
+  const observer = { observe(subject, topic) {
     const channel = subject.QueryInterface(Ci.nsIHttpChannel);
     const url = channel.URI.spec;
-    if (url.startsWith("https://github.com/Ninnja10563/Fluxion-Browser/releases/download/")) report.assetRequests++;
+    if (topic === "http-on-modify-request" && url.startsWith("https://github.com/Ninnja10563/Fluxion-Browser/releases/download/")) report.assetRequests++;
     if (url !== endpoint) return;
+    if (topic === "http-on-examine-response") {
+      const responseHeader = name => { try { return channel.getResponseHeader(name); } catch (_) { return ""; } };
+      report.response = { status: channel.responseStatus, retryAfter: responseHeader("Retry-After"),
+        remaining: responseHeader("X-RateLimit-Remaining"), reset: responseHeader("X-RateLimit-Reset") };
+      return;
+    }
     report.requests++;
     const header = name => { try { return channel.getRequestHeader(name); } catch (_) { return ""; } };
     report.requestHeaders.push({ cookie: Boolean(header("Cookie")), authorization: Boolean(header("Authorization")),
       referrer: Boolean(header("Referer")), method: channel.requestMethod });
   } };
   Services.obs.addObserver(observer, "http-on-modify-request");
+  Services.obs.addObserver(observer, "http-on-examine-response");
   async function run() {
     await SessionStore.promiseAllWindowsRestored;
     const { Downloads } = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");
@@ -54,6 +61,7 @@
     report.installed = get("status").dataset.installed;
     report.latest = get("status").dataset.latest;
     report.message = get("status").textContent;
+    report.retryAt = get("status").dataset.retryAt;
     assert(["current", "available"].includes(state), `Real release check failed: ${report.message}`);
     assert(report.installed === Services.env.get("FLUXION_EXPECTED_RELEASE"), "Installed release or preview channel did not match the product package");
     assert(report.latest && report.message.includes(report.latest), "Latest compatible version was not displayed");
@@ -72,6 +80,7 @@
     Cu.reportError(error);
   }).finally(() => {
     Services.obs.removeObserver(observer, "http-on-modify-request");
+    Services.obs.removeObserver(observer, "http-on-examine-response");
     Services.prefs.setStringPref(`${prefix}.report`, JSON.stringify(report));
     Services.prefs.savePrefFile(null);
   });

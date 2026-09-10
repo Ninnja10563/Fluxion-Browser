@@ -970,6 +970,7 @@
     updateStatus.dataset.state = "checking";
     delete updateStatus.dataset.latest;
     delete updateStatus.dataset.reason;
+    delete updateStatus.dataset.retryAt;
     updateStatus.textContent = "Checking Fluxion releases on GitHub…";
     try {
       const { FluxionUpdates } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionUpdates.sys.mjs");
@@ -986,6 +987,11 @@
           "too-large": "The release list exceeded the safe response size. Open Fluxion releases to check manually.",
         };
         updateStatus.textContent = messages[result.reason] || "The release list could not be retrieved safely. Try again later or open Fluxion releases.";
+        if (result.reason === "rate-limit" && Number.isFinite(result.retryAt)) {
+          updateStatus.dataset.retryAt = String(result.retryAt);
+          const refusal = result.status === 403 ? "GitHub temporarily refused this update check." : "GitHub's request limit was reached.";
+          updateStatus.textContent = `${refusal} Check again after ${new Date(result.retryAt).toLocaleString()}. You can still open Fluxion releases.`;
+        }
       } else if (result.state === "available") {
         availableUpdate = result;
         releases.textContent = "Release notes";

@@ -93,3 +93,15 @@ test("compact release control retains a descriptive name and opens the correct d
   h.click(releases);
   assert.equal(h.opened[1], releaseURL);
 });
+
+test("rate-limit advice displays the server retry time without offering a download", async () => {
+  const h = fixture(); h.click();
+  const retryAt = Date.now() + 120000;
+  h.calls[0].resolve({ state: "unavailable", reason: "rate-limit", status: 403, installed, retryAt }); await settle();
+  assert.equal(h.status.dataset.state, "error");
+  assert.equal(h.status.dataset.retryAt, String(retryAt));
+  assert.match(h.status.textContent, /Check again after/);
+  assert.match(h.status.textContent, /temporarily refused/);
+  assert.equal(h.download.hidden, true);
+  assert.deepEqual(h.opened, []);
+});
