@@ -16,6 +16,9 @@
   const { FluxionMemoryStore } = ChromeUtils.importESModule(
     "resource://fluxion/modules/FluxionMemoryStore.sys.mjs"
   );
+  const { FluxionNativeMemory } = ChromeUtils.importESModule(
+    "resource://fluxion/modules/FluxionNativeMemory.sys.mjs"
+  );
   let manager = null;
   let exclusionSweep = null;
   let indexScheduler = null;
@@ -40,10 +43,11 @@
   }
 
   function embeddingsEnabled() {
-    return enabled() && embeddingProvider() === "gecko-local";
+    return enabled() && embeddingProvider() === "gecko-local" && !FluxionNativeMemory.pending();
   }
 
   function applyEmbeddingFeaturePrefs(active = embeddingsEnabled()) {
+    active = active && !FluxionNativeMemory.pending();
     Services.prefs.setBoolPref("browser.ml.enable", active);
     Services.prefs.setBoolPref("places.semanticHistory.featureGate", active);
     Services.prefs.setBoolPref("places.semanticHistory.removeOnStartup", !active);
@@ -116,15 +120,7 @@
 
   function getManager() {
     if (!manager) {
-      const { getPlacesSemanticHistoryManager } = ChromeUtils.importESModule(
-        "resource://gre/modules/PlacesSemanticHistoryManager.sys.mjs"
-      );
-      manager = getPlacesSemanticHistoryManager({
-        rowLimit: 10000,
-        samplingAttrib: "frecency",
-        changeThresholdCount: 1,
-        distanceThreshold: 0.68,
-      });
+      manager = FluxionNativeMemory.getManager();
     }
     return manager;
   }
@@ -165,7 +161,7 @@
 
   async function applyExclusions() {
     if (!embeddingsEnabled() || !manager || exclusionSweep) return exclusionSweep;
-    exclusionSweep = (async () => {
+    exclusionSweep = FluxionNativeMemory.runMutation(async () => {
       const connection = await manager.getConnection();
       if (!connection) return;
       const rows = await connection.execute(`
@@ -193,20 +189,14 @@
           );
         }
       });
-    })().catch(Cu.reportError).finally(() => { exclusionSweep = null; });
+    }).catch(Cu.reportError).finally(() => { exclusionSweep = null; });
     return exclusionSweep;
   }
 
   async function clearEmbeddingData() {
     let nativeError = null;
     try {
-      const nativeConnection = manager ? await manager.getConnection() : null;
-      if (nativeConnection) {
-        await nativeConnection.executeTransaction(async () => {
-          await nativeConnection.execute("DELETE FROM vec_history");
-          await nativeConnection.execute("DELETE FROM vec_history_mapping");
-        });
-      }
+      await FluxionNativeMemory.purge();
     } catch (error) {
       Cu.reportError(error);
       nativeError = error;
@@ -216,18 +206,18 @@
   }
 
   async function embeddingVectorCounts() {
-    const nativeConnection = manager ? await manager.getConnection() : null;
-    let native = 0;
-    if (nativeConnection) {
-      const rows = await nativeConnection.execute("SELECT count(*) AS count FROM vec_history");
-      native = Number(rows[0]?.getResultByName("count") || 0);
-    }
+    const native = await FluxionNativeMemory.vectorCount();
     return { native, enriched: await FluxionMemoryStore.vectorCount() };
   }
 
-  async function setEmbeddingProvider(value) {
+  function setEmbeddingProvider(value) {
+    return FluxionNativeMemory.runControl(() => applyEmbeddingProvider(value));
+  }
+
+  async function applyEmbeddingProvider(value) {
     if (PrivateBrowsingUtils.isWindowPrivate(window)) return embeddingProvider();
     const next = FluxionSettings.normaliseEmbeddingProvider(value);
+    if (next !== "disabled") await FluxionNativeMemory.recover();
     Services.prefs.setStringPref(PREF_EMBEDDING_PROVIDER, next);
     applyEmbeddingFeaturePrefs(enabled() && next === "gecko-local");
     if (next === "disabled") {
@@ -323,8 +313,13 @@
     };
   }
 
-  async function enable() {
+  function enable() {
+    return FluxionNativeMemory.runControl(enableMemory);
+  }
+
+  async function enableMemory() {
     if (PrivateBrowsingUtils.isWindowPrivate(window)) return false;
+    await FluxionNativeMemory.recover();
     Services.prefs.setBoolPref(PREF_ENABLED, true);
     applyEmbeddingFeaturePrefs();
     Services.prefs.savePrefFile(null);
@@ -340,7 +335,11 @@
     return connection ? "semantic" : "lexical";
   }
 
-  async function clearAndDisable() {
+  function clearAndDisable() {
+    return FluxionNativeMemory.runControl(disableMemory);
+  }
+
+  async function disableMemory() {
     Services.prefs.setBoolPref(PREF_ENABLED, false);
     applyEmbeddingFeaturePrefs(false);
     indexScheduler?.clear();

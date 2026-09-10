@@ -71,6 +71,7 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const queries = [], errors = [], timers = new Map();
   let nextTimer = 0;
   let observerRemoved = false;
+  let placesObserver;
   let progressListener;
   let downloadView;
   const Downloads = { PUBLIC: 1, getList: async () => ({ getAll: async () => [...downloads],
@@ -78,7 +79,7 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const db = { execute: (sql, params) => new Promise((resolve, reject) => queries.push({ sql, params, resolve, reject })) };
   const PlacesUtils = { promiseDBConnection: async () => db,
     bookmarks: { toolbarGuid: "toolbar_____", menuGuid: "menu________", unfiledGuid: "unfiled_____", mobileGuid: "mobile______" },
-    observers: { addListener() {}, removeListener() { observerRemoved = true; } },
+    observers: { addListener(_types, listener) { placesObserver = listener; }, removeListener() { observerRemoved = true; } },
   };
   const window = Object.assign(new Element(), { document,
     setTimeout(fn) { const id = ++nextTimer; timers.set(id, fn); return id; },
@@ -99,6 +100,7 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const byClass = name => elements.find(node => node.className === name);
   const input = byClass("fluxion-library-search");
   return { window, document, queries, errors, timers, input,
+    placesChanged(events) { placesObserver(events); },
     commitURI(uri) { tab.linkedBrowser.currentURI.spec = uri; progressListener.onLocationChange(tab.linkedBrowser); },
     downloadChanged(download) { downloadView.onDownloadChanged(download); },
     list: byClass("fluxion-library-list"), root: document.getElementById("fluxion-library"),
@@ -150,6 +152,44 @@ test("older full Library query results cannot overwrite a newer search", async (
   assert.match(h.list.textContent, /newest/);
   assert.doesNotMatch(h.list.textContent, /obsolete/);
   assert.equal(h.root.dataset.queryState, "ready");
+});
+
+test("background Places updates retain reading geometry and restore owned row focus without stale activation", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("reading", 100)); await settle();
+  const row = h.list.children[20];
+  row.firstChild.focus(); h.content.scrollTop = 1200;
+  h.placesChanged([{ type: "page-title-changed" }]);
+  const timer = [...h.timers.keys()][0];
+  h.placesChanged([{ type: "page-visited" }]);
+  assert.equal([...h.timers.keys()][0], timer, "continuous events retain first refresh deadline");
+  assert.equal(h.list.children[20], row);
+  assert.equal(h.document.activeElement, row.firstChild);
+  assert.equal(h.content.scrollTop, 1200);
+  let prevented = false, stopped = false;
+  h.list.listeners.get("click")[0]({ preventDefault() { prevented = true; }, stopImmediatePropagation() { stopped = true; } });
+  assert.ok(prevented && stopped, "retained stale actions must be blocked");
+  h.flush(); await settle();
+  h.queries[1].resolve(rows("reading", 100).map(row => ({
+    getResultByName: name => name === "title" ? "updated title" : row.getResultByName(name),
+  }))); await settle();
+  assert.ok(h.document.activeElement === h.list.children[20].firstChild);
+  assert.equal(h.content.scrollTop, 1200);
+  assert.match(h.list.textContent, /updated/);
+});
+
+test("deletions clear retained evidence immediately and explicit search cancels background focus recovery", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("private old")); await settle();
+  h.list.children[0].firstChild.focus();
+  h.placesChanged([{ type: "page-title-changed" }]);
+  h.type("new query");
+  assert.doesNotMatch(h.list.textContent, /private old/);
+  h.flush(); await settle();
+  h.queries[1].resolve(rows("new query")); await settle();
+  assert.equal(h.document.activeElement, h.input);
+  h.placesChanged([{ type: "history-cleared" }]);
+  assert.doesNotMatch(h.list.textContent, /new query 0/);
 });
 
 test("superseded page advance cannot steal focus or scroll from a new search", async () => {

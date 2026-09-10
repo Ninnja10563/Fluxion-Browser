@@ -22,3 +22,14 @@ test("sensitive and non-web locations are rejected", () => {
   assert.equal(policy.isSensitiveUrl("file:///Users/person/secret.txt"), true);
   assert.equal(policy.isSensitiveUrl("https://developer.mozilla.org/en-US/docs/Web/API"), false);
 });
+
+test("excluded DNS names retain their boundary with a trailing root dot and Unicode spelling", () => {
+  for (const url of ["https://example.com./article", "https://docs.EXAMPLE.com./guide",
+    "https://www.example.com./", "https://example.com%2e/article"]) {
+    assert.equal(policy.isExcludedUrl(url, ["https://www.example.com./"]), true, url);
+    assert.equal(policy.canIndexPage({ url }, ["example.com"]), false, url);
+  }
+  assert.equal(policy.isExcludedUrl("https://docs.bücher.example./", ["bücher.example"]), true);
+  assert.equal(policy.isExcludedUrl("https://notexample.com./", ["example.com"]), false);
+  assert.equal(policy.isExcludedUrl("https://example.com.evil.invalid./", ["example.com"]), false);
+});

@@ -154,6 +154,49 @@
     select.dispatchEvent(new window.Event("change", { bubbles: true }));
     await query("Fluxion Archive", rows => rows.length === 100 && rows.every(title => title.includes("bookmark")));
     await pages("bookmarks", 550);
+    const content = root.querySelector(".fluxion-library-content");
+    const next = root.querySelector('[aria-label="Next Library page"]');
+    content.scrollTop = 1800;
+    await delay(80);
+    const scrollRect = content.getBoundingClientRect();
+    const nextRect = next.getBoundingClientRect();
+    assert(nextRect.top >= scrollRect.top && nextRect.bottom <= scrollRect.bottom,
+      "Sticky pager is clipped outside the actual deep-scroll viewport");
+    report.assertions.push("sticky-pager-visible-after-deep-scroll");
+
+    const readingRow = root.querySelectorAll(".fluxion-library-row")[25];
+    const readingGuid = readingRow._fluxionLibraryId;
+    const readingTitle = readingRow.querySelector(".fluxion-library-row-title").textContent;
+    const readingControl = readingRow.querySelector(".fluxion-library-open");
+    readingControl.focus({ preventScroll: true });
+    const readingScroll = content.scrollTop;
+    await PlacesUtils.bookmarks.update({ guid: readingGuid, title: `${readingTitle} — refreshed` });
+    await waitFor(() => ready() && titles().includes(`${readingTitle} — refreshed`),
+      "Background bookmark update did not refresh the current reading page");
+    assert(document.activeElement?.closest(".fluxion-library-row")?._fluxionLibraryId === readingGuid,
+      "Background bookmark update lost the user's focused row");
+    assert(Math.abs(content.scrollTop - readingScroll) <= 1,
+      "Background bookmark update moved the reading scroll position");
+    report.assertions.push("background-places-update-preserves-reading-focus-and-scroll");
+
+    const oldWidth = window.outerWidth, oldHeight = window.outerHeight;
+    try {
+      window.resizeTo(920, 800);
+      content.scrollTop = 0;
+      await delay(150);
+      const rect = content.getBoundingClientRect();
+      const tools = root.querySelector(".fluxion-library-section-tools");
+      for (const control of tools.querySelectorAll("button, select")) {
+        if (control.hidden) continue;
+        const bounds = control.getBoundingClientRect();
+        assert(bounds.width > 0 && bounds.left >= rect.left && bounds.right <= rect.right,
+          "Narrow bookmark section clips an actionable control");
+      }
+      assert(content.scrollWidth <= content.clientWidth + 1, "Narrow bookmark controls cause horizontal overflow");
+      report.assertions.push("narrow-bookmark-controls-remain-visible");
+    } finally {
+      window.resizeTo(oldWidth, oldHeight);
+    }
     await query("école mémoire café", rows => rows.length === 1 && rows[0] === bookmarkTarget);
     assert(select.value === folder.guid, "Bookmark search lost its selected folder");
     report.assertions.push("old-bookmark-outside-500-record-cap", "folder-filter-before-limit");

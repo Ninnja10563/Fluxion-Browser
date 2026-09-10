@@ -53,7 +53,8 @@
 
   function isExcludedUrl(value, domains) {
     try {
-      const hostname = new URL(value).hostname.toLocaleLowerCase();
+      // DNS's optional root dot must not bypass the same domain exclusion.
+      const hostname = new URL(value).hostname.toLocaleLowerCase().replace(/\.$/, "");
       return parseExcludedDomains(domains).some(domain => domainMatches(hostname, domain));
     } catch (_) {
       return true;

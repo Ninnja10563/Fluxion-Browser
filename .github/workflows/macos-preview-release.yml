@@ -113,6 +113,11 @@ jobs:
         shell: bash
         run: ./fluxion/scripts/verify-macos-session.sh '.runtime/Fluxion.app'
 
+      - name: Verify native Memory deletion across windows
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: ./fluxion/scripts/verify-macos-memory-privacy.sh '.runtime/Fluxion.app'
+
       - name: Preserve chrome inspection snapshot
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

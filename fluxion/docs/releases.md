@@ -64,7 +64,17 @@ cannot replace Fluxion with Firefox. Extension updates remain independent.
    timestamps, searches older records and Unicode titles beyond the old caps,
    and requires a final search to win over previous pending work. Native history
    deletion and bookmark rename/removal must update the visible results without
-   an explicit Library refresh. A separate Library screenshot is preserved.
+   an explicit Library refresh. Native geometry checks also require a deep-scroll
+   sticky pager, retained reading focus/scroll after a bookmark title update,
+   and unclipped bookmark controls in a narrow window. A separate Library
+   screenshot is preserved.
+   A separate native Memory privacy gate inserts explicit valid tensors tied
+   to actual Places visits and reads both native vector and mapping tables
+   across provider disable/re-enable and clearing from a second window. It
+   retains the real storage connection while disabled, so a null feature-gated
+   accessor cannot masquerade as successful deletion. This is a cleanup test,
+   not model-inference evidence; the real semantic retrieval gate remains
+   separate. Fresh indexing after explicit re-enablement is permitted.
    A separate fresh-profile Flow gate repeats 24 batches of 20 native title/audio
    updates across 200 visible tabs. It requires stable row and control identity,
    scroll, focus, selection, workspace controls, and no structural removals;

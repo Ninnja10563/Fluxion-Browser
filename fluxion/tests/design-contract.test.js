@@ -9,6 +9,7 @@ const root = path.resolve(__dirname, "..");
 const chrome = fs.readFileSync(path.join(root, "chrome/fluxion-chrome.js"), "utf8");
 const palette = fs.readFileSync(path.join(root, "chrome/fluxion-palette.js"), "utf8");
 const memory = fs.readFileSync(path.join(root, "chrome/fluxion-memory.js"), "utf8");
+const nativeMemory = fs.readFileSync(path.join(root, "modules/FluxionNativeMemory.sys.mjs"), "utf8");
 const settings = fs.readFileSync(path.join(root, "chrome/fluxion-settings.js"), "utf8");
 const sleeping = fs.readFileSync(path.join(root, "chrome/fluxion-tab-sleeping.js"), "utf8");
 const peek = fs.readFileSync(path.join(root, "chrome/fluxion-peek.js"), "utf8");
@@ -65,7 +66,7 @@ test("Fluxion settings replace the visible Firefox preferences surface with live
   assert.match(settings, /browser\.startup\.page/);
   assert.match(settings, /SearchService\.sys\.mjs/);
   assert.match(settings, /CHANGE_REASON\.USER/);
-  assert.match(settings, /FluxionMemory\?\.setExcludedDomains/);
+  assert.match(settings, /FluxionMemory\.setExcludedDomains/);
   assert.match(settings, /FluxionDataClearing\.open\(\)/);
   assert.match(settings, /FluxionDataClearing\.openSiteData\(\)/);
   assert.doesNotMatch(settings, /PlacesUtils\.history\.clear|Services\.cookies\.removeAll|Services\.cache2\.clear/);
@@ -538,7 +539,8 @@ test("tab sleeping uses Gecko discard and protects live browsing state", () => {
 });
 
 test("Browser Memory is optional, local, and unavailable in private windows", () => {
-  assert.match(memory, /PlacesSemanticHistoryManager\.sys\.mjs/);
+  assert.match(memory, /FluxionNativeMemory\.sys\.mjs/);
+  assert.match(nativeMemory, /PlacesSemanticHistoryManager\.sys\.mjs/);
   assert.match(memory, /PrivateBrowsingUtils\.isWindowPrivate/);
   assert.match(memory, /fluxion\.memory\.enabled/);
   assert.match(memory, /places\.semanticHistory\.removeOnStartup/);
@@ -555,9 +557,10 @@ test("Browser Memory exposes functional privacy controls", () => {
   assert.match(memory, /DELETE FROM vec_history/);
   assert.match(memory, /excludedDomains/);
   assert.match(memory, /function embeddingProvider\(\)/);
-  assert.match(memory, /async function setEmbeddingProvider/);
+  assert.match(memory, /function setEmbeddingProvider/);
   assert.match(memory, /async function embeddingVectorCounts/);
-  assert.match(memory, /nativeConnection = manager \? await manager\.getConnection\(\) : null/);
+  assert.match(memory, /FluxionNativeMemory\.purge\(\)/);
+  assert.match(memory, /FluxionNativeMemory\.vectorCount\(\)/);
   assert.match(memory, /FluxionMemoryStore\.search\(query, 18, useEmbeddings\)/);
   assert.match(store, /async clearVectors\(\)/);
   assert.match(store, /async vectorCount\(\)/);

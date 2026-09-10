@@ -54,6 +54,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
       ? { embeddingsGeneratorFactory: { forPlaces: createEngine }, EmbeddingsGenerator: {} }
       : { EmbeddingsGenerator: { forPlaces: createEngine } },
     Cu: { reportError: error => errors.push(error) },
+    URL,
     setTimeout(callback) { timers.set(++timerID, callback); return timerID; },
     clearTimeout(id) { timers.delete(id); },
     Services: { prefs: {
@@ -146,6 +147,22 @@ for (const operation of ["clear", "clearVectors", "deleteBlocked", "deleteURLs"]
     assert.equal(writes.some(sql => sql.startsWith("INSERT INTO page_vectors")), false);
   });
 }
+
+test("domain removal erases dotted DNS aliases and their vectors without deleting suffix lookalikes", async () => {
+  const { store, db, operations } = fixture();
+  const urls = ["https://example.com/article", "https://example.com./article",
+    "https://docs.example.com./guide", "https://notexample.com./article",
+    "https://example.com.evil.invalid./article"];
+  const execute = db.execute;
+  db.execute = async sql => sql === "SELECT id,url FROM pages"
+    ? urls.map((url, index) => ({ getResultByName: name => name === "url" ? url : index + 1 }))
+    : execute(sql);
+  await store.deleteBlocked(["example.com"]);
+  for (const table of ["pages", "page_vectors"]) {
+    assert.deepEqual(operations.filter(item => item.sql.startsWith(`DELETE FROM ${table} WHERE`))
+      .map(item => item.parameters.rowid), [1, 2, 3]);
+  }
+});
 
 test("a page extracted before a privacy change cannot be inserted afterwards", async () => {
   const { store, writes } = fixture();

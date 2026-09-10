@@ -406,15 +406,25 @@ inspectable against local browser data.
 Embedding execution is a separate persisted choice from Browser Memory
 storage. `gecko-local` enables Gecko's on-device semantic-history and ML feature
 gates; `disabled` keeps lexical Places and enriched-page recall active while
-skipping every embedding call. Switching to Keywords only deletes vectors from
-both `vec_history` and Fluxion's `page_vectors` table when the native semantic
-connection is active, but retains ordinary history and bounded textual
-evidence. A process that has never opened the semantic manager does not open it
-merely to clear an empty fresh profile; Gecko's `removeOnStartup` flag covers
-any dormant native store. The same choice is applied during autoconfig startup
-before indexing begins, so a keyword-only profile does not briefly start the
-model pipeline. Re-enabling semantic search uses only Gecko's packaged local
-embedder and never routes page data through the generative AI provider.
+skipping every embedding call. Switching to Keywords only deletes native
+`vec_history` vectors and their mappings, plus Fluxion's `page_vectors`, while
+retaining ordinary history and bounded textual evidence. The shared
+`FluxionNativeMemory` adapter accesses native storage independently of the
+manager's feature-gated connection accessor: a disabled accessor returning null
+does not prove the database is empty. Cleanup awaits Gecko's initialization
+before opening its storage-only connection, without enabling the model.
+
+The adapter tracks native embedding/write operations across windows. Purging
+first persists `fluxion.memory.nativePendingRemoval`, disables native feature
+gates, waits for outstanding writes, and then deletes vectors and mappings in
+one transaction. Failed or timed-out cleanup retains that quarantine; enabling
+semantic search must finish recovery first. Autoconfig honors the durable
+barrier and installs the write guard at `profile-after-change` for opted-in
+profiles, before browser-window consumers can begin indexing. These are
+explicit integration contracts with the pinned Gecko manager and must be
+rechecked on upstream updates. Re-enabling semantic search uses only Gecko's
+packaged local embedder; new indexing of retained ordinary history is allowed
+after explicit re-enablement, and never uses a generative AI provider.
 
 The enriched-page store owns its SQLite lifetime explicitly. Before its first
 connection begins opening, the module registers a Gecko
@@ -428,7 +438,9 @@ Firefox excludes private-window visits before they enter Places, and Fluxion
 also refuses Browser Memory operations from private windows. Pages containing
 password fields are rejected before storage. Auth, mail, payment, billing, and
 other obviously sensitive URLs are filtered. User domain
-exclusions are stored as a local preference; excluded vector rows are replaced
+exclusions are stored as a local preference. Exclusion checks and enriched-store
+deletion normalize the optional DNS root dot, so `example.com.` and its
+subdomains cannot bypass an `example.com` exclusion. Excluded vector rows are replaced
 with a content-free sentinel and filtered at query time, preventing the native
 indexer from immediately recreating page-derived vectors while retaining the
 ordinary history record. Clearing Browser Memory disables its feature gates,
@@ -518,6 +530,11 @@ Gecko [Places event notifications](https://raw.githubusercontent.com/mozilla-fir
 refresh the visible affected section after native
 or other-window edits; hidden views defer database work until shown. History
 deletion and bookmark changes cannot repopulate a view from an old response.
+Non-deletion background updates retain reading geometry while blocking actions
+on stale rows, then restore the current item's focus and scroll position.
+Explicit searches and deletion events clear old results immediately. A compact
+sticky pager remains available deep in the list, and bookmark controls wrap
+within narrow windows instead of being clipped.
 
 Folder hierarchy is projected from Places parent GUIDs; Fluxion does not keep a
 parallel folder tree. The toolbar, menu, unfiled, mobile, root, and tag folders

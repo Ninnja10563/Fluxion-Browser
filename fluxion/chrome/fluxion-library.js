@@ -76,9 +76,9 @@
       box-sizing: border-box; flex: 0 1 820px; min-width: 420px;
       padding: 26px 30px 70px; overflow: auto;
     }
-    .fluxion-library-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
+    .fluxion-library-section-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
     .fluxion-library-section-head h2 { margin: 0; font-size: 22px; letter-spacing: -.025em; }
-    .fluxion-library-section-tools { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+    .fluxion-library-section-tools { display: flex; flex-wrap: wrap; min-width: 0; align-items: center; gap: 6px; }
     .fluxion-library-summary { margin-inline-end: 4px; color: var(--fluxion-muted); font-size: 11px; }
     .fluxion-library-folder-select {
       max-width: 190px; height: 28px; border: 1px solid var(--fluxion-line); border-radius: 4px;
@@ -102,7 +102,7 @@
     .fluxion-library-action:hover:not(:disabled) { color: var(--fluxion-ink); background: var(--fluxion-hover); }
     .fluxion-library-action:disabled { opacity: .45; }
     .fluxion-library-action[hidden] { display: none !important; }
-    .fluxion-library-pagination { display: flex; align-items: center; gap: 12px; padding: 0 0 12px; }
+    .fluxion-library-pagination { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 12px 0; background: var(--fluxion-bg-raised); border-bottom: 1px solid var(--fluxion-line); }
     .fluxion-library-page-label { color: var(--fluxion-muted); font-size: 11px; }
     .fluxion-library-empty { padding: 48px 8px; color: var(--fluxion-muted); text-align: center; }
     .fluxion-library-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 11px; }
@@ -183,6 +183,7 @@
   let hasMore = false;
   let loading = false;
   let queryError = "";
+  let retainedPlaces = false;
   let queryTimer = 0;
   let visibleTab = null;
 
@@ -540,6 +541,7 @@
 
   function renderRow(item) {
     const row = create("div", "fluxion-library-row");
+    row._fluxionLibraryId = item.id;
     row.setAttribute("role", "listitem");
     const primary = create("button", "fluxion-library-open");
     primary.type = "button";
@@ -659,6 +661,14 @@
 
   function render() {
     if (root.hidden) return;
+    const restoreReading = retainedPlaces;
+    const focused = document.activeElement;
+    const focusedRow = focused?.closest?.(".fluxion-library-row");
+    const focusedId = focusedRow?._fluxionLibraryId;
+    const focusedPrimary = focusedRow?.firstChild === focused;
+    const focusedLabel = focused?.textContent;
+    const scrollPosition = content.scrollTop;
+    retainedPlaces = false;
     currentSection = tabSection(selectedLibraryTab());
     for (const [id, button] of navButtons) button.setAttribute("aria-current", String(id === currentSection));
     const labels = { history: "History", bookmarks: "Bookmarks", folders: "Bookmark Folders", downloads: "Downloads" };
@@ -685,6 +695,15 @@
       for (const item of items) fragment.appendChild(renderRow(item));
       listNode.appendChild(fragment);
     }
+    if (restoreReading) {
+      if (focusedId) {
+        const row = [...listNode.children].find(node => node._fluxionLibraryId === focusedId);
+        const control = focusedPrimary ? row?.firstChild
+          : [...(row?.children[1]?.children || [])].find(node => node.textContent === focusedLabel);
+        (control || search).focus({ preventScroll: true });
+      }
+      content.scrollTop = scrollPosition;
+    }
   }
 
   function renderPageState() {
@@ -703,7 +722,7 @@
     hasMore = false;
   }
 
-  function invalidateQuery({ reset = true, keepTimer = false } = {}) {
+  function invalidateQuery({ reset = true, keepTimer = false, retain = false } = {}) {
     refreshToken += 1;
     downloadRefreshToken += 1;
     if (!keepTimer) {
@@ -711,6 +730,13 @@
       queryTimer = 0;
     }
     if (reset) resetPaging();
+    retainedPlaces = retain;
+    if (retain) {
+      loading = true;
+      queryError = "";
+      renderPageState();
+      return;
+    }
     if (currentSection === "folders") folderPage = [];
     else data[currentSection] = [];
     loading = true;
@@ -814,6 +840,7 @@
       refreshToken += 1;
       downloadRefreshToken += 1;
       window.clearTimeout(queryTimer);
+      retainedPlaces = false;
       loading = false;
     }
   }
@@ -854,18 +881,30 @@
     invalidateQuery();
     queryTimer = window.setTimeout(() => refreshAll(), 140);
   });
+  // Keep reading geometry during background updates, but never permit actions
+  // against a stale Places snapshot. Do not use inert: it discards row focus.
+  for (const eventType of ["click", "auxclick", "keydown"]) {
+    listNode.addEventListener(eventType, event => {
+      if (!retainedPlaces || !loading) return;
+      if (eventType === "keydown" && !["Enter", " "].includes(event.key)) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+    }, true);
+  }
   const onPlacesChanged = events => {
     if (destroyed || root.hidden) return;
     const affected = FluxionLibraryChanges.affected(events);
     if (!affected[currentSection]) return;
     // Keep a first-event deadline: continuous visits must not starve updates.
     // Keyset cursors stay valid when new entries arrive ahead of this page.
-    invalidateQuery({ reset: false, keepTimer: true });
+    const removesEvidence = events.some(event => /removed|cleared|purge/.test(event.type));
+    invalidateQuery({ reset: false, keepTimer: true, retain: !removesEvidence });
     if (!queryTimer) queryTimer = window.setTimeout(() => refreshAll(), 100);
   };
   PlacesUtils.observers.addListener(FluxionLibraryChanges.TYPES, onPlacesChanged);
   window.addEventListener("unload", () => {
     destroyed = true;
+    retainedPlaces = false;
     refreshToken += 1;
     downloadRefreshToken += 1;
     window.clearTimeout(queryTimer);

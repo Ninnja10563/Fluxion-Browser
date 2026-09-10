@@ -525,8 +525,8 @@
   const memoryToggle = toggle("Enabled", Boolean(window.FluxionMemory?.enabled()), async checked => {
     memoryToggle.querySelector("input").disabled = true;
     try {
-      const capability = checked ? await window.FluxionMemory?.enable() : null;
-      if (!checked) await window.FluxionMemory?.clearAndDisable();
+      const capability = checked ? await window.FluxionMemory.enable() : null;
+      if (!checked) await window.FluxionMemory.clearAndDisable();
       setNote(
         checked
           ? capability === "lexical"
@@ -536,9 +536,11 @@
         "search",
       );
     } catch (error) {
-      memoryToggle.querySelector("input").checked = !checked;
       setNote(`Could not update Browser Memory: ${error.message}`, "search");
-    } finally { memoryToggle.querySelector("input").disabled = false; }
+    } finally {
+      memoryToggle.querySelector("input").checked = Boolean(window.FluxionMemory?.enabled());
+      memoryToggle.querySelector("input").disabled = false;
+    }
   });
   row(search, "Browser Memory", "Keep searchable non-private history and bounded page evidence on this Mac.", memoryToggle);
   let embeddingChoiceTask = Promise.resolve("gecko-local");
@@ -547,11 +549,13 @@
     ["disabled", "Keywords only"],
   ], window.FluxionMemory?.embeddingProvider() || "gecko-local", value => {
     embeddingChoiceTask = applyEmbeddingChoice(value);
+    // Keep the task rejectable for callers while handling DOM-dispatched errors.
+    embeddingChoiceTask.catch(Cu.reportError);
   });
   async function applyEmbeddingChoice(value) {
     embeddingChoice.disabled = true;
     try {
-      const saved = await window.FluxionMemory?.setEmbeddingProvider(value) || "gecko-local";
+      const saved = await window.FluxionMemory.setEmbeddingProvider(value);
       embeddingChoice.value = saved;
       setNote(
         saved === "disabled"
@@ -584,18 +588,31 @@
   domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
   domains.addEventListener("change", async () => {
     const next = FluxionSettings.excludedDomains(domains.value);
-    const saved = await window.FluxionMemory?.setExcludedDomains(next) || next;
-    domains.value = saved.join(", ");
-    setNote("Browser Memory exclusions saved.");
+    domains.disabled = true;
+    try {
+      const saved = await window.FluxionMemory.setExcludedDomains(next);
+      domains.value = saved.join(", ");
+      setNote("Browser Memory exclusions saved.", "search");
+    } catch (error) {
+      domains.value = window.FluxionMemory?.excludedDomains().join(", ") || "";
+      setNote(`Could not finish removing excluded data: ${error.message}`, "search");
+    } finally { domains.disabled = false; }
   });
   row(search, "Excluded domains", "These sites are removed from and never added to Browser Memory.", domains);
   const clearMemory = create("button", "fluxion-settings-button danger", "Clear Browser Memory");
   clearMemory.type = "button";
   clearMemory.addEventListener("click", async () => {
     if (!Services.prompt.confirm(window, "Clear Browser Memory", "Delete local Browser Memory evidence and vectors, then turn the feature off?")) return;
-    await window.FluxionMemory?.clearAndDisable();
-    memoryToggle.querySelector("input").checked = false;
-    setNote("Browser Memory was cleared.");
+    clearMemory.disabled = true;
+    try {
+      await window.FluxionMemory.clearAndDisable();
+      setNote("Browser Memory was cleared.", "search");
+    } catch (error) {
+      setNote(`Could not finish clearing Browser Memory: ${error.message}`, "search");
+    } finally {
+      memoryToggle.querySelector("input").checked = Boolean(window.FluxionMemory?.enabled());
+      clearMemory.disabled = false;
+    }
   });
   row(search, "Delete Browser Memory data", "This does not delete ordinary Gecko browsing history.", clearMemory);
 

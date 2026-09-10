@@ -319,7 +319,10 @@ export const FluxionMemoryStore = Object.freeze({
     await removeEvidence(async db => {
       const rows = await db.execute("SELECT id,url FROM pages");
       const blocked = rows.filter(item => domains.some(domain => {
-        try { const host = new URL(item.getResultByName("url")).hostname; return host === domain || host.endsWith(`.${domain}`); } catch (_) { return true; }
+        try {
+          const host = new URL(item.getResultByName("url")).hostname.toLowerCase().replace(/\.$/, "");
+          return host === domain || host.endsWith(`.${domain}`);
+        } catch (_) { return true; }
       }));
       await db.executeTransaction(async () => {
         for (const item of blocked) {

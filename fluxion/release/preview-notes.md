@@ -17,8 +17,14 @@ Version 0.47 makes Library useful beyond recent records:
   title/URL matching plus folder-name search;
 - prevent older asynchronous searches from replacing the current query;
 - refresh visible results after native or other-window history/bookmark edits;
+- preserve reading position during background updates, keep paging controls
+  reachable, and wrap bookmark controls in narrower windows;
 - require real macOS checks over 360 history records and 550 bookmarks, with
-  pagination, older matches, folder isolation, Unicode, and live edit assertions.
+  pagination, older matches, folder isolation, Unicode, and live edit assertions;
+- clear native Memory vectors even after their feature gate is disabled or
+  from another window, with failed cleanup quarantined before re-enablement;
+- close the trailing-dot domain-exclusion bypass and show cleanup failures
+  accurately in Settings.
 
 Version 0.46 strengthens everyday browsing reliability:
 

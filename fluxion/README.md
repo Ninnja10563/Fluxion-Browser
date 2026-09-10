@@ -69,6 +69,8 @@ The current preview is runnable and includes:
   **Gecko on-device semantic** restores private local meaning search;
 - Browser Memory deletion follows Gecko history removal, and pending indexing
   work is invalidated by privacy changes so deleted evidence cannot return;
+- native vector cleanup works across windows with model execution disabled;
+  failed cleanup blocks semantic re-enablement until recovery succeeds;
 - a bounded, deduplicating Browser Memory queue that runs one page at a time
   and yields during user activity, low battery, active media/sharing, or memory
   pressure;
