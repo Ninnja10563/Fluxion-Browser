@@ -9,8 +9,9 @@ API, create DMGs, upload applications, or publish releases. A diagnostic pass
 never replaces the complete release gates below. This allows native debugging
 while a GitHub API cooldown blocks release verification.
 
-macOS milestone builds use `.github/workflows/macos-preview-release.yml` in two
-passes:
+macOS milestone builds use `.github/workflows/macos-preview-release.yml` with a
+verified staging pass followed by publication. The default rebuild/publication
+route and exact-artifact promotion alternative are described below:
 
 Application assembly and the complete native integration verifier are separate
 required CI steps. Independent runtime gates still run when another verifier
@@ -261,6 +262,34 @@ bytes, a guarantee of upstream security currency, or an automatic installer.
    creates the Git tag and GitHub prerelease.
 4. Stream the published DMG back from GitHub and compare its SHA-256 with the
    attached checksum.
+
+### Promoting an already verified staging artifact
+
+An unchanged artifact from a successful staging run may be published directly.
+This preserves the exact tested bytes when a later rebuild encounters an
+external service failure. It does not permit publishing artifacts from failed,
+cancelled, incomplete, or diagnostic-only runs, even at the same source commit.
+
+Before promotion:
+
+- Check the official repository, release workflow path, dispatch event, full
+  source SHA, and completed/success run status. Every required product test and
+  native gate, including real release discovery, must have succeeded in that
+  run; packaging and artifact upload must also have succeeded.
+- Select the one unexpired, exact-version universal artifact belonging to that
+  run. Record its artifact ID and GitHub archive digest. Download it into a new
+  private temporary directory and require exactly the expected DMG and checksum
+  files. Verify the DMG's SHA-256 against its checksum before uploading.
+- Read the version and release notes from the built commit. Never modify or
+  rebuild the downloaded application. Create a new prerelease targeting the
+  built SHA, not a newer documentation or release-administration commit. Do not
+  overwrite an existing tag or release asset.
+- Record the successful run, source SHA, artifact ID, DMG digest, and any later
+  failed rebuild honestly. A later rate-limit failure remains a failure; its
+  checks must not be marked successful or bypassed. Honor the service's retry
+  advice for the failed request; promotion does not retry release discovery.
+- Stream the public DMG back and verify its bytes against the attached checksum
+  and the original staging digest.
 
 DMG creation writes each attempt to a private filename and promotes only a
 completed image. The packager retries bounded `hdiutil` resource-contention
