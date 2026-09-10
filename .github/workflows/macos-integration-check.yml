@@ -62,6 +62,20 @@ jobs:
           FLUXION_SIDEBAR_WIDTH_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-sidebar-width-evidence
         run: ./fluxion/scripts/verify-macos-sidebar-width.sh '.runtime/Fluxion.app'
 
+      - name: Check stable Flow selection in large sessions
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_SELECTION_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-selection-evidence
+        run: ./fluxion/scripts/verify-macos-selection.sh '.runtime/Fluxion.app'
+
+      - name: Preserve Flow selection evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-selection-diagnostic
+          path: ${{ runner.temp }}/fluxion-selection-evidence
+          if-no-files-found: warn
+
       - name: Preserve sidebar sizing evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@v7

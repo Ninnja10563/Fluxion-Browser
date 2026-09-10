@@ -1027,6 +1027,34 @@ creation/renaming, in addition to its original accessible-name checks. Browser
 services and event handlers remain the owners of the actions; CSS changes do
 not introduce replacement state or an alternate settings backend.
 
+## Selection-only Flow updates
+
+Flow distinguishes selection dirtiness from content and structural dirtiness.
+The rendered selection snapshot contains the selected native tab, the current
+workspace and the multi-selected set. A selection frame refreshes the old/new
+selected rows and the symmetric difference of multi-selection, plus affected
+expanded-group and split active indicators. It retains the existing controls,
+listeners and container nodes. Structural dirtiness always takes precedence;
+a workspace mismatch, disconnected selected row or changed collapsed-group
+active-page projection falls back to the full renderer.
+
+Pinned and ordinary tab trees retain independent roving focus entries. The
+final requested or retained focus target is chosen before changing attributes,
+so an unrelated focused row is not temporarily deselected and reselected.
+Pointer-close holds retain their existing deferred structural behavior.
+
+Workspace marker reconciliation still reads authoritative SessionStore values
+across the workspace, including restoration repairs. Only values that actually
+change are written; a failed read still attempts repair. This reduces writes,
+not the O(N) marker-read cost, and does not add a shadow session cache.
+
+The separate selection verifier uses 1,000 real native tabs (40 eagerly created
+browsers and the remainder lazy), repeated ordinary selection and multi-select
+operations, and real Flow activation handlers. Identity, mutation and focus
+assertions are distinct from hosted event-to-frame timings. Group, pin and
+split transitions remain part of that gate rather than being inferred from
+plain tabs alone.
+
 ## Native tab-status ownership
 
 Flow derives page activity exclusively from Gecko's native tab state:

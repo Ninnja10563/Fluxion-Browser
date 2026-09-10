@@ -8,11 +8,16 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+The 0.58 candidate targets stable tab switching in large sessions: updating
+selection without rebuilding unchanged Flow rows and avoiding redundant
+workspace-session marker writes. Native verification is pending; the published
+DMG remains 0.57.
+
+## Latest published changes
+
 Fluxion 0.57 adapts every Settings section to narrow windows, including workspace
 editing, permission decisions and keyboard shortcuts. Permission expiry remains
 visible, and reset controls identify their exact origin and browsing context.
-
-## Latest published changes
 
 Fluxion 0.56 adds adjustable Flow width: drag its inner edge, use the keyboard
 separator, or enter a pixel width in Appearance. Changes persist across windows

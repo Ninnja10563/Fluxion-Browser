@@ -32,6 +32,11 @@
   let renderQueued = false;
   let structureDirty = true;
   const dirtyTabs = new Set();
+  let selectionDirty = false;
+  let renderedSelectedTab = null;
+  let renderedMultiSelected = new Set();
+  let renderedWorkspace = null;
+  const rovingElements = new Map();
   let workspaceRenderSignature = "";
   let pointerCloseHold = null;
   let renderDeferredForClose = false;
@@ -1032,14 +1037,30 @@
     if (!tab?.parentNode) return false;
     let active = false;
     try { active = SessionStore.getCustomTabValue(tab, TAB_WORKSPACE_ACTIVE) === "true"; }
-    catch (_) { active = tab.getAttribute(TAB_WORKSPACE_ACTIVE) === "true"; }
-    tab.toggleAttribute(TAB_WORKSPACE_ACTIVE, active);
+    catch (error) {
+      Cu.reportError(error);
+      active = tab.hasAttribute(TAB_WORKSPACE_ACTIVE);
+    }
+    if (tab.hasAttribute(TAB_WORKSPACE_ACTIVE) !== active) {
+      tab.toggleAttribute(TAB_WORKSPACE_ACTIVE, active);
+    }
     return active;
   }
 
   function setWorkspaceTabActive(tab, active) {
     if (!tab?.parentNode) return;
-    tab.toggleAttribute(TAB_WORKSPACE_ACTIVE, active);
+    if (tab.hasAttribute(TAB_WORKSPACE_ACTIVE) !== Boolean(active)) {
+      tab.toggleAttribute(TAB_WORKSPACE_ACTIVE, active);
+    }
+    let saved;
+    try {
+      saved = SessionStore.getCustomTabValue(tab, TAB_WORKSPACE_ACTIVE);
+      if (active ? saved === "true" : saved === "" || saved == null) return;
+    } catch (error) {
+      // A failed read is not evidence that the marker is already correct.
+      // Retain the original repair attempt and surface the read failure.
+      Cu.reportError(error);
+    }
     try {
       if (active) SessionStore.setCustomTabValue(tab, TAB_WORKSPACE_ACTIVE, "true");
       else SessionStore.deleteCustomTabValue(tab, TAB_WORKSPACE_ACTIVE);
@@ -1679,8 +1700,7 @@
 
   function focusFlowItem(element) {
     if (!element?.isConnected) return false;
-    for (const candidate of rovingItemsFor(element)) candidate.tabIndex = -1;
-    element.tabIndex = 0;
+    setFlowRovingElement(element);
     element.focus({ preventScroll: true });
     element.scrollIntoView({ block: "nearest" });
     return true;
@@ -1691,7 +1711,7 @@
     if (!tab) return focusFlowItem(element);
     focusTabAfterRender = tab;
     gBrowser.selectedTab = tab;
-    scheduleRender();
+    scheduleRender({ type: "TabSelect" });
     return true;
   }
 
@@ -2048,7 +2068,7 @@
         if (tab.multiselected) gBrowser.lockClearMultiSelectionOnce();
         gBrowser.selectedTab = tab;
       }
-      scheduleRender();
+      scheduleRender({ type: "TabMultiSelect" });
     };
     item.addEventListener("click", select);
     item.addEventListener("auxclick", event => {
@@ -2138,6 +2158,7 @@
     );
     item.dataset.orientation = orientation;
     item.dataset.active = String(Boolean(splitView?.hasActiveTab));
+    item._fluxionSplitView = splitView;
     for (const tab of tabs) item.appendChild(createTabElement(tab, { level }));
     return item;
   }
@@ -2461,6 +2482,13 @@
     if (treeItems.length && !treeItems.some(element => element.tabIndex === 0)) {
       treeItems[0].tabIndex = 0;
     }
+    rovingElements.clear();
+    rovingElements.set("pinned", pinnedRendered.find(element => element.tabIndex === 0));
+    rovingElements.set("tree", treeItems.find(element => element.tabIndex === 0));
+    renderedSelectedTab = gBrowser.selectedTab;
+    renderedMultiSelected = new Set(gBrowser.selectedTabs.filter(tab => tab.multiselected));
+    renderedWorkspace = currentWorkspace;
+    selectionDirty = false;
     const requestedTabFocus = focusTabAfterRender;
     const requestedGroupFocus = focusGroupAfterRender;
     focusTabAfterRender = null;
@@ -2500,6 +2528,62 @@
     }
   }
 
+  function setFlowRovingElement(element) {
+    const key = element.closest(".fluxion-pinned-tabs") ? "pinned" : "tree";
+    const previous = rovingElements.get(key);
+    if (previous !== element && previous?.isConnected && previous.tabIndex !== -1) previous.tabIndex = -1;
+    if (element.tabIndex !== 0) element.tabIndex = 0;
+    rovingElements.set(key, element);
+  }
+
+  function refreshFlowSelection() {
+    const selected = gBrowser.selectedTab;
+    // A collapsed group deliberately projects its active page. Changing that page
+    // changes the row topology, unlike ordinary selection in an expanded group.
+    if (renderedWorkspace !== currentWorkspace || !tabElements.get(selected)?.isConnected ||
+        (selected !== renderedSelectedTab &&
+          (selected?.group?.collapsed || renderedSelectedTab?.group?.collapsed))) return false;
+    const multi = new Set(gBrowser.selectedTabs.filter(tab => tab.multiselected));
+    const changed = new Set([renderedSelectedTab, selected]);
+    for (const tab of renderedMultiSelected) if (!multi.has(tab)) changed.add(tab);
+    for (const tab of multi) if (!renderedMultiSelected.has(tab)) changed.add(tab);
+    const splits = new Set();
+    for (const tab of changed) {
+      const element = tabElements.get(tab);
+      if (!element?.isConnected || !tab?.parentNode) continue;
+      refreshTabElement(tab, element);
+      const split = element.closest(".fluxion-split");
+      if (split) splits.add(split);
+    }
+    for (const split of splits) {
+      const active = String(Boolean(split._fluxionSplitView?.hasActiveTab));
+      if (split.getAttribute("data-active") !== active) split.setAttribute("data-active", active);
+    }
+    for (const group of new Set([renderedSelectedTab?.group, selected?.group])) {
+      const heading = groupElements.get(group);
+      const active = selected?.group === group;
+      if (heading && heading.classList.contains("has-active") !== active) heading.classList.toggle("has-active", active);
+    }
+    const focused = document.activeElement?.closest?.(".fluxion-tab, .fluxion-group-heading");
+    // Keep a keyboard user's existing tree position when native selection changes
+    // elsewhere, without moving focus away from an address field or webpage.
+    const selectedElement = tabElements.get(selected);
+    const requestedElement = tabElements.get(focusTabAfterRender);
+    const retainedElement = requestedElement || focused;
+    const sameFocusContainer = retainedElement?.isConnected &&
+      Boolean(retainedElement.closest(".fluxion-pinned-tabs")) === Boolean(selectedElement.closest(".fluxion-pinned-tabs"));
+    setFlowRovingElement(sameFocusContainer ? retainedElement : selectedElement);
+    if (focusTabAfterRender) {
+      const target = tabElements.get(focusTabAfterRender);
+      focusTabAfterRender = null;
+      if (target) focusFlowItem(target);
+    }
+    renderedSelectedTab = selected;
+    renderedMultiSelected = multi;
+    selectionDirty = false;
+    return true;
+  }
+
   function scheduleRender(event = null) {
     flowMenuSession?.reconcile();
     if (event?.type === "TabClose") {
@@ -2508,7 +2592,9 @@
     }
     const contentOnly = ["TabAttrModified", "TabSharingStateChanged", "FluxionTabSleep", "FluxionPeekChange"]
       .includes(event?.type);
-    if (contentOnly) {
+    if (["TabSelect", "TabMultiSelect"].includes(event?.type)) {
+      selectionDirty = true;
+    } else if (contentOnly) {
       const changed = event.detail?.changed;
       if (event.type === "TabAttrModified" && Array.isArray(changed) && changed.length &&
           !changed.some(name => ["label", "image", "busy", "progress", "pending", "attention", "crashed",
@@ -2536,6 +2622,11 @@
       if (structureDirty || pointerCloseHold) render();
       else {
         renderQueued = false;
+        if (selectionDirty && !refreshFlowSelection()) {
+          render();
+          updateWindowTitle();
+          return;
+        }
         for (const tab of dirtyTabs) {
           const item = tabElements.get(tab);
           if (item?.isConnected && tab.parentNode) refreshTabElement(tab, item);

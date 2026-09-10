@@ -19,6 +19,15 @@ remains independently required. Reports and a narrow Workspace screenshot are
 preserved as Settings layout evidence; these are DOM-driven packaged checks,
 not an assertion of physical OS input or exhaustive screen-reader usability.
 
+The dedicated Flow selection gate creates 1,000 real Gecko tabs, mostly lazy,
+and requires repeated same-workspace selections to retain row and close-control
+identity without rebuilding the list or writing unchanged attributes. It also
+checks multi-selection, the shipped mouse/keyboard activation paths, independent
+pinned/tree roving stops, and group/split projections. Its event-to-frame
+measurements are hosted-runner diagnostics, not proof of physical input latency
+or a particular display refresh rate. Reports are preserved independently of
+the existing background-update and palette-search performance gates.
+
 macOS milestone builds use `.github/workflows/macos-preview-release.yml` with a
 verified staging pass followed by publication. The default rebuild/publication
 route and exact-artifact promotion alternative are described below:

@@ -26,6 +26,7 @@ bash -n \
   scripts/verify-macos-tab-transfer.sh \
   scripts/verify-macos-shortcuts.sh \
   scripts/verify-macos-sidebar-width.sh \
+  scripts/verify-macos-selection.sh \
   scripts/verify-macos-library.sh \
   scripts/verify-macos-workspaces.sh \
   scripts/verify-macos-default-bookmarks.sh \
@@ -74,6 +75,7 @@ node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-sidebar-width.js
 node --check chrome/fluxion-sidebar-width-verification.js
+node --check chrome/fluxion-selection-verification.js
 node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js
 node --check chrome/fluxion-file-picker-verification.js
