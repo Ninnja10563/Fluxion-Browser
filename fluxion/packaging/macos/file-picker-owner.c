@@ -121,14 +121,17 @@ static int type_fixture_path(const char *path, pid_t owner, pid_t approved,
     CGEventSetFlags(up, 0);
     CGEventKeyboardSetUnicodeString(down, 1, &character);
     CGEventKeyboardSetUnicodeString(up, 1, &character);
-    CGEventPostToPid(owner, down);
-    CGEventPostToPid(owner, up);
+    // AppKit's remote panel does not receive events posted to Gecko's PID.
+    // Use the normal session route, just like the driver's System Events keys.
+    // The driver requires the exact owned browser to be foreground beforehand.
+    CGEventPost(kCGSessionEventTap, down);
+    CGEventPost(kCGSessionEventTap, up);
     CFRelease(down);
     CFRelease(up);
     usleep(5000);
   }
   CFRelease(text);
-  printf("Native UTF-16 keyboard path input sent to owned browser %d\n", owner);
+  printf("Native UTF-16 keyboard path input sent for foreground browser %d\n", owner);
   return 0;
 }
 

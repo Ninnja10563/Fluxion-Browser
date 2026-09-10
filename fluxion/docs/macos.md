@@ -102,13 +102,15 @@ UI automation requires a graphical login and the applicable macOS automation
 and accessibility permissions. Missing permission or ambiguous dialog ownership
 fails the check; no replacement picker or file-list injection is used.
 
-macOS renders its open panel in an AppKit helper process. The test builds a
+macOS renders its open panel in an AppKit helper process. The test builds an
 ownership resolver and fixed-fixture Unicode keyboard driver with Xcode's
 `clang` into its temporary directory. Attribution and focus-inspection modes
 are read-only; the input mode accepts only the existing same-user verification
 file under the dedicated temporary fixture directory. It posts paired native
-UTF-16 key events to the exact browser PID, avoiding keyboard-layout conversion
-of the Unicode filename, clipboard changes, and file-list injection.
+UTF-16 key events through the normal session input route after requiring the
+exact browser to be foreground, avoiding keyboard-layout conversion of the
+Unicode filename, clipboard changes, and file-list injection. Events posted
+directly to Gecko's PID do not reach AppKit's remote picker on the CI host.
 It dynamically resolves a private macOS responsibility-PID function and accepts
 only the exact system helper attributed to this browser process, never a shared
 Terminal/CI ancestor. An unavailable function fails closed. This test helper
