@@ -6,6 +6,7 @@ import pathlib
 import re
 import sys
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib.parse import urlsplit
 
 
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 19876
@@ -22,6 +23,24 @@ class OllamaFixture(BaseHTTPRequestHandler):
         self.wfile.write(payload)
 
     def do_GET(self):
+        organisation_pages = {
+            "/organisation/guide": "React learning guide",
+            "/organisation/source": "React source repository",
+            "/organisation/package": "React package",
+        }
+        title = organisation_pages.get(urlsplit(self.path).path)
+        if title:
+            payload = (
+                f"<!doctype html><html lang='en'><meta charset='utf-8'>"
+                f"<title>{title}</title><h1>{title}</h1>"
+                "<p>Controlled page evidence for Fluxion tab organisation.</p></html>"
+            ).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
         if self.path != "/api/tags":
             self.send_json(404, {"error": "not found"})
             return

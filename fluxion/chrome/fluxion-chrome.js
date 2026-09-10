@@ -3441,14 +3441,13 @@
   }
   if (Services.env.get("FLUXION_VISUAL_ORGANISATION_TEST") === "1") {
     const fixtures = [
-      ["https://react.dev/learn?fluxion-organise=guide", "React learning guide"],
-      ["https://github.com/facebook/react?fluxion-organise=source", "React source repository"],
-      ["https://www.npmjs.com/package/react?fluxion-organise=package", "React package"],
+      "http://127.0.0.1:19876/organisation/guide?fluxion-organise=guide",
+      "http://localhost:19876/organisation/source?fluxion-organise=source",
+      "http://127.0.0.1:19876/organisation/package?fluxion-organise=package",
     ];
-    for (const [url, label] of fixtures) {
+    for (const url of fixtures) {
       const tab = gBrowser.addTrustedTab(url, { skipAnimation: true });
       setTabWorkspace(tab, currentWorkspace);
-      tab.setAttribute("label", label);
     }
     scheduleRender();
   }

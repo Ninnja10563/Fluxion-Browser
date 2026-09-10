@@ -1373,9 +1373,14 @@
     }
   }
   function runOrganisationVisualGate(attempt = 0) {
+    const fixtureTabs = [...gBrowser.tabs].filter(tab =>
+      /fluxion-organise=/.test(tab.linkedBrowser?.currentURI?.spec || ""));
+    const pageTitles = new Set(fixtureTabs.map(tab => tab.label));
+    const pagesLoaded = fixtureTabs.length === 3 && fixtureTabs.every(tab => !tab.hasAttribute("busy")) &&
+      ["React learning guide", "React source repository", "React package"].every(title => pageTitles.has(title));
     const suggestion = organisationSuggestion();
     const item = commandItems().find(candidate => candidate.label === "Suggest tab group");
-    if (!suggestion || suggestion.records.length < 3 || !item || !/React/.test(item.detail)) {
+    if (!pagesLoaded || !suggestion || suggestion.records.length < 3 || !item || !/React/.test(item.detail)) {
       if (attempt < 24) {
         window.setTimeout(() => runOrganisationVisualGate(attempt + 1), 250);
         return;

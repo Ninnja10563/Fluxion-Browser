@@ -85,6 +85,7 @@ jobs:
         run: ./fluxion/scripts/verify-macos-session.sh '.runtime/Fluxion.app'
 
       - name: Preserve chrome inspection snapshot
+        if: ${{ always() }}
         uses: actions/upload-artifact@v7
         with:
           name: Fluxion-${{ inputs.version }}-chrome-inspection
