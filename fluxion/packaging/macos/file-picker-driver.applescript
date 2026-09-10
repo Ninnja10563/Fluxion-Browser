@@ -13,7 +13,7 @@ on shortDiagnostic(valueToFormat)
 end shortDiagnostic
 
 on remoteTreeSummary(remoteProcess)
-  set lines to {}
+  set diagnosticLines to {}
   set pendingNodes to {remoteProcess}
   set scanned to 0
   set deadline to (current date) + 20
@@ -59,10 +59,10 @@ on remoteTreeSummary(remoteProcess)
       end try
     end tell
     end timeout
-    set end of lines to lineText
+    set end of diagnosticLines to lineText
   end repeat
   set summary to linefeed & "remoteTree nodes=" & scanned & "; pending=" & (count of pendingNodes) & "; deadlineReached=" & ((current date) >= deadline)
-  repeat with lineText in lines
+  repeat with lineText in diagnosticLines
     set summary to summary & linefeed & (contents of lineText)
   end repeat
   return summary
