@@ -8,6 +8,15 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.64 is a published release-discovery preview. About checks a bounded,
+expiring public feed without depending on GitHub's anonymous repository API.
+The maintainer publisher verifies actual DMG/checksum bytes before advertising
+releases; browser checks remain manual, credential-free and separate from any
+download. Invalid/expired data fails clearly and clears previous download actions.
+All 828 tests and every native release gate passed, including real feed HTTP 200
+and independent release/source/asset comparison. See
+[release provenance](provenance/v0.64.0-preview.1.md).
+
 Version 0.63 is a published group drag-and-drop preview. Move intact groups
 around tabs, groups and splits, or drop either split pane onto a group to move
 the pair. Keyboard group movement traverses all top-level units. Same-document

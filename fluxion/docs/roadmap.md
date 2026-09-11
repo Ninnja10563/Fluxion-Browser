@@ -151,7 +151,10 @@ controls work and its failure paths have been tested.
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)
 - explicit in-app Fluxion release discovery (implemented, with preview-aware
-  version checks, official asset validation, and manual download/installation)
+  version checks, official asset validation, and manual download/installation;
+  published 0.64 replaces anonymous API dependency with a verified, expiring
+  public feed, serialized publication and native independent-release comparison;
+  automatic installation remains unfinished)
 - macOS notarization, Windows signing, Linux packages, and authenticated
   automatic installation/update service
 - signed and notarized Apple Silicon DMGs attached to GitHub Releases for each

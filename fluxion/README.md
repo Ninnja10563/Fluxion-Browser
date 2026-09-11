@@ -8,6 +8,15 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.64 is published: manual update discovery now uses a small, expiring
+public feed instead of GitHub's anonymous repository API. The feed publisher
+verifies actual release assets before advertising them; the browser remains
+anonymous and never downloads an update automatically. All 828 tests and every
+native macOS release gate passed. Download the
+[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.64.0-preview.1)
+for Apple Silicon (including M3) and Intel. See
+[release provenance](release/provenance/v0.64.0-preview.1.md).
+
 Fluxion 0.63 is published: drag whole groups around tabs and split views, move
 split pairs into groups without separating their pages, and keep URL tooltips
 current during same-document navigation. All 801 tests and every native release
@@ -50,6 +59,13 @@ avoid redundant writes and duplicate ownership reads. Broader resource profiling
 and platform accessibility audits remain on the roadmap.
 
 ## Latest published changes
+
+Fluxion 0.64 rejects expired or malformed release metadata without claiming the
+browser is current or retaining an old download action. Checks share one bounded
+request across windows and send no credentials, cookies, referrer or installed-
+version query. A serialized maintainer workflow refreshes the feed after release
+changes and periodically; it verifies public bytes and source identities before
+updating only its dedicated branch. Download and installation remain manual.
 
 Fluxion 0.63 gives whole groups a clear before/after insertion boundary and
 preserves collapsed state. Dragging either split pane onto a group moves both
@@ -103,7 +119,7 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.63](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.63.0-preview.1)
+[Fluxion 0.64](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.64.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 The adjustable sidebar retains compact/Focus rail geometry and cancels an
 unfinished resize with Escape. It includes 0.55's menu, search and Settings

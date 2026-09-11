@@ -1,6 +1,6 @@
 # Verified update channel
 
-The 0.64 candidate uses this feed for manual update discovery. Published 0.63
+The published 0.64 preview uses this feed for manual update discovery. Published 0.63
 and earlier keep their existing explicit GitHub API request; their successful
 native release evidence and shipped binaries have not been changed.
 
@@ -77,8 +77,21 @@ Bootstrap workflow [34597299803](https://github.com/Ninnja10563/Fluxion-Browser/
 passed on producer source `114998f7c7336f0e281d20f5cb93e750613463a4`, publishing
 feed commit `3b90726a5179619c56aaf5fcdd8a12325a977a6b`. A real anonymous fetch
 returned its valid JSON describing public 0.63, generated
-`2026-09-11T12:07:31.131Z`, expiring 24 hours later. This does not yet prove
-the candidate's native Gecko consumption; that remains a release gate.
+`2026-09-11T12:07:31.131Z`, expiring 24 hours later.
+
+The second real publication run
+[34598129536](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/34598129536)
+passed on source `4e2a3cc1c59837dca295d00d3a36d3f48040a3ee`. Feed commit
+`b318113206b34a3f72fde07d6532c7ebe78a0282` has the bootstrap commit as its
+parent, independently confirming an ordinary fast-forward refresh. Full native
+staging [34597750878](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/34597750878)
+subsequently passed the actual Gecko feed request and all release gates.
+
+Publication of 0.64 automatically triggered successful release-event run
+[34598681368](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/34598681368).
+Its feed commit `d46b1ad0431ecad8c896f9e073942edfeffb320e` advertises actual
+public 0.64. A postpublication run of the real update module against the public
+endpoint returned HTTP 200 and the correct available version/source/assets.
 
 ## Browser and native validation
 
