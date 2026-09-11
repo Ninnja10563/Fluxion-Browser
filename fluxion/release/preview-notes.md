@@ -8,6 +8,15 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.63 is a published group drag-and-drop preview. Move intact groups
+around tabs, groups and splits, or drop either split pane onto a group to move
+the pair. Keyboard group movement traverses all top-level units. Same-document
+navigation updates only the affected Flow URL tooltip. All 801 tests and every
+native gate passed, including 30 structural operations on 1,000 tabs and seven
+four-page checks preserving unsaved text and document state without extra loads.
+Real anonymous update discovery, architecture/signature checks and DMG packaging
+passed. See [release provenance](provenance/v0.63.0-preview.1.md).
+
 Version 0.62 is a published grouped-tab stability preview. Surviving tab rows,
 close/audio controls and group headings remain connected through native group
 and split changes. All 770 tests and every combined native gate passed,

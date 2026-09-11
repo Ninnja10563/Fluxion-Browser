@@ -144,7 +144,9 @@ controls work and its failure paths have been tested.
   all combined native gates and packaging passed; published 0.62 extends keyed
   reconciliation to groups and splits with 21 native 1,000-tab operations,
   retained control/heading identity and global visible-order checks;
-  physical-hardware profiling and whole-group drag interaction remain)
+  published 0.63 adds whole-group drag placement and intact split-pair drops
+  into groups, with 30 structural operations and seven real-page state checks;
+  physical-hardware profiling remains)
 - bounded page evidence traversal without DOM cloning or full text-node reads,
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)

@@ -1203,7 +1203,7 @@ including global visible-order assertions, with zero unaffected row writes.
 
 ## Native group dragging
 
-The 0.63 candidate keeps same-window group drag identity in privileged chrome,
+The published 0.63 preview keeps same-window group drag identity in privileged chrome,
 never in a page-readable payload. `FluxionFlowDrag` validates current native
 membership, workspace, pin/closing state and split backreferences both while
 showing feedback and again at drop time. Either pane resolves to its complete
@@ -1228,8 +1228,10 @@ the explicit native-adoption Move to Window menu remains available.
 Gecko retains page/session state, group membership and collapse state. Flow's
 keyed renderer retains surviving controls and heading relationships. The native
 structure verifier exercises actual chrome handlers using DOM DragEvents and a
-Gecko DataTransfer, not physical trackpad input. Candidate native validation is
-required before release; pure and VM tests alone do not prove native behavior.
+Gecko DataTransfer, not physical trackpad input. Full 0.63 staging passed all
+30 structural operations, including seven four-page live-state checks with no
+additional document loads and 24 exact keyboard-owner baselines. Pure and VM
+tests remain separate evidence; physical hardware auditing is still required.
 
 Manual DMG packaging derives its default release from the supplied app's
 bundled Settings constants, parsed as data. It requires the complete release

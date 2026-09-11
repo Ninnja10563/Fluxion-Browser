@@ -8,11 +8,14 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.63 candidate adds whole-group dragging, intact split-pair drops into
-groups, and same-document URL updates. All 801 tests and native browser checks
-passed. It is not yet downloadable: release staging must pass live update
-discovery after GitHub's reported quota reset. 0.62 remains the latest verified
-public DMG. See the [candidate validation record](docs/validation/0.63-candidate.md).
+Fluxion 0.63 is published: drag whole groups around tabs and split views, move
+split pairs into groups without separating their pages, and keep URL tooltips
+current during same-document navigation. All 801 tests and every native release
+gate passed, including 30 structural operations on 1,000 Gecko tabs, live update
+discovery and DMG packaging. Download the
+[universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.63.0-preview.1)
+for Apple Silicon (including M3) and Intel. See
+[release provenance](release/provenance/v0.63.0-preview.1.md).
 
 Fluxion 0.62 is published: stable Flow updates now extend to grouped tabs and
 split views, preserving surviving rows, controls and accessible group headings.
@@ -48,12 +51,19 @@ and platform accessibility audits remain on the roadmap.
 
 ## Latest published changes
 
+Fluxion 0.63 gives whole groups a clear before/after insertion boundary and
+preserves collapsed state. Dragging either split pane onto a group moves both
+pages intact. Move Group Up/Down offers a keyboard-menu equivalent around all
+top-level tabs, groups and splits. Seven native drag scenarios preserve four
+live pages' document identity, unsaved text and navigation state without extra
+loads. Same-document URL changes update only their existing Flow row.
+
 Fluxion 0.62 keeps surviving tab and close/audio nodes connected through native
 group and split changes. Group headings retain their accessible relationships,
 collapsed groups expose only the selected page, and keyboard-focus recovery
 does not steal focus from other controls. Native tests check global visible
 order as well as group order, with zero writes to unaffected rows. Whole-group
-dragging and broader hardware/accessibility profiling remain unfinished.
+dragging follows in 0.63; broader hardware/accessibility profiling remains.
 
 Fluxion 0.61 adds compact named domain lists beside direct exclusions. Unsaved
 drafts survive changes from other windows, conflicting saves are rejected, and
@@ -93,7 +103,7 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.61](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.61.0-preview.1)
+[Fluxion 0.63](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.63.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 The adjustable sidebar retains compact/Focus rail geometry and cancels an
 unfinished resize with Escape. It includes 0.55's menu, search and Settings
