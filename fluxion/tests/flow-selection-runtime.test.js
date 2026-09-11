@@ -17,9 +17,16 @@ function fixture(size = 1000) {
     constructor(className = "") {
       this.classes = new Set(className.split(" ").filter(Boolean)); this.attrs = new Map();
       this.children = []; this.listeners = new Map(); this.writes = 0; this.replacements = 0;
-      this.ownerDocument = document; this.style = { setProperty() {} };
+      const styles = new Map();
+      this.ownerDocument = document; this.style = {
+        setProperty: (key, value) => { this.writes++; styles.set(key, String(value)); },
+        getPropertyValue: key => styles.get(key) || "",
+      };
       this.classList = { contains: key => this.classes.has(key), toggle: (key, on) => {
-        this.writes++; if (on) this.classes.add(key); else this.classes.delete(key);
+        const next = on === undefined ? !this.classes.has(key) : Boolean(on);
+        if (this.classes.has(key) !== next) this.writes++;
+        if (next) this.classes.add(key); else this.classes.delete(key);
+        return next;
       } };
       this.dataset = new Proxy({}, { set: (_, key, value) => {
         this.setAttribute(`data-${key.replace(/[A-Z]/g, c => `-${c.toLowerCase()}`)}`, value); return true;
@@ -33,25 +40,33 @@ function fixture(size = 1000) {
     getAttribute(key) { return this.attrs.get(key) ?? null; }
     hasAttribute(key) { return this.attrs.has(key); }
     removeAttribute(key) { this.attrs.delete(key); }
-    append(...children) { for (const child of children) { child.parentNode = this; this.children.push(child); } }
+    append(...children) { for (const child of children) { child.remove(); child.parentNode = this; this.children.push(child); } }
     appendChild(child) { this.append(child); return child; }
     contains(node) { for (; node; node = node.parentNode) if (node === this) return true; return false; }
     remove() {
       if (!this.parentNode) return;
-      this.parentNode.children.splice(this.parentNode.children.indexOf(this), 1);
-      this.parentNode = null;
+      this.parentNode.removeChild(this);
+    }
+    removeChild(child) {
+      const index = this.children.indexOf(child);
+      if (index < 0) throw new Error("NotFoundError");
+      if (child.contains(document.activeElement)) document.activeElement = null;
+      this.children.splice(index, 1); child.parentNode = null;
+      return child;
     }
     insertBefore(child, before) {
       if (child.parentNode && child.contains(document.activeElement)) document.activeElement = null;
       this.moveBefore(child, before);
     }
     moveBefore(child, before) {
-      child.remove();
+      // Atomic native moveBefore preserves focus, unlike remove/insertBefore.
+      if (child.parentNode) child.parentNode.children.splice(child.parentNode.children.indexOf(child), 1);
       const index = before ? this.children.indexOf(before) : this.children.length;
       this.children.splice(index, 0, child); child.parentNode = this;
       this.moves = (this.moves || 0) + 1;
     }
     replaceChildren(...children) {
+      if (this.contains(document.activeElement)) document.activeElement = null;
       this.replacements++; for (const child of this.children) child.parentNode = null;
       this.children = []; this.append(...children);
     }
@@ -63,8 +78,10 @@ function fixture(size = 1000) {
     }
     closest(selector) { for (let item = this; item; item = item.parentNode) if (item.matches(selector)) return item; return null; }
     querySelectorAll(selector) {
+      if (selector.startsWith(":scope > ")) return this.children.filter(child => child.matches(selector.slice(9)));
       return this.children.flatMap(child => [...(child.matches(selector) ? [child] : []), ...child.querySelectorAll(selector)]);
     }
+    querySelector(selector) { return this.querySelectorAll(selector)[0] || null; }
     addEventListener(type, listener) { this.listeners.set(type, listener); }
     emit(type, options = {}) { this.listeners.get(type)?.({ target: this, preventDefault() {}, stopPropagation() {}, ...options }); }
     focus() { document.activeElement = this; }
@@ -116,6 +133,7 @@ function fixture(size = 1000) {
     describeTab: () => ({ labels: [], indicators: [], audio: null }), splitOrientation: tab => tab.splitview.orientation,
     FluxionFlowNavigation: require("../chrome/core/flow-navigation.js"),
     FluxionFlowTabContent: require("../chrome/core/flow-tab-content.js"),
+    FluxionFlowTree: require("../chrome/core/flow-tree.js"),
     FluxionTabGroups: require("../chrome/core/tab-groups.js"),
     FluxionSplitViews: require("../chrome/core/split-views.js"),
   });
@@ -123,8 +141,8 @@ function fixture(size = 1000) {
   // together. Only browser services and native DOM are supplied by this fixture.
   vm.runInContext(block("  function renderedTreeItems()", "  function clearTabDropFeedback()") +
     block("  function refreshTabElement(", "  function workspaceSymbol(") +
-    block("  function createGroupElement(", "  function renderWorkspaces()") +
-    block("  function stableFlatRowIndices(", "  const popupSet =") +
+    block("  function refreshGroupElement(", "  function renderWorkspaces()") +
+    block("  function reconcileFlowTabs(", "  const popupSet =") +
     block('  for (const eventName of [\n    "TabOpen",', '  on(gBrowser.tabContainer, "TabSelect", () => {'), context);
   const flush = () => { while (frames.length) frames.shift()(); };
   context.render();
@@ -184,7 +202,7 @@ test("expanded group and split active indicators update without replacing wrappe
   assert.deepEqual(f.nodes(), rows);
 });
 
-test("collapsed projections and pending topology changes retain structural fallback", () => {
+test("collapsed projections and pending topology changes retain unrelated row identity", () => {
   const f = fixture(8), group = { id: "g", label: "Research", color: "blue", collapsed: true };
   f.tabs[2].group = f.tabs[3].group = group;
   f.context.scheduleRender(); f.flush();
@@ -198,7 +216,7 @@ test("collapsed projections and pending topology changes retain structural fallb
   const old = f.row(f.tabs[7]);
   f.context.scheduleRender({ type: "TabMove" });
   f.gBrowser.selectedTab = f.tabs[6]; f.flush();
-  assert.notEqual(f.row(f.tabs[7]), old, "grouped workspace still uses full structural fallback");
+  assert.equal(f.row(f.tabs[7]), old, "group membership changes must not rebuild unrelated rows");
 });
 
 test("pinned and ordinary trees keep independent roving stops; external focus is retained", () => {
@@ -344,23 +362,162 @@ test("pin role changes replace only affected row and retain independent tree tab
   assert.equal(f.tabsList.children.filter(row => row.tabIndex === 0).length, 1);
 });
 
-test("native split creation and removal retain full fallback before resuming flat reconciliation", () => {
+test("native split creation and removal retain unrelated and member rows across wrapper changes", () => {
   const f = fixture(12), original = f.row(f.tabs[8]);
+  const member = f.row(f.tabs[2]), close = member._fluxionParts.close;
   const split = { tabs: [f.tabs[2], f.tabs[3]], orientation: "side-by-side", hasActiveTab: false };
   for (const tab of split.tabs) tab.splitview = split;
   f.context.scheduleRender({ type: "SplitViewCreated" }); f.flush();
-  assert.notEqual(f.row(f.tabs[8]), original);
+  assert.equal(f.row(f.tabs[8]), original);
+  assert.equal(f.row(f.tabs[2]), member);
+  assert.equal(f.row(f.tabs[2])._fluxionParts.close, close);
   assert.ok(f.row(f.tabs[2]).closest(".fluxion-split"));
   const grouped = f.row(f.tabs[8]);
   f.context.scheduleRender({ type: "TabMove" }); f.flush();
-  assert.notEqual(f.row(f.tabs[8]), grouped);
+  assert.equal(f.row(f.tabs[8]), grouped);
   for (const tab of split.tabs) delete tab.splitview;
   const beforeRemoval = f.row(f.tabs[8]);
   f.context.scheduleRender({ type: "SplitViewRemoved" }); f.flush();
-  assert.notEqual(f.row(f.tabs[8]), beforeRemoval);
+  assert.equal(f.row(f.tabs[8]), beforeRemoval);
+  assert.equal(f.row(f.tabs[2]), member);
+  assert.equal(f.row(f.tabs[2]).closest(".fluxion-split"), null);
   const flat = f.row(f.tabs[8]);
   f.context.scheduleRender({ type: "TabMove" }); f.flush();
   assert.equal(f.row(f.tabs[8]), flat);
+});
+
+test("grouping and ungrouping retain member controls, adjust hierarchy and preserve exact close focus", () => {
+  const f = fixture(12), member = f.row(f.tabs[2]), neighbor = f.row(f.tabs[9]);
+  const close = member._fluxionParts.close; close.focus();
+  const group = { id: "group-move", label: "Research", color: "blue", collapsed: false };
+  f.tabs[2].group = f.tabs[3].group = group;
+  f.context.scheduleRender({ type: "TabGrouped" }); f.flush();
+  assert.equal(f.row(f.tabs[2]), member);
+  assert.equal(member.getAttribute("aria-level"), "2");
+  assert.equal(f.document.activeElement, close);
+  assert.equal(f.row(f.tabs[9]), neighbor);
+  delete f.tabs[2].group;
+  f.context.scheduleRender({ type: "TabUngrouped" }); f.flush();
+  assert.equal(f.row(f.tabs[2]), member);
+  assert.equal(member.getAttribute("aria-level"), "1");
+  assert.equal(member.closest(".fluxion-group"), null);
+  assert.equal(f.document.activeElement, close);
+  assert.equal(f.row(f.tabs[3]).getAttribute("aria-level"), "2");
+});
+
+test("group metadata updates retain heading/container identity and current counts and focus", () => {
+  const f = fixture(12), group = { id: "metadata", label: "Research", color: "blue", collapsed: false };
+  f.tabs[2].group = f.tabs[3].group = group;
+  f.context.scheduleRender(); f.flush();
+  const heading = f.context.groupElements.get(group), wrapper = heading.parentNode;
+  const content = wrapper.querySelector(".fluxion-group-tabs"), id = content.id;
+  heading.focus(); group.label = "Reference"; group.color = "green"; f.tabs[4].group = group;
+  f.context.scheduleRender({ type: "TabGroupUpdate" }); f.flush();
+  assert.equal(f.context.groupElements.get(group), heading);
+  assert.equal(heading.parentNode, wrapper);
+  assert.equal(wrapper.querySelector(".fluxion-group-tabs"), content);
+  assert.equal(content.id, id);
+  assert.equal(heading.getAttribute("aria-controls"), id);
+  assert.equal(heading.getAttribute("aria-owns"), id);
+  assert.match(heading.getAttribute("aria-label"), /Reference, 3 tabs, expanded/);
+  assert.equal(wrapper.querySelector(".fluxion-group-name").textContent, "Reference");
+  assert.equal(wrapper.querySelector(".fluxion-group-count").textContent, "3");
+  assert.equal(wrapper.style.getPropertyValue("--group-accent"), "#667c69");
+  assert.equal(f.document.activeElement, heading);
+});
+
+test("collapsed grouped split shows only active pane and keeps unaffected headings and rows stable", () => {
+  const f = fixture(12), group = { id: "nested", label: "Comparison", color: "blue", collapsed: false };
+  f.tabs[2].group = f.tabs[3].group = f.tabs[4].group = group;
+  const split = { tabs: [f.tabs[2], f.tabs[3]], hasActiveTab: true };
+  for (const tab of split.tabs) { tab.splitview = split; tab.splitOrientation = "stacked"; }
+  f.gBrowser.selectedTab = f.tabs[2]; f.context.scheduleRender(); f.flush();
+  const member = f.row(f.tabs[2]), heading = f.context.groupElements.get(group), neighbor = f.row(f.tabs[9]);
+  assert.ok(member.closest(".fluxion-split"));
+  group.collapsed = true; f.context.scheduleRender({ type: "TabGroupCollapse" }); f.flush();
+  assert.equal(f.row(f.tabs[2]), member);
+  assert.equal(member.closest(".fluxion-split"), null);
+  assert.equal(f.row(f.tabs[3]), undefined);
+  assert.equal(f.row(f.tabs[4]), undefined);
+  assert.equal(heading.getAttribute("aria-expanded"), "false");
+  assert.equal(heading.parentNode.querySelector(".fluxion-group-count").textContent, "+2");
+  f.gBrowser.selectedTab = f.tabs[3]; f.flush();
+  assert.equal(f.row(f.tabs[2]), undefined);
+  assert.ok(f.row(f.tabs[3]));
+  assert.equal(f.row(f.tabs[3]).closest(".fluxion-split"), null);
+  assert.equal(f.context.groupElements.get(group), heading);
+  assert.equal(f.row(f.tabs[9]), neighbor);
+  group.collapsed = false; f.context.scheduleRender({ type: "TabGroupExpand" }); f.flush();
+  assert.equal(f.row(f.tabs[3]).closest(".fluxion-split").getAttribute("data-orientation"), "stacked");
+  assert.equal(heading.parentNode.querySelectorAll(".fluxion-tab").length, 3);
+});
+
+test("native collapse returns removed child focus to surviving heading without stealing external focus", () => {
+  for (const externalFocus of [false, true]) {
+    const f = fixture(10), group = { id: "focus-fallback", label: "Research", collapsed: false };
+    f.tabs[2].group = f.tabs[3].group = group;
+    f.context.scheduleRender(); f.flush();
+    const heading = f.context.groupElements.get(group);
+    const close = f.row(f.tabs[2])._fluxionParts.close;
+    close.focus();
+    let external;
+    if (externalFocus) { external = new f.Element(); external.root = true; external.focus(); }
+    group.collapsed = true;
+    f.context.scheduleRender({ type: "TabGroupCollapse" }); f.flush();
+    assert.equal(close.isConnected, false);
+    assert.equal(f.document.activeElement, externalFocus ? external : heading);
+    assert.equal(f.context.groupElements.get(group), heading);
+  }
+});
+
+test("split member order and orientation refresh without recreating wrappers or close controls", () => {
+  const f = fixture(10), split = { tabs: [f.tabs[2], f.tabs[3]], hasActiveTab: false };
+  for (const tab of split.tabs) { tab.splitview = split; tab.splitOrientation = "side-by-side"; }
+  f.context.scheduleRender(); f.flush();
+  const first = f.row(f.tabs[2]), second = f.row(f.tabs[3]), wrapper = first.parentNode;
+  const close = first._fluxionParts.close; close.focus();
+  split.tabs.reverse();
+  for (const tab of split.tabs) tab.splitOrientation = "stacked";
+  f.context.scheduleRender({ type: "SplitViewTabChange" }); f.flush();
+  assert.equal(first.parentNode, wrapper); assert.equal(second.parentNode, wrapper);
+  assert.deepEqual(wrapper.children, [second, first]);
+  assert.equal(wrapper.getAttribute("data-orientation"), "stacked");
+  assert.equal(wrapper.getAttribute("aria-label"), "Stacked split view");
+  assert.equal(first._fluxionParts.close, close);
+  assert.equal(f.document.activeElement, close);
+});
+
+test("split projections never move members across separate group containers", () => {
+  const f = fixture(10), a = { id: "a", label: "A", collapsed: false }, b = { id: "b", label: "B", collapsed: false };
+  f.tabs[2].group = a; f.tabs[3].group = b;
+  const split = { tabs: [f.tabs[2], f.tabs[3]], hasActiveTab: false };
+  for (const tab of split.tabs) tab.splitview = split;
+  f.context.scheduleRender(); f.flush();
+  assert.equal(f.row(f.tabs[2]).closest(".fluxion-split"), null);
+  assert.equal(f.row(f.tabs[3]).closest(".fluxion-split"), null);
+  assert.equal(f.row(f.tabs[2]).closest(".fluxion-group"), f.context.groupElements.get(a).parentNode);
+  assert.equal(f.row(f.tabs[3]).closest(".fluxion-group"), f.context.groupElements.get(b).parentNode);
+  assert.equal(f.nodes().length, f.tabs.length);
+});
+
+test("leaving a workspace removes absent rows and groups; same persisted group id cannot reuse stale handlers", () => {
+  const f = fixture(8), oldGroup = { id: "restored-id", label: "Old", color: "blue", collapsed: false };
+  f.tabs[2].group = f.tabs[3].group = oldGroup;
+  f.context.scheduleRender(); f.flush();
+  const oldHeading = f.context.groupElements.get(oldGroup), oldRow = f.row(f.tabs[2]);
+  for (const tab of f.tabs) tab.workspace = "other";
+  f.context.scheduleRender(); f.flush();
+  assert.equal(f.nodes().length, 0); assert.equal(oldHeading.isConnected, false);
+  assert.equal(oldRow.isConnected, false); assert.equal(f.context.groupElements.size, 0);
+  const restored = { ...oldGroup, label: "Restored" };
+  for (const tab of f.tabs) tab.workspace = "focus";
+  f.tabs[2].group = f.tabs[3].group = restored;
+  f.context.scheduleRender(); f.flush();
+  const heading = f.context.groupElements.get(restored);
+  assert.ok(heading); assert.notEqual(heading, oldHeading);
+  assert.equal(f.context.groupElements.has(oldGroup), false);
+  heading.emit("click"); f.flush();
+  assert.equal(restored.collapsed, true); assert.equal(oldGroup.collapsed, false);
 });
 
 test("arbitrary flat reorder batches produce native order without losing row identity", () => {

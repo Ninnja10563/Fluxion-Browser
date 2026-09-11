@@ -37,7 +37,7 @@ process_id=$!
 for ((attempt=0; attempt<600; attempt++)); do
   if [[ -f "$profile/prefs.js" ]]; then
     if grep -Fq 'user_pref("fluxion.structure.verification.error"' "$profile/prefs.js"; then break; fi
-    if grep -Fq 'user_pref("fluxion.structure.verification.health", "keyed-1000-tab-structure-and-native-fallbacks-verified")' "$profile/prefs.js"; then
+    if grep -Fq 'user_pref("fluxion.structure.verification.health", "keyed-1000-tab-hierarchical-structure-verified")' "$profile/prefs.js"; then
       grep 'fluxion.structure.verification' "$profile/prefs.js"
       exit 0
     fi

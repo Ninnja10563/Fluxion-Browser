@@ -1,4 +1,4 @@
-/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionFlowTabContent, FluxionSplitViews, FluxionTabCloseStability, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
+/* global gBrowser, Services, SessionStore, FluxionClosedTabs, FluxionFlowNavigation, FluxionFlowTabContent, FluxionFlowTree, FluxionSplitViews, FluxionTabCloseStability, FluxionTabDrop, FluxionTabGroups, FluxionTabSelection, FluxionTabStatus, FluxionWorkspaces, FluxionWorkspaceTabs */
 (function initialiseFluxion(window) {
   "use strict";
 
@@ -36,7 +36,6 @@
   let renderedSelectedTab = null;
   let renderedMultiSelected = new Set();
   let renderedWorkspace = null;
-  let renderedFlat = false;
   const rovingElements = new Map();
   let workspaceRenderSignature = "";
   let pointerCloseHold = null;
@@ -2163,29 +2162,24 @@
     return item;
   }
 
-  function createSplitElement(splitView, tabs, { level = 1 } = {}) {
-    const item = create("div", "fluxion-split");
+  function refreshSplitElement(splitView, item) {
     const orientation = FluxionSplitViews.orientationOf(splitView);
-    item.setAttribute("role", "group");
-    item.setAttribute(
-      "aria-label",
-      orientation === FluxionSplitViews.STACKED ? "Stacked split view" : "Side-by-side split view",
-    );
-    item.dataset.orientation = orientation;
-    item.dataset.active = String(Boolean(splitView?.hasActiveTab));
-    item._fluxionSplitView = splitView;
-    for (const tab of tabs) item.appendChild(createTabElement(tab, { level }));
-    return item;
+    const attributes = {
+      "aria-label": orientation === FluxionSplitViews.STACKED ? "Stacked split view" : "Side-by-side split view",
+      "data-orientation": orientation,
+      "data-active": String(Boolean(splitView?.hasActiveTab)),
+    };
+    for (const [name, value] of Object.entries(attributes)) {
+      if (item.getAttribute(name) !== value) item.setAttribute(name, value);
+    }
   }
 
-  function appendSplitRows(container, tabs, { level = 1 } = {}) {
-    for (const row of FluxionSplitViews.projectSplitRows(tabs)) {
-      container.appendChild(
-        row.kind === "split"
-          ? createSplitElement(row.splitView, row.tabs, { level })
-          : createTabElement(row.tab, { level }),
-      );
-    }
+  function createSplitElement(splitView) {
+    const item = create("div", "fluxion-split");
+    item.setAttribute("role", "group");
+    item._fluxionSplitView = splitView;
+    refreshSplitElement(splitView, item);
+    return item;
   }
 
   function fallbackIcon() {
@@ -2222,7 +2216,7 @@
     return svg;
   }
 
-  function createGroupElement(group, tabs) {
+  function refreshGroupElement(group, tabs, item) {
     const colours = {
       blue: "#51748a", purple: "#756681", cyan: "#4f7d7e",
       orange: "#907052", yellow: "#8a7b4c", pink: "#896777",
@@ -2233,49 +2227,56 @@
       gBrowser.selectedTab,
       Boolean(group.collapsed),
     );
+    const { heading, label, groupCount, groupTabs } = item._fluxionParts;
+    for (const [element, name, value] of [
+      [item, "is-collapsed", Boolean(group.collapsed)],
+      [item, "has-visible-active", Boolean(group.collapsed) && projection.activeVisible],
+      [heading, "has-active", tabs.includes(gBrowser.selectedTab)],
+    ]) if (element.classList.contains(name) !== value) element.classList.toggle(name, value);
+    const accent = colours[group.color] || colours.gray;
+    if (item.style.getPropertyValue("--group-accent") !== accent) item.style.setProperty("--group-accent", accent);
+    const attributes = {
+      "aria-expanded": String(!group.collapsed),
+      "aria-label": `${group.label || "Group"}, ${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, ` +
+        `${group.collapsed ? "collapsed" : "expanded"}` +
+        `${group.collapsed && projection.activeVisible ? ", active page shown" : ""}`,
+    };
+    for (const [name, value] of Object.entries(attributes)) {
+      if (heading.getAttribute(name) !== value) heading.setAttribute(name, value);
+    }
+    if (heading.title !== (group.label || "Tab group")) heading.title = group.label || "Tab group";
+    if (label.textContent !== (group.label || "Group")) label.textContent = group.label || "Group";
+    const countText = group.collapsed && projection.activeVisible
+      ? (projection.hiddenCount ? `+${projection.hiddenCount}` : "") : String(tabs.length);
+    if (groupCount.textContent !== countText) groupCount.textContent = countText;
+    if (groupCount.hidden !== !countText) groupCount.hidden = !countText;
+    const countTitle = group.collapsed
+      ? `${projection.hiddenCount} hidden ${projection.hiddenCount === 1 ? "tab" : "tabs"}`
+      : `${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}`;
+    if (groupCount.title !== countTitle) groupCount.title = countTitle;
+    const hidden = projection.visibleTabs.length === 0;
+    if (groupTabs.hidden !== hidden) groupTabs.hidden = hidden;
+    return projection;
+  }
+
+  function createGroupElement(group, tabs) {
     const item = create("div", "fluxion-group");
     item.setAttribute("role", "none");
-    item.classList.toggle("is-collapsed", Boolean(group.collapsed));
-    item.classList.toggle(
-      "has-visible-active",
-      Boolean(group.collapsed) && projection.activeVisible,
-    );
-    item.style.setProperty("--group-accent", colours[group.color] || colours.gray);
-
+    item._fluxionGroup = group;
     const heading = create("button", "fluxion-group-heading");
     heading.type = "button";
     heading.tabIndex = -1;
     heading._fluxionGroup = group;
     heading.setAttribute("role", "treeitem");
     heading.setAttribute("aria-level", "1");
-    heading.setAttribute(
-      "aria-keyshortcuts",
-      "ArrowUp ArrowDown Home End ArrowLeft ArrowRight Enter Space Shift+F10",
-    );
-    heading.classList.toggle("has-active", tabs.includes(gBrowser.selectedTab));
-    heading.setAttribute("aria-expanded", String(!group.collapsed));
-    heading.setAttribute(
-      "aria-label",
-      `${group.label || "Group"}, ${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}, ` +
-        `${group.collapsed ? "collapsed" : "expanded"}` +
-        `${group.collapsed && projection.activeVisible ? ", active page shown" : ""}`,
-    );
-    heading.title = group.label || "Tab group";
+    heading.setAttribute("aria-keyshortcuts", "ArrowUp ArrowDown Home End ArrowLeft ArrowRight Enter Space Shift+F10");
     const disclosure = create("span", "fluxion-group-disclosure");
     disclosure.textContent = "›";
     disclosure.setAttribute("aria-hidden", "true");
     const mark = create("span", "fluxion-group-mark");
     mark.setAttribute("aria-hidden", "true");
     const label = create("span", "fluxion-group-name");
-    label.textContent = group.label || "Group";
     const groupCount = create("span", "fluxion-group-count");
-    groupCount.textContent = group.collapsed && projection.activeVisible
-      ? (projection.hiddenCount ? `+${projection.hiddenCount}` : "")
-      : String(tabs.length);
-    groupCount.hidden = !groupCount.textContent;
-    groupCount.title = group.collapsed
-      ? `${projection.hiddenCount} hidden ${projection.hiddenCount === 1 ? "tab" : "tabs"}`
-      : `${tabs.length} ${tabs.length === 1 ? "tab" : "tabs"}`;
     heading.append(disclosure, mark, label, groupCount);
     heading.addEventListener("click", () => {
       focusGroupAfterRender = group;
@@ -2339,9 +2340,9 @@
     groupTabs.setAttribute("role", "group");
     heading.setAttribute("aria-controls", groupTabs.id);
     heading.setAttribute("aria-owns", groupTabs.id);
-    groupTabs.hidden = projection.visibleTabs.length === 0;
-    appendSplitRows(groupTabs, projection.visibleTabs, { level: 2 });
     item.append(heading, groupTabs);
+    item._fluxionParts = { heading, label, groupCount, groupTabs };
+    refreshGroupElement(group, tabs, item);
     groupElements.set(group, heading);
     return item;
   }
@@ -2428,53 +2429,57 @@
     addWorkspaceButton.disabled = workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES;
   }
 
-  function stableFlatRowIndices(container, items) {
-    const positions = new Map([...container.children].map((child, index) => [child, index]));
-    const tails = [], previous = new Map();
-    // Keep the longest already-ordered subsequence connected and unmoved.
-    // A single native reorder then moves one row in either direction.
-    for (let index = 0; index < items.length; index++) {
-      const position = positions.get(items[index]);
-      if (position === undefined) continue;
-      let low = 0, high = tails.length;
-      while (low < high) {
-        const middle = (low + high) >>> 1;
-        if (positions.get(items[tails[middle]]) < position) low = middle + 1;
-        else high = middle;
-      }
-      previous.set(index, low ? tails[low - 1] : -1);
-      tails[low] = index;
-    }
-    const stable = new Set();
-    for (let index = tails.at(-1); index !== undefined && index !== -1; index = previous.get(index)) stable.add(index);
-    return stable;
-  }
-
-  function reconcileFlatTabs(visible) {
-    const wanted = new Set();
-    const pinned = [], regular = [];
-    for (const tab of visible) {
+  function reconcileFlowTabs(visible) {
+    const wantedTabs = new Set(), wantedGroups = new Set();
+    function tabPlan(tab, level = 1) {
       const role = tab.pinned ? "tab" : "treeitem";
       let item = tabElements.get(tab);
       if (!item?.isConnected || item.getAttribute("role") !== role) item = createTabElement(tab, { role });
       else refreshTabElement(tab, item);
-      wanted.add(item);
-      (tab.pinned ? pinned : regular).push(item);
+      if (role === "treeitem" && item.getAttribute("aria-level") !== String(level)) item.setAttribute("aria-level", String(level));
+      wantedTabs.add(tab);
+      return { node: item };
     }
-    for (const [tab, item] of tabElements) {
-      if (!wanted.has(item)) tabElements.delete(tab);
+    function splitPlans(container, tabs, level = 1) {
+      // A split's visible members can differ between group projections during
+      // native moves. A wrapper belongs to its projected parent, not a global ID.
+      const existing = new Map([...container.children].filter(child => child._fluxionSplitView)
+        .map(child => [child._fluxionSplitView, child]));
+      return FluxionSplitViews.projectSplitRows(tabs).map(row => {
+        if (row.kind !== "split") return tabPlan(row.tab, level);
+        const item = existing.get(row.splitView) || createSplitElement(row.splitView);
+        refreshSplitElement(row.splitView, item);
+        return { node: item, children: row.tabs.map(tab => tabPlan(tab, level)) };
+      });
     }
-    for (const [container, items] of [[pinnedTabs, pinned], [tabsList, regular]]) {
-      for (const child of [...container.children]) if (!wanted.has(child)) child.remove();
-      const stable = stableFlatRowIndices(container, items);
-      for (let index = items.length - 1; index >= 0; index--) {
-        if (stable.has(index)) continue;
-        const item = items[index], before = items[index + 1] || null;
-        if (item.parentNode === container && typeof container.moveBefore === "function") {
-          container.moveBefore(item, before);
-        } else container.insertBefore(item, before);
+    const pinned = visible.filter(tab => tab.pinned).map(tab => tabPlan(tab));
+    const regularTabs = visible.filter(tab => !tab.pinned);
+    const ungrouped = new Map(splitPlans(tabsList, regularTabs.filter(tab => !tab.group))
+      .map(plan => [plan.node._fluxionSplitView || plan.node._fluxionTab, plan]));
+    const regular = [], seenSplitViews = new Set();
+    for (const row of FluxionTabGroups.projectTabRows(regularTabs, currentWorkspace,
+      { workspaceOf: tabWorkspace, groupOf: tab => tab.group })) {
+      if (row.kind === "group") {
+        let item = groupElements.get(row.group)?.parentNode;
+        if (!item?.isConnected) item = createGroupElement(row.group, row.tabs);
+        const projection = refreshGroupElement(row.group, row.tabs, item);
+        const { heading, groupTabs } = item._fluxionParts;
+        wantedGroups.add(row.group);
+        regular.push({ node: item, children: [{ node: heading },
+          { node: groupTabs, children: splitPlans(groupTabs, projection.visibleTabs, 2) }] });
+      } else {
+        const split = row.tab.splitview;
+        const plan = ungrouped.get(split) || ungrouped.get(row.tab);
+        if (plan?.node._fluxionSplitView) {
+          if (seenSplitViews.has(split)) continue;
+          seenSplitViews.add(split);
+        }
+        if (plan) regular.push(plan);
       }
     }
+    FluxionFlowTree.reconcile([{ node: pinnedTabs, children: pinned }, { node: tabsList, children: regular }]);
+    for (const tab of tabElements.keys()) if (!wantedTabs.has(tab)) tabElements.delete(tab);
+    for (const group of groupElements.keys()) if (!wantedGroups.has(group)) groupElements.delete(group);
   }
 
   function render() {
@@ -2491,53 +2496,14 @@
       ?.closest?.(".fluxion-tab")?._fluxionTab || null;
     const focusedGroupBeforeRender = document.activeElement
       ?.closest?.(".fluxion-group-heading")?._fluxionGroup || null;
+    const focusedParentGroupBeforeRender = document.activeElement
+      ?.closest?.(".fluxion-group")?._fluxionGroup || null;
     renderQueued = false;
     structureDirty = false;
     dirtyTabs.clear();
     renderWorkspaces();
     const visible = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === currentWorkspace);
-    const flat = !visible.some(tab => tab.group || tab.splitview);
-    if (flat && renderedFlat && renderedWorkspace === currentWorkspace) {
-      reconcileFlatTabs(visible);
-    } else {
-      groupElements.clear();
-      tabElements.clear();
-      groupRenderSequence = 0;
-      pinnedTabs.replaceChildren();
-      tabsList.replaceChildren();
-      const visibleSet = new Set(visible);
-      for (const tab of visible.filter(tab => tab.pinned)) {
-        pinnedTabs.appendChild(createTabElement(tab, { role: "tab" }));
-      }
-      const rows = FluxionTabGroups.projectTabRows(
-        visible.filter(tab => !tab.pinned),
-        currentWorkspace,
-        { workspaceOf: tabWorkspace, groupOf: tab => tab.group },
-      );
-      const seenSplitViews = new Set();
-      for (const row of rows) {
-        if (row.kind === "group") {
-          tabsList.appendChild(createGroupElement(row.group, row.tabs));
-          continue;
-        }
-        const splitView = row.tab.splitview;
-        if (!splitView) {
-          tabsList.appendChild(createTabElement(row.tab));
-          continue;
-        }
-        if (seenSplitViews.has(splitView)) continue;
-        seenSplitViews.add(splitView);
-        const splitTabs = splitView.tabs.filter(tab =>
-          visibleSet.has(tab) && !tab.pinned && !tab.group
-        );
-        tabsList.appendChild(
-          splitTabs.length > 1
-            ? createSplitElement(splitView, splitTabs)
-            : createTabElement(row.tab),
-        );
-      }
-    }
-    renderedFlat = flat;
+    reconcileFlowTabs(visible);
     const noPinnedTabs = pinnedTabs.childElementCount === 0;
     if (pinnedLabel.hidden !== noPinnedTabs) pinnedLabel.hidden = noPinnedTabs;
     if (pinnedTabs.hidden !== noPinnedTabs) pinnedTabs.hidden = noPinnedTabs;
@@ -2582,6 +2548,11 @@
             focusedElementBeforeRender.focus({ preventScroll: true });
           }
         } else focusFlowItem(element);
+      } else if (!requestedTabFocus && focusedParentGroupBeforeRender &&
+          [document.body, document.documentElement, null].includes(document.activeElement)) {
+        // Native collapse may remove a keyboard-owned child from the projection.
+        // Return to its surviving disclosure, but never steal external focus.
+        focusFlowItem(groupElements.get(focusedParentGroupBeforeRender));
       }
     } else if (groupToRefocus) {
       focusFlowItem(groupElements.get(groupToRefocus));

@@ -35,7 +35,7 @@ async function fixture({ primary = false, restore = false, remove = false, persi
 test("shipped completion cleans up and persists report before publishing success", async () => {
   const result = await fixture();
   assert.deepEqual(result.events, ["disconnect", "restore", "remove", "report", "health"]);
-  assert.equal(result.prefs.get("health"), "keyed-1000-tab-structure-and-native-fallbacks-verified");
+  assert.equal(result.prefs.get("health"), "keyed-1000-tab-hierarchical-structure-verified");
   assert.equal(result.prefs.has("error"), false);
 });
 

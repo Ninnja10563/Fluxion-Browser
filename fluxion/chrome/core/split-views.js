@@ -33,6 +33,7 @@
     const splitOf = adapters.splitViewOf || splitViewOf;
     const rows = [];
     const seen = new Set();
+    const visible = new Set(tabs || []);
 
     for (const tab of tabs || []) {
       const splitView = splitOf(tab);
@@ -43,7 +44,7 @@
       if (seen.has(splitView)) continue;
       seen.add(splitView);
       const members = (splitView.tabs || []).filter(candidate =>
-        (tabs || []).includes(candidate)
+        visible.has(candidate)
       );
       if (members.length > 1) {
         rows.push({ kind: "split", splitView, tabs: members });

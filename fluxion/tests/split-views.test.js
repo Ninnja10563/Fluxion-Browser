@@ -48,6 +48,21 @@ test("partial split projections degrade to an ordinary tab row", () => {
   assert.deepEqual(projectSplitRows([second]), [{ kind: "tab", tab: second }]);
 });
 
+test("large split projections use bounded membership lookup and preserve native pane order", () => {
+  const tabs = Array.from({ length: 1000 }, () => ({}));
+  for (let index = 0; index < tabs.length; index += 2) {
+    const splitview = { tabs: [tabs[index + 1], tabs[index], {}] };
+    tabs[index].splitview = tabs[index + 1].splitview = splitview;
+  }
+  tabs.includes = () => { throw new Error("Repeated linear membership scan"); };
+  const rows = projectSplitRows(tabs);
+  assert.equal(rows.length, 500);
+  rows.forEach((row, index) => {
+    assert.equal(row.kind, "split");
+    assert.deepEqual(row.tabs, [tabs[index * 2 + 1], tabs[index * 2]]);
+  });
+});
+
 test("split positions are one-based and stable", () => {
   const first = {};
   const second = {};

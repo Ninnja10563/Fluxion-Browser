@@ -43,6 +43,16 @@ test("keeps pinned tabs outside native groups and filters cross-workspace member
   assert.deepEqual(rows[1].tabs.map(tab => tab.id), ["focus"]);
 });
 
+test("distinct native group objects sharing an id never inherit one another's members", () => {
+  const first = { id: "restored", label: "Research" }, second = { ...first };
+  const tabs = [first, second, first].map(group => ({ group, workspaceId: "focus" }));
+  const rows = projectTabRows(tabs, "focus");
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].group, first); assert.equal(rows[1].group, second);
+  assert.deepEqual(rows[0].tabs, [tabs[0], tabs[2]]);
+  assert.deepEqual(rows[1].tabs, [tabs[1]]);
+});
+
 test("expanded groups project every native member", () => {
   const tabs = [{ id: "a" }, { id: "b" }, { id: "c" }];
   const projection = collapsedGroupProjection(tabs, tabs[1], false);

@@ -1164,16 +1164,26 @@ assertions are distinct from hosted event-to-frame timings. Group, pin and
 split transitions remain part of that gate rather than being inferred from
 plain tabs alone.
 
-## Flat Flow structural updates
+## Hierarchical Flow structural updates
 
-In a flat workspace (no grouped or split pages), opening, closing and moving
-native tabs reconcile rows keyed by the actual Gecko tab objects. Existing
+Opening, closing and moving native tabs reconcile rows keyed by the actual
+Gecko tab objects, including grouped and split projections. Existing
 rows refresh only changed content. Pinning or unpinning recreates the affected
 row for its changed accessibility role, while retaining the other rows.
-Switching workspaces or entering/leaving grouped or split topology retains
-full projection as the correctness fallback.
+Group headings and their accessible child-container IDs are retained by native
+group object identity, not labels or persisted IDs. Split wrappers are retained
+within their projected parent; partial splits show an ordinary row, and collapsed
+groups still show only their selected page. Moving between group levels updates
+the existing row's hierarchy without replacing its controls.
 
-A longest-increasing-subsequence plan keeps already ordered rows stationary
+`core/flow-tree.js` validates the complete unique-node plan before moving nodes,
+connects new wrappers before moving existing controls into them, and prunes
+obsolete wrappers only after all surviving children have reached their new
+parents. This keeps regrouping or separating a split from disconnecting controls
+that still belong in the visible sidebar. Removed projections are not retained
+as a hidden cache. Pointer-close holding defers all these mutations.
+
+A per-parent longest-increasing-subsequence plan keeps already ordered rows stationary
 and relocates only the necessary DOM nodes. A single native reorder therefore
 needs one DOM relocation, although adjacent-swap ties can relocate the neighbor
 instead of the tab that emitted the native event. Both retain object identity.
@@ -1185,8 +1195,10 @@ Authoritative tab/workspace reads remain O(N), and the ordering plan is
 O(N log N). This reduces DOM work; it does not establish constant-time tab
 operations, sustained frame rates or content-heavy memory performance. The
 native structure gate uses 1,000 tabs (40 eager, 960 lazy), actual Gecko tab
-operations and chrome focus. Group/split fallback correctness is tested
-separately from flat row retention.
+operations and chrome focus. Its expanded candidate checks cover native group
+creation, changes and collapse, split creation/orientation/reversal/separation,
+and native split wrappers moved into groups. Local VM tests are separate evidence;
+the 0.62 candidate must pass the packaged native gate before release.
 
 Manual DMG packaging derives its default release from the supplied app's
 bundled Settings constants, parsed as data. It requires the complete release

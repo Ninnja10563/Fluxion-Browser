@@ -31,10 +31,10 @@
         rows.push({ kind: "tab", tab });
         continue;
       }
-      let row = groupRows.get(group.id);
+      let row = groupRows.get(group);
       if (!row) {
         row = { kind: "group", group, tabs: [] };
-        groupRows.set(group.id, row);
+        groupRows.set(group, row);
         rows.push(row);
       }
       row.tabs.push(tab);

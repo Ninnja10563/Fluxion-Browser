@@ -169,7 +169,8 @@ test("Flow uses roving focus and the packaged app proves 200-tab keyboard stabil
   assert.match(chrome, /item\.tabIndex = tab === gBrowser\.selectedTab \? 0 : -1/);
   assert.match(chrome, /aria-keyshortcuts/);
   assert.match(chrome, /focusTabAfterRender/);
-  assert.match(chrome, /new Set\(visible\)/);
+  assert.match(runtimeConfig, /chrome\/core\/flow-tree\.js/);
+  assert.match(chrome, /FluxionFlowTree\.reconcile/);
   assert.match(chrome, /gBrowser\.selectedTab = scaleTabs\[0\]/);
   assert.match(chrome, /gBrowser\.selectedTab === scaleTabs\[1\]/);
   assert.match(chrome, /FluxionWorkspaceCaptureReady/);

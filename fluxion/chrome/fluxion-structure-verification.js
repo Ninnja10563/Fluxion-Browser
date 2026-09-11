@@ -135,17 +135,103 @@
     await operation("unpin-role-change-preserves-unaffected-rows", new Set([fixtures[20]]),
       () => gBrowser.unpinTab(fixtures[20]), closeFocus());
     assert(rows().get(fixtures[20]).getAttribute("role") === "treeitem", "Unpinned row role is not treeitem");
+    const headings = () => new Map([...flow.querySelectorAll(".fluxion-group-heading")].map(node => [node._fluxionGroup, node]));
+    const visible = row => row && !row.closest("[hidden]");
+    function hierarchy() {
+      const stops = [...tree.querySelectorAll('[role="treeitem"]')].filter(node => visible(node) && node.tabIndex === 0);
+      assert(stops.length === 1, "Hierarchical tree lost its single visible keyboard entry");
+      for (const [nativeGroup, heading] of headings()) {
+        const groupChildren = document.getElementById(heading.getAttribute("aria-controls"));
+        assert(groupChildren && heading.getAttribute("aria-owns") === groupChildren.id, "Group lost its accessible child relationship");
+        const expected = [...nativeGroup.tabs].filter(tab => ui.tabWorkspace(tab) === workspace &&
+          (!nativeGroup.collapsed || tab === gBrowser.selectedTab));
+        const actual = [...groupChildren.querySelectorAll(".fluxion-tab")].filter(visible).map(row => row._fluxionTab);
+        assert(actual.length === expected.length && actual.every((tab, index) => tab === expected[index]), "Group projection order diverged from native membership");
+      }
+    }
+    async function hierarchicalOperation(name, affected, action, { selects = false, disappearing = new Set() } = {}) {
+      write("stage", name);
+      if (!selects) {
+        const row = rows().get(fixtures[1]);
+        row.focus({ preventScroll: true });
+        row.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+        await settle();
+        row.querySelector(".fluxion-close").focus({ preventScroll: true });
+        await settle();
+      }
+      const focus = document.activeElement, before = rows();
+      const controls = new Map([...before].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
+      const groupBefore = new Map([...headings()].map(([group, heading]) => [group,
+        { heading, id: heading.getAttribute("aria-controls"), children: document.getElementById(heading.getAttribute("aria-controls")) }]));
+      drain(); await action(); await settle();
+      const after = rows();
+      for (const [tab, row] of before) {
+        if (!after.has(tab) && disappearing.has(tab)) continue;
+        assert(after.get(tab) === row && row.querySelector(".fluxion-close") === controls.get(tab), `${name} replaced an existing hierarchical row/control`);
+      }
+      for (const [group, previous] of groupBefore) {
+        const heading = headings().get(group);
+        if (!heading && !group.tabs.length) continue;
+        assert(heading === previous.heading && heading.getAttribute("aria-controls") === previous.id &&
+          document.getElementById(previous.id) === previous.children, `${name} replaced a stable group heading/container`);
+      }
+      for (const change of drain()) {
+        const element = change.target.nodeType === 1 ? change.target : change.target.parentElement;
+        const row = element?.closest(".fluxion-tab");
+        if (row && !affected.has(row._fluxionTab)) {
+          report.unaffectedWrites++;
+          throw new Error(`${name} changed unrelated hierarchical row: ${change.type}/${change.attributeName || "children"}`);
+        }
+      }
+      if (!selects) assert(focus?.isConnected && document.activeElement === focus, `${name} stole unaffected close-control focus`);
+      hierarchy(); report.checks.push(name);
+    }
+    let group;
+    await hierarchicalOperation("create-group-retains-rows-and-unrelated-focus", new Set([fixtures[5], fixtures[6]]), () => {
+      group = gBrowser.addTabGroup([fixtures[5], fixtures[6]], { label: "Structure research", color: "blue" });
+    });
+    await hierarchicalOperation("group-rename-retains-heading-container-and-rows", new Set(), () => { group.label = "Renamed research"; group.color = "green"; });
+    assert(headings().get(group).textContent.includes("Renamed research"), "Native group rename did not reach Flow");
+    await hierarchicalOperation("group-add-retains-member-controls", new Set([fixtures[7]]), () => group.addTabs([fixtures[7]]));
+    await hierarchicalOperation("group-reorder-retains-member-controls", new Set([fixtures[7]]), () => gBrowser.moveTabTo(fixtures[7], { tabIndex: fixtures[5]._tPos }));
+    await hierarchicalOperation("group-remove-retains-promoted-row", new Set([fixtures[7]]), () => gBrowser.ungroupTab(fixtures[7]));
+    ui.selectTab(fixtures[5]); await settle();
+    await hierarchicalOperation("collapse-retains-active-page-and-heading", new Set([fixtures[5], fixtures[6]]), () => { group.collapsed = true; },
+      { selects: true, disappearing: new Set([fixtures[6]]) });
+    assert(visible(rows().get(fixtures[5])), "Collapsed group omitted active page");
+    await hierarchicalOperation("collapsed-selection-updates-only-necessary-projection", new Set([fixtures[5], fixtures[7]]), () => ui.selectTab(fixtures[7]),
+      { selects: true, disappearing: new Set([fixtures[5]]) });
+    assert(!visible(rows().get(fixtures[5])), "Collapsed group exposed an inactive page");
+    await hierarchicalOperation("group-expansion-retains-unrelated-controls", new Set([fixtures[5], fixtures[6]]), () => { group.collapsed = false; });
+    await hierarchicalOperation("split-creation-retains-native-tab-rows", new Set([fixtures[1], fixtures[8], fixtures[9]]),
+      () => ui.createSplitView(fixtures[8], fixtures[9], { orientation: window.FluxionSplitViews.STACKED }), { selects: true });
+    const split = fixtures[8].splitview;
+    assert(split && split === fixtures[9].splitview, "Native split pair did not form");
+    const splitWrapper = rows().get(fixtures[8]).closest(".fluxion-split");
+    await hierarchicalOperation("split-orientation-retains-wrapper-and-controls", new Set([fixtures[8], fixtures[9]]), () => ui.setSplitOrientation(fixtures[8], window.FluxionSplitViews.SIDE_BY_SIDE));
+    assert(rows().get(fixtures[8]).closest(".fluxion-split") === splitWrapper, "Orientation replaced native split wrapper");
+    // Firefox 155's group.addTabs accepts the native split wrapper itself;
+    // passing its individual members would exercise separate tab moves instead.
+    await hierarchicalOperation("moving-native-split-into-group-retains-member-controls", new Set([fixtures[8], fixtures[9]]),
+      () => group.addTabs([split]));
+    assert(split.group === group && fixtures[8].group === group && fixtures[9].group === group,
+      "Native split did not move intact into its group");
+    const nestedWrapper = rows().get(fixtures[8]).closest(".fluxion-split");
+    assert(nestedWrapper?.closest(".fluxion-group") && rows().get(fixtures[8]).getAttribute("aria-level") === "2",
+      "Grouped split did not acquire its proper hierarchy");
+    await hierarchicalOperation("nested-split-reversal-retains-wrapper-and-controls", new Set([fixtures[8], fixtures[9]]),
+      () => ui.reverseSplitView(fixtures[8]));
+    assert(rows().get(fixtures[8]).closest(".fluxion-split") === nestedWrapper, "Reversal replaced nested split wrapper");
+    ui.selectTab(fixtures[8]); await settle();
+    await hierarchicalOperation("collapsed-nested-split-retains-only-active-pane", new Set([fixtures[5], fixtures[6], fixtures[8], fixtures[9]]),
+      () => { group.collapsed = true; }, { selects: true, disappearing: new Set([fixtures[5], fixtures[6], fixtures[9]]) });
+    assert(visible(rows().get(fixtures[8])) && !rows().get(fixtures[8]).closest(".fluxion-split"),
+      "Collapsed group must project only its selected pane without an incomplete split wrapper");
+    await hierarchicalOperation("expanded-nested-split-retains-active-pane-control", new Set([fixtures[5], fixtures[6], fixtures[8], fixtures[9]]),
+      () => { group.collapsed = false; }, { selects: true });
+    await hierarchicalOperation("split-separation-retains-member-controls", new Set([fixtures[8], fixtures[9]]), () => ui.separateSplitView(fixtures[8]));
+    assert(!fixtures[8].splitview && !rows().get(fixtures[8]).closest(".fluxion-split"), "Separated split retained obsolete topology");
     observer.disconnect(); observer = null;
-    const group = gBrowser.addTabGroup([fixtures[5], fixtures[6]], { label: "Structure research", color: "blue" });
-    ui.selectTab(fixtures[5]); group.collapsed = true; await settle();
-    assert(rows().get(fixtures[5]) && !rows().get(fixtures[5]).closest("[hidden]"), "Grouped fallback omitted active collapsed page");
-    ui.selectTab(fixtures[7]); await settle();
-    assert(!rows().get(fixtures[5]) || rows().get(fixtures[5]).closest("[hidden]"), "Grouped fallback exposed inactive collapsed page");
-    ui.createSplitView(fixtures[8], fixtures[9], { orientation: window.FluxionSplitViews.STACKED });
-    await wait(() => fixtures[8].splitview && fixtures[8].splitview === fixtures[9].splitview, "Split fallback did not create native pair");
-    ui.selectTab(fixtures[9]); await settle();
-    assert(rows().get(fixtures[9]).closest(".fluxion-split")?.getAttribute("data-active") === "true", "Split fallback omitted active wrapper");
-    report.checks.push("native-group-collapse-and-stacked-split-fallback-correct");
     report.complete = true;
   }
   function complete(primaryError = null) {
@@ -161,7 +247,7 @@
     if (failures.length) report.failures = failures.map(error => `${error.message}\n${error.stack || ""}`);
     attempt(() => write("report", JSON.stringify(report)));
     if (!failures.length && report.complete) {
-      attempt(() => write("health", "keyed-1000-tab-structure-and-native-fallbacks-verified"));
+      attempt(() => write("health", "keyed-1000-tab-hierarchical-structure-verified"));
     }
     if (failures.length) {
       report.complete = false;

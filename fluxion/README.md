@@ -8,6 +8,9 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+The 0.62 candidate extends stable Flow updates to grouped tabs and split views.
+It is not yet a downloadable release; native validation is in progress.
+
 Fluxion 0.61 is published: named local Memory exclusion lists, revision-safe
 cross-window editing, malformed-policy recovery and pre-embedding checks for
 newly visited excluded pages. All 746 tests, every combined native release
