@@ -223,16 +223,26 @@
         assert(actual.length === expected.length && actual.every((tab, index) => tab === expected[index]), "Group projection order diverged from native membership");
       }
     }
+    async function establishHierarchyBaseline(name, selects) {
+      const owner = selects ? gBrowser.selectedTab : fixtures[1];
+      const row = rows().get(owner);
+      assert(row?.isConnected, "Hierarchy baseline has no connected native owner row");
+      row.focus({ preventScroll: true });
+      row.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      await settle();
+      const close = row.querySelector(".fluxion-close");
+      assert(close?.isConnected, "Hierarchy baseline has no connected close control");
+      close.focus({ preventScroll: true });
+      await settle();
+      const baseline = { operation: name, owner: fixtures.indexOf(owner), selected: fixtures.indexOf(gBrowser.selectedTab),
+        focused: document.activeElement === close, tabIndex: row.tabIndex };
+      (report.hierarchicalBaselines ||= []).push(baseline);
+      assert(gBrowser.selectedTab === owner && row.tabIndex === 0 && baseline.focused,
+        `Hierarchy baseline did not establish exact selected keyboard owner: ${JSON.stringify(baseline)}`);
+    }
     async function hierarchicalOperation(name, affected, action, { selects = false, disappearing = new Set() } = {}) {
       write("stage", name);
-      if (!selects) {
-        const row = rows().get(fixtures[1]);
-        row.focus({ preventScroll: true });
-        row.dispatchEvent(new window.KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
-        await settle();
-        row.querySelector(".fluxion-close").focus({ preventScroll: true });
-        await settle();
-      }
+      await establishHierarchyBaseline(name, selects);
       const focus = document.activeElement, before = rows();
       const controls = new Map([...before].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
       const groupBefore = new Map([...headings()].map(([group, heading]) => [group,
@@ -254,6 +264,11 @@
         const row = element?.closest(".fluxion-tab");
         if (row && !affected.has(row._fluxionTab)) {
           report.unaffectedWrites++;
+          report.unexpectedMutation = { operation: name, row: fixtures.indexOf(row._fluxionTab),
+            type: change.type, attribute: change.attributeName, oldValue: change.oldValue,
+            currentValue: change.attributeName ? element.getAttribute(change.attributeName) : null,
+            selected: fixtures.indexOf(gBrowser.selectedTab),
+            focusOwner: fixtures.indexOf(document.activeElement?.closest(".fluxion-tab")?._fluxionTab) };
           throw new Error(`${name} changed unrelated hierarchical row: ${change.type}/${change.attributeName || "children"}`);
         }
       }
