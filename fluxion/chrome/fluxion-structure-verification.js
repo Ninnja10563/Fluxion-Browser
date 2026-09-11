@@ -138,6 +138,14 @@
     const headings = () => new Map([...flow.querySelectorAll(".fluxion-group-heading")].map(node => [node._fluxionGroup, node]));
     const visible = row => row && !row.closest("[hidden]");
     function hierarchy() {
+      const nativeTabs = [...gBrowser.tabs].filter(tab => ui.tabWorkspace(tab) === workspace);
+      for (const [container, isPinned] of [[tree, false], [pinned, true]]) {
+        const expected = nativeTabs.filter(tab => tab.pinned === isPinned &&
+          (isPinned || !tab.group?.collapsed || tab === gBrowser.selectedTab));
+        const actual = [...container.querySelectorAll(".fluxion-tab")].filter(visible).map(row => row._fluxionTab);
+        assert(actual.length === expected.length && actual.every((tab, index) => tab === expected[index]),
+          "Flattened hierarchical Flow order diverged from native visible tab order");
+      }
       const stops = [...tree.querySelectorAll('[role="treeitem"]')].filter(node => visible(node) && node.tabIndex === 0);
       assert(stops.length === 1, "Hierarchical tree lost its single visible keyboard entry");
       for (const [nativeGroup, heading] of headings()) {
