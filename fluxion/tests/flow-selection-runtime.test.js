@@ -104,6 +104,9 @@ function fixture(size = 1000) {
     if (target.parentEventTarget) emit(target.parentEventTarget, type, origin);
   };
   const gBrowser = { tabs, get selectedTabs() { return tabs.filter(tab => tab === selected || tab.multiselected); },
+    getTabForBrowser: browser => tabs.find(tab => tab.linkedBrowser === browser),
+    addTabsProgressListener(listener) { this.progressListener = listener; },
+    removeTabsProgressListener(listener) { if (this.progressListener === listener) this.progressListener = null; },
     clearMultiSelectedTabs() { for (const tab of tabs) tab.multiselected = false; emit(this, "TabMultiSelect"); },
     addToMultiSelectedTabs(tab) { tab.multiselected = true; emit(this, "TabMultiSelect"); },
     removeFromMultiSelectedTabs(tab) { tab.multiselected = false; emit(this, "TabMultiSelect"); },
@@ -150,6 +153,21 @@ function fixture(size = 1000) {
   const nodes = () => [...pinnedTabs.querySelectorAll(".fluxion-tab"), ...tabsList.querySelectorAll(".fluxion-tab")];
   return { context, document, tabs, gBrowser, pinnedTabs, tabsList, flush, row, nodes, Element };
 }
+
+test("same-document location changes refresh real row tooltips without replacing controls or other rows", () => {
+  const f = fixture(1000), tab = f.tabs[5], row = f.row(tab);
+  const before = new Map(f.tabs.map(item => [item, { row: f.row(item), writes: f.row(item).writes }]));
+  const close = row.querySelector(".fluxion-close");
+  tab.linkedBrowser.currentURI.displaySpec = "https://example.org/5?step=1";
+  f.gBrowser.progressListener.onLocationChange(tab.linkedBrowser, { isTopLevel: true });
+  f.flush();
+  assert.equal(row.title, "Page 5\nhttps://example.org/5?step=1");
+  assert.equal(f.row(tab), row); assert.equal(row.querySelector(".fluxion-close"), close);
+  for (const [item, old] of before) {
+    assert.equal(f.row(item), old.row);
+    if (item !== tab) assert.equal(f.row(item).writes, old.writes);
+  }
+});
 
 test("1,000-row native selection preserves controls and leaves unaffected DOM untouched", () => {
   const f = fixture();

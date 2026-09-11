@@ -43,6 +43,10 @@
     assert(/^http:\/\/127\.0\.0\.1:\d+$/.test(origin), "Structure document fixture requires exact loopback origin");
     const readLivePage = (tab, command = "Read") => tab.linkedBrowser.browsingContext.currentWindowGlobal
       .getActor("FluxionTabTransferVerification").sendQuery(`FluxionTabTransfer:${command}`, { origin });
+    function livePageChromeReady(tab, state) {
+      return !tab.hasAttribute("busy") && tab.linkedBrowser.currentURI.spec === state.url &&
+        rows().get(tab)?.title === `Fluxion transfer fixture\n${state.url}`;
+    }
     const livePages = new Map();
     for (const index of [5, 6, 8, 9]) {
       const tab = fixtures[index];
@@ -56,6 +60,10 @@
       const state = await readLivePage(tab, "Seed");
       assert(state.nonce && state.counter === 1 && state.draft === "Unsaved transfer draft — café" &&
         state.url === `${origin}/transfer?step=1`, "Live structure document did not retain seeded state");
+      // Seed pushes same-document history. Require the normal native location
+      // event to update Flow before measuring unrelated structural operations;
+      // forcing a render here would hide stale SPA URL/tooltip behavior.
+      await wait(() => livePageChromeReady(tab, state), "Flow did not naturally reflect the seeded same-document URL");
       livePages.set(tab, state);
     }
     assert(new Set([...livePages.values()].map(state => state.nonce)).size === 4, "Live fixture nonces are not distinct");

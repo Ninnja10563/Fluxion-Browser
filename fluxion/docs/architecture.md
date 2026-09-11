@@ -1211,6 +1211,12 @@ native split wrapper; duplicate selections cannot split or duplicate that unit.
 The group drop calls Gecko's `group.addTabs` with those validated units. Pinned
 tabs are rejected rather than allowing that API to unpin them implicitly.
 
+Flow also subscribes to Gecko's top-level location notifications: same-document
+navigation can change a URL without changing any native tab attributes. These
+notifications enter the content-only scheduler for that existing row, coalesce
+within a frame, and do not rebuild the tree. Subframes and closed/unrendered
+tabs are ignored; the progress listener is removed on window unload.
+
 Whole groups move before/after an outer native tab, split or group using
 `gBrowser.moveTabBefore` / `moveTabAfter`; they never nest in another group.
 The pointer's position within the hovered row or heading chooses before/after,

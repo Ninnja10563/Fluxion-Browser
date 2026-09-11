@@ -2726,7 +2726,7 @@
       closingTabs.delete(event.target);
       if (pointerCloseHold?.tabs.has(event.target)) pointerCloseHold.closed.add(event.target);
     }
-    const contentOnly = ["TabAttrModified", "TabSharingStateChanged", "FluxionTabSleep", "FluxionPeekChange"]
+    const contentOnly = ["TabAttrModified", "TabSharingStateChanged", "FluxionTabSleep", "FluxionPeekChange", "FluxionTabLocationChange"]
       .includes(event?.type);
     if (["TabSelect", "TabMultiSelect"].includes(event?.type)) {
       selectionDirty = true;
@@ -3233,6 +3233,19 @@
   }
   // Gecko emits this event on the tabbrowser itself, not its tab-strip child.
   on(gBrowser, "TabMultiSelect", scheduleRender);
+  const flowProgressListener = {
+    onLocationChange(browser, webProgress) {
+      // Same-document navigation need not change any native tab attributes.
+      // Refresh only this row so its URL never waits for an unrelated rebuild.
+      if (!webProgress?.isTopLevel) return;
+      const tab = gBrowser.getTabForBrowser(browser);
+      if (tab?.parentNode && !tab.closing) {
+        scheduleRender({ type: "FluxionTabLocationChange", detail: { tab } });
+      }
+    },
+  };
+  gBrowser.addTabsProgressListener(flowProgressListener);
+  on(window, "unload", () => gBrowser.removeTabsProgressListener(flowProgressListener), { once: true });
   on(gBrowser.tabContainer, "TabSelect", () => {
     const tab = gBrowser.selectedTab;
     if (tab?.parentNode && storedTabWorkspace(tab) === currentWorkspace) rememberWorkspaceTab(tab);
