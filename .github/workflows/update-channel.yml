@@ -1,0 +1,37 @@
+name: Verify and publish update channel
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published, edited, deleted]
+  schedule:
+    - cron: '23 */6 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fluxion-verified-update-channel
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'Ninnja10563/Fluxion-Browser'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Check producer and publication boundaries
+        run: node --test fluxion/tests/release-feed*.test.js
+      - name: Verify public bytes and fast-forward only the update branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: node fluxion/scripts/publish-release-feed.mjs --publish

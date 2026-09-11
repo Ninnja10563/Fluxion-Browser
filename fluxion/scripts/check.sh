@@ -134,6 +134,7 @@ node --check modules/FluxionNativeMemory.sys.mjs
 node --check modules/FluxionRelease.sys.mjs
 node --check modules/FluxionReleaseFeed.sys.mjs
 node --check scripts/build-release-feed.mjs
+node --check scripts/publish-release-feed.mjs
 node --check modules/FluxionUpdates.sys.mjs
 node --check modules/FluxionAIControl.sys.mjs
 node --test tests/*.test.js

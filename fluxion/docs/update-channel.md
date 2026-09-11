@@ -46,7 +46,7 @@ This is maintainer-controlled metadata delivered over HTTPS, not an independent
 digital signature or a native-build attestation. Existing build and release
 gates remain responsible for browser validation before public release.
 
-## Deployment contract still to implement
+## Deployment
 
 Publish on a dedicated `update-channel` branch only after the release is public
 and its assets are verified. Serialize producers, query current releases inside
@@ -63,6 +63,21 @@ also fail or cache stale content; expiry and actionable failure UI are required.
 The native gate must observe a real public HTTP 200 response and compare the
 selected release with independent published-release evidence. Local fixtures
 remain unit-test inputs, never release evidence.
+
+The publisher now implements a dedicated `update-channel` branch with a
+`releases.json` file. Git tree updates preserve unrelated branch files and use
+the observed commit as parent. Ref updates explicitly prohibit force; branch
+movement before verification or publication fails the attempt. Bootstrap
+creates an independent root commit without deleting a source checkout.
+The workflow serializes publication, refreshes every six hours, and responds
+to release publication/edit/deletion or a manual dispatch. It checks out trusted
+`main`, never a release tag's workflow code. Twenty-four producer, schema and
+publication tests cover these boundaries before deployment.
+
+GitHub's [reference API](https://docs.github.com/en/rest/git/refs) provides
+non-forced fast-forward updates; its [tree API](https://docs.github.com/en/rest/git/trees)
+supports preserving an existing base tree while replacing one file. Repository
+write credentials are confined to the maintainer job, never sent by the browser.
 
 ## Prototype verification — 2026-09-11
 
