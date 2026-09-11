@@ -95,8 +95,10 @@ controls work and its failure paths have been tested.
 - privacy-gated heading/body extraction and richer local metadata (implemented)
 - encoded sensitive-route classification and first-open cleanup of existing
   evidence (published in 0.59; native storage/startup and full release checks passed);
-  named user-defined domain exclusion lists passed native branch diagnostics
-  and are integrated into the 0.61 release candidate (not automatic site categorization)
+  named user-defined domain exclusion lists are published in 0.61, with
+  pre-embedding native candidate filtering, conflict-safe editing and
+  corrupt-policy restart retention verified by full native release gates
+  (not automatic site categorization)
 - inspectable Browser Memory answer evidence (implemented)
 - history-removal propagation and invalidation of pending extraction, embeddings,
   and searches (implemented; native release verification covers exact URL

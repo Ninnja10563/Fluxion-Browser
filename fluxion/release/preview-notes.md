@@ -8,6 +8,14 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.61 is a published local Memory controls preview. It adds named domain
+lists, draft-safe cross-window editing, explicit corrupt-policy recovery and
+pre-embedding filtering for new excluded visits. The editor is checked through
+native geometry, keyboard/accessibility assertions and actual OS screenshots.
+All 746 tests, every combined native gate, actual anonymous update discovery
+and real DMG packaging passed. See
+[release provenance](provenance/v0.61.0-preview.1.md).
+
 Version 0.60 is a published tab-structure preview. Flat workspaces retain
 unaffected Flow rows and controls through native opening, closing, movement and
 pin-role changes. Reordering uses minimal DOM relocations while preserving

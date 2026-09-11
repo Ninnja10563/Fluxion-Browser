@@ -8,15 +8,15 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-Fluxion 0.61 is a release candidate: named local Memory exclusion lists,
-revision-safe cross-window editing and malformed-policy recovery. Its feature
-branch passed all native diagnostics; final integrated staging is still needed.
-The latest downloadable browser is 0.60 below.
+Fluxion 0.61 is published: named local Memory exclusion lists, revision-safe
+cross-window editing, malformed-policy recovery and pre-embedding checks for
+newly visited excluded pages. All 746 tests, every combined native release
+gate, actual anonymous update discovery and real DMG packaging passed.
 
-Known preview limitation: native indexing can briefly store vectors for newly
-visited excluded sites before cleanup, and interruption can retain them. Keep
-Browser Memory disabled if you rely on exclusions while the 0.61 fix is tested.
-Normal browsing is unaffected; no external upload was demonstrated.
+Upgrade from 0.60 or older if you rely on Memory exclusions. Those previews can
+store a newly excluded site's vector before cleanup, and interruption can
+retain it. Keep Memory disabled in older previews until upgrading to 0.61.
+Normal browsing works without Memory; no external upload was demonstrated.
 
 Fluxion 0.60 is published: flat workspaces retain Flow rows and focused
 controls during tab opening, closing and reordering, and manual DMG packaging
@@ -35,6 +35,14 @@ avoid redundant writes and duplicate ownership reads. Broader resource profiling
 and platform accessibility audits remain on the roadmap.
 
 ## Latest published changes
+
+Fluxion 0.61 adds compact named domain lists beside direct exclusions. Unsaved
+drafts survive changes from other windows, conflicting saves are rejected, and
+invalid policy stops recall/indexing without treating corruption as deletion
+consent. Native indexing filters excluded candidates before model input while
+preserving safe-page embedding and ordinary history. The editor is checked
+with actual macOS captures, keyboard focus and 320/600-pixel layout measurements.
+Lists are user-defined collections, not automatic website categories.
 
 Fluxion 0.60 keeps unaffected rows and controls connected during flat-tab
 structural changes. A single reordered tab requires one DOM relocation, with
@@ -66,17 +74,18 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.60](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.60.0-preview.1)
+[Fluxion 0.61](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.61.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 The adjustable sidebar retains compact/Focus rail geometry and cancels an
 unfinished resize with Escape. It includes 0.55's menu, search and Settings
 interaction improvements and 0.54's live cross-window tab transfers.
 
-All 687 regression tests and every native release gate passed, including
+All 746 regression tests and every native release gate passed, including
 stable 1,000-tab selection and structural changes, OS-native tab/group menu navigation, clean/crash
 recovery, private-data exclusion, disabled-Memory startup cleanup, responsive
-Settings and actual anonymous update discovery. See
-[verified release provenance](release/provenance/v0.60.0-preview.1.md).
+Settings, excluded cold-page model inputs, corrupt-policy restart retention
+and actual anonymous update discovery. See
+[verified release provenance](release/provenance/v0.61.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 
