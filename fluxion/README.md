@@ -8,8 +8,11 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.62 candidate extends stable Flow updates to grouped tabs and split views.
-It is not yet a downloadable release; native validation is in progress.
+Fluxion 0.62 is published: stable Flow updates now extend to grouped tabs and
+split views, preserving surviving rows, controls and accessible group headings.
+All 770 tests and every native release gate passed, including 21 structural
+operations on 1,000 real Gecko tabs, anonymous update discovery and DMG packaging.
+Download the [universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.62.0-preview.1).
 
 Fluxion 0.61 is published: named local Memory exclusion lists, revision-safe
 cross-window editing, malformed-policy recovery and pre-embedding checks for
@@ -30,7 +33,7 @@ Fluxion 0.59 is published: encoded sensitive routes remain excluded from
 Browser Memory, including saved evidence from older profiles. Native macOS
 privacy and restart checks verify selective cleanup while preserving safe
 evidence and ordinary browsing history. Sensitive-page detection remains
-heuristic; user-defined exclusion lists are in the 0.61 candidate, not 0.60.
+heuristic; user-defined exclusion lists are published in 0.61 and later, not 0.60.
 
 Fluxion 0.58 is published: ordinary tab switching preserves unchanged Flow rows
 and controls, native multi-selection stays synchronized, and workspace sessions
@@ -38,6 +41,13 @@ avoid redundant writes and duplicate ownership reads. Broader resource profiling
 and platform accessibility audits remain on the roadmap.
 
 ## Latest published changes
+
+Fluxion 0.62 keeps surviving tab and close/audio nodes connected through native
+group and split changes. Group headings retain their accessible relationships,
+collapsed groups expose only the selected page, and keyboard-focus recovery
+does not steal focus from other controls. Native tests check global visible
+order as well as group order, with zero writes to unaffected rows. Whole-group
+dragging and broader hardware/accessibility profiling remain unfinished.
 
 Fluxion 0.61 adds compact named domain lists beside direct exclusions. Unsaved
 drafts survive changes from other windows, conflicting saves are rejected, and
@@ -50,7 +60,7 @@ Lists are user-defined collections, not automatic website categories.
 Fluxion 0.60 keeps unaffected rows and controls connected during flat-tab
 structural changes. A single reordered tab requires one DOM relocation, with
 native order, independent pinned/list keyboard entries and owned focus
-preserved. Grouped/split/workspace projections keep their existing fallback.
+preserved. Its grouped/split fallback is superseded by 0.62's hierarchical updates.
 This reduces unnecessary mutations; it is not a physical-hardware frame-rate
 guarantee or tab virtualization.
 

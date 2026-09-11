@@ -8,6 +8,14 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.62 is a published grouped-tab stability preview. Surviving tab rows,
+close/audio controls and group headings remain connected through native group
+and split changes. All 770 tests and every combined native gate passed,
+including 21 structural operations on 1,000 Gecko tabs, actual anonymous update
+discovery, architecture/signature checks and real DMG packaging. This reduces
+unnecessary sidebar mutations, not a physical-hardware frame-rate guarantee.
+See [release provenance](provenance/v0.62.0-preview.1.md).
+
 Version 0.61 is a published local Memory controls preview. It adds named domain
 lists, draft-safe cross-window editing, explicit corrupt-policy recovery and
 pre-embedding filtering for new excluded visits. The editor is checked through

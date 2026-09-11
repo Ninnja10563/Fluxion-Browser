@@ -141,8 +141,10 @@ controls work and its failure paths have been tested.
   remain, with no cache across restoration events)
 - preserve flat Flow rows through opening, closing and reordering, with
   minimal DOM moves and exact owned control-focus retention (published in 0.60;
-  all combined native gates and packaging passed; complex topology still uses
-  full-render fallbacks, and physical-hardware profiling remains)
+  all combined native gates and packaging passed; published 0.62 extends keyed
+  reconciliation to groups and splits with 21 native 1,000-tab operations,
+  retained control/heading identity and global visible-order checks;
+  physical-hardware profiling and whole-group drag interaction remain)
 - bounded page evidence traversal without DOM cloning or full text-node reads,
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)

@@ -1195,10 +1195,11 @@ Authoritative tab/workspace reads remain O(N), and the ordering plan is
 O(N log N). This reduces DOM work; it does not establish constant-time tab
 operations, sustained frame rates or content-heavy memory performance. The
 native structure gate uses 1,000 tabs (40 eager, 960 lazy), actual Gecko tab
-operations and chrome focus. Its expanded candidate checks cover native group
+operations and chrome focus. Its expanded checks cover native group
 creation, changes and collapse, split creation/orientation/reversal/separation,
 and native split wrappers moved into groups. Local VM tests are separate evidence;
-the 0.62 candidate must pass the packaged native gate before release.
+the published 0.62 build passed all 21 operations in the packaged native gate,
+including global visible-order assertions, with zero unaffected row writes.
 
 Manual DMG packaging derives its default release from the supplied app's
 bundled Settings constants, parsed as data. It requires the complete release
