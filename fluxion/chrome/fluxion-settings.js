@@ -891,7 +891,7 @@
       add.disabled = !canEdit || snapshot.lists.length >= 20 || records.has("new");
       for (const saved of snapshot.lists) {
         const record = records.get(saved.id) || makeRecord(saved.id);
-        record.summary.textContent = `${saved.name} · ${saved.enabled ? "Enabled" : "Disabled"} · ${saved.domains.length} domains`;
+        record.summary.textContent = `${saved.name} · ${saved.enabled ? "Enabled" : "Disabled"} · ${saved.domains.length} ${saved.domains.length === 1 ? "domain" : "domains"}`;
         if (!record.dirty) {
           record.name.value = saved.name; record.domains.value = saved.domains.join(", ");
           record.enabled.checked = saved.enabled; record.revision = snapshot.revision;

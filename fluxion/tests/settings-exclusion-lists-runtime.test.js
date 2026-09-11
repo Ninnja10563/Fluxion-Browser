@@ -71,6 +71,21 @@ test("actual Settings creates an explicitly saved named list with stable fields 
   assert.equal(h.row("new"), undefined);
 });
 
+test("saved list summary uses singular only for one domain and refreshes without replacing its disclosure", () => {
+  const h = harness(), row = h.row("research"), summary = find(row, item => item.tagName === "summary");
+  assert.equal(summary.textContent, "Research · Enabled · 1 domain");
+  for (const [domains, enabled, expected] of [
+    [[], false, "Research · Disabled · 0 domains"],
+    [["first.example", "second.example"], true, "Research · Enabled · 2 domains"],
+    [["only.example"], true, "Research · Enabled · 1 domain"],
+  ]) {
+    h.publish({ lists: [{ id: "research", name: "Research", domains, enabled }] });
+    assert.equal(h.row("research"), row);
+    assert.equal(find(row, item => item.tagName === "summary"), summary);
+    assert.equal(summary.textContent, expected);
+  }
+});
+
 test("draft toggle needs Save; cross-window edits preserve identity, focus and revision conflict until Cancel", async () => {
   const h = harness(), row = h.row("research"), name = h.field(row, "List name"), enabled = h.field(row, "Enable this list");
   name.focus(); name.value = "My draft"; name.selectionStart = 2; name.selectionEnd = 5; await fire(name, "input");
