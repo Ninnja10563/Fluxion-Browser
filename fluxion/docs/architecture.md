@@ -667,7 +667,8 @@ writes and cleanup finish. A timeout/failure is reported, not represented as a
 completed deletion. This is not atomic or forensic erasure across a crash.
 
 `FluxionUrlbarMemory.sys.mjs` unregisters only Gecko's experimental
-`SemanticHistorySearch` provider from native URL-bar/smart-bar registries at
+`UrlbarProviderSemanticHistorySearch` provider (and the older
+`SemanticHistorySearch` alias) from native URL-bar/smart-bar registries at
 profile readiness. Ordinary Places, autofill and search providers remain.
 Semantic recall is exposed through Fluxion's policy-filtered Memory interface,
 not a second native provider that bypasses its exclusions. Native indexing

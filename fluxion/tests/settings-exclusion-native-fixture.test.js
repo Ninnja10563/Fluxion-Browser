@@ -56,3 +56,41 @@ test("invalid policy cannot be overwritten just to run responsive verification",
   const h = fixture({ invalid: true }); await assert.rejects(h.seed(), /valid writable exclusion policy/);
   assert.deepEqual(h.calls, []);
 });
+
+function captureFixture({ exclusionsReceipt = true } = {}) {
+  const captureStart = source.indexOf("  async function captureNarrowSettings(surface)");
+  const captureEnd = source.indexOf("  run().catch(error =>", captureStart);
+  assert.ok(captureStart > 0 && captureEnd > captureStart);
+  let elapsed = 0;
+  const writes = [], reads = [];
+  const context = vm.createContext({
+    assert: (value, message) => { if (!value) throw new Error(message); },
+    deadline: 100, Date: { now: () => elapsed }, pause: async () => { elapsed += 25; },
+    PathUtils: { profileDir: "/owned/profile", parent: () => "/owned", join: (...parts) => parts.join("/") },
+    IOUtils: {
+      async writeUTF8(file, value) { writes.push({ file, value }); },
+      async exists(file) {
+        reads.push(file);
+        return file === "/owned/capture.sent" ||
+          (file === "/owned/capture-exclusions.sent" && exclusionsReceipt && elapsed >= 50);
+      },
+    },
+  });
+  vm.runInContext(source.slice(captureStart, captureEnd) + "\nglobalThis.capture = captureNarrowSettings;", context);
+  return { capture: context.capture, writes, reads, elapsed: () => elapsed };
+}
+test("native screenshot handshake preserves Workspaces receipt and requires a separate exclusion-list receipt", async () => {
+  const h = captureFixture();
+  await h.capture("workspaces"); await h.capture("exclusion-lists");
+  assert.deepEqual(h.writes, [{ file: "/owned/capture.ready", value: "ready" },
+    { file: "/owned/capture-exclusions.ready", value: "ready" }]);
+  assert.equal(h.elapsed(), 50, "Workspaces receipt cannot acknowledge exclusion-list capture");
+  assert.equal(h.reads.filter(file => file.endsWith("capture-exclusions.sent")).length, 3);
+});
+test("missing second capture fails boundedly and unknown surface never touches the driver", async () => {
+  const h = captureFixture({ exclusionsReceipt: false });
+  await assert.rejects(h.capture("exclusion-lists"), /Narrow exclusion-lists screenshot driver did not respond/);
+  assert.equal(h.elapsed(), 100);
+  const invalid = captureFixture(); await assert.rejects(invalid.capture("../../other"), /Unknown Settings screenshot surface/);
+  assert.deepEqual(invalid.writes, []); assert.deepEqual(invalid.reads, []);
+});

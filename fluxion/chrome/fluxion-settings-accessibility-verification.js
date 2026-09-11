@@ -248,12 +248,19 @@
       await waitFor(() => Math.abs(root.getBoundingClientRect().width - 320) < 2, "Screenshot did not reach narrow width");
       await show(sections.find(panel => panel.dataset.section === "workspaces"));
       root.querySelector('.fluxion-workspace-create input').focus();
-      const driver = PathUtils.parent(PathUtils.profileDir);
-      await IOUtils.writeUTF8(PathUtils.join(driver, "capture.ready"), "ready");
-      do {
-        if (await IOUtils.exists(PathUtils.join(driver, "capture.sent"))) break;
-        assert(Date.now() < deadline, "Narrow Settings screenshot driver did not respond"); await pause();
-      } while (true);
+      await captureNarrowSettings("workspaces");
+      await show(sections.find(panel => panel.dataset.section === "search"));
+      const editor = root.querySelector(`[data-exclusion-list-id="${exclusionFixture.id}"]`);
+      assert(editor, "Seeded exclusion list disappeared before screenshot");
+      if (!editor.open) editor.querySelector("summary").click();
+      const name = editor.querySelector('input[type="text"]');
+      await waitFor(() => editor.open && name.getBoundingClientRect().height > 0,
+        "Exclusion-list screenshot editor did not become visible");
+      name.focus();
+      editor.scrollIntoView({ block: "start", inline: "nearest", behavior: "instant" });
+      assert(document.activeElement === name, "Exclusion-list screenshot lost its field focus");
+      await captureNarrowSettings("exclusion-lists");
+      geometry.screenshots = ["narrow-workspaces.png", "narrow-exclusion-lists.png"];
     }
     window.resizeTo(original.width, original.height);
     write("report", JSON.stringify(report));
@@ -262,6 +269,17 @@
       await exclusionFixture.restore();
     }
     write("geometry.health", "all-settings-sections-fit-320-and-600px");
+  }
+  async function captureNarrowSettings(surface) {
+    const name = surface === "workspaces" ? "capture" : surface === "exclusion-lists" ? "capture-exclusions" : null;
+    assert(name, "Unknown Settings screenshot surface");
+    const driver = PathUtils.parent(PathUtils.profileDir);
+    await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
+    do {
+      if (await IOUtils.exists(PathUtils.join(driver, `${name}.sent`))) return;
+      assert(Date.now() < deadline, `Narrow ${surface} screenshot driver did not respond`);
+      await pause();
+    } while (true);
   }
   run().catch(error => {
     write("report", JSON.stringify(report));

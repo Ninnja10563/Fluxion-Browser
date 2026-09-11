@@ -44,7 +44,10 @@ FLUXION_PROFILE="$profile" FLUXION_SETTINGS_ACCESSIBILITY_TEST=1 \
   "$launcher" about:blank >"$log" 2>&1 &
 process_id=$!
 for ((attempt=0; attempt<720; attempt++)); do
-  if [[ -f "$check_root/capture.ready" && ! -f "$check_root/capture.sent" ]]; then
+  for capture in "capture:narrow-workspaces" "capture-exclusions:narrow-exclusion-lists"; do
+    capture_key="${capture%%:*}"
+    capture_image="${capture#*:}"
+  if [[ -f "$check_root/$capture_key.ready" && ! -f "$check_root/$capture_key.sent" ]]; then
     owned || exit 1
     [[ -n "${FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR:-}" ]] || exit 1
     osascript - "$process_id" <<'APPLESCRIPT'
@@ -60,9 +63,10 @@ end run
 APPLESCRIPT
     mkdir -p "$FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR"
     owned || exit 1
-    screencapture -x "$FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR/narrow-workspaces.png"
-    touch "$check_root/capture.sent"
+    screencapture -x "$FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR/$capture_image.png"
+    touch "$check_root/$capture_key.sent"
   fi
+  done
   if [[ -f "$profile/prefs.js" ]]; then
     if grep -Fq 'user_pref("fluxion.settingsAccessibility.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.settingsAccessibility.health", "native-control-names-and-descriptions-verified")' "$profile/prefs.js" &&
