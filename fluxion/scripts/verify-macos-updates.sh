@@ -26,7 +26,28 @@ cleanup() {
   esac
 }
 trap cleanup EXIT
-FLUXION_PROFILE="$profile" FLUXION_UPDATE_TEST=1 FLUXION_EXPECTED_RELEASE="$expected_release" \
+
+# Independent maintainer evidence: authenticate only repository reads, then
+# anonymously stream actual public DMG/checksum bytes. This is not the browser's
+# feed response and cannot substitute a fixture for its genuine HTTP 200 check.
+node "$fluxion_root/scripts/build-release-feed.mjs" --output "$check_root/release-evidence.json"
+published_evidence="$(node --input-type=module - "$fluxion_root" "$check_root/release-evidence.json" "$expected_release" <<'JS'
+import { readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+const { FluxionRelease } = await import(pathToFileURL(`${process.argv[2]}/modules/FluxionRelease.sys.mjs`));
+const feed = JSON.parse(readFileSync(process.argv[3], 'utf8'));
+const result = FluxionRelease.select(feed.releases, process.argv[4]);
+const release = feed.releases.find(entry => entry.tag_name === `v${result.latest}`);
+if (!release) throw new Error('No independently verified compatible release');
+console.log(JSON.stringify({ latest: result.latest, state: result.state, evidence: {
+  id: release.id, tag: release.tag_name, sourceCommit: release.sourceCommit,
+  publishedAt: release.published_at, assets: release.assets,
+} }));
+JS
+)"
+env -u GH_TOKEN -u GITHUB_TOKEN \
+  FLUXION_PROFILE="$profile" FLUXION_UPDATE_TEST=1 FLUXION_EXPECTED_RELEASE="$expected_release" \
+  FLUXION_PUBLISHED_EVIDENCE="$published_evidence" \
   "$launcher" about:blank >"$log" 2>&1 &
 process_id=$!
 for ((attempt=0; attempt<240; attempt++)); do

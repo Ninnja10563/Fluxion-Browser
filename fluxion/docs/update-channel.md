@@ -1,9 +1,8 @@
-# Verified update channel: implementation in progress
+# Verified update channel
 
-This work is separate from the 0.63 release candidate. Its consumer and
-deployment are not yet enabled; ordinary Fluxion update checks still use the
-existing explicit GitHub API request. No new endpoint or success fixture has
-been substituted into 0.63's native release gate.
+The 0.64 candidate uses this feed for manual update discovery. Published 0.63
+and earlier keep their existing explicit GitHub API request; their successful
+native release evidence and shipped binaries have not been changed.
 
 Repeated anonymous API quota exhaustion motivates a maintained public feed for
 manual update discovery. A browser should not require a GitHub token to check
@@ -73,6 +72,33 @@ The workflow serializes publication, refreshes every six hours, and responds
 to release publication/edit/deletion or a manual dispatch. It checks out trusted
 `main`, never a release tag's workflow code. Twenty-four producer, schema and
 publication tests cover these boundaries before deployment.
+
+Bootstrap workflow [34597299803](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/34597299803)
+passed on producer source `114998f7c7336f0e281d20f5cb93e750613463a4`, publishing
+feed commit `3b90726a5179619c56aaf5fcdd8a12325a977a6b`. A real anonymous fetch
+returned its valid JSON describing public 0.63, generated
+`2026-09-11T12:07:31.131Z`, expiring 24 hours later. This does not yet prove
+the candidate's native Gecko consumption; that remains a release gate.
+
+## Browser and native validation
+
+The fixed endpoint is
+`https://raw.githubusercontent.com/Ninnja10563/Fluxion-Browser/update-channel/releases.json`.
+The browser performs one manual, shared, credential-free GET with no query
+parameters, cookies, referrer or API fallback. It accepts JSON or raw-hosting
+text/plain only after strict JSON/schema validation. The whole response is
+limited to 64 KiB and ten seconds. Expired or malformed data is unavailable,
+never current; the user can retry explicitly or open the releases page. Checks
+do not download the DMG/checksum. Installation remains manual.
+
+Before launching the native verifier, the maintainer shell separately discovers
+actual GitHub releases and anonymously hashes public DMG/checksum bytes. Its
+repository API reads may use the workflow token; both `GH_TOKEN` and
+`GITHUB_TOKEN` are removed from the browser launch environment, and the native
+test asserts their absence. Only public expected metadata crosses that boundary.
+The actual browser must receive feed HTTP 200, make no repository API request,
+and match the independent latest version, release/source identity and all asset
+IDs, URLs, sizes and digests. No local feed is injected into the browser.
 
 GitHub's [reference API](https://docs.github.com/en/rest/git/refs) provides
 non-forced fast-forward updates; its [tree API](https://docs.github.com/en/rest/git/trees)

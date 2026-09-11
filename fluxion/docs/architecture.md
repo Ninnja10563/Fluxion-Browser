@@ -408,14 +408,14 @@ overwriting the product, without disabling extension or security-service updates
 
 About provides an explicit Fluxion release check. `FluxionUpdates` is a privileged,
 process-shared module; importing it performs no network request. A user action
-fetches only the fixed public GitHub releases endpoint, omitting credentials and
-referrer, rejecting redirects, and bounding the streamed response to 4 MiB and
-100 records. A 10-second deadline aborts the request, including response-body
+fetches only the fixed public verified-feed endpoint, omitting credentials and
+referrer, rejecting redirects, and bounding the streamed response to 64 KiB and
+at most two release channels. A 10-second deadline aborts the request, including response-body
 reads. Concurrent checks share one request; failures are not retried
 automatically. Rate-limit responses create a shared cooldown using GitHub's
 retry/reset advice (one minute when no valid future advice is supplied); checks
 during that interval return the retry time without another network request.
-Other failures are not cached. Rate-limit, malformed-response, and network failures are not
+Other failures are not cached. Expired-feed, rate-limit, malformed-response, and network failures are not
 reported as being up to date.
 
 The pure `FluxionRelease` selector compares full `major.minor.patch-preview.N`
@@ -423,10 +423,17 @@ versions numerically, treats a stable version as newer than its own previews,
 and excludes previews for stable installations. It validates non-draft release
 flags, the exact repository/tag URL, and one uploaded positive-size universal
 DMG plus matching checksum asset with exact official URLs. It chooses the highest
-compatible version among the bounded recent records without relying on ordering;
+compatible version among the bounded channel records without relying on ordering;
 no compatible candidate is an indeterminate result, and an older candidate never
 produces a download action. Only macOS currently has packaged update support.
-This is release discovery, not binary-integrity verification or a signed updater.
+The producer independently verifies public asset bytes before publishing an
+expiring feed; `FluxionReleaseFeed` rejects malformed identity, timestamps,
+digests and channels as a whole. A serialized workflow refreshes the dedicated
+branch without force updates. The browser never falls back to authenticated API
+access. See [the update channel contract](update-channel.md), including the
+native gate's independent public-release comparison and credential boundary.
+This remains release discovery, not a signed updater or client-side verification
+of a later manual download.
 Downloading is a separate user action through Gecko, and installation remains
 manual. Developer ID signing, notarization, and authenticated automatic updates
 remain release-hardening work.

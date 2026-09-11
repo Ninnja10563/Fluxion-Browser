@@ -5,8 +5,8 @@
   const prefix = "fluxion.updateVerification";
   if (Services.prefs.getBoolPref(`${prefix}.claimed`, false)) return;
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
-  const endpoint = "https://api.github.com/repos/Ninnja10563/Fluxion-Browser/releases?per_page=100";
-  const report = { requests: 0, assetRequests: 0, requestHeaders: [] };
+  const endpoint = "https://raw.githubusercontent.com/Ninnja10563/Fluxion-Browser/update-channel/releases.json";
+  const report = { requests: 0, assetRequests: 0, apiRequests: 0, requestHeaders: [] };
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const pause = ms => new Promise(resolve => window.setTimeout(resolve, ms));
   const waitFor = async (predicate, message) => {
@@ -17,6 +17,7 @@
   const observer = { observe(subject, topic) {
     const channel = subject.QueryInterface(Ci.nsIHttpChannel);
     const url = channel.URI.spec;
+    if (topic === "http-on-modify-request" && url.startsWith("https://api.github.com/repos/Ninnja10563/Fluxion-Browser/")) report.apiRequests++;
     if (topic === "http-on-modify-request" && url.startsWith("https://github.com/Ninnja10563/Fluxion-Browser/releases/download/")) report.assetRequests++;
     if (url !== endpoint) return;
     if (topic === "http-on-examine-response") {
@@ -33,6 +34,8 @@
   Services.obs.addObserver(observer, "http-on-modify-request");
   Services.obs.addObserver(observer, "http-on-examine-response");
   async function run() {
+    assert(!Services.env.get("GH_TOKEN") && !Services.env.get("GITHUB_TOKEN"),
+      "Maintainer verification credentials must not enter the browser process");
     await SessionStore.promiseAllWindowsRestored;
     const { Downloads } = ChromeUtils.importESModule("resource://gre/modules/Downloads.sys.mjs");
     const downloads = await Downloads.getList(Downloads.ALL);
@@ -51,7 +54,7 @@
     report.compactActionLabels = true;
     assert(get("status").dataset.state === "idle", "Opening About started an update check automatically");
     await pause(250);
-    assert(report.requests === 0 && report.assetRequests === 0, "Update traffic occurred before the user action");
+    assert(report.requests === 0 && report.assetRequests === 0 && report.apiRequests === 0, "Update traffic occurred before the user action");
     const tabs = window.gBrowser.tabs.length;
     get("check").click();
     assert(get("check").disabled && get("status").dataset.state === "checking", "Check action did not show immediate busy feedback");
@@ -65,6 +68,15 @@
     assert(["current", "available"].includes(state), `Real release check failed: ${report.message}`);
     assert(report.installed === Services.env.get("FLUXION_EXPECTED_RELEASE"), "Installed release or preview channel did not match the product package");
     assert(report.latest && report.message.includes(report.latest), "Latest compatible version was not displayed");
+    const expected = JSON.parse(Services.env.get("FLUXION_PUBLISHED_EVIDENCE"));
+    assert(expected.latest === report.latest && expected.state === state,
+      "Public feed selection differs from independently verified published releases");
+    const actualEvidence = JSON.parse(get("status").dataset.releaseEvidence);
+    assert(JSON.stringify(actualEvidence) === JSON.stringify(expected.evidence),
+      "Public feed source or asset evidence differs from actual published release data");
+    report.publishedEvidence = actualEvidence;
+    assert(report.response?.status === 200 && report.apiRequests === 0,
+      "Native update check must use real public feed HTTP 200, without an API fallback");
     assert(get("download").hidden === (state !== "available"), "Download action does not match update availability");
     assert(report.requests === 1 && report.requestHeaders.every(headers => headers.method === "GET" &&
       !headers.cookie && !headers.authorization && !headers.referrer), "Update request included credentials, referrer, or duplicates");

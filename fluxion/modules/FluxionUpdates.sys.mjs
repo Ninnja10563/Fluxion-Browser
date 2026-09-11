@@ -1,5 +1,6 @@
 import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
 import { FluxionRelease } from "resource://fluxion/modules/FluxionRelease.sys.mjs";
+import { FluxionReleaseFeed } from "resource://fluxion/modules/FluxionReleaseFeed.sys.mjs";
 
 // System-global DOM exposure varies across Gecko baselines. These are native
 // chrome globals, never constructors or network functions supplied by a page.
@@ -7,8 +8,8 @@ if (typeof fetch === "undefined" || typeof TextDecoder === "undefined") {
   Cu.importGlobalProperties(["fetch", "TextDecoder"]);
 }
 
-const RELEASES_URL = "https://api.github.com/repos/Ninnja10563/Fluxion-Browser/releases?per_page=100";
-const MAX_BYTES = 4 * 1024 * 1024;
+const RELEASES_URL = "https://raw.githubusercontent.com/Ninnja10563/Fluxion-Browser/update-channel/releases.json";
+const MAX_BYTES = 64 * 1024;
 const DEADLINE_MS = 10000;
 let inFlight;
 let rateLimit;
@@ -49,7 +50,7 @@ async function fetchReleases() {
     const response = await fetch(RELEASES_URL, {
       method: "GET", credentials: "omit", redirect: "error", referrer: "",
       referrerPolicy: "no-referrer", cache: "no-store", signal: controller.signal,
-      headers: { Accept: "application/vnd.github+json", "X-GitHub-Api-Version": "2022-11-28" },
+      headers: { Accept: "application/json, text/plain" },
     });
     if (timedOut) return { error: "timeout" };
     if (response.redirected || response.url !== RELEASES_URL) return { error: "http" };
@@ -59,7 +60,9 @@ async function fetchReleases() {
     }
     if (response.status !== 200) return { error: "http" };
     const type = response.headers.get("content-type")?.split(";")[0].trim().toLowerCase();
-    if (!["application/json", "application/vnd.github+json"].includes(type)) return { error: "invalid-response" };
+    // GitHub raw content uses text/plain. Trust rests on the fixed HTTPS URL
+    // and bounded, strict JSON schema, never on treating the response as code.
+    if (!["application/json", "text/plain"].includes(type)) return { error: "invalid-response" };
     const length = response.headers.get("content-length");
     if (length && (!/^\d+$/.test(length) || Number(length) > MAX_BYTES)) return { error: "too-large" };
     if (!response.body?.getReader) return { error: "invalid-response" };
@@ -76,9 +79,9 @@ async function fetchReleases() {
       text += decoder.decode(value, { stream: true });
     }
     text += decoder.decode();
-    const releases = JSON.parse(text);
-    if (!Array.isArray(releases) || releases.length > 100) return { error: "invalid-response" };
-    return { releases };
+    const feed = JSON.parse(text);
+    if (!FluxionReleaseFeed.validate(feed)) return { error: "invalid-feed" };
+    return { feed };
   } catch (_) {
     return { error: timedOut ? "timeout" : "unavailable" };
   } finally {
@@ -101,8 +104,16 @@ export const FluxionUpdates = Object.freeze({
     // Importing this singleton performs no network IO. Only an explicit check
     // starts a request; concurrent browser windows share its bounded response.
     if (!inFlight) inFlight = fetchReleases().finally(() => { inFlight = null; });
-    return inFlight.then(result => result.error
-      ? unavailable(result, installedRelease)
-      : FluxionRelease.select(result.releases, installedRelease, platform));
+    return inFlight.then(result => {
+      if (result.error) return unavailable(result, installedRelease);
+      const checked = FluxionReleaseFeed.validate(result.feed);
+      if (!checked) return unavailable({ error: "invalid-feed" }, installedRelease);
+      const selection = FluxionRelease.select(checked.releases, installedRelease, platform);
+      const selected = checked.releases.find(release => release.tag_name === `v${selection.latest}`);
+      return { ...selection, ...(selected ? { evidence: {
+        id: selected.id, tag: selected.tag_name, sourceCommit: selected.sourceCommit,
+        publishedAt: selected.published_at, assets: selected.assets,
+      } } : {}) };
+    });
   },
 });

@@ -67,7 +67,7 @@ test("unsupported or incomplete release data is not described as up to date", as
 });
 
 test("structured network failures are shown as failures rather than no compatible release", async () => {
-  for (const reason of ["rate-limit", "timeout", "too-large", "http"]) {
+  for (const reason of ["rate-limit", "timeout", "too-large", "http", "invalid-feed"]) {
     const h = fixture(); h.click();
     h.calls[0].resolve({ state: "unavailable", installed, reason }); await settle();
     assert.equal(h.status.dataset.state, "error");
@@ -76,6 +76,19 @@ test("structured network failures are shown as failures rather than no compatibl
     assert.equal(h.download.hidden, true);
     assert.doesNotMatch(h.status.textContent, /No compatible downloadable release was found/);
   }
+});
+
+test("expired feed clears prior release evidence and download actions without claiming current", async () => {
+  const h = fixture(); h.click();
+  h.calls[0].resolve({ state: "available", latest: "1.0.0", downloadURL: "old-download",
+    evidence: { sourceCommit: "a".repeat(40) } }); await settle();
+  assert.equal(JSON.parse(h.status.dataset.releaseEvidence).sourceCommit, "a".repeat(40));
+  h.click(); assert.equal(h.status.dataset.releaseEvidence, undefined);
+  h.calls[1].resolve({ state: "unavailable", reason: "invalid-feed" }); await settle();
+  assert.equal(h.download.hidden, true); assert.equal(h.check.disabled, false);
+  assert.match(h.status.textContent, /expired or could not be verified/);
+  assert.doesNotMatch(h.status.textContent, /No newer|up to date/i);
+  h.click(h.download); assert.deepEqual(h.opened, []);
 });
 
 test("compact release control retains a descriptive name and opens the correct destination", async () => {

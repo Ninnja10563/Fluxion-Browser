@@ -4,7 +4,19 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
-const URL = "https://api.github.com/repos/Ninnja10563/Fluxion-Browser/releases?per_page=100";
+const URL = "https://raw.githubusercontent.com/Ninnja10563/Fluxion-Browser/update-channel/releases.json";
+const NOW = Date.UTC(2026, 8, 10, 12);
+function manifest(version = "0.49.0-preview.1") {
+  const root = "https://github.com/Ninnja10563/Fluxion-Browser", tag = `v${version}`;
+  const filename = `Fluxion-${version}-macOS-universal.dmg`;
+  return { schemaVersion: 1, repository: "Ninnja10563/Fluxion-Browser", generatedAt: new Date(NOW).toISOString(),
+    expiresAt: new Date(NOW + 86400000).toISOString(), releases: [{ id: 1, tag_name: tag, draft: false,
+      prerelease: version.includes("preview"), html_url: `${root}/releases/tag/${tag}`,
+      published_at: new Date(NOW - 86400000).toISOString(), verifiedAt: new Date(NOW).toISOString(),
+      sourceCommit: "a".repeat(40), assets: [filename, `${filename}.sha256`].map((name, index) => ({
+        id: 10 + index, name, state: "uploaded", size: 100, digest: `sha256:${"b".repeat(64)}`,
+        browser_download_url: `${root}/releases/download/${tag}/${name}` })) }] };
+}
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const settle = () => new Promise(resolve => setImmediate(resolve));
 
@@ -22,10 +34,15 @@ function fixture(fetchImpl, { realValidation = false } = {}) {
       return { state: platform === "Darwin" ? "current" : "unsupported", installed };
     } },
   });
-  if (realValidation) {
+  {
+    const selectionSpy = context.FluxionRelease;
     const validation = fs.readFileSync(path.join(__dirname, "../modules/FluxionRelease.sys.mjs"), "utf8")
       .replace("export const FluxionRelease", "globalThis.FluxionRelease");
     vm.runInContext(`(() => { ${validation} })()`, context);
+    const feedValidation = fs.readFileSync(path.join(__dirname, "../modules/FluxionReleaseFeed.sys.mjs"), "utf8")
+      .replace(/^import .*;\n/gm, "").replace("export const FluxionReleaseFeed", "globalThis.FluxionReleaseFeed");
+    vm.runInContext(`(() => { const FluxionRelease = globalThis.FluxionRelease; ${feedValidation} })()`, context);
+    if (!realValidation) context.FluxionRelease = selectionSpy;
   }
   const source = fs.readFileSync(path.join(__dirname, "../modules/FluxionUpdates.sys.mjs"), "utf8")
     .replace(/^import .*;\n/gm, "").replace("export const FluxionUpdates", "globalThis.FluxionUpdates");
@@ -34,7 +51,7 @@ function fixture(fetchImpl, { realValidation = false } = {}) {
     now: () => now, advance(ms) { now += ms; },
     expire() { for (const timer of [...timers.values()]) timer(); } };
 }
-function response(text = "[]", options = {}) {
+function response(text = JSON.stringify(manifest()), options = {}) {
   const encoder = new TextEncoder();
   const body = options.body || new ReadableStream({ start(controller) { controller.enqueue(encoder.encode(text)); controller.close(); } });
   return { status: 200, url: URL, redirected: false,
@@ -53,25 +70,22 @@ test("explicit checks only use fixed credential-free GitHub request and share in
   assert.equal(options.credentials, "omit"); assert.equal(options.redirect, "error");
   assert.equal(options.referrer, ""); assert.equal(options.referrerPolicy, "no-referrer");
   assert.equal(options.cache, "no-store"); assert.equal(options.method, "GET");
-  assert.deepEqual(Object.keys(options.headers).sort(), ["Accept", "X-GitHub-Api-Version"]);
-  pending.resolve(response('[{"tag_name":"v0.49.0-preview.1"}]'));
+  assert.deepEqual(Object.keys(options.headers), ["Accept"]);
+  pending.resolve(response());
   assert.equal((await first).state, "current"); assert.equal((await second).state, "current");
   assert.equal(f.selections[0].releases[0].tag_name, "v0.49.0-preview.1");
   assert.equal(f.timers.size, 0);
 });
 
 test("actual network module and release validator expose only the verified newer DMG pair", async () => {
-  const tag = "v0.50.0-preview.1";
-  const repo = "https://github.com/Ninnja10563/Fluxion-Browser";
-  const filename = "Fluxion-0.50.0-preview.1-macOS-universal.dmg";
-  const release = { tag_name: tag, draft: false, prerelease: true, html_url: `${repo}/releases/tag/${tag}`,
-    assets: [filename, `${filename}.sha256`].map(name => ({ name, state: "uploaded", size: 100,
-      browser_download_url: `${repo}/releases/download/${tag}/${name}` })) };
-  const f = fixture(async () => response(JSON.stringify([release])), { realValidation: true });
+  const feed = manifest("0.50.0-preview.1"), release = feed.releases[0];
+  const f = fixture(async () => response(JSON.stringify(feed)), { realValidation: true });
   const result = await f.check("0.49.0-preview.1");
   assert.equal(result.state, "available");
   assert.equal(result.downloadURL, release.assets[0].browser_download_url);
   assert.equal(result.checksumURL, release.assets[1].browser_download_url);
+  assert.equal(result.evidence.sourceCommit, release.sourceCommit);
+  assert.equal(result.evidence.assets[0].digest, release.assets[0].digest);
   assert.equal(f.calls.length, 1, "checking never downloads app or checksum bytes");
 });
 
@@ -80,10 +94,10 @@ for (const [label, makeResponse, reason] of [
   ["redirected response", () => response("[]", { redirected: true }), "http"],
   ["different final URL", () => response("[]", { url: "https://evil.test/releases" }), "http"],
   ["HTML payload", () => response("[]", { headers: new Headers({ "content-type": "text/html" }) }), "invalid-response"],
-  ["oversized declared response", () => response("[]", { headers: new Headers({ "content-type": "application/json", "content-length": "4194305" }) }), "too-large"],
-  ["oversized streamed response", () => response(" ".repeat(4194305)), "too-large"],
-  ["more than 100 releases", () => response(JSON.stringify(Array.from({ length: 101 }, () => ({})))), "invalid-response"],
-  ["non-array JSON", () => response("{}"), "invalid-response"],
+  ["oversized declared response", () => response("[]", { headers: new Headers({ "content-type": "application/json", "content-length": "65537" }) }), "too-large"],
+  ["oversized streamed response", () => response(" ".repeat(65537)), "too-large"],
+  ["legacy release array", () => response(JSON.stringify(Array.from({ length: 101 }, () => ({})))), "invalid-feed"],
+  ["empty manifest", () => response("{}"), "invalid-feed"],
 ]) {
   test(`${label} never reports current or feeds validation and is not cached`, async () => {
     const f = fixture(async () => makeResponse());
@@ -93,6 +107,36 @@ for (const [label, makeResponse, reason] of [
     await f.check("0.49.0-preview.1"); assert.equal(f.calls.length, 2);
   });
 }
+
+test("raw text/plain JSON is validated and expired or tampered feeds never report current", async () => {
+  const f = fixture(async () => response(undefined, { headers: new Headers({ "content-type": "text/plain; charset=utf-8" }) }), { realValidation: true });
+  assert.equal((await f.check("0.48.0-preview.1")).state, "available");
+  f.advance(86400000);
+  assert.equal((await f.check("0.48.0-preview.1")).reason, "invalid-feed");
+  assert.equal(f.calls.length, 2, "expired feeds cannot trigger an API fallback");
+  for (const mutate of [
+    x => { x.releases[0].assets[0].digest = "not a digest"; },
+    x => { x.releases[0].sourceCommit = "main"; },
+    x => { x.releases[0].assets[0].browser_download_url += "?token=x"; },
+    x => { x.generatedAt = new Date(NOW + 300001).toISOString(); },
+    x => { x.releases.push(x.releases[0]); },
+  ]) {
+    const value = manifest(); mutate(value);
+    const bad = fixture(async () => response(JSON.stringify(value)), { realValidation: true });
+    assert.equal((await bad.check("0.48.0-preview.1")).reason, "invalid-feed");
+    assert.equal(bad.calls.length, 1);
+  }
+});
+
+test("shared response retains independent stable and preview channel selection", async () => {
+  const pending = deferred(); const f = fixture(() => pending.promise, { realValidation: true });
+  const stable = f.check("0.48.0"), preview = f.check("0.48.0-preview.1");
+  const value = manifest("0.49.0-preview.1"), older = manifest("0.48.1").releases[0];
+  older.id = 2; older.assets.forEach((asset, i) => { asset.id = 20 + i; });
+  value.releases.push(older); pending.resolve(response(JSON.stringify(value)));
+  assert.equal((await stable).latest, "0.48.1"); assert.equal((await preview).latest, "0.49.0-preview.1");
+  assert.equal(f.calls.length, 1);
+});
 
 test("whole-body deadline aborts stalled streaming without releasing the fetch slot early", async () => {
   const pendingRead = deferred();

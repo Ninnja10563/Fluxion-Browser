@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.63.0";
-  const PRODUCT_RELEASE = "0.63.0-preview.1";
+  const PRODUCT_VERSION = "0.64.0";
+  const PRODUCT_RELEASE = "0.64.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -1315,19 +1315,22 @@
     delete updateStatus.dataset.latest;
     delete updateStatus.dataset.reason;
     delete updateStatus.dataset.retryAt;
-    updateStatus.textContent = "Checking Fluxion releases on GitHub…";
+    delete updateStatus.dataset.releaseEvidence;
+    updateStatus.textContent = "Checking Fluxion's verified release feed…";
     try {
       const { FluxionUpdates } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionUpdates.sys.mjs");
       const result = await FluxionUpdates.check(PRODUCT_RELEASE, Services.appinfo.OS);
       if (updateDisposed) return;
       updateStatus.dataset.state = result.state;
       if (result.latest) updateStatus.dataset.latest = result.latest;
+      if (result.evidence) updateStatus.dataset.releaseEvidence = JSON.stringify(result.evidence);
       if (result.reason) {
         updateStatus.dataset.state = "error";
         updateStatus.dataset.reason = result.reason;
         const messages = {
           "rate-limit": "GitHub's request limit was reached. Try again later.",
           timeout: "The update check timed out. Try again when the connection is available.",
+          "invalid-feed": "The release feed is expired or could not be verified. Try again later or open Fluxion releases.",
           "too-large": "The release list exceeded the safe response size. Open Fluxion releases to check manually.",
         };
         updateStatus.textContent = messages[result.reason] || "The release list could not be retrieved safely. Try again later or open Fluxion releases.";
@@ -1359,7 +1362,7 @@
   });
   updateActions.append(checkUpdate, releases);
   updateControls.append(updateActions, updateStatus, downloadUpdate);
-  row(about, "Updates", "Checks GitHub only when requested. Automatic installation is not available in this preview.", updateControls);
+  row(about, "Updates", "Checks the verified public release feed only when requested. No automatic downloads or installation.", updateControls);
   const licenses = create("button", "fluxion-settings-button", "Open third-party licenses");
   licenses.type = "button";
   licenses.addEventListener("click", () => openAboutDestination("about:license"));
