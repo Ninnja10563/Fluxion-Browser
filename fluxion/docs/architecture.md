@@ -1201,6 +1201,30 @@ and native split wrappers moved into groups. Local VM tests are separate evidenc
 the published 0.62 build passed all 21 operations in the packaged native gate,
 including global visible-order assertions, with zero unaffected row writes.
 
+## Native group dragging
+
+The 0.63 candidate keeps same-window group drag identity in privileged chrome,
+never in a page-readable payload. `FluxionFlowDrag` validates current native
+membership, workspace, pin/closing state and split backreferences both while
+showing feedback and again at drop time. Either pane resolves to its complete
+native split wrapper; duplicate selections cannot split or duplicate that unit.
+The group drop calls Gecko's `group.addTabs` with those validated units. Pinned
+tabs are rejected rather than allowing that API to unpin them implicitly.
+
+Whole groups move before/after an outer native tab, split or group using
+`gBrowser.moveTabBefore` / `moveTabAfter`; they never nest in another group.
+The pointer's position within the hovered row or heading chooses before/after,
+and the insertion line is drawn on the outer unit's actual boundary. Existing
+Move Group Up/Down menus use the same validation and now traverse ordinary tabs
+and splits as well as groups. Cross-window group dragging is not introduced;
+the explicit native-adoption Move to Window menu remains available.
+
+Gecko retains page/session state, group membership and collapse state. Flow's
+keyed renderer retains surviving controls and heading relationships. The native
+structure verifier exercises actual chrome handlers using DOM DragEvents and a
+Gecko DataTransfer, not physical trackpad input. Candidate native validation is
+required before release; pure and VM tests alone do not prove native behavior.
+
 Manual DMG packaging derives its default release from the supplied app's
 bundled Settings constants, parsed as data. It requires the complete release
 and product/bundle versions to agree, and refuses an explicit mismatched label

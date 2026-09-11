@@ -42,6 +42,8 @@ node --check chrome/core/url.js
 node --check chrome/core/search.js
 node --check chrome/core/flow-navigation.js
 node --check chrome/core/flow-tab-content.js
+node --check chrome/core/flow-tree.js
+node --check chrome/core/flow-drag.js
 node --check chrome/core/index-scheduler.js
 node --check chrome/core/ai-providers.js
 node --check chrome/core/library-data.js

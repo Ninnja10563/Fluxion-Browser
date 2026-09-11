@@ -6,7 +6,7 @@
   const { document, gBrowser, FluxionUI: ui } = window;
   const fixtures = [], original = gBrowser.selectedTab;
   const report = { fixtureTabs: 1000, checks: [], baselines: [], unaffectedWrites: 0,
-    input: "Native Gecko tab operations and chrome focus; not physical OS input" };
+    input: "Native Gecko tab operations, synthetic chrome DragEvents, and chrome focus; not physical OS input" };
   let observer;
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const write = (key, value) => {
@@ -20,7 +20,7 @@
   const settle = async () => { await frame(); await frame(); };
   const wait = async (predicate, message) => {
     const deadline = Date.now() + 20000;
-    do { if (predicate()) return; await settle(); } while (Date.now() < deadline);
+    do { if (await predicate()) return; await settle(); } while (Date.now() < deadline);
     throw new Error(message);
   };
   async function run() {
@@ -39,6 +39,45 @@
     ui.selectTab(fixtures[0]);
     await wait(() => rows().size >= 1000 && fixtures.slice(0, 40).every(tab => !tab.hasAttribute("busy")), "Flat fixture did not settle");
     assert(!fixtures.some(tab => tab.group || tab.splitview), "Fixture unexpectedly has grouped topology");
+    const origin = Services.env.get("FLUXION_TAB_TRANSFER_ORIGIN");
+    assert(/^http:\/\/127\.0\.0\.1:\d+$/.test(origin), "Structure document fixture requires exact loopback origin");
+    const readLivePage = (tab, command = "Read") => tab.linkedBrowser.browsingContext.currentWindowGlobal
+      .getActor("FluxionTabTransferVerification").sendQuery(`FluxionTabTransfer:${command}`, { origin });
+    const livePages = new Map();
+    for (const index of [5, 6, 8, 9]) {
+      const tab = fixtures[index];
+      tab.linkedBrowser.loadURI(Services.io.newURI(`${origin}/transfer`), {
+        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+      });
+      await wait(async () => {
+        if (tab.hasAttribute("busy") || tab.linkedBrowser.currentURI.spec !== `${origin}/transfer`) return false;
+        try { return Boolean((await readLivePage(tab)).nonce); } catch { return false; }
+      }, "Live structure document did not render");
+      const state = await readLivePage(tab, "Seed");
+      assert(state.nonce && state.counter === 1 && state.draft === "Unsaved transfer draft — café" &&
+        state.url === `${origin}/transfer?step=1`, "Live structure document did not retain seeded state");
+      livePages.set(tab, state);
+    }
+    assert(new Set([...livePages.values()].map(state => state.nonce)).size === 4, "Live fixture nonces are not distinct");
+    const documentLoads = async () => {
+      const response = await window.fetch(`${origin}/state`, { credentials: "omit", cache: "no-store" });
+      assert(response.ok, "Live structure document load evidence unavailable");
+      return (await response.json()).loads;
+    };
+    const baselineLoads = await documentLoads();
+    assert(baselineLoads === 4, "Live structure fixture did not load exactly four documents");
+    report.liveDocuments = { pages: 4, baselineLoads, checks: [] };
+    async function verifyLiveDocuments(operation) {
+      for (const [tab, before] of livePages) {
+        const after = await readLivePage(tab);
+        assert(after.nonce === before.nonce && after.draft === before.draft && after.counter === before.counter &&
+          after.historyLength === before.historyLength && after.url === before.url,
+        `${operation} lost a live document, unsaved draft, JavaScript counter, or navigation history`);
+      }
+      const loads = await documentLoads();
+      assert(loads === baselineLoads, `${operation} reloaded a live fixture document`);
+      report.liveDocuments.checks.push({ operation, pages: livePages.size, loads });
+    }
     fixtures[2].toggleMuteAudio();
     await settle();
     await wait(() => !rows().get(fixtures[2]).querySelector(".fluxion-audio").hidden, "Native muted tab did not expose audio action");
@@ -137,6 +176,25 @@
     assert(rows().get(fixtures[20]).getAttribute("role") === "treeitem", "Unpinned row role is not treeitem");
     const headings = () => new Map([...flow.querySelectorAll(".fluxion-group-heading")].map(node => [node._fluxionGroup, node]));
     const visible = row => row && !row.closest("[hidden]");
+    async function dragFlow(source, target, after = false) {
+      assert(source?.isConnected && target?.isConnected, "Drag fixture lost its source or target");
+      target.scrollIntoView({ block: "nearest" });
+      await settle();
+      const rect = target.getBoundingClientRect();
+      assert(rect.height > 0, "Drag boundary has no native layout geometry");
+      const transfer = new window.DataTransfer();
+      const options = { bubbles: true, cancelable: true, dataTransfer: transfer,
+        clientX: rect.left + rect.width / 2, clientY: after ? rect.bottom - 1 : rect.top + 1 };
+      source.dispatchEvent(new window.DragEvent("dragstart", options));
+      try {
+        const over = new window.DragEvent("dragover", options);
+        target.dispatchEvent(over);
+        assert(over.defaultPrevented, "Flow dragover did not accept the actual drag session");
+        target.dispatchEvent(new window.DragEvent("drop", options));
+      } finally {
+        source.dispatchEvent(new window.DragEvent("dragend", options));
+      }
+    }
     function hierarchy() {
       const nativeTabs = [...gBrowser.tabs].filter(tab => ui.tabWorkspace(tab) === workspace);
       for (const [container, isPinned] of [[tree, false], [pinned, true]]) {
@@ -218,12 +276,48 @@
     const splitWrapper = rows().get(fixtures[8]).closest(".fluxion-split");
     await hierarchicalOperation("split-orientation-retains-wrapper-and-controls", new Set([fixtures[8], fixtures[9]]), () => ui.setSplitOrientation(fixtures[8], window.FluxionSplitViews.SIDE_BY_SIDE));
     assert(rows().get(fixtures[8]).closest(".fluxion-split") === splitWrapper, "Orientation replaced native split wrapper");
-    // Firefox 155's group.addTabs accepts the native split wrapper itself;
-    // passing its individual members would exercise separate tab moves instead.
+    let otherGroup;
+    await hierarchicalOperation("create-drag-target-group-retains-unrelated-controls", new Set([fixtures[40], fixtures[41]]), () => {
+      otherGroup = gBrowser.addTabGroup([fixtures[40], fixtures[41]], { label: "Drag destination", color: "gray" });
+    });
+    await hierarchicalOperation("collapse-drag-source-preserves-unrelated-controls", new Set([fixtures[5], fixtures[6]]),
+      () => { group.collapsed = true; }, { disappearing: new Set([fixtures[5], fixtures[6]]) });
+    const originalMembers = [...group.tabs], otherMembers = [...otherGroup.tabs];
+    const originalOrientation = window.FluxionSplitViews.orientationOf(split);
+    for (const targetKind of ["tab", "group", "split"]) {
+      for (const after of [false, true]) {
+        const targetTabs = targetKind === "tab" ? [fixtures[45]] : targetKind === "group" ? otherMembers : [...split.tabs];
+        await hierarchicalOperation(`flow-group-drag-${after ? "after" : "before"}-${targetKind}-retains-topology`, new Set(targetTabs), async () => {
+          const before = [...gBrowser.tabs];
+          const target = targetKind === "group" ? headings().get(otherGroup) : rows().get(targetTabs[0]);
+          await dragFlow(headings().get(group), target, after);
+          await settle();
+          const current = [...gBrowser.tabs];
+          assert(current.some((tab, index) => tab !== before[index]), "Whole-group Flow drop did not move any native tabs");
+          assert(group.collapsed && group.tabs.length === originalMembers.length &&
+            originalMembers.every((tab, index) => group.tabs[index] === tab && tab.group === group),
+          "Whole-group Flow drop changed source membership, order, or collapsed state");
+          assert(!otherGroup.collapsed && otherGroup.tabs.length === otherMembers.length &&
+            otherMembers.every((tab, index) => otherGroup.tabs[index] === tab && tab.group === otherGroup),
+          "Whole-group Flow drop changed the destination group");
+          assert(fixtures[8].splitview === split && fixtures[9].splitview === split &&
+            window.FluxionSplitViews.orientationOf(split) === originalOrientation, "Whole-group drop changed the destination split");
+          const sourcePositions = originalMembers.map(tab => current.indexOf(tab));
+          const targetPositions = targetTabs.map(tab => current.indexOf(tab));
+          assert(after ? Math.min(...sourcePositions) === Math.max(...targetPositions) + 1 :
+            Math.max(...sourcePositions) + 1 === Math.min(...targetPositions), "Whole-group drop missed its outer before/after boundary");
+          await verifyLiveDocuments(`group-drag-${after ? "after" : "before"}-${targetKind}`);
+        });
+      }
+    }
+    await hierarchicalOperation("expand-dragged-group-preserves-unrelated-controls", new Set(originalMembers), () => { group.collapsed = false; });
+    // Exercise the actual Flow drag handlers, not direct native group.addTabs.
+    // Dragging one pane must carry its intact native split wrapper into the group.
     await hierarchicalOperation("moving-native-split-into-group-retains-member-controls", new Set([fixtures[8], fixtures[9]]),
-      () => group.addTabs([split]));
+      () => dragFlow(rows().get(fixtures[8]), headings().get(group)));
     assert(split.group === group && fixtures[8].group === group && fixtures[9].group === group,
       "Native split did not move intact into its group");
+    await verifyLiveDocuments("split-pane-drag-into-group");
     const nestedWrapper = rows().get(fixtures[8]).closest(".fluxion-split");
     assert(nestedWrapper?.closest(".fluxion-group") && rows().get(fixtures[8]).getAttribute("aria-level") === "2",
       "Grouped split did not acquire its proper hierarchy");

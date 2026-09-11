@@ -10,6 +10,8 @@ check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-structure-check.XXXXXX")"
 profile="$check_root/profile"
 log="$check_root/browser.log"
 process_id=""
+server_log="$check_root/server.log"
+server_pid=""
 owned() {
   [[ -n "$process_id" ]] && kill -0 "$process_id" 2>/dev/null || return 1
   local command_line expected
@@ -21,7 +23,14 @@ cleanup() {
   if [[ -n "${FLUXION_STRUCTURE_ARTIFACT_DIR:-}" ]]; then
     mkdir -p "$FLUXION_STRUCTURE_ARTIFACT_DIR"
     [[ ! -f "$log" ]] || cp "$log" "$FLUXION_STRUCTURE_ARTIFACT_DIR/browser.log"
+    [[ ! -f "$server_log" ]] || cp "$server_log" "$FLUXION_STRUCTURE_ARTIFACT_DIR/server.log"
     if [[ -f "$profile/prefs.js" ]]; then grep 'fluxion.structure.verification' "$profile/prefs.js" > "$FLUXION_STRUCTURE_ARTIFACT_DIR/report.txt" || true; fi
+  fi
+  if [[ -n "$server_pid" ]] && kill -0 "$server_pid" 2>/dev/null; then
+    kill "$server_pid" 2>/dev/null || true
+    for ((attempt=0; attempt<40; attempt++)); do kill -0 "$server_pid" 2>/dev/null || break; sleep 0.25; done
+    if kill -0 "$server_pid" 2>/dev/null; then kill -KILL "$server_pid" 2>/dev/null || true; fi
+    wait "$server_pid" 2>/dev/null || true
   fi
   if owned; then
     kill "$process_id" 2>/dev/null || true
@@ -32,7 +41,16 @@ cleanup() {
   case "$check_root" in "${TMPDIR:-/tmp}"/fluxion-structure-check.*) rm -rf -- "$check_root";; esac
 }
 trap cleanup EXIT
-FLUXION_PROFILE="$profile" FLUXION_STRUCTURE_TEST=1 "$launcher" about:blank >"$log" 2>&1 &
+node "$fluxion_root/scripts/tab-transfer-fixture.mjs" 0 >"$server_log" 2>&1 &
+server_pid=$!
+for ((attempt=0; attempt<80; attempt++)); do
+  [[ ! -s "$server_log" ]] || break
+  kill -0 "$server_pid" 2>/dev/null || { sed -n '1,80p' "$server_log" >&2; exit 1; }
+  sleep 0.1
+done
+origin="$(node -e 'const f=JSON.parse(require("node:fs").readFileSync(process.argv[1],"utf8").split("\n")[0]); if(!/^http:\/\/127\.0\.0\.1:\d+$/.test(f.origin))throw Error("Invalid structure fixture origin");console.log(f.origin)' "$server_log")"
+FLUXION_PROFILE="$profile" FLUXION_STRUCTURE_TEST=1 FLUXION_TAB_TRANSFER_TEST=0 FLUXION_TAB_TRANSFER_ORIGIN="$origin" \
+  "$launcher" about:blank >"$log" 2>&1 &
 process_id=$!
 for ((attempt=0; attempt<600; attempt++)); do
   if [[ -f "$profile/prefs.js" ]]; then

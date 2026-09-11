@@ -28,6 +28,7 @@
   let flowMenuSession = null;
   let dragTab = null;
   let dragTabs = [];
+  let dragGroup = null;
   let dragTargetElement = null;
   let renderQueued = false;
   let structureDirty = true;
@@ -382,13 +383,13 @@
       overflow: hidden; opacity: 0; transform: scaleY(.58); pointer-events: none;
     }
     .fluxion-tab.is-sleeping { color: color-mix(in srgb, var(--fluxion-muted) 82%, transparent); }
-    .fluxion-tab[data-drop-intent="reorder-before"]::after,
-    .fluxion-tab[data-drop-intent="reorder-after"]::after {
+    #fluxion-flow [data-drop-intent="reorder-before"]::after,
+    #fluxion-flow [data-drop-intent="reorder-after"]::after {
       content: ""; position: absolute; inset-inline: 4px; height: 2px;
       z-index: 3; background: var(--fluxion-accent); pointer-events: none;
     }
-    .fluxion-tab[data-drop-intent="reorder-before"]::after { inset-block-start: -2px; }
-    .fluxion-tab[data-drop-intent="reorder-after"]::after { inset-block-end: -2px; }
+    #fluxion-flow [data-drop-intent="reorder-before"]::after { inset-block-start: -2px; }
+    #fluxion-flow [data-drop-intent="reorder-after"]::after { inset-block-end: -2px; }
     .fluxion-tab[data-drop-action="split"] {
       color: var(--fluxion-ink); box-shadow: inset 0 0 0 1px var(--fluxion-accent);
     }
@@ -417,7 +418,7 @@
     }
     .fluxion-split-mark::before { inset-inline-start: 1px; }
     .fluxion-split-mark::after { inset-inline-end: 1px; }
-    .fluxion-group { margin: 2px 0 4px; }
+    .fluxion-group { position: relative; margin: 2px 0 4px; }
     .fluxion-group-heading {
       width: 100%; height: 25px; display: flex; align-items: center; gap: 5px;
       padding: 0 7px; border: 0; border-radius: 3px; color: var(--fluxion-muted);
@@ -1178,16 +1179,18 @@
     switchWorkspace(currentWorkspace);
   }
 
+  function adjacentGroupTarget(group, direction) {
+    const units = [...new Set([...gBrowser.tabs]
+      .filter(tab => !tab.pinned && !tab.closing && tabWorkspace(tab) === currentWorkspace)
+      .map(tab => tab.group || tab.splitview || tab))];
+    const index = units.indexOf(group);
+    const target = units[index + Math.sign(direction)];
+    return index >= 0 && groupMovePlan(group, target) ? target : null;
+  }
+
   function reorderGroup(group, direction) {
-    const groups = gBrowser.tabGroups.filter(candidate =>
-      candidate.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
-    );
-    const index = groups.indexOf(group);
-    const target = groups[index + Math.sign(direction)];
-    if (index < 0 || !target) return;
-    if (direction < 0) gBrowser.moveTabBefore(group, target);
-    else gBrowser.moveTabAfter(group, target);
-    scheduleRender();
+    const target = adjacentGroupTarget(group, direction);
+    if (target) applyGroupMove(group, target, direction < 0 ? "before" : "after");
   }
 
   function workspaceSnapshot() {
@@ -1741,6 +1744,7 @@
 
   function clearTabDropFeedback() {
     if (dragTargetElement) {
+      dragTargetElement.removeAttribute("data-dragover");
       dragTargetElement.removeAttribute("data-drop-intent");
       dragTargetElement.removeAttribute("data-drop-action");
       dragTargetElement.removeAttribute("data-drop-label");
@@ -1753,6 +1757,47 @@
     clearTabDropFeedback();
     dragTab = null;
     dragTabs = [];
+    dragGroup = null;
+  }
+
+  function groupDropPlan(group, tabs = dragTabs) {
+    return FluxionFlowDrag.planGroupDrop({ tabs, group, allTabs: [...gBrowser.tabs],
+      workspaceId: currentWorkspace, workspaceOf: tabWorkspace });
+  }
+
+  function groupMovePlan(group, target) {
+    return FluxionFlowDrag.planGroupMove({ group, target, allTabs: [...gBrowser.tabs],
+      workspaceId: currentWorkspace, workspaceOf: tabWorkspace });
+  }
+
+  function applyGroupMove(group, target, position) {
+    const plan = groupMovePlan(group, target);
+    if (!plan || !["before", "after"].includes(position)) return false;
+    if (position === "before") gBrowser.moveTabBefore(plan.group, plan.target);
+    else gBrowser.moveTabAfter(plan.group, plan.target);
+    scheduleRender();
+    return true;
+  }
+
+  function groupDropPosition(event, element) {
+    const rect = element.getBoundingClientRect();
+    return event.clientY < rect.top + rect.height / 2 ? "before" : "after";
+  }
+
+  function showGroupMoveFeedback(event, element, target) {
+    clearTabDropFeedback();
+    const plan = groupMovePlan(dragGroup, target);
+    if (!plan) return false;
+    // The insertion line belongs to the outer native unit, even when the
+    // pointer is over one of its children. A group never nests in another.
+    const surface = element.closest(".fluxion-group") || element.closest(".fluxion-split") || element;
+    const position = groupDropPosition(event, element);
+    dragTargetElement = surface;
+    surface.dataset.dropIntent = `reorder-${position}`;
+    surface.dataset.dropAction = "reorder";
+    const label = plan.target.label || (plan.target.tabs ? "split view" : tabLabel(plan.target));
+    dragAnnouncement.textContent = `Move ${dragGroup.label || "group"} ${position} ${label}.`;
+    return true;
   }
 
   function tabDropIntent(event, element, target) {
@@ -2130,6 +2175,7 @@
       contextMenu.openPopupAtScreen(event.screenX, event.screenY, true);
     });
     item.addEventListener("dragstart", event => {
+      resetTabDrag();
       dragTab = tab;
       dragTabs = contextTabs(tab);
       if (event.dataTransfer) {
@@ -2140,6 +2186,14 @@
         "Drag to an edge to reorder, or over the centre to split. Hold Shift to stack pages.";
     });
     item.addEventListener("dragover", event => {
+      if (dragGroup) {
+        if (showGroupMoveFeedback(event, item, tab)) {
+          event.preventDefault();
+          event.stopPropagation();
+          if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+        }
+        return;
+      }
       if (!dragTab || dragTabs.includes(tab)) return;
       event.preventDefault();
       if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
@@ -2147,15 +2201,17 @@
     });
     item.addEventListener("dragleave", event => {
       if (event.relatedTarget?.nodeType && item.contains(event.relatedTarget)) return;
-      if (dragTargetElement === item) clearTabDropFeedback();
+      if (dragGroup || dragTargetElement === item) clearTabDropFeedback();
     });
     item.addEventListener("drop", event => {
       event.preventDefault();
       event.stopPropagation();
-      if (dragTab && !dragTabs.includes(tab)) {
-        applyTabDrop(dragTabs, tab, tabDropIntent(event, item, tab));
-      }
-      resetTabDrag();
+      try {
+        if (dragGroup) applyGroupMove(dragGroup, tab, groupDropPosition(event, item));
+        else if (dragTab && !dragTabs.includes(tab)) {
+          applyTabDrop(dragTabs, tab, tabDropIntent(event, item, tab));
+        }
+      } finally { resetTabDrag(); }
     });
     item.addEventListener("dragend", resetTabDrag);
     tabElements.set(tab, item);
@@ -2265,6 +2321,7 @@
     item._fluxionGroup = group;
     const heading = create("button", "fluxion-group-heading");
     heading.type = "button";
+    heading.draggable = true;
     heading.tabIndex = -1;
     heading._fluxionGroup = group;
     heading.setAttribute("role", "treeitem");
@@ -2320,20 +2377,47 @@
       contextGroup = group;
       groupMenu.openPopupAtScreen(event.screenX, event.screenY, true);
     });
-    heading.addEventListener("dragover", event => {
-      if (!dragTab || dragTab.group === group) return;
-      event.preventDefault();
-      clearTabDropFeedback();
-      heading.setAttribute("data-dragover", "true");
+    heading.addEventListener("dragstart", event => {
+      resetTabDrag();
+      if (!group?.isConnected) { event.preventDefault(); return; }
+      event.stopPropagation();
+      dragGroup = group;
+      if (event.dataTransfer) {
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("application/x-fluxion-group", "group");
+      }
+      dragAnnouncement.textContent = "Drag before or after a tab, split view or group to move the whole group.";
     });
-    heading.addEventListener("dragleave", () => heading.removeAttribute("data-dragover"));
+    heading.addEventListener("dragover", event => {
+      if (dragGroup) {
+        if (!showGroupMoveFeedback(event, heading, group)) return;
+      } else {
+        clearTabDropFeedback();
+        if (!dragTab || !groupDropPlan(group)) return;
+        dragTargetElement = heading;
+        heading.setAttribute("data-dragover", "true");
+        dragAnnouncement.textContent = `Move tabs into ${group.label || "group"}; split pairs stay together.`;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.dataTransfer) event.dataTransfer.dropEffect = "move";
+    });
+    heading.addEventListener("dragleave", event => {
+      if (event.relatedTarget?.nodeType && heading.contains(event.relatedTarget)) return;
+      clearTabDropFeedback();
+    });
     heading.addEventListener("drop", event => {
       event.preventDefault();
-      heading.removeAttribute("data-dragover");
-      if (dragTabs.length) group.addTabs(dragTabs.filter(tab => !tab.pinned && !tab.splitview));
-      resetTabDrag();
-      scheduleRender();
+      event.stopPropagation();
+      try {
+        if (dragGroup) applyGroupMove(dragGroup, group, groupDropPosition(event, heading));
+        else {
+          const units = groupDropPlan(group);
+          if (units) { group.addTabs(units); scheduleRender(); }
+        }
+      } finally { resetTabDrag(); }
     });
+    heading.addEventListener("dragend", resetTabDrag);
 
     const groupTabs = create("div", "fluxion-group-tabs");
     groupTabs.id = `fluxion-group-tabs-${++groupRenderSequence}`;
@@ -2922,16 +3006,12 @@
   });
   groupMenu.addEventListener("popupshowing", event => {
     if (event.target !== groupMenu) return;
-    const groups = gBrowser.tabGroups.filter(group =>
-      group.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
-    );
-    const index = groups.indexOf(contextGroup);
     collapseGroupItem.setAttribute(
       "label",
       contextGroup?.collapsed ? "Expand Group" : "Collapse Group",
     );
-    moveGroupUp.setAttribute("disabled", String(index <= 0));
-    moveGroupDown.setAttribute("disabled", String(index < 0 || index >= groups.length - 1));
+    moveGroupUp.setAttribute("disabled", String(!adjacentGroupTarget(contextGroup, -1)));
+    moveGroupDown.setAttribute("disabled", String(!adjacentGroupTarget(contextGroup, 1)));
     for (const [colour, item] of groupColourItems) {
       item.setAttribute("checked", String(contextGroup?.color === colour));
     }
