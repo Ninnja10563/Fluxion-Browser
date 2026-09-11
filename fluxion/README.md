@@ -8,9 +8,11 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The 0.63 candidate adds whole-group dragging and intact split-pair drops into
-groups. It is not yet downloadable; native validation is pending. 0.62 remains
-the latest verified public DMG.
+The 0.63 candidate adds whole-group dragging, intact split-pair drops into
+groups, and same-document URL updates. All 801 tests and native browser checks
+passed. It is not yet downloadable: release staging must pass live update
+discovery after GitHub's reported quota reset. 0.62 remains the latest verified
+public DMG. See the [candidate validation record](docs/validation/0.63-candidate.md).
 
 Fluxion 0.62 is published: stable Flow updates now extend to grouped tabs and
 split views, preserving surviving rows, controls and accessible group headings.
