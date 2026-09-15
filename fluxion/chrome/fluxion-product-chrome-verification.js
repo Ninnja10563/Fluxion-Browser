@@ -7,7 +7,7 @@
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
   const driver = Services.env.get("FLUXION_PRODUCT_CHROME_DRIVER_DIR");
   const { document, gBrowser, gURLBar } = window;
-  const report = { checks: [], captures: [], geometry: [], input: "Actual Gecko chrome layout and native URL-bar query; no OS trackpad or keyboard synthesis claimed" };
+  const report = { checks: [], captures: [], geometry: [], input: "Native macOS System Events Cmd-L and typed bookmark restriction; actual Gecko Places results and layout; no OS trackpad input claimed" };
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const delay = ms => new Promise(resolve => window.setTimeout(resolve, ms));
   const wait = async (condition, message, timeout = 15000) => {
@@ -39,6 +39,34 @@
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Product chrome capture was not acknowledged: ${name}`, 20000);
     report.captures.push(name);
+  }
+  async function nativeQuery(width) {
+    const name = `query-product-suggestions-${width}`;
+    const keys = [], inputs = [];
+    const onKey = event => {
+      if (event.metaKey && event.key.toLowerCase() === "l") keys.push({ key: event.key,
+        trusted: event.isTrusted, meta: event.metaKey, shift: event.shiftKey, alt: event.altKey, control: event.ctrlKey });
+    };
+    const onInput = event => inputs.push({ trusted: event.isTrusted, value: gURLBar.inputField.value });
+    window.addEventListener("keydown", onKey, true);
+    gURLBar.inputField.addEventListener("input", onInput);
+    try {
+      await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
+      await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)),
+        `Native URL-bar input driver did not acknowledge ${name}`, 20000);
+      report.nativeQueries ||= [];
+      report.nativeQueries.push({ width, keys, inputs });
+      await wait(() => keys.length >= 1 && inputs.some(event => event.trusted &&
+        event.value.endsWith("Fluxion navigation geometry fixture")),
+      "Native key delivery did not complete the URL-bar query");
+      assert(keys.length === 1 && keys[0].trusted && keys[0].meta && !keys[0].shift && !keys[0].alt && !keys[0].control,
+        "URL-bar query did not receive exactly one native Cmd-L");
+      assert(inputs.some(event => event.trusted && event.value.endsWith("Fluxion navigation geometry fixture")),
+        "Complete URL-bar fixture text did not arrive through native trusted input");
+    } finally {
+      window.removeEventListener("keydown", onKey, true);
+      gURLBar.inputField.removeEventListener("input", onInput);
+    }
   }
   function sidebarColumns(label) {
     const flow = document.getElementById("fluxion-flow");
@@ -189,11 +217,10 @@
       await wait(() => document.activeElement === gURLBar.inputField, "Native address input did not receive focus");
       await delay(250);
       const focused = geometry(`${width}-focused`);
-      // Use Gecko's normal input-event path, including its typed-value state.
-      // startQuery() itself returns void, not the query completion promise.
-      // Gecko's user-facing '*' restriction scopes this exact-title query to
-      // real bookmarks; neither remote search heuristics nor AI can satisfy it.
-      gURLBar.search(`* ${fixtureTitle}`);
+      // The owned macOS driver sends Cmd-L and the fixed bookmark restriction
+      // as actual key input. Do not refocus or call programmatic search before
+      // capturing the first popup that this real interaction opens.
+      await nativeQuery(width);
       await wait(() => {
         const rows = [...document.querySelectorAll(".urlbarView-row")];
         report.suggestions = {

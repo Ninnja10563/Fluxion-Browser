@@ -32,7 +32,7 @@ cleanup() {
   printf 'Product chrome fixture and logs retained at: %s\n' "$check_root" >&2
 }
 trap cleanup EXIT
-foreground() {
+native_action() {
   owned || { printf 'Product chrome capture driver lost its exact owned browser process.\n' >&2; return 1; }
   osascript - "$process_id" "$1" <<'APPLESCRIPT'
 on run arguments
@@ -41,7 +41,13 @@ on run arguments
   with timeout of 10 seconds
     tell application "System Events"
       set ownedProcess to first application process whose unix id is browserPID
-      if captureName starts with "capture-product-suggestions-" then
+      if captureName starts with "query-product-suggestions-" then
+        if not frontmost of ownedProcess then error "Native query lost its foreground owner"
+        tell ownedProcess
+          keystroke "l" using command down
+          keystroke "* Fluxion navigation geometry fixture"
+        end tell
+      else if captureName starts with "capture-product-suggestions-" then
         if not frontmost of ownedProcess then error "Popup capture lost its foreground owner"
       else if not frontmost of ownedProcess then
         set frontmost of ownedProcess to true
@@ -63,12 +69,14 @@ FLUXION_PROFILE="$profile" FLUXION_PRODUCT_CHROME_TEST=1 FLUXION_PRODUCT_CHROME_
 process_id=$!
 for ((attempt=0; attempt<720; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
-  for action in capture-product-chrome-1280 capture-product-chrome-800 capture-product-suggestions-1280 capture-product-suggestions-800; do
+  for action in capture-product-chrome-1280 query-product-suggestions-1280 capture-product-suggestions-1280 capture-product-chrome-800 query-product-suggestions-800 capture-product-suggestions-800; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
-      foreground "$action"
+      native_action "$action"
       owned || exit 1
-      screencapture -x "$artifact_dir/$action.png"
-      [[ -s "$artifact_dir/$action.png" ]] || { printf 'Product chrome screenshot is missing.\n' >&2; exit 1; }
+      if [[ "$action" == capture-* ]]; then
+        screencapture -x "$artifact_dir/$action.png"
+        [[ -s "$artifact_dir/$action.png" ]] || { printf 'Product chrome screenshot is missing.\n' >&2; exit 1; }
+      fi
       touch "$check_root/$action.sent"
     fi
   done
@@ -82,4 +90,4 @@ if [[ "$result" != 0 ]] || ! grep -Fq 'user_pref("fluxion.productChrome.verifica
   exit 1
 fi
 grep 'fluxion.productChrome.verification' "$profile/prefs.js"
-printf 'Verified inherited VPN feature exclusion, actual nonoverlapping toolbar controls, balanced normal/focused address padding at 1280/800px, and native Places suggestion anchoring.\n'
+printf 'Verified inherited VPN feature exclusion, actual nonoverlapping toolbar controls, balanced normal/focused address padding at 1280/800px, and native Places suggestions after macOS Cmd-L and typed input.\n'
