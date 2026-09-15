@@ -1,6 +1,8 @@
 # Fluxion 0.67 — coherent browser chrome
 
-Release candidate; publication and native evidence are recorded separately.
+Published as 0.67.0-preview.1. All 899 tests and every mandatory native macOS
+gate passed; see [release provenance](../release/provenance/v0.67.0-preview.1.md)
+for tested source, public assets and verification limitations.
 
 The reference-led layout aligns navigation and bookmarks with the page column,
 while reserving space for native window controls and toolbar overflow. A measured
@@ -33,3 +35,10 @@ Two new isolated macOS gates test real toolbar bounds/address suggestion
 geometry and trusted Gecko-routed wheel events. Existing native keyboard close,
 large-session, frame, color, privacy and recovery gates remain mandatory. See
 [candidate validation](validation/0.67-candidate.md).
+
+Known visual-verification limit: the CI capture of the first 1280px address
+popup omits the main-window backdrop, despite passing native input and layout
+checks. The 800px popup and normal-window captures are complete. A capture or
+compositing anomaly has not been distinguished from a visible first-open
+problem; the first Command-L interaction needs a physical-M3 check. See the
+candidate audit rather than treating this as confirmed rendering success.

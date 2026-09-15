@@ -8,6 +8,19 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.67 is published: navigation follows the page column, the address field
+has equal 6px top/bottom spacing, and workspace/tab/New tab labels share one
+alignment. The unslop-ui audit removed redundant borders and decoration.
+Sidebar swipes change workspaces; fresh profiles start with one workspace,
+without removing existing ones. Firefox VPN promotion and Suggest branding are
+removed while native browser services remain. All 899 tests and every mandatory
+native macOS gate passed. Download the
+[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.67.0-preview.1)
+for Apple Silicon (including M3) and Intel. See
+[release provenance](release/provenance/v0.67.0-preview.1.md).
+The first wide address-popup screenshot has an unresolved capture/compositing
+limitation; first Command-L and trackpad behavior still need a physical-M3 check.
+
 Fluxion 0.66 is published: collapse reveals on edge hover, Expand stays open,
 New tab follows the final tab, and recognizable workspace symbols sit in a
 bottom dock. Custom light/dark colors live in Appearance. Corrected Gecko
@@ -15,7 +28,7 @@ address-bar styling and native dropdown arrows resolve mismatched controls.
 The unslop-ui audit kept the layout flat and restrained. All 871 tests and
 every mandatory native macOS gate passed, including hover cycles, short-window
 overflow, cross-window colors, clean restart and unchanged webpage pixels.
-Download the [latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.66.0-preview.1)
+Download the [0.66 universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.66.0-preview.1)
 for Apple Silicon (including M3) and Intel. See
 [release provenance](release/provenance/v0.66.0-preview.1.md).
 

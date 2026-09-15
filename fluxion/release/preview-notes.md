@@ -8,6 +8,15 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.67 is a published chrome and workspace-gesture preview. Navigation
+aligns with the page column; the address field has equal 6px vertical insets.
+Sidebar labels share one alignment, suggestion framing is simplified, and
+Firefox-only VPN promotion and Suggest branding are removed. Horizontal sidebar
+swipes change one workspace at a time; fresh profiles start with one workspace.
+All 899 tests and every mandatory native macOS gate passed. The first wide popup
+capture has an unresolved backdrop omission; physical-M3 first Command-L and
+trackpad checks remain. See [release provenance](provenance/v0.67.0-preview.1.md).
+
 Version 0.66 is a published sidebar and appearance preview. Collapse reveals
 on edge hover; Expand stays open. New tab follows the last tab, with recognizable
 workspace symbols in a bottom dock. Appearance adds custom light/dark colors,

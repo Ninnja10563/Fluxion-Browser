@@ -43,6 +43,12 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- coherent navigation/page-column alignment, equal address-field insets, quiet
+  single-frame suggestions, single-workspace fresh defaults and horizontal
+  sidebar workspace gestures (published in 0.67; native first-focus keyboard,
+  real Places retrieval, pairwise geometry and trusted wheel-routing gates
+  passed; the first wide popup capture has an unresolved backdrop omission,
+  and physical-M3 first-open/trackpad checks remain)
 - predictable collapse/expand with edge-hover reveal, keyboard/menu focus
   ownership, inline New tab and a bottom symbol workspace dock; optional
   cross-window light/dark chrome palettes with readable text and Reset
