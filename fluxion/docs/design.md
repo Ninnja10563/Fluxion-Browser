@@ -26,6 +26,16 @@ SigmaOS is deliberately excluded as a reference.
 ## Fluxion rules
 
 - The webpage is the visual centre. It is not placed inside a decorative card.
+- A four-pixel solid frame separates content from controls, consistently across
+  live webpages, Settings and Library. It uses margins on the native tabbox,
+  not clipping or transforms on Gecko's rendering and permission containers.
+  The inset is removed in fullscreen.
+- One workspace band contains workspace selection, creation and the sidebar
+  mode control. Repeated rail branding and a redundant “Flow” caption do not
+  consume vertical tab space. The mode control remains available in Compact.
+- Settings navigation belongs to the preferences page, not a second copy of
+  the browser rail. Standalone actions size to their label; editable fields
+  and deliberate paired action groups retain their useful column alignment.
 - Browser controls use native Gecko behavior and a restrained macOS-oriented
   skin. Security state, permission anchors, autofill, and URL completion stay
   on Firefox's audited implementations.

@@ -94,12 +94,12 @@
   style.id = "fluxion-style";
   style.textContent = `
     :root {
-      --fluxion-bg: light-dark(#f3f3f1, #20211f);
+      --fluxion-bg: light-dark(#e9eae7, #1c1e20);
       --fluxion-bg-raised: light-dark(#fafaf8, #292a27);
       --fluxion-ink: light-dark(#20211f, #efefeb);
       --fluxion-muted: light-dark(#696a65, #a8a9a3);
       --fluxion-line: light-dark(rgba(25,26,23,.11), rgba(255,255,250,.10));
-      --fluxion-selected: light-dark(#dfdfdb, #373834);
+      --fluxion-selected: light-dark(#d7d9d5, #34373a);
       --fluxion-hover: light-dark(rgba(25,26,23,.055), rgba(255,255,250,.06));
       --fluxion-accent: light-dark(#3f596e, #8ba9bd);
       --fluxion-fast: 140ms cubic-bezier(.2,.7,.2,1);
@@ -107,7 +107,7 @@
     #toolbar-menubar, #TabsToolbar { visibility: collapse !important; }
     #navigator-toolbox {
       appearance: none !important; background: var(--fluxion-bg) !important;
-      border: 0 !important; border-bottom: 1px solid var(--fluxion-line) !important;
+      border: 0 !important;
     }
     #nav-bar {
       min-height: 46px !important; padding: 5px 8px !important;
@@ -177,7 +177,10 @@
       position: relative; background: var(--fluxion-bg);
       --fluxion-sidebar-width: 232px;
       --fluxion-flow-layout-width: var(--fluxion-sidebar-width);
+      --fluxion-page-inset: 4px;
     }
+    #tabbrowser-tabbox { margin: var(--fluxion-page-inset) !important; }
+    :root[inFullscreen] #browser, :root[inDOMFullscreen] #browser { --fluxion-page-inset: 0px; }
     #browser:has(#fluxion-flow[data-state="compact"]) { --fluxion-flow-layout-width: 44px; }
     #browser:has(#fluxion-flow[data-state="focus"]) { --fluxion-flow-layout-width: 3px; }
     #tabbrowser-tabpanels[splitview] .split-view-panel.deck-selected > .browserContainer {
@@ -242,7 +245,6 @@
     .fluxion-surface {
       position: relative; width: 100%; min-width: 0; height: 100%; display: flex; flex-direction: column;
       overflow: hidden; background: var(--fluxion-bg);
-      border-inline-end: 1px solid var(--fluxion-line);
       transform: translateX(0); transform-origin: left center;
       transition: transform var(--fluxion-fast), box-shadow var(--fluxion-fast);
     }
@@ -288,29 +290,19 @@
     :root[data-fluxion-sidebar-resizing] #fluxion-settings,
     :root[data-fluxion-sidebar-resizing] #fluxion-library { transition: none !important; }
     :root[data-fluxion-sidebar-resizing] { cursor: col-resize; user-select: none; }
-    .fluxion-header {
-      min-height: 38px; display: flex; align-items: center; gap: 6px;
-      padding: 5px 7px; border-bottom: 1px solid var(--fluxion-line);
-    }
-    .fluxion-mark {
-      width: 24px; height: 24px; flex: none; display: grid; place-items: center;
-      color: var(--fluxion-ink);
-    }
-    .fluxion-mark svg { width: 18px; height: 18px; }
-    .fluxion-name { font-weight: 600; letter-spacing: -.005em; flex: 1; white-space: nowrap; }
     .fluxion-icon-button, .fluxion-close, .fluxion-audio {
       border: 0; padding: 0; color: inherit; background: transparent; border-radius: 4px;
       display: grid; place-items: center; cursor: default;
     }
     .fluxion-tab > [hidden] { display: none !important; }
-    .fluxion-icon-button { width: 24px; height: 24px; font-size: 15px; }
+    .fluxion-icon-button { width: 27px; height: 27px; flex: none; font-size: 15px; }
     .fluxion-icon-button:hover, .fluxion-close:hover, .fluxion-audio:hover { background: var(--fluxion-hover); }
     .fluxion-icon-button:focus-visible, .fluxion-tab:focus-visible, .fluxion-workspace:focus-visible,
     .fluxion-add-workspace:focus-visible, .fluxion-group-heading:focus-visible,
     .fluxion-new-tab:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
-    .fluxion-workspaces { display: flex; align-items: center; gap: 3px; padding: 5px 7px 4px; }
+    .fluxion-workspaces { display: flex; align-items: center; gap: 3px; padding: 5px 7px 8px; }
     .fluxion-workspace-list {
       min-width: 0; flex: 1; display: flex; align-items: center; gap: 2px;
       overflow-x: auto; scrollbar-width: none;
@@ -492,7 +484,6 @@
       padding: 0 !important; margin: -1px !important; overflow: hidden !important;
       clip-path: inset(50%) !important; white-space: nowrap !important; border: 0 !important;
     }
-    #fluxion-flow[data-state="compact"] .fluxion-name,
     #fluxion-flow[data-state="compact"] .fluxion-section-label,
     #fluxion-flow[data-state="compact"] .fluxion-title,
     #fluxion-flow[data-state="compact"] .fluxion-group-name,
@@ -522,8 +513,6 @@
     }
     .fluxion-pinned-tabs .fluxion-audio .fluxion-control-glyph,
     #fluxion-flow[data-state="compact"] .fluxion-audio .fluxion-control-glyph { width: 12px; height: 12px; }
-    #fluxion-flow[data-state="compact"] .fluxion-header { padding-inline: 10px; }
-    #fluxion-flow[data-state="compact"] .fluxion-icon-button { display: none; }
     #fluxion-flow[data-state="compact"] .fluxion-workspaces { flex-direction: column; gap: 2px; padding: 4px 7px; }
     #fluxion-flow[data-state="compact"] .fluxion-workspace-list {
       width: 30px; flex: none; flex-direction: column; overflow-x: hidden; overflow-y: auto;
@@ -929,21 +918,6 @@
   const initialState = Services.prefs.getStringPref(PREF_SIDEBAR, "expanded");
   flow.dataset.state = SIDEBAR_STATES.includes(initialState) ? initialState : "expanded";
 
-  const header = create("div", "fluxion-header");
-  const mark = create("div", "fluxion-mark");
-  mark.setAttribute("aria-hidden", "true");
-  const markSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  markSvg.setAttribute("viewBox", "0 0 24 24");
-  markSvg.setAttribute("fill", "none");
-  const markPath = document.createElementNS("http://www.w3.org/2000/svg", "path");
-  markPath.setAttribute("d", "M5 4.5h13.5l-7.2 6.3H18L6 20l3.5-7H5z");
-  markPath.setAttribute("stroke", "currentColor");
-  markPath.setAttribute("stroke-width", "1.55");
-  markPath.setAttribute("stroke-linejoin", "round");
-  markSvg.appendChild(markPath);
-  mark.appendChild(markSvg);
-  const name = create("div", "fluxion-name");
-  name.textContent = "Fluxion";
   const modeButton = create("button", "fluxion-icon-button");
   modeButton.type = "button";
   const updateModeButtonTitle = () => {
@@ -953,7 +927,6 @@
   modeButton.setAttribute("aria-label", "Cycle sidebar size");
   modeButton.textContent = flow.dataset.state === "expanded" ? "‹" :
     flow.dataset.state === "compact" ? "·" : "›";
-  header.append(mark, name, modeButton);
 
   const workspaceBar = create("div", "fluxion-workspaces");
   const workspaceList = create("div", "fluxion-workspace-list");
@@ -965,7 +938,7 @@
   addWorkspaceButton.textContent = "+";
   addWorkspaceButton.title = "New workspace";
   addWorkspaceButton.setAttribute("aria-label", "New workspace");
-  workspaceBar.append(workspaceList, addWorkspaceButton);
+  workspaceBar.append(workspaceList, addWorkspaceButton, modeButton);
   const pinnedLabel = create("div", "fluxion-section-label");
   pinnedLabel.textContent = "Pinned";
   const pinnedTabs = create("div", "fluxion-tabs fluxion-pinned-tabs");
@@ -973,8 +946,6 @@
   pinnedTabs.setAttribute("role", "tablist");
   pinnedTabs.setAttribute("aria-label", "Pinned tabs");
   pinnedTabs.setAttribute("aria-orientation", "horizontal");
-  const openLabel = create("div", "fluxion-section-label");
-  openLabel.textContent = "Flow";
   const tabsList = create("div", "fluxion-tabs");
   tabsList.setAttribute("role", "tree");
   tabsList.setAttribute("aria-label", "Open tabs in current workspace");
@@ -1000,7 +971,7 @@
   sidebarResizer.setAttribute("aria-orientation", "vertical");
   sidebarResizer.setAttribute("aria-controls", "fluxion-flow");
   surface.append(
-    header, workspaceBar, pinnedLabel, pinnedTabs, openLabel, tabsList, footer, dragAnnouncement, sidebarResizer,
+    workspaceBar, pinnedLabel, pinnedTabs, tabsList, footer, dragAnnouncement, sidebarResizer,
   );
   flow.append(surface);
   browser.prepend(flow);
@@ -1878,7 +1849,7 @@
   }
 
   function beginPointerCloseHold(tabs, elements, closeButton, event) {
-    if (!event || !closeButton || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) {
+    if (!event || !event.detail || !closeButton || !Number.isFinite(event.clientX) || !Number.isFinite(event.clientY)) {
       return;
     }
     if (pointerCloseHold) releasePointerCloseHold({ animate: false });
@@ -1902,7 +1873,7 @@
 
   function releasePointerCloseHold({ animate = true } = {}) {
     const hold = pointerCloseHold;
-    if (!hold || hold.releasing) return false;
+    if (!hold || (hold.releasing && animate)) return false;
     const closed = [...hold.tabs].every(tab => !tab.parentNode || hold.closed.has(tab));
     if (!closed || !animate || !closeMotionDuration()) {
       finishPointerCloseHold(hold);
@@ -1934,10 +1905,23 @@
     const closingElements = tabs.map(candidate => tabElements.get(candidate)).filter(Boolean);
     for (const candidate of closingElements) candidate.classList.add("is-closing");
     beginPointerCloseHold(tabs, closingElements, pointer?.closeButton, pointer?.event);
+    const ownHold = pointerCloseHold?.tabs.has(tab) ? pointerCloseHold : null;
+    const ownFocusRequest = focusTabAfterRender;
     window.setTimeout(() => {
-      closeTabs(tabs, { animate: false });
-      for (const candidate of tabs) {
-        if (candidate.parentNode && !candidate.closing) closingTabs.delete(candidate);
+      try {
+        closeTabs(tabs, { animate: false });
+      } finally {
+        // Native beforeunload can cancel some or all of a multi-tab close.
+        const survivors = tabs.filter(candidate => candidate.parentNode && !candidate.closing);
+        for (const candidate of survivors) {
+          closingTabs.delete(candidate);
+          tabElements.get(candidate)?.classList.remove("is-closing", "is-close-releasing");
+        }
+        if (survivors.length) {
+          if (focusTabAfterRender === ownFocusRequest) focusTabAfterRender = null;
+          if (ownHold && pointerCloseHold === ownHold) finishPointerCloseHold(ownHold);
+          scheduleRender();
+        }
       }
     }, closeMotionDuration());
   }
@@ -2586,7 +2570,8 @@
     structureDirty = false;
     dirtyTabs.clear();
     renderWorkspaces();
-    const visible = [...gBrowser.tabs].filter(tab => tabWorkspace(tab) === currentWorkspace);
+    // Gecko emits TabClose before its closing animation detaches the native tab.
+    const visible = [...gBrowser.tabs].filter(tab => tab.parentNode && !tab.closing && tabWorkspace(tab) === currentWorkspace);
     reconcileFlowTabs(visible);
     const noPinnedTabs = pinnedTabs.childElementCount === 0;
     if (pinnedLabel.hidden !== noPinnedTabs) pinnedLabel.hidden = noPinnedTabs;
@@ -2725,6 +2710,7 @@
     if (event?.type === "TabClose") {
       closingTabs.delete(event.target);
       if (pointerCloseHold?.tabs.has(event.target)) pointerCloseHold.closed.add(event.target);
+      else if (pointerCloseHold) finishPointerCloseHold(pointerCloseHold);
     }
     const contentOnly = ["TabAttrModified", "TabSharingStateChanged", "FluxionTabSleep", "FluxionPeekChange", "FluxionTabLocationChange"]
       .includes(event?.type);

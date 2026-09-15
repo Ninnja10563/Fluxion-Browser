@@ -41,8 +41,9 @@
     #fluxion-library[hidden] { display: none !important; }
     :root[data-fluxion-library-visible] #identity-icon-box { display: none !important; }
     #fluxion-library {
-      position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
-      inset-inline-end: 0; z-index: 3; min-width: 0; display: flex; flex-direction: column;
+      position: absolute; inset-block: var(--fluxion-page-inset);
+      inset-inline-start: calc(var(--fluxion-flow-layout-width) + var(--fluxion-page-inset));
+      inset-inline-end: var(--fluxion-page-inset); z-index: 3; min-width: 0; display: flex; flex-direction: column;
       color: var(--fluxion-ink); background: var(--fluxion-bg-raised); font: menu; font-size: 13px;
       container: fluxion-library / inline-size;
     }
@@ -65,7 +66,7 @@
     .fluxion-library-body { min-height: 0; flex: 1; display: flex; overflow: hidden; }
     .fluxion-library-nav {
       box-sizing: border-box; flex: 0 0 164px; min-width: 164px; padding: 24px 12px;
-      border-inline-end: 1px solid var(--fluxion-line); background: var(--fluxion-bg); overflow: auto;
+      background: var(--fluxion-bg-raised); overflow: auto;
     }
     .fluxion-library-nav button {
       width: 100%; height: 32px; border: 0; border-radius: 4px; padding: 0 10px;

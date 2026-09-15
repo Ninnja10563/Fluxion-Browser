@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.64.0";
-  const PRODUCT_RELEASE = "0.64.0-preview.1";
+  const PRODUCT_VERSION = "0.65.0";
+  const PRODUCT_RELEASE = "0.65.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -36,8 +36,9 @@
     #fluxion-settings[hidden] { display: none !important; }
     :root[data-fluxion-settings-visible] #identity-icon-box { display: none !important; }
     #fluxion-settings {
-      position: absolute; inset-block: 0; inset-inline-start: var(--fluxion-flow-layout-width);
-      inset-inline-end: 0; z-index: 3; min-width: 0;
+      position: absolute; inset-block: var(--fluxion-page-inset);
+      inset-inline-start: calc(var(--fluxion-flow-layout-width) + var(--fluxion-page-inset));
+      inset-inline-end: var(--fluxion-page-inset); z-index: 3; min-width: 0;
       display: flex; color: var(--fluxion-ink); background: var(--fluxion-bg-raised); overflow: hidden;
       container: fluxion-settings / inline-size;
       font: menu; font-size: 13px;
@@ -45,7 +46,7 @@
     .fluxion-settings-nav {
       box-sizing: border-box; flex: 0 0 184px; width: 184px; min-width: 184px;
       padding: 28px 14px; overflow: auto;
-      background: var(--fluxion-bg); border-inline-end: 1px solid var(--fluxion-line);
+      background: var(--fluxion-bg-raised);
     }
     .fluxion-settings-nav h1 { margin: 0 8px 22px; font-size: 16px; letter-spacing: -.02em; }
     .fluxion-settings-nav button {
@@ -74,7 +75,7 @@
     .fluxion-settings-control:focus-visible, .fluxion-settings-button:focus-visible, .fluxion-settings-nav button:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: 1px;
     }
-    .fluxion-settings-button { cursor: default; text-align: center; }
+    .fluxion-settings-button { width: auto; max-width: 100%; justify-self: start; cursor: default; text-align: center; }
     .fluxion-settings-button:hover { background: var(--fluxion-hover); }
     .fluxion-settings-button.danger { color: light-dark(#8e2f2b, #ef9690); }
     .fluxion-switch { justify-self: end; display: inline-flex; align-items: center; gap: 8px; color: var(--fluxion-muted); }
@@ -102,6 +103,7 @@
     .fluxion-shortcut-key[data-capturing="true"] { border-color: var(--fluxion-accent); color: var(--fluxion-muted); }
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+    .fluxion-settings-actions > .fluxion-settings-button { width: 100%; justify-self: stretch; }
     #fluxion-sidebar-width-controls { grid-template-columns: minmax(0, 1fr) auto; }
     .fluxion-workspace-create {
       display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 7px;
