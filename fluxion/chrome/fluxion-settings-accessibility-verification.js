@@ -72,6 +72,12 @@
               tag: control.localName, disabled: control.disabled, connected: control.isConnected })}`);
           }
           assert(control.getBoundingClientRect().height > 0, `${section}/${label} control is not rendered`);
+          if (control.localName === "select" && !control.multiple && !control.hasAttribute("size")) {
+            const style = window.getComputedStyle(control);
+            assert(style.backgroundImage.includes("chrome://global/skin/icons/arrow-down-12.svg") &&
+              Number.parseFloat(style.paddingInlineEnd) >= 28 && style.fill === style.color,
+            `${section}/${label} dropdown lost its visible, color-matched disclosure or text clearance`);
+          }
           report.controls.push({ section, setting: label, type: control.type || control.localName,
             disabled: Boolean(control.disabled), ...actual, expectedName, expectedDescription });
           if (!isAction) fields++;

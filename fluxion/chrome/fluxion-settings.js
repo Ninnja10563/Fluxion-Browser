@@ -72,6 +72,17 @@
       border-radius: 4px; padding: 5px 8px; color: var(--fluxion-ink); background: var(--fluxion-bg);
       font: inherit; box-shadow: none;
     }
+    /* The field background shorthand resets Gecko's painted select arrow.
+       Reuse its context-colored disclosure without replacing the native popup. */
+    select.fluxion-settings-control:not([multiple], [size]) {
+      appearance: none; padding-inline-end: 28px;
+      background-image: url("chrome://global/skin/icons/arrow-down-12.svg");
+      background-position: right 8px center; background-size: 12px 12px; background-repeat: no-repeat;
+      -moz-context-properties: fill; fill: currentColor;
+    }
+    select.fluxion-settings-control:not([multiple], [size]):dir(rtl) {
+      background-position: left 8px center;
+    }
     .fluxion-settings-control:focus-visible, .fluxion-settings-button:focus-visible, .fluxion-settings-nav button:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: 1px;
     }

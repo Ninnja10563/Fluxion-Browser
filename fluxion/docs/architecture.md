@@ -36,6 +36,14 @@ removes the inline token overrides, leaving the existing Gecko theme choice
 intact. Workspace SVG data is a small pinned, licensed Lucide subset; persisted
 workspace icon IDs stay stable across the visual upgrade.
 
+Pinned Gecko 155's `UrlbarInput.mjs` creates a `.urlbar-background` child, not
+the older `#urlbar-background`. Fluxion styles the current element and native
+field tokens while keeping the old selector for ESR. The packaged color gate
+checks its actual computed foreground/background, not merely preference values.
+Re-audit the [native template](https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_155_0_1_RELEASE/browser/components/urlbar/content/UrlbarInput.mjs)
+and [native CSS](https://raw.githubusercontent.com/mozilla-firefox/firefox/FIREFOX_155_0_1_RELEASE/browser/themes/shared/urlbar-searchbar.css)
+when updating the locked engine.
+
 ### macOS process and external-open integration
 
 The native launcher uses `execv` to preserve the application process that
