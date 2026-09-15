@@ -19,6 +19,28 @@
     while (!(await condition())) { assert(Date.now() < deadline, message); await delay(50); }
   };
   const near = (a, b) => Math.abs(a - b) < 1.5;
+  function sidebarSurfaceEvidence(surface, mode) {
+    const style = window.getComputedStyle(surface);
+    const radii = [style.borderTopLeftRadius, style.borderTopRightRadius,
+      style.borderBottomRightRadius, style.borderBottomLeftRadius];
+    const expected = mode === "revealed" ? "8px" : "0px";
+    assert(radii.every(radius => radius === expected),
+      `Sidebar ${mode} surface has unexpected corner radii: ${JSON.stringify(radii)}`);
+    if (mode === "revealed") {
+      // Split shadows without splitting the commas inside computed rgb().
+      const shadows = style.boxShadow.split(/,(?![^()]*\))/).map(value => value.trim());
+      const inset = shadows.filter(value => /\binset\b/.test(value));
+      const exterior = shadows.filter(value => !/\binset\b/.test(value));
+      assert(shadows.length === 2 && inset.length === 1 && /\b0px 0px 0px 1px\b/.test(inset[0]),
+        `Revealed sidebar is missing its one-pixel inset outline: ${style.boxShadow}`);
+      assert(exterior.length === 1 && /\b4px 0px 12px 0px\b/.test(exterior[0]) &&
+        /rgba\(0,\s*0,\s*0,\s*0\.14\)/.test(exterior[0]),
+      `Revealed sidebar exterior shadow is not the restrained neutral shadow: ${style.boxShadow}`);
+    } else {
+      assert(style.boxShadow === "none", `Expanded sidebar must remain flush and unshadowed: ${style.boxShadow}`);
+    }
+    return { mode, radii, boxShadow: style.boxShadow };
+  }
   const rect = node => {
     const r = node.getBoundingClientRect();
     return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
@@ -207,6 +229,7 @@
       await delay(200);
       gap(mode);
       workspaceControls(mode, mode !== "focus");
+      if (mode === "expanded") report.geometry.push(sidebarSurfaceEvidence(flow.querySelector(".fluxion-surface"), "expanded"));
     }
     stage("routed-edge-hover-and-sidebar-toggle");
     report.hoverEvents = [];
@@ -229,8 +252,16 @@
       await wait(() => flow.dataset.revealed === "true" && !surface.inert, `Edge hover did not reveal sidebar on cycle ${cycle}`);
       await delay(200);
       workspaceControls("focus", true);
+      const appearance = sidebarSurfaceEvidence(surface, "revealed");
       const pageAfter = rect(gBrowser.tabpanels);
       assert(["left", "top", "width", "height"].every(key => near(pageBefore[key], pageAfter[key])), "Routed edge reveal reflowed page content");
+      if (cycle === 0) {
+        report.geometry.push(appearance);
+        await action("capture-sidebar-revealed");
+        assert(flow.dataset.revealed === "true" && !surface.inert, "Sidebar hid before the revealed-state screenshot completed");
+        report.captures.push({ name: "capture-sidebar-revealed", theme: window.FluxionTheme.current(),
+          url: gBrowser.selectedBrowser.currentURI.spec, title: gBrowser.selectedTab.label });
+      }
       if (cycle === 1) {
         const selected = rowFor(gBrowser.selectedTab);
         assert(selected, "Hover fixture lost the selected Flow row");
@@ -261,6 +292,8 @@
     clickControl(toggle);
     await wait(() => near(rect(flow).width, 232), "Expanded sidebar did not return for captures");
     assert(flow.dataset.state === "expanded" && !surface.inert, "Expand left the sidebar surface hidden or inert");
+    report.geometry.push(sidebarSurfaceEvidence(surface, "expanded-after-reveal"));
+    report.checks.push("flush-expanded-sidebar-and-rounded-outlined-hover-overlay-with-real-capture");
     report.checks.push("expanded-compact-focus-consistent-insets-and-overlay-without-page-reflow");
     report.checks.push("routed-pointer-edge-reveal-three-cycles-and-compact-expand-never-hides");
     report.checks.push("bottom-symbol-workspace-dock-with-accessible-toggle-in-each-mode");

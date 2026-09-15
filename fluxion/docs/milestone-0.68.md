@@ -1,10 +1,12 @@
 # Fluxion 0.68 — workspace interaction details
 
 Candidate: publication requires the full native macOS release workflow. All
-949 local tests pass. The second candidate's native Settings persistence
+951 local tests pass. The second candidate's native Settings persistence
 assertion exposed a test race with asynchronous Gecko writes; the correction
-is pushed, but GitHub HTTP 500 dispatch failures currently prevent its next
-native staging run. Nothing from 0.68 has been published yet. See the
+is pushed, and GitHub has accepted native staging after its earlier HTTP 500
+dispatch failures. The final candidate also checks the refined hover-overlay
+surface against the user's sidebar references. Nothing from 0.68 has been
+published yet. See the
 [candidate audit](validation/0.68-candidate.md).
 
 The current workspace heading reveals an options button on hover or keyboard
@@ -43,6 +45,12 @@ suppress it. Neither screenshots nor routed Gecko wheel events establish
 physical M3 trackpad reliability. Address-popup captures intermittently omit
 the main-window backdrop at different widths; the 0.67 symptom remains under
 a hardware audit rather than being claimed fixed.
+
+The expanded sidebar remains integrated into the frame. The hidden sidebar's
+edge-revealed surface has 8px corners, a 1px inset neutral outline and a reduced
+direction-aware shadow. These treatments distinguish an overlay from a layout
+column without adding borders around individual tabs, changing geometry or
+moving the webpage. The native frame gate captures this actual hover state.
 
 Fluxion's own General and Privacy sections add six everyday browser controls:
 smooth scrolling, hardware acceleration (restart required), download-location

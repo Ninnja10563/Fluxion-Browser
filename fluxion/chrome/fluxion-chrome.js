@@ -295,17 +295,19 @@
     }
     #fluxion-flow[data-state="focus"] > .fluxion-surface {
       position: absolute; inset-block: 0; inset-inline-start: 0; width: var(--fluxion-sidebar-width);
+      border-radius: 8px;
       pointer-events: none; transform: translateX(calc(-100% + 3px)); box-shadow: none;
     }
     #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
       pointer-events: auto; transform: translateX(0);
-      box-shadow: 8px 0 22px rgba(0, 0, 0, .16);
+      box-shadow: inset 0 0 0 1px var(--fluxion-line), 4px 0 12px rgba(0, 0, 0, .14);
     }
     :root[chromedir="rtl"] #fluxion-flow[data-state="focus"] > .fluxion-surface {
       transform: translateX(calc(100% - 3px)); transform-origin: right center;
     }
     :root[chromedir="rtl"] #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
-      transform: translateX(0); box-shadow: -8px 0 22px rgba(0, 0, 0, .16);
+      transform: translateX(0);
+      box-shadow: inset 0 0 0 1px var(--fluxion-line), -4px 0 12px rgba(0, 0, 0, .14);
     }
     #fluxion-flow * { box-sizing: border-box; }
     #fluxion-sidebar-resizer {

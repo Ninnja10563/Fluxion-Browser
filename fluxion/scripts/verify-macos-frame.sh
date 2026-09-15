@@ -63,7 +63,7 @@ FLUXION_PROFILE="$profile" FLUXION_FRAME_TEST=1 FLUXION_FRAME_DRIVER_DIR="$check
 process_id=$!
 for ((attempt=0; attempt<720; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
-  for action in foreground close-ordinary restore-ordinary close-after-pointer capture-page-light capture-page-dark capture-page-split capture-settings; do
+  for action in foreground close-ordinary restore-ordinary close-after-pointer capture-sidebar-revealed capture-page-light capture-page-dark capture-page-split capture-settings; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       if [[ "$action" == capture-* ]]; then
@@ -84,4 +84,4 @@ if [[ "$result" != 0 ]] || ! grep -Fq 'user_pref("fluxion.frame.verification.hea
   exit 1
 fi
 grep 'fluxion.frame.verification' "$profile/prefs.js"
-printf 'Verified native macOS keyboard closure, routed edge-hover/sidebar toggles, inline new-tab placement, scroll-stable workspace dock, frame geometry, and actual webpage/Settings captures. OS mouse movement and fullscreen are not claimed.\n'
+printf 'Verified native macOS keyboard closure, routed edge-hover/sidebar toggles, flush expanded and rounded outlined revealed surfaces, inline new-tab placement, scroll-stable workspace dock, frame geometry, and actual revealed-sidebar/webpage/Settings captures. OS mouse movement and fullscreen are not claimed.\n'
