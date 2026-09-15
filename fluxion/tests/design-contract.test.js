@@ -388,8 +388,8 @@ test("Appearance switches live Gecko themes and stays searchable from the palett
   assert.match(chrome, /--fluxion-flow-layout-width: var\(--fluxion-sidebar-width\)/);
   assert.match(chrome, /--fluxion-flow-layout-width: 44px/);
   assert.match(chrome, /--fluxion-flow-layout-width: 3px/);
-  assert.match(settings, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);
-  assert.match(library, /inset-inline-start: var\(--fluxion-flow-layout-width\)/);
+  assert.match(settings, /inset-inline-start: calc\(var\(--fluxion-flow-layout-width\) \+ var\(--fluxion-page-inset\)\)/);
+  assert.match(library, /inset-inline-start: calc\(var\(--fluxion-flow-layout-width\) \+ var\(--fluxion-page-inset\)\)/);
   assert.match(settings, /width: 184px; min-width: 184px/);
   assert.match(settings, /flex: 0 0 184px/);
   assert.match(theme, /navRect\?\.width >= 150/);
