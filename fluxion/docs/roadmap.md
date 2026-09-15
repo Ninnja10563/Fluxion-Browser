@@ -147,6 +147,15 @@ controls work and its failure paths have been tested.
   published 0.63 adds whole-group drag placement and intact split-pair drops
   into groups, with 30 structural operations and seven real-page state checks;
   physical-hardware profiling remains)
+- native keyboard-close projection excludes still-attached closing Gecko tabs;
+  pointer-close spacing survives same-window content focus transfer and canceled
+  page-leave prompts restore surviving rows (published 0.65; extracted lifecycle
+  regressions and real macOS Command-W/reopen checks passed)
+- quieter single-band workspace controls, mode-aware workspace navigation,
+  consistent thin page/Settings/Library frame and intrinsic Settings actions
+  (published 0.65 following an unslop-ui audit; actual light/dark and split-page
+  captures inspected, responsive Settings passed; a full-resolution user
+  reference and broader physical interaction/accessibility audits remain)
 - bounded page evidence traversal without DOM cloning or full text-node reads,
   with editable/form subtree pruning (implemented; native document-wide source
   and password selectors remain, and broader resource profiling is still needed)

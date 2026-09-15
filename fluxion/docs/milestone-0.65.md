@@ -1,6 +1,8 @@
 # 0.65 — tab closure and a quieter browser frame
 
-Candidate milestone; native macOS validation and publication are pending.
+Published as [0.65.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.65.0-preview.1).
+All 846 tests and every mandatory native macOS release gate passed. See
+[release provenance](../release/provenance/v0.65.0-preview.1.md).
 
 ## Interaction corrections
 

@@ -8,12 +8,22 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.65 is published: Command-W no longer leaves ghost tabs, pointer-close
+spacing survives native content focus transfer, and Flow has a quieter single
+workspace band with clearer controls. A thin content frame, simpler Settings
+navigation and label-sized actions follow an unslop-ui design audit. All 846
+tests and every mandatory native macOS gate passed, including real keyboard
+closure, light/dark webpage captures, split view and responsive Settings.
+Download the [latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.65.0-preview.1)
+for Apple Silicon (including M3) and Intel. See
+[release provenance](release/provenance/v0.65.0-preview.1.md).
+
 Fluxion 0.64 is published: manual update discovery now uses a small, expiring
 public feed instead of GitHub's anonymous repository API. The feed publisher
 verifies actual release assets before advertising them; the browser remains
 anonymous and never downloads an update automatically. All 828 tests and every
 native macOS release gate passed. Download the
-[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.64.0-preview.1)
+[0.64 universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.64.0-preview.1)
 for Apple Silicon (including M3) and Intel. See
 [release provenance](release/provenance/v0.64.0-preview.1.md).
 
@@ -119,18 +129,17 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.64](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.64.0-preview.1)
+[Fluxion 0.65](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.65.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
-The adjustable sidebar retains compact/Focus rail geometry and cancels an
-unfinished resize with Escape. It includes 0.55's menu, search and Settings
-interaction improvements and 0.54's live cross-window tab transfers.
+Quit the old app, then replace Fluxion.app using the DMG. Your separate Fluxion
+profile is retained. The adjustable sidebar retains Compact/Focus behavior,
+workspace keyboard navigation and the native browser's services.
 
-All 746 regression tests and every native release gate passed, including
-stable 1,000-tab selection and structural changes, OS-native tab/group menu navigation, clean/crash
-recovery, private-data exclusion, disabled-Memory startup cleanup, responsive
-Settings, excluded cold-page model inputs, corrupt-policy restart retention
-and actual anonymous update discovery. See
-[verified release provenance](release/provenance/v0.61.0-preview.1.md).
+All 846 regression tests and every mandatory native release gate passed,
+including Command-W, real webpage/split rendering, 1,000-tab structural changes,
+native menus, clean/crash recovery, private-data exclusion, local Memory,
+responsive Settings and actual anonymous update discovery. See
+[verified release provenance](release/provenance/v0.65.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 

@@ -8,6 +8,14 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.65 is a published tab-closure and visual-restraint preview. Command-W
+removes stale rows; pointer-close safety survives native content focus changes.
+One workspace band, clear compact controls, a thin shared content frame and
+smaller Settings actions reduce visual noise. All 846 tests and every native
+release gate passed, including real shortcuts, actual light/dark and split-page
+captures, narrow Settings and 1,000-tab structural changes. See
+[release provenance](provenance/v0.65.0-preview.1.md).
+
 Version 0.64 is a published release-discovery preview. About checks a bounded,
 expiring public feed without depending on GitHub's anonymous repository API.
 The maintainer publisher verifies actual DMG/checksum bytes before advertising
