@@ -309,7 +309,7 @@
     }
     .fluxion-workspace-list::-webkit-scrollbar { display: none; }
     .fluxion-workspace {
-      position: relative; min-width: 44px; max-width: 88px; height: 27px; flex: 1 0 44px;
+      position: relative; min-width: 44px; max-width: 88px; height: 27px; flex: 1 0 auto;
       display: flex; align-items: center; justify-content: center; gap: 5px;
       border: 0; border-radius: 0; padding: 0 3px;
       color: var(--fluxion-muted); background: transparent; font: inherit;

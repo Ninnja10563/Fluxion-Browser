@@ -60,11 +60,15 @@
     const remoteAppearance = await section(companion, "Appearance");
     const sidebar = field(appearance, "Flow sidebar");
     window.FluxionUI.setSidebarState("expanded");
-    const cycle = document.querySelector('button[aria-label="Cycle sidebar size"]');
+    const cycle = document.querySelector('.fluxion-workspaces > button.fluxion-icon-button');
     assert(cycle, "The shipped Flow sidebar cycle button is missing");
+    assert(cycle.getAttribute("aria-label") === "Collapse sidebar to icons",
+      "Expanded sidebar control does not describe its next action");
     cycle.click();
     await waitFor(() => sidebar.value === "compact" && field(remoteAppearance, "Flow sidebar").value === "compact",
       "Toolbar sidebar change left an open Settings window stale");
+    assert(cycle.getAttribute("aria-label") === "Hide sidebar",
+      "Compact sidebar control does not describe its next action");
     change(companion, field(remoteAppearance, "Flow sidebar"), "expanded");
     change(companion, field(remoteAppearance, "Tab density"), "roomy");
     change(companion, field(remoteAppearance, "Interface motion"), false);

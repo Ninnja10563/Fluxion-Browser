@@ -70,11 +70,13 @@
     const documentLoads = async () => {
       const response = await window.fetch(`${origin}/state`, { credentials: "omit", cache: "no-store" });
       assert(response.ok, "Live structure document load evidence unavailable");
-      return (await response.json()).loads;
+      const { loads, requests, omittedRequests } = await response.json();
+      report.documentRequests = { loads, requests, omittedRequests };
+      return loads;
     };
     const baselineLoads = await documentLoads();
-    assert(baselineLoads === 4, "Live structure fixture did not load exactly four documents");
     report.liveDocuments = { pages: 4, baselineLoads, checks: [] };
+    assert(baselineLoads === 4, `Live structure fixture did not load exactly four documents: observed ${baselineLoads}`);
     async function verifyLiveDocuments(operation) {
       for (const [tab, before] of livePages) {
         const after = await readLivePage(tab);

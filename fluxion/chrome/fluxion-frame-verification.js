@@ -182,6 +182,12 @@
           box.top >= surface.top - 1 && box.bottom <= surface.bottom + 1 &&
           button.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)),
         `Sidebar toggle is clipped, hidden, or has an insufficient hit area in ${mode}`);
+        if (mode !== "compact") {
+          for (const label of list.querySelectorAll(".fluxion-workspace-name")) {
+            assert(label.scrollWidth <= label.clientWidth + 1,
+              `Default workspace label is clipped in ${mode}: ${label.textContent}`);
+          }
+        }
       }
     };
     for (const [mode, expected] of [["expanded", 232], ["compact", 44], ["focus", 3]]) {
