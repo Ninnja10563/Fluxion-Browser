@@ -8,6 +8,13 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+The [0.68 candidate](docs/milestone-0.68.md) adds workspace-heading options,
+per-workspace color editing, centered dock symbols, bidirectional swipe
+refinements, short transitions and six everyday controls in Fluxion's custom
+Settings. All 949 local tests pass; final native validation and publication
+are pending because GitHub is rejecting new workflow dispatches with HTTP 500.
+The downloadable release remains 0.67 until the corrected candidate is verified.
+
 Fluxion 0.67 is published: navigation follows the page column, the address field
 has equal 6px top/bottom spacing, and workspace/tab/New tab labels share one
 alignment. The unslop-ui audit removed redundant borders and decoration.

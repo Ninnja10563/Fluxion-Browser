@@ -1,6 +1,11 @@
 # Fluxion 0.68 — workspace interaction details
 
-Candidate: publication requires the full native macOS release workflow.
+Candidate: publication requires the full native macOS release workflow. All
+949 local tests pass. The second candidate's native Settings persistence
+assertion exposed a test race with asynchronous Gecko writes; the correction
+is pushed, but GitHub HTTP 500 dispatch failures currently prevent its next
+native staging run. Nothing from 0.68 has been published yet. See the
+[candidate audit](validation/0.68-candidate.md).
 
 The current workspace heading reveals an options button on hover or keyboard
 focus. A quiet sage-neutral highlight connects the title and action; no badge,
