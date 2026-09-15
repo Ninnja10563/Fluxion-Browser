@@ -213,14 +213,12 @@
       await delay(350);
       geometry(`${width}-normal`);
       await capture(`capture-product-chrome-${width}`);
-      gURLBar.focus();
-      await wait(() => document.activeElement === gURLBar.inputField, "Native address input did not receive focus");
-      await delay(250);
-      const focused = geometry(`${width}-focused`);
       // The owned macOS driver sends Cmd-L and the fixed bookmark restriction
       // as actual key input. Do not refocus or call programmatic search before
       // capturing the first popup that this real interaction opens.
       await nativeQuery(width);
+      await wait(() => document.activeElement === gURLBar.inputField, "Native Cmd-L did not focus the address input");
+      const focused = geometry(`${width}-focused`);
       await wait(() => {
         const rows = [...document.querySelectorAll(".urlbarView-row")];
         report.suggestions = {
