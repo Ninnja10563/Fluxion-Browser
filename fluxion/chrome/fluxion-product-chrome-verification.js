@@ -29,7 +29,13 @@
     inner.right <= outer.right + tolerance && inner.top >= outer.top - tolerance && inner.bottom <= outer.bottom + tolerance;
   const stage = value => { Services.prefs.setStringPref(`${prefix}.stage`, value); Services.prefs.savePrefFile(null); };
   async function capture(name) {
-    window.focus();
+    // Refocusing while a native popup is open can change Cocoa window ordering.
+    // Capture the existing state; the driver only activates normal captures.
+    await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    report.captureStates ||= [];
+    report.captureStates.push({ name, documentVisibility: document.visibilityState,
+      windowState: window.windowState, activeWindow: Services.focus.activeWindow === window,
+      urlbarOpen: gURLBar.view.isOpen });
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Product chrome capture was not acknowledged: ${name}`, 20000);
     report.captures.push(name);
@@ -104,6 +110,8 @@
     const panel = document.getElementById("PanelUI-ipprotection");
     assert(!painted(panel), "Firefox VPN enrollment panel is visible");
     assert(document.getElementById("aboutName")?.getAttribute("label") === "About Fluxion", "Native About command is not Fluxion branded");
+    assert(Services.prefs.getBoolPref("browser.urlbar.groupLabels.enabled", true) === false,
+      "Native Firefox Suggest group labels are not disabled by product configuration");
     report.checks.push("inherited-vpn-enabled-pref-overridden-on-both-branches-and-locked", "native-vpn-service-uninitialized-widget-unpainted-and-panel-closed", "native-about-command-is-fluxion");
     Services.prefs.setBoolPref("browser.tabs.warnOnClose", false);
     Services.prefs.setBoolPref("browser.warnOnQuit", false);
@@ -204,6 +212,15 @@
       },
       "Native Places suggestion did not render in the real address-bar view");
       const view = rect(gURLBar.view.panel), input = rect(document.querySelector("#urlbar > .urlbar-input-container"));
+      const viewStyle = window.getComputedStyle(gURLBar.view.panel);
+      const borders = ["Top", "Right", "Bottom", "Left"].map(side => Number.parseFloat(viewStyle[`border${side}Width`]));
+      const resultRows = [...document.querySelectorAll(".urlbarView-row")].filter(painted);
+      assert(resultRows.every(row => !row.hasAttribute("label") && !row.querySelector(".urlbarView-group-aria-label")),
+        "Native results still expose a Firefox Suggest group label visually or to accessibility");
+      assert(borders.every(value => value === 0) && viewStyle.boxShadow === "none",
+        `Suggestion view adds a duplicate inner frame: ${JSON.stringify({ borders, shadow: viewStyle.boxShadow })}`);
+      report.suggestions.innerFrame = { borders, shadow: viewStyle.boxShadow };
+      report.suggestions.rowLabels = resultRows.map(row => row.getAttribute("label"));
       report.geometry.push({ label: `${width}-native-suggestions`, view, input, focused });
       assert(view.top >= input.bottom - 1.5 && view.left <= input.left + 16 && view.right >= input.right - 16 &&
         view.left >= -1 && view.right <= window.innerWidth + 1,
@@ -213,7 +230,7 @@
       gURLBar.handleRevert();
       gBrowser.selectedBrowser.focus();
     }
-    report.checks.push("normal-and-focused-address-field-balanced-at-1280-and-800", "visible-toolbar-controls-contained-with-no-pairwise-overlap", "expanded-workspace-tab-and-new-tab-labels-share-one-column", "native-places-suggestions-retain-address-field-anchor");
+    report.checks.push("normal-and-focused-address-field-balanced-at-1280-and-800", "visible-toolbar-controls-contained-with-no-pairwise-overlap", "expanded-workspace-tab-and-new-tab-labels-share-one-column", "native-places-suggestions-retain-address-field-anchor", "native-suggestion-group-branding-disabled-without-duplicate-inner-frame");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-product-policy-and-toolbar-geometry-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack}`); Cu.reportError(error); })

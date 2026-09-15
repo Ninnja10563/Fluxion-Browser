@@ -34,14 +34,19 @@ cleanup() {
 trap cleanup EXIT
 foreground() {
   owned || { printf 'Product chrome capture driver lost its exact owned browser process.\n' >&2; return 1; }
-  osascript - "$process_id" <<'APPLESCRIPT'
+  osascript - "$process_id" "$1" <<'APPLESCRIPT'
 on run arguments
   set browserPID to (item 1 of arguments) as integer
+  set captureName to item 2 of arguments
   with timeout of 10 seconds
     tell application "System Events"
       set ownedProcess to first application process whose unix id is browserPID
-      set frontmost of ownedProcess to true
-      delay 0.15
+      if captureName starts with "capture-product-suggestions-" then
+        if not frontmost of ownedProcess then error "Popup capture lost its foreground owner"
+      else if not frontmost of ownedProcess then
+        set frontmost of ownedProcess to true
+        delay 0.15
+      end if
       if (unix id of first application process whose frontmost is true) is not browserPID then error "Wrong foreground process"
     end tell
   end timeout
@@ -60,7 +65,7 @@ for ((attempt=0; attempt<720; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
   for action in capture-product-chrome-1280 capture-product-chrome-800 capture-product-suggestions-1280 capture-product-suggestions-800; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
-      foreground
+      foreground "$action"
       owned || exit 1
       screencapture -x "$artifact_dir/$action.png"
       [[ -s "$artifact_dir/$action.png" ]] || { printf 'Product chrome screenshot is missing.\n' >&2; exit 1; }

@@ -168,9 +168,8 @@
     }
     #urlbar-input { color: var(--fluxion-ink) !important; font-size: 13px !important; letter-spacing: -.005em; }
     #urlbar .urlbarView {
-      border: 1px solid var(--fluxion-line) !important; border-radius: 7px !important;
-      background: var(--fluxion-bg-raised) !important;
-      box-shadow: 0 10px 28px rgba(0,0,0,.18) !important;
+      border: 0 !important; border-radius: 0 !important;
+      background: transparent !important; box-shadow: none !important;
     }
     #PanelUI-button { display: none !important; }
     #fluxion-toolbar-menu {

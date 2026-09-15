@@ -36,3 +36,9 @@ and existing preference stores, including a stale re-enable attempt and checks
 that unrelated settings remain untouched. Native macOS validation must additionally
 check the effective locked gate and absence of the promotion on the actual Gecko
 window. Re-review the gate and widget/panel IDs whenever updating the engine lock.
+
+Fluxion also disables `browser.urlbar.groupLabels.enabled`, the native switch
+for the marketing-style "Firefox Suggest" group heading. Real bookmark/history
+results, their source icons/text and native query providers are retained. The
+outer native URL-bar surface owns the popup's single frame; Fluxion does not
+wrap the results in a second bordered panel.

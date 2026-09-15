@@ -3,6 +3,8 @@
   "use strict";
   if (Services.env.get("FLUXION_STRUCTURE_TEST") !== "1") return;
   const prefix = "fluxion.structure.verification";
+  if (Services.prefs.getBoolPref(`${prefix}.claimed`, false)) return;
+  Services.prefs.setBoolPref(`${prefix}.claimed`, true);
   const { document, gBrowser, FluxionUI: ui } = window;
   const fixtures = [], original = gBrowser.selectedTab;
   const report = { fixtureTabs: 1000, checks: [], baselines: [], unaffectedWrites: 0,
@@ -41,6 +43,26 @@
     assert(!fixtures.some(tab => tab.group || tab.splitview), "Fixture unexpectedly has grouped topology");
     const origin = Services.env.get("FLUXION_TAB_TRANSFER_ORIGIN");
     assert(/^http:\/\/127\.0\.0\.1:\d+$/.test(origin), "Structure document fixture requires exact loopback origin");
+    const documentLoads = async () => {
+      const response = await window.fetch(`${origin}/state`, { credentials: "omit", cache: "no-store" });
+      assert(response.ok, "Live structure document load evidence unavailable");
+      const { loads, requests, omittedRequests } = await response.json();
+      report.documentRequests = { loads, requests, omittedRequests };
+      return loads;
+    };
+    const browserWindowCount = () => [...Services.wm.getEnumerator("navigator:browser")]
+      .filter(browserWindow => !browserWindow.closed).length;
+    const documentIdentity = tab => {
+      const context = tab.linkedBrowser.browsingContext;
+      const global = context?.currentWindowGlobal;
+      return { browsingContextId: context?.id ?? null,
+        innerWindowId: global?.innerWindowId ?? null,
+        url: tab.linkedBrowser.currentURI.spec,
+        busy: tab.hasAttribute("busy"),
+        pending: tab.hasAttribute("pending"),
+        remoteWithoutWindowGlobal: Boolean(tab.linkedBrowser.isRemoteBrowser && !global) };
+    };
+    report.setup = { windowCount: browserWindowCount(), initialLoads: await documentLoads(), navigations: [] };
     const readLivePage = (tab, command = "Read") => tab.linkedBrowser.browsingContext.currentWindowGlobal
       .getActor("FluxionTabTransferVerification").sendQuery(`FluxionTabTransfer:${command}`, { origin });
     function livePageChromeReady(tab, state) {
@@ -50,6 +72,9 @@
     const livePages = new Map();
     for (const index of [5, 6, 8, 9]) {
       const tab = fixtures[index];
+      const checkpoint = { fixtureIndex: index, windowCountBefore: browserWindowCount(),
+        beforeLoads: await documentLoads(), before: documentIdentity(tab) };
+      report.setup.navigations.push(checkpoint);
       tab.linkedBrowser.loadURI(Services.io.newURI(`${origin}/transfer`), {
         triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
       });
@@ -57,6 +82,8 @@
         if (tab.hasAttribute("busy") || tab.linkedBrowser.currentURI.spec !== `${origin}/transfer`) return false;
         try { return Boolean((await readLivePage(tab)).nonce); } catch { return false; }
       }, "Live structure document did not render");
+      checkpoint.afterNavigationLoads = await documentLoads();
+      checkpoint.afterNavigation = documentIdentity(tab);
       const state = await readLivePage(tab, "Seed");
       assert(state.nonce && state.counter === 1 && state.draft === "Unsaved transfer draft — café" &&
         state.url === `${origin}/transfer?step=1`, "Live structure document did not retain seeded state");
@@ -65,15 +92,14 @@
       // forcing a render here would hide stale SPA URL/tooltip behavior.
       await wait(() => livePageChromeReady(tab, state), "Flow did not naturally reflect the seeded same-document URL");
       livePages.set(tab, state);
+      checkpoint.afterSeedLoads = await documentLoads();
+      checkpoint.afterSeed = documentIdentity(tab);
+      checkpoint.windowCountAfter = browserWindowCount();
+      // Keep only bounded fixture metadata. These checkpoints diagnose initial
+      // extra document requests; they do not alter the strict load-count gate.
+      write("report", JSON.stringify(report));
     }
     assert(new Set([...livePages.values()].map(state => state.nonce)).size === 4, "Live fixture nonces are not distinct");
-    const documentLoads = async () => {
-      const response = await window.fetch(`${origin}/state`, { credentials: "omit", cache: "no-store" });
-      assert(response.ok, "Live structure document load evidence unavailable");
-      const { loads, requests, omittedRequests } = await response.json();
-      report.documentRequests = { loads, requests, omittedRequests };
-      return loads;
-    };
     const baselineLoads = await documentLoads();
     report.liveDocuments = { pages: 4, baselineLoads, checks: [] };
     assert(baselineLoads === 4, `Live structure fixture did not load exactly four documents: observed ${baselineLoads}`);

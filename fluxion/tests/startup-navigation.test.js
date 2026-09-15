@@ -114,6 +114,16 @@ test("full startup disables an inherited Firefox VPN enrollment without altering
   assert.deepEqual(h.navigations, []);
 });
 
+test("startup removes suggestion marketing headings without disabling bookmark results", () => {
+  const h = startupFixture("https://example.com/restored", [
+    ["browser.urlbar.groupLabels.enabled", true], ["browser.urlbar.suggest.bookmark", true],
+  ]);
+  assert.deepEqual(h.errors, []);
+  assert.equal(h.prefs.getBoolPref("browser.urlbar.groupLabels.enabled"), false);
+  assert.equal(h.prefs.getBoolPref("browser.urlbar.suggest.bookmark"), true);
+  assert.deepEqual(h.navigations, []);
+});
+
 for (const removal of [false, true]) {
   test(`invalid startup policy blocks native construction and preserves removal=${removal}`, () => {
     const h = startupFixture("about:blank", [
