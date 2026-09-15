@@ -311,7 +311,7 @@
     .fluxion-workspace {
       position: relative; min-width: 44px; max-width: 88px; height: 27px; flex: 1 0 44px;
       display: flex; align-items: center; justify-content: center; gap: 5px;
-      border: 0; border-radius: 0;
+      border: 0; border-radius: 0; padding: 0 3px;
       color: var(--fluxion-muted); background: transparent; font: inherit;
       font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     }
@@ -1930,6 +1930,18 @@
     }, closeMotionDuration());
   }
 
+  function handlePointerCloseBlur() {
+    const hold = pointerCloseHold;
+    if (!hold) return;
+    // Gecko also blurs chrome when focus transfers to content in this window.
+    // Wait for native focus bookkeeping, then release only on deactivation.
+    window.setTimeout(() => {
+      if (pointerCloseHold === hold && Services.focus.activeWindow !== window) {
+        finishPointerCloseHold(hold);
+      }
+    }, 0);
+  }
+
   function closeTabs(tabs, options = {}) {
     const ordinary = tabs.filter(tab =>
       tab?.parentNode && !window.FluxionPeek?.close(tab, { returnToSource: false })
@@ -3176,7 +3188,7 @@
       releasePointerCloseHold();
     }
   }, true);
-  on(window, "blur", () => releasePointerCloseHold({ animate: false }));
+  on(window, "blur", handlePointerCloseBlur);
   on(tabsList, "scroll", () => releasePointerCloseHold({ animate: false }), { passive: true });
   on(flow, "pointerenter", () => {
     focusPointerInside = true;

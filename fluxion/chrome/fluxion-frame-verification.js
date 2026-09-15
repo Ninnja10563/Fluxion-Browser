@@ -211,6 +211,23 @@
     };
     await capture("capture-page-light", "light");
     await capture("capture-page-dark", "dark");
+    const secondPage = add("https://example.com/");
+    await wait(() => secondPage.linkedBrowser.currentURI.spec === "https://example.com/" &&
+      !secondPage.hasAttribute("busy") && secondPage.label === "Example Domain",
+    "Second real HTTPS page did not finish loading", 35000);
+    const split = ui.createSplitView(webpage, secondPage);
+    assert(split && webpage.splitview === split && secondPage.splitview === split && split.tabs.length === 2,
+      "Real pages did not enter the same native split view");
+    await wait(() => gBrowser.activeSplitView === split && split.panels.length === 2 &&
+      Array.from(split.panels).every(panel => panel.classList.contains("split-view-panel-active") &&
+        rect(panel).width > 100 && rect(panel).height > 100), "Both native split panels did not become visible");
+    await delay(250);
+    const [leftPane, rightPane] = Array.from(split.panels, rect);
+    assert(rightPane.left >= leftPane.right && near(leftPane.top, rightPane.top), "Native side-by-side page panels overlap or are misaligned");
+    report.geometry.push({ mode: "real-page-split", leftPane, rightPane,
+      urls: split.tabs.map(tab => tab.linkedBrowser.currentURI.spec) });
+    await capture("capture-page-split", "dark");
+    report.checks.push("two-real-https-pages-share-visible-nonoverlapping-native-split-panels");
     const settingsTab = add("about:preferences?fluxion=appearance");
     await select(settingsTab);
     const settings = document.getElementById("fluxion-settings");

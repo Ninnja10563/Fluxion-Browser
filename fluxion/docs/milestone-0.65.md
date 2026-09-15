@@ -15,6 +15,11 @@ synthetic coordinates. A canceled `beforeunload` restores the surviving row's
 visibility and interaction, including partial multi-tab cancellation, without
 releasing a newer or unrelated pointer operation.
 
+Native macOS testing also exposed chrome-to-content focus transfer emitting a
+window blur while that same app window remains active. The pointer guard now
+waits for native focus bookkeeping and releases only on actual deactivation;
+an old blur callback cannot clear a newer operation's guard.
+
 ## Design direction
 
 The user requested the [unslop-ui skill](https://github.com/yuwen-lu/unslop-ui).

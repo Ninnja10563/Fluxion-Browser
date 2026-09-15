@@ -63,7 +63,7 @@ FLUXION_PROFILE="$profile" FLUXION_FRAME_TEST=1 FLUXION_FRAME_DRIVER_DIR="$check
 process_id=$!
 for ((attempt=0; attempt<720; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
-  for action in foreground close-ordinary restore-ordinary close-after-pointer capture-page-light capture-page-dark capture-settings; do
+  for action in foreground close-ordinary restore-ordinary close-after-pointer capture-page-light capture-page-dark capture-page-split capture-settings; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       if [[ "$action" == capture-* ]]; then

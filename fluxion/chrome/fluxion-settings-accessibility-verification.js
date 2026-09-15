@@ -119,6 +119,20 @@
     }
     const geometry = { sizes: [], interactiveControls: 0, permissionExpiry: [], source: "Actual privileged Settings DOM; no external AI requests" };
     report.geometry = geometry;
+    const resizeSettings = async size => {
+      const before = root.getBoundingClientRect().width;
+      assert(before > 0, "Settings must be visible before measuring native window overhead");
+      // Measure the existing chrome and frame rather than assuming Settings
+      // touches the outer window edge. The content-width assertion stays exact.
+      const overhead = window.outerWidth - before;
+      const target = Math.round(size + overhead);
+      geometry.resizeRequests ||= [];
+      geometry.resizeRequests.push({ requestedRootWidth: size, beforeRootWidth: before,
+        beforeOuterWidth: window.outerWidth, measuredOverhead: overhead, targetOuterWidth: target });
+      window.resizeTo(target, Math.max(850, original.height));
+      await waitFor(() => Math.abs(root.getBoundingClientRect().width - size) < 2,
+        `Settings root did not reach ${size}px with ${overhead}px measured window overhead`);
+    };
     const sections = [...root.querySelectorAll("[data-section]")];
     assert(sections.length >= 10, "Settings geometry corpus omitted sections");
     const show = async panel => {
@@ -145,8 +159,7 @@
     };
     ui.setSidebarState("expanded");
     for (const size of [320, 600]) {
-      window.resizeTo(size + window.FluxionSidebarWidth.effectiveWidth(), Math.max(850, original.height));
-      await waitFor(() => Math.abs(root.getBoundingClientRect().width - size) < 2, `Settings root did not reach ${size}px`);
+      await resizeSettings(size);
       const summary = { rootWidth: root.getBoundingClientRect().width, sections: [] };
       geometry.sizes.push(summary);
       for (const navigation of root.querySelectorAll(".fluxion-settings-nav button, .fluxion-settings-nav h1")) {
@@ -244,8 +257,7 @@
       }
     }
     if (Services.env.get("FLUXION_SETTINGS_ACCESSIBILITY_ARTIFACT_DIR")) {
-      window.resizeTo(320 + window.FluxionSidebarWidth.effectiveWidth(), Math.max(850, original.height));
-      await waitFor(() => Math.abs(root.getBoundingClientRect().width - 320) < 2, "Screenshot did not reach narrow width");
+      await resizeSettings(320);
       await show(sections.find(panel => panel.dataset.section === "workspaces"));
       root.querySelector('.fluxion-workspace-create input').focus();
       await captureNarrowSettings("workspaces");

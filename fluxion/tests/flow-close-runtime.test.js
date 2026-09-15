@@ -31,6 +31,7 @@ function fixture() {
     removeTabs(items) { for (const tab of items) this.removeTab(tab); },
   };
   const context = vm.createContext({ gBrowser, tabElements, groupElements: new Map(), workspaceElements: new Map(),
+    Services: { focus: { activeWindow: null } },
     window: { requestAnimationFrame: fn => frames.push(fn), setTimeout: fn => timers.push(fn),
       matchMedia: () => ({ matches: false }) },
     document: { activeElement: null, documentElement: { hasAttribute: () => false } },
@@ -50,6 +51,7 @@ function fixture() {
       }
     },
   });
+  context.Services.focus.activeWindow = context.window;
   // Run shipped state/scheduling functions, not a reimplementation. The native
   // lifecycle is modeled from Firefox155.0.1: committed TabClose precedes DOM
   // teardown; canceled permitUnload emits no event. Physical macOS keyboard
@@ -198,4 +200,43 @@ test("a canceled keyboard close does not take ownership of another tab's pointer
   f.context.releasePointerCloseHold({ animate: false }); f.flush();
   assert.equal(f.tabElements.has(f.tabs[0]), false);
   assert.equal(f.tabElements.get(survivor), original);
+});
+
+test("chrome-to-content blur in the same native window retains the pointer close gap", async () => {
+  const f = fixture(), hold = f.hold();
+  f.commitClose(f.tabs[0]);
+  f.context.document.activeElement = { localName: "body" };
+  f.context.handlePointerCloseBlur();
+  assert.equal(f.timers.length, 1);
+  assert.equal(f.context.pointerCloseHold, hold);
+  await f.finishTimers(); f.flush();
+  assert.equal(f.context.pointerCloseHold, hold);
+  assert.ok(f.tabElements.has(f.tabs[0]));
+  assert.equal(f.projections.length, 0);
+});
+
+test("native window deactivation releases the close gap after focus bookkeeping settles", async () => {
+  for (const nextWindow of [null, {}]) {
+    const f = fixture(), hold = f.hold();
+    f.commitClose(f.tabs[0]);
+    f.context.handlePointerCloseBlur();
+    assert.equal(f.context.pointerCloseHold, hold, "blur alone must not synchronously release");
+    f.context.Services.focus.activeWindow = nextWindow;
+    await f.finishTimers(); f.flush();
+    assert.equal(f.context.pointerCloseHold, null);
+    assert.equal(f.tabElements.has(f.tabs[0]), false);
+    assert.equal(f.context.count.textContent, "3");
+  }
+});
+
+test("an obsolete blur callback cannot release a newer pointer close guard", async () => {
+  const f = fixture(), old = f.hold();
+  f.commitClose(f.tabs[0]);
+  f.context.handlePointerCloseBlur();
+  f.context.releasePointerCloseHold({ animate: false }); f.flush();
+  const current = f.hold(f.tabs[1]);
+  assert.notEqual(current, old);
+  f.context.Services.focus.activeWindow = null;
+  await f.finishTimers();
+  assert.equal(f.context.pointerCloseHold, current);
 });
