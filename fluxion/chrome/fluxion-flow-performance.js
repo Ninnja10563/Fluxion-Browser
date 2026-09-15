@@ -13,6 +13,7 @@
   let mutationRecords = 0;
   let observer = null;
   const fixtures = [];
+  let ownedWorkspace = null;
   let backgroundMetrics = null;
   const searchLatencies = [];
   const originalSelected = gBrowser.selectedTab;
@@ -67,6 +68,12 @@
     const flow = document.getElementById("fluxion-flow");
     const tree = flow?.querySelector('[aria-label="Open tabs in current workspace"]');
     assert(tree, "Flow tab tree did not mount");
+    const scrollArea = flow.querySelector(".fluxion-tab-scroll");
+    assert(scrollArea?.contains(tree), "Flow tab tree has no native scrolling container");
+    if (!ui.workspaces().some(workspace => workspace.id !== originalWorkspace)) {
+      ownedWorkspace = ui.createWorkspace("Performance reference", { activate: false });
+      assert(ownedWorkspace, "Performance fixture could not create its off-workspace destination");
+    }
     for (let index = 0; index < 200; index += 1) {
       const tab = gBrowser.addTrustedTab(`about:blank?fluxion-performance=${index}`, { skipAnimation: true });
       ui.setTabWorkspace(tab, originalWorkspace);
@@ -94,7 +101,8 @@
     focused.focus();
     focused.scrollIntoView({ block: "center" });
     await settle();
-    const scrollTop = tree.scrollTop;
+    const scrollTop = scrollArea.scrollTop;
+    assert(scrollTop > 0, "Performance fixture did not scroll its selected middle tab into view");
     assert(document.activeElement === focused, "Fixture could not focus selected Flow row");
     observer = new window.MutationObserver(recordMutations);
     observer.observe(flow, { childList: true, attributes: true, characterData: true, subtree: true });
@@ -107,7 +115,7 @@
       const currentWorkspaceButtons = [...flow.querySelectorAll(".fluxion-workspace")];
       assert(currentWorkspaceButtons.length === workspaceButtons.length && workspaceButtons.every((button, index) => currentWorkspaceButtons[index] === button), "A background content event rebuilt workspace buttons");
       assert(document.activeElement === focused && gBrowser.selectedTab === selected, "Background updates moved keyboard focus or tab selection");
-      assert(Math.abs(tree.scrollTop - scrollTop) <= 1, "Background updates shifted Flow scroll position");
+      assert(Math.abs(scrollArea.scrollTop - scrollTop) <= 1, "Background updates shifted Flow scroll position");
       assert([...tree.querySelectorAll('[role="treeitem"]')].filter(row => row.tabIndex === 0).length === 1 && focused.tabIndex === 0, "Background updates changed the Flow roving tab stop");
       assert(structuralRemovals === 0, `Background updates removed ${structuralRemovals} structural Flow nodes`);
     };
@@ -310,6 +318,7 @@
     if (originalSelected?.parentNode) ui.selectTab(originalSelected);
     const remaining = fixtures.filter(tab => tab.parentNode);
     if (remaining.length) gBrowser.removeTabs(remaining, { animate: false });
+    if (ownedWorkspace) ui.deleteWorkspace(ownedWorkspace.id, { confirm: false });
     Services.prefs.savePrefFile(null);
   });
 })(window);

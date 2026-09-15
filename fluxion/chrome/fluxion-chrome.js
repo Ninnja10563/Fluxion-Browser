@@ -199,6 +199,7 @@
       --fluxion-page-inset: 4px;
     }
     #tabbrowser-tabbox { margin: var(--fluxion-page-inset) !important; }
+    #tabbrowser-tabpanels .browserContainer { background: var(--fluxion-bg); }
     #tabbrowser-tabpanels .browserStack { border-radius: 8px; overflow: clip; }
     :root[inFullscreen] #tabbrowser-tabpanels .browserStack,
     :root[inDOMFullscreen] #tabbrowser-tabpanels .browserStack { border-radius: 0; }
@@ -332,10 +333,11 @@
       display: flex; flex: none; align-items: center; gap: 3px; padding: 6px 7px;
     }
     .fluxion-workspace-heading {
-      display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 14px;
+      display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 15px;
       color: var(--fluxion-muted); font-weight: 600; overflow: hidden;
     }
     .fluxion-workspace-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fluxion-workspace-heading > .fluxion-workspace-symbol { width: 16px; height: 16px; }
     #fluxion-flow[data-state="compact"] .fluxion-workspace-heading { display: none; }
     .fluxion-workspace-list {
       min-width: 0; flex: 1; display: flex; align-items: center; gap: 2px;
@@ -505,7 +507,12 @@
     }
     .fluxion-new-tab {
       flex: 1; height: 26px; border: 0; border-radius: 3px; background: transparent;
+      display: flex; align-items: center; gap: 9px;
       color: var(--fluxion-muted); font: inherit; text-align: start; padding: 0 8px;
+    }
+    .fluxion-new-tab > [aria-hidden] {
+      width: 16px; height: 16px; flex: none; display: grid; place-items: center;
+      font-size: 20px; font-weight: 300; line-height: 16px;
     }
     .fluxion-new-tab:hover { background: var(--fluxion-hover); }
     .fluxion-count { display: none; }

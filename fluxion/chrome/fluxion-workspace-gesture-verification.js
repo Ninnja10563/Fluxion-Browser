@@ -55,15 +55,21 @@
     assert(second && third, "Gesture fixture workspaces could not be created");
     const fixtures = [];
     for (const workspace of [first, second, third]) {
-      const initial = `about:blank?fluxion-swipe=${workspace.id}-initial`;
-      const current = `about:blank?fluxion-swipe=${workspace.id}-current`;
+      // Initial about:blank entries are replaceable by the next navigation.
+      // A titled, committed document gives this fixture real Back history.
+      const initialTitle = `Fluxion swipe ${workspace.id} initial`;
+      const currentTitle = `Fluxion swipe ${workspace.id} current`;
+      const pageURL = title => `data:text/html,${encodeURIComponent(`<title>${title}</title><p>${title}</p>`)}`;
+      const initial = pageURL(initialTitle), current = pageURL(currentTitle);
       const tab = gBrowser.addTrustedTab(initial, { skipAnimation: true });
       ui.setTabWorkspace(tab, workspace.id);
       ui.selectTab(tab);
-      await wait(() => tab.linkedBrowser.currentURI.spec === initial && !tab.hasAttribute("busy"), "Initial gesture history page did not load");
+      await wait(() => tab.linkedBrowser.currentURI.spec === initial && tab.label === initialTitle && !tab.hasAttribute("busy"),
+        "Initial gesture history document did not commit");
       tab.linkedBrowser.loadURI(Services.io.newURI(current), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
-      await wait(() => tab.linkedBrowser.currentURI.spec === current && !tab.hasAttribute("busy") && tab.linkedBrowser.canGoBack,
-        "Gesture page did not acquire a real Back history entry");
+      await wait(() => tab.linkedBrowser.currentURI.spec === current && tab.label === currentTitle &&
+        !tab.hasAttribute("busy") && tab.linkedBrowser.canGoBack,
+      "Gesture page did not acquire a real Back history entry");
       fixtures.push(tab);
     }
     const history = () => fixtures.map(tab => ({ uri: tab.linkedBrowser.currentURI.spec,

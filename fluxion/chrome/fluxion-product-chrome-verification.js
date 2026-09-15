@@ -34,7 +34,26 @@
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Product chrome capture was not acknowledged: ${name}`, 20000);
     report.captures.push(name);
   }
+  function sidebarColumns(label) {
+    const flow = document.getElementById("fluxion-flow");
+    assert(flow?.dataset.state === "expanded", "Sidebar column check requires expanded Flow");
+    const targets = [
+      ["workspace-heading", flow.querySelector(".fluxion-workspace-heading > span")],
+      ["ungrouped-tab-title", flow.querySelector('.fluxion-tabs[role="tree"] > .fluxion-tab[aria-level="1"] .fluxion-title')],
+      ["new-tab-label", flow.querySelector(".fluxion-new-tab > span:not([aria-hidden])")],
+    ];
+    const origin = rect(flow).left;
+    const columns = targets.map(([id, node]) => {
+      assert(painted(node), `Sidebar column target is missing or hidden: ${id}`);
+      return { id, left: rect(node).left - origin };
+    });
+    report.geometry.push({ label: `${label}-sidebar-columns`, columns });
+    const positions = columns.map(column => column.left);
+    assert(Math.max(...positions) - Math.min(...positions) <= 1,
+      `Workspace, ungrouped tab and New tab labels do not share a common column: ${JSON.stringify(columns)}`);
+  }
   function geometry(label) {
+    sidebarColumns(label);
     const nav = document.getElementById("nav-bar");
     const input = document.querySelector("#urlbar > .urlbar-input-container");
     assert(painted(nav) && painted(input), "Native navigation bar or actual Gecko address input is not painted");
@@ -95,6 +114,12 @@
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
     await PlacesUtils.bookmarks.insert({ parentGuid: PlacesUtils.bookmarks.menuGuid,
       url: "https://example.org/fluxion-product-chrome", title: "Fluxion navigation geometry fixture" });
+    // Places defers bookmark frecency updates; the real address-bar provider
+    // excludes zero-frecency pages. Await Gecko's native fixture-readiness API
+    // instead of depending on an idle task firing during this short check.
+    const { PlacesFrecencyRecalculator } = ChromeUtils.importESModule(
+      "resource://gre/modules/PlacesFrecencyRecalculator.sys.mjs");
+    await PlacesFrecencyRecalculator.recalculateAnyOutdatedFrecencies();
     window.FluxionUI.setSidebarState("expanded");
     window.FluxionSidebarWidth?.setWidth(232);
     await window.FluxionTheme.set("dark");
@@ -112,10 +137,24 @@
       await wait(() => document.activeElement === gURLBar.inputField, "Native address input did not receive focus");
       await delay(250);
       const focused = geometry(`${width}-focused`);
-      gURLBar.value = "fluxion-product-chrome";
-      await gURLBar.startQuery({ searchString: "fluxion-product-chrome", allowAutofill: false });
-      await wait(() => gURLBar.view.isOpen && painted(gURLBar.view.panel) &&
-        [...document.querySelectorAll(".urlbarView-row")].some(row => painted(row) && row.textContent.includes("Fluxion navigation geometry fixture")),
+      // Use Gecko's normal input-event path, including its typed-value state.
+      // startQuery() itself returns void, not the query completion promise.
+      gURLBar.search("fluxion-product-chrome");
+      await wait(() => {
+        const rows = [...document.querySelectorAll(".urlbarView-row")];
+        report.suggestions = {
+          width, open: gURLBar.view.isOpen, panelPainted: painted(gURLBar.view.panel),
+          value: gURLBar.value, searchString: gURLBar.view.queryContext?.searchString,
+          results: (gURLBar.view.queryContext?.results || []).slice(0, 12).map(result => ({
+            type: result.type, source: result.source, provider: result.providerName,
+            title: result.payload?.title, url: result.payload?.url,
+          })),
+          rows: rows.slice(0, 12).map(row => ({ painted: painted(row), hidden: row.hidden,
+            type: row.getAttribute("type"), text: row.textContent.slice(0, 220) })),
+        };
+        return gURLBar.view.isOpen && painted(gURLBar.view.panel) && rows.some(row =>
+          painted(row) && row.textContent.includes("Fluxion navigation geometry fixture"));
+      },
       "Native Places suggestion did not render in the real address-bar view");
       const view = rect(gURLBar.view.panel), input = rect(document.querySelector("#urlbar > .urlbar-input-container"));
       report.geometry.push({ label: `${width}-native-suggestions`, view, input, focused });
@@ -127,7 +166,7 @@
       gURLBar.handleRevert();
       gBrowser.selectedBrowser.focus();
     }
-    report.checks.push("normal-and-focused-address-field-balanced-at-1280-and-800", "visible-toolbar-controls-contained-with-no-pairwise-overlap", "native-places-suggestions-retain-address-field-anchor");
+    report.checks.push("normal-and-focused-address-field-balanced-at-1280-and-800", "visible-toolbar-controls-contained-with-no-pairwise-overlap", "expanded-workspace-tab-and-new-tab-labels-share-one-column", "native-places-suggestions-retain-address-field-anchor");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-product-policy-and-toolbar-geometry-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack}`); Cu.reportError(error); })
