@@ -28,6 +28,16 @@ pages retain Firefox's process, principal, and sandbox boundaries.
 
 ### Browser appearance boundary
 
+`fluxion-chrome-layout.js` measures the sidebar and native toolbar origins to
+align navigation with the page column. It reserves a minimum navigation budget
+at narrow widths, coalesces observer updates per frame and leaves native window
+controls, URL input and toolbar overflow intact. Workspace wheel routing lives
+in `fluxion-workspace-gestures.js`; its independent axis/momentum state machine
+is in `core/workspace-swipe.js`. Only trusted events inside the visible
+system-principal sidebar reach workspace commands. No content listener is used.
+Firefox-only cloud VPN enrollment is gated at startup rather than relabeled;
+see [product service policy](product-service-policy.md).
+
 `core/colors.js` validates local base/accent preferences and derives readable
 light/dark chrome tokens. `fluxion-colors.js` projects those tokens into each
 privileged browser document and observes one atomic preference across windows.

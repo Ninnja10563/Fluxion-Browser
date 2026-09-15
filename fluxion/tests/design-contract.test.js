@@ -650,7 +650,7 @@ test("optional AI stays privileged, cancellable, and separate from ordinary brow
   assert.match(providers, /class OllamaProvider extends AIProvider/);
   assert.match(providers, /class OpenAICompatibleProvider extends AIProvider/);
   assert.match(providers, /class EmbeddingProvider/);
-  assert.match(settings, /Firefox’s encrypted login store/);
+  assert.match(settings, /browser’s encrypted login store/);
   assert.match(palette, /Compare Selected Pages/);
 });
 

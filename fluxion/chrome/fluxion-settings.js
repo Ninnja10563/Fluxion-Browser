@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.66.0";
-  const PRODUCT_RELEASE = "0.66.0-preview.1";
+  const PRODUCT_VERSION = "0.67.0";
+  const PRODUCT_RELEASE = "0.67.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -1080,7 +1080,7 @@
   aiKey.type = "password";
   aiKey.autocomplete = "new-password";
   aiKey.placeholder = "Leave blank to keep this endpoint’s saved key";
-  row(ai, "API key", "Stored in Firefox’s encrypted login store, never in Fluxion preferences or source code.", aiKey);
+  row(ai, "API key", "Stored in the browser’s encrypted login store, never in Fluxion preferences or source code.", aiKey);
   aiProvider.addEventListener("change", () => {
     if (aiMutationPending || aiDisposed) return;
     const defaults = FluxionAIProviders.DEFAULTS[aiProvider.value];

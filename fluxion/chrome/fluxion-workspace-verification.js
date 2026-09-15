@@ -26,6 +26,9 @@
   async function run() {
     await SessionStore.promiseAllWindowsRestored;
     const ui = await waitFor(() => window.FluxionUI, "Flow did not initialize");
+    assert(ui.workspaces().length === 1 && ui.workspaces()[0].id === "focus",
+      "A fresh profile must begin with exactly one Focus workspace");
+    report.checks.push("fresh-profile-single-workspace");
     const { TabStateFlusher } = ChromeUtils.importESModule("resource:///modules/sessionstore/TabStateFlusher.sys.mjs");
     const a = ui.createWorkspace("Verification A", { activate: false });
     const b = ui.createWorkspace("Verification B", { activate: false });
@@ -63,6 +66,9 @@
     window.OpenBrowserWindow();
     companion = await waitFor(() => [...Services.wm.getEnumerator("navigator:browser")]
       .find(candidate => !before.has(candidate) && candidate.FluxionUI), "Companion window did not initialize");
+    assert(JSON.stringify(companion.FluxionUI.workspaces()) === JSON.stringify(ui.workspaces()),
+      "Opening another window reset the saved workspace definitions");
+    report.checks.push("saved-workspaces-retained-on-new-window");
     window.focus(); await painted();
     const button = flowButton(a.name);
     assert(button, "Workspace button is missing");

@@ -31,6 +31,8 @@ bash -n \
   scripts/verify-macos-selection.sh \
   scripts/verify-macos-structure.sh \
   scripts/verify-macos-frame.sh \
+  scripts/verify-macos-product-chrome.sh \
+  scripts/verify-macos-workspace-gestures.sh \
   scripts/verify-macos-colors.sh \
   scripts/verify-macos-library.sh \
   scripts/verify-macos-workspaces.sh \
@@ -77,16 +79,21 @@ node --check chrome/core/tab-drop.js
 node --check chrome/core/tab-transfer-drag.js
 node --check chrome/core/flow-menu-session.js
 node --check chrome/core/workspaces.js
+node --check chrome/core/workspace-swipe.js
 node --check chrome/core/workspace-icons.js
 node --check chrome/core/colors.js
 node --check chrome/core/workspace-editor.js
 node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
+node --check chrome/fluxion-chrome-layout.js
+node --check chrome/fluxion-workspace-gestures.js
 node --check chrome/fluxion-sidebar-width.js
 node --check chrome/fluxion-sidebar-width-verification.js
 node --check chrome/fluxion-selection-verification.js
 node --check chrome/fluxion-structure-verification.js
 node --check chrome/fluxion-frame-verification.js
+node --check chrome/fluxion-product-chrome-verification.js
+node --check chrome/fluxion-workspace-gesture-verification.js
 node --check chrome/fluxion-colors-verification.js
 node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js

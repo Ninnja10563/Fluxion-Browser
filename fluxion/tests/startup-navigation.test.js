@@ -9,6 +9,8 @@ const vm = require("node:vm");
 function startupFixture(selectedURL, saved = [], options = {}) {
   const preferences = new Map(saved);
   const defaults = new Map();
+  const locked = new Set();
+  const effectivePref = key => locked.has(key) ? defaults.get(key) : preferences.get(key) ?? defaults.get(key);
   const loadedScripts = [];
   const navigations = [];
   const errors = [];
@@ -37,11 +39,17 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     prefs: {
       setStringPref: (key, value) => preferences.set(key, value),
       setBoolPref: (key, value) => preferences.set(key, value),
-      getStringPref: (key, fallback) => preferences.get(key) ?? defaults.get(key) ?? fallback,
-      getBoolPref: (key, fallback) => preferences.get(key) ?? fallback,
+      getStringPref: (key, fallback) => effectivePref(key) ?? fallback,
+      getBoolPref: (key, fallback) => effectivePref(key) ?? fallback,
       prefHasUserValue: key => preferences.has(key),
-      getPrefType: key => !preferences.has(key) ? 0 : typeof preferences.get(key) === "string" ? 32 : 128,
-      getDefaultBranch: () => ({ setStringPref: (key, value) => defaults.set(key, value) }),
+      prefIsLocked: key => locked.has(key),
+      lockPref: key => locked.add(key),
+      getPrefType: key => effectivePref(key) === undefined ? 0 : typeof effectivePref(key) === "string" ? 32 : 128,
+      getDefaultBranch: () => ({
+        setStringPref: (key, value) => defaults.set(key, value),
+        setBoolPref: (key, value) => defaults.set(key, value),
+        getBoolPref: (key, fallback) => defaults.get(key) ?? fallback,
+      }),
       clearUserPref: key => preferences.delete(key),
       savePrefFile() {},
     },
@@ -90,10 +98,21 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     gBrowser: { selectedBrowser, selectedTab, tabs: [selectedTab], loadURI(...args) { navigations.push(args); } },
   };
   startupObserver.observe(window, "browser-delayed-startup-finished");
-  return { preferences, defaults, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser,
+  return { preferences, defaults, prefs: Services.prefs, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser,
     profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
     get managerCalls() { return managerCalls; }, boundaryEvents };
 }
+
+test("full startup disables an inherited Firefox VPN enrollment without altering the selected page", () => {
+  const h = startupFixture("https://example.com/restored", [["browser.ipProtection.enabled", true]]);
+  assert.deepEqual(h.errors, []);
+  assert.equal(h.prefs.getBoolPref("browser.ipProtection.enabled"), false);
+  assert.equal(h.prefs.getDefaultBranch("").getBoolPref("browser.ipProtection.enabled"), false);
+  assert.equal(h.prefs.prefIsLocked("browser.ipProtection.enabled"), true);
+  h.prefs.setBoolPref("browser.ipProtection.enabled", true);
+  assert.equal(h.prefs.getBoolPref("browser.ipProtection.enabled"), false);
+  assert.deepEqual(h.navigations, []);
+});
 
 for (const removal of [false, true]) {
   test(`invalid startup policy blocks native construction and preserves removal=${removal}`, () => {

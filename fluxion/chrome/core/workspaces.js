@@ -6,10 +6,11 @@
   const ACCENTS = Object.freeze(["slate", "blue", "ochre", "sage", "rose"]);
   const ICONS = Object.freeze(["circle", "diamond", "square", "arc", "grid"]);
   const DEFAULTS = Object.freeze([
-    { id: "focus", name: "Focus", accent: "slate", icon: "circle" },
-    { id: "build", name: "Build", accent: "blue", icon: "diamond" },
-    { id: "life", name: "Life", accent: "ochre", icon: "arc" },
+    Object.freeze({ id: "focus", name: "Focus", accent: "slate", icon: "circle" }),
   ]);
+  // Older saved workspaces predate the icon field. Their appearance must not
+  // change merely because new profiles now begin with a single workspace.
+  const LEGACY_ICONS = Object.freeze({ focus: "circle", build: "diamond", life: "arc" });
 
   function sanitiseName(value) {
     return String(value || "").trim().replace(/\s+/g, " ").slice(0, 32);
@@ -23,7 +24,7 @@
     const accent = ACCENTS.includes(value.accent)
       ? value.accent
       : "slate";
-    const inheritedIcon = DEFAULTS.find(item => item.id === id)?.icon;
+    const inheritedIcon = Object.hasOwn(LEGACY_ICONS, id) ? LEGACY_ICONS[id] : null;
     const icon = ICONS.includes(value.icon) ? value.icon : inheritedIcon || "circle";
     return { id, name, accent, icon };
   }

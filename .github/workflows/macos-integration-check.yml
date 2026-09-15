@@ -38,6 +38,34 @@ jobs:
           FLUXION_SKIP_LAUNCH_CHECK: "1"
         run: ./fluxion/scripts/build-macos.sh --clean
 
+      - name: Verify product service policy and address bar geometry
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_PRODUCT_CHROME_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-product-chrome-evidence
+        run: ./fluxion/scripts/verify-macos-product-chrome.sh '.runtime/Fluxion.app'
+
+      - name: Preserve product chrome evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-product-chrome-diagnostic
+          path: ${{ runner.temp }}/fluxion-product-chrome-evidence
+          if-no-files-found: warn
+
+      - name: Verify native sidebar workspace gestures
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_WORKSPACE_GESTURE_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-workspace-gesture-evidence
+        run: ./fluxion/scripts/verify-macos-workspace-gestures.sh '.runtime/Fluxion.app'
+
+      - name: Preserve workspace gesture evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-workspace-gesture-diagnostic
+          path: ${{ runner.temp }}/fluxion-workspace-gesture-evidence
+          if-no-files-found: warn
+
       - name: Check native keyboard closure and browser frame geometry
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:

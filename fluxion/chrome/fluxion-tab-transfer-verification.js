@@ -173,6 +173,10 @@
     assert(/^http:\/\/127\.0\.0\.1:\d+$/.test(origin || "") &&
       /\/fluxion-tab-transfer-check\.[^/]+\/profile\/?$/.test(PathUtils.profileDir), "Transfer gate requires an isolated loopback profile");
     await waitFor(() => window.FluxionTabTransfer, "Transfer adapter did not load");
+    assert(window.FluxionUI.workspaces().length === 1, "Transfer fixture must start from the single-workspace default");
+    const build = window.FluxionUI.createWorkspace("Build", { activate: false });
+    assert(build?.id === "build", "Transfer fixture could not explicitly create its destination workspace");
+    report.checks.push("explicit-cross-workspace-fixture-created");
     write("stage", "live-document-adoption");
     const destination = await newWindow();
     const source = await page(window, { pinned: true, userContextId: 1 });

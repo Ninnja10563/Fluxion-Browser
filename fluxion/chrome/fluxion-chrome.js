@@ -94,12 +94,12 @@
   style.id = "fluxion-style";
   style.textContent = `
     :root {
-      --fluxion-bg: light-dark(#e9eae7, #1c1e20);
-      --fluxion-bg-raised: light-dark(#fafaf8, #282a2c);
+      --fluxion-bg: light-dark(#eeeeec, #1f1f1f);
+      --fluxion-bg-raised: light-dark(#fafaf8, #303030);
       --fluxion-ink: light-dark(#20211f, #efefeb);
       --fluxion-muted: light-dark(#696a65, #a8a9a3);
       --fluxion-line: light-dark(rgba(25,26,23,.11), rgba(255,255,250,.10));
-      --fluxion-selected: light-dark(#d7d9d5, #34373a);
+      --fluxion-selected: light-dark(#dededb, #383838);
       --fluxion-hover: light-dark(rgba(25,26,23,.055), rgba(255,255,250,.06));
       --fluxion-accent: light-dark(#3f596e, #8ba9bd);
       --fluxion-fast: 140ms cubic-bezier(.2,.7,.2,1);
@@ -119,18 +119,21 @@
       --toolbarbutton-icon-fill: var(--fluxion-ink);
     }
     #nav-bar {
-      min-height: 46px !important; padding: 5px 8px !important;
+      box-sizing: border-box; min-height: 44px !important; padding: 6px 8px !important;
       background: var(--fluxion-bg) !important; box-shadow: none !important;
       border: 0 !important;
     }
-    #nav-bar-customization-target { align-items: center; gap: 2px; }
+    #nav-bar-customization-target { align-items: center; gap: 2px; padding-inline-start: var(--fluxion-navigation-offset, 0px); }
+    #PersonalToolbar { padding-inline-start: var(--fluxion-chrome-rail, 0px) !important; }
     #nav-bar #firefox-view-button,
     #nav-bar #fxa-toolbar-menu-button,
     #nav-bar #save-to-pocket-button,
     #nav-bar #pocket-button,
     #nav-bar #sidebar-button,
     #nav-bar #smartwindow-ask-button,
-    #nav-bar #ip-protection-button { display: none !important; }
+    #nav-bar #ip-protection-button,
+    #nav-bar #ipprotection-button,
+    #PanelUI-ipprotection { display: none !important; }
     #nav-bar .toolbarbutton-1 {
       margin: 0 !important; padding: 0 !important; border-radius: 5px !important;
     }
@@ -143,24 +146,24 @@
     #nav-bar .toolbarbutton-1:not([disabled]):hover > .toolbarbutton-badge-stack {
       background: var(--fluxion-hover) !important;
     }
-    #urlbar-container { margin-inline: 7px !important; padding: 0 !important; }
+    #urlbar-container { margin-inline: 12px !important; padding: 0 !important; min-height: 32px !important; }
     #urlbar {
-      --urlbar-height: 34px; font-size: 13px !important;
+      --urlbar-min-height: 32px; font-size: 13px !important;
       --urlbar-background-color: var(--fluxion-bg-raised);
       --urlbar-background-color-focus: var(--fluxion-bg-raised);
     }
     /* Gecko 155 uses a class; ESR 140 retains the legacy background ID. */
     #urlbar > .urlbar-background, #urlbar-background {
       background: var(--fluxion-bg-raised) !important;
-      border: 1px solid var(--fluxion-line) !important;
-      border-radius: 6px !important; box-shadow: none !important;
+      border: 1px solid transparent !important;
+      border-radius: 7px !important; box-shadow: none !important;
     }
     #urlbar[focused] > #urlbar-background,
     #urlbar[open] > #urlbar-background,
     #urlbar[focused] > .urlbar-background,
     #urlbar[open] > .urlbar-background {
-      border-color: color-mix(in srgb, var(--fluxion-accent) 66%, transparent) !important;
-      outline: 2px solid color-mix(in srgb, var(--fluxion-accent) 17%, transparent) !important;
+      border-color: transparent !important;
+      outline: 1px solid color-mix(in srgb, var(--fluxion-accent) 60%, transparent) !important;
       outline-offset: -1px !important;
     }
     #urlbar-input { color: var(--fluxion-ink) !important; font-size: 13px !important; letter-spacing: -.005em; }
@@ -196,6 +199,9 @@
       --fluxion-page-inset: 4px;
     }
     #tabbrowser-tabbox { margin: var(--fluxion-page-inset) !important; }
+    #tabbrowser-tabpanels .browserStack { border-radius: 8px; overflow: clip; }
+    :root[inFullscreen] #tabbrowser-tabpanels .browserStack,
+    :root[inDOMFullscreen] #tabbrowser-tabpanels .browserStack { border-radius: 0; }
     :root[inFullscreen] #browser, :root[inDOMFullscreen] #browser { --fluxion-page-inset: 0px; }
     #browser:has(#fluxion-flow[data-state="compact"]) { --fluxion-flow-layout-width: 44px; }
     #browser:has(#fluxion-flow[data-state="focus"]) { --fluxion-flow-layout-width: 3px; }
@@ -255,7 +261,7 @@
     #fluxion-flow {
       width: var(--fluxion-sidebar-width); min-width: var(--fluxion-sidebar-width); max-width: var(--fluxion-sidebar-width);
       position: relative; z-index: 4; color: var(--fluxion-ink); background: transparent;
-      font: menu; font-size: 12px; overflow: visible;
+      font: menu; font-size: 13px; overflow: visible;
       transition: width var(--fluxion-fast), min-width var(--fluxion-fast), max-width var(--fluxion-fast);
     }
     .fluxion-surface {
@@ -324,8 +330,13 @@
     }
     .fluxion-workspaces {
       display: flex; flex: none; align-items: center; gap: 3px; padding: 6px 7px;
-      border-top: 1px solid var(--fluxion-line);
     }
+    .fluxion-workspace-heading {
+      display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 14px;
+      color: var(--fluxion-muted); font-weight: 600; overflow: hidden;
+    }
+    .fluxion-workspace-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    #fluxion-flow[data-state="compact"] .fluxion-workspace-heading { display: none; }
     .fluxion-workspace-list {
       min-width: 0; flex: 1; display: flex; align-items: center; gap: 2px;
       overflow-x: auto; scrollbar-width: none;
@@ -364,10 +375,10 @@
     }
     .fluxion-section-label[hidden], .fluxion-tabs[hidden] { display: none !important; }
     .fluxion-tab-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-block: 6px; }
-    .fluxion-tabs { padding: 1px 5px 0; }
+    .fluxion-tabs { padding: 1px 7px 0; }
     .fluxion-tab {
-      position: relative; height: 32px; display: flex; align-items: center; gap: 7px;
-      padding: 0 6px; margin: 1px 0; border-radius: 3px; color: var(--fluxion-muted);
+      position: relative; height: 34px; display: flex; align-items: center; gap: 9px;
+      padding: 0 8px; margin: 2px 0; border-radius: 7px; color: var(--fluxion-muted);
       user-select: none; transition: opacity 100ms ease, transform var(--fluxion-fast),
         height 120ms cubic-bezier(.2,.7,.2,1), margin 120ms cubic-bezier(.2,.7,.2,1),
         padding 120ms cubic-bezier(.2,.7,.2,1), background-color 80ms linear;
@@ -388,10 +399,6 @@
     .fluxion-tab.is-multiselected:not([data-active="true"]) {
       color: var(--fluxion-ink); background: var(--fluxion-hover);
       box-shadow: inset 0 0 0 1px var(--fluxion-line);
-    }
-    .fluxion-tab[aria-selected="true"]::before {
-      content: ""; position: absolute; inset-inline-start: 0; width: 2px; height: 14px;
-      background: var(--fluxion-accent);
     }
     .fluxion-tab.is-closing { opacity: 0; transform: scaleY(.72); pointer-events: none; }
     .fluxion-tab.is-close-releasing {
@@ -494,14 +501,14 @@
     .fluxion-audio .fluxion-control-glyph { width: 14px; height: 14px; }
     .fluxion-tab:hover .fluxion-close, .fluxion-tab:focus-within .fluxion-close, .fluxion-audio { opacity: 1; }
     .fluxion-footer {
-      height: 34px; display: flex; align-items: center; gap: 6px; padding: 2px 5px;
+      height: 36px; display: flex; align-items: center; gap: 6px; padding: 2px 7px;
     }
     .fluxion-new-tab {
       flex: 1; height: 26px; border: 0; border-radius: 3px; background: transparent;
-      color: var(--fluxion-ink); font: inherit; text-align: start; padding: 0 7px;
+      color: var(--fluxion-muted); font: inherit; text-align: start; padding: 0 8px;
     }
     .fluxion-new-tab:hover { background: var(--fluxion-hover); }
-    .fluxion-count { color: var(--fluxion-muted); min-width: 18px; text-align: center; font-variant-numeric: tabular-nums; }
+    .fluxion-count { display: none; }
     .fluxion-visually-hidden {
       position: fixed !important; width: 1px !important; height: 1px !important;
       padding: 0 !important; margin: -1px !important; overflow: hidden !important;
@@ -514,7 +521,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-split-mark,
     #fluxion-flow[data-state="compact"] .fluxion-close,
     #fluxion-flow[data-state="compact"] .fluxion-count,
-    #fluxion-flow[data-state="compact"] .fluxion-new-tab span { display: none; }
+    #fluxion-flow[data-state="compact"] .fluxion-new-tab span:not([aria-hidden]) { display: none; }
     .fluxion-pinned-tabs {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
       gap: 2px; padding: 1px 5px 6px;
@@ -793,7 +800,7 @@
   }
 
   const toolbarTarget = document.getElementById("nav-bar-customization-target");
-  const toolbarMenuPath = "M5 4.5h13.5l-7.2 6.3H18L6 20l3.5-7H5z";
+  const toolbarMenuPath = "M5 10a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Zm7 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4Z";
   const toolbarMenuButton = xul("toolbarbutton", {
     id: "fluxion-toolbar-menu",
     class: "toolbarbutton-1 chromeclass-toolbar-additional",
@@ -983,7 +990,7 @@
   const footer = create("div", "fluxion-footer");
   const newTabButton = create("button", "fluxion-new-tab");
   newTabButton.type = "button";
-  newTabButton.innerHTML = `<b aria-hidden="true">+</b> <span>New tab</span>`;
+  newTabButton.innerHTML = `<span aria-hidden="true">+</span> <span>New tab</span>`;
   newTabButton.setAttribute("aria-label", "New tab");
   const count = create("span", "fluxion-count");
   const dragAnnouncement = create("span", "fluxion-visually-hidden");
@@ -993,7 +1000,10 @@
   footer.append(newTabButton, count);
   const surface = create("div", "fluxion-surface");
   const tabScroll = create("div", "fluxion-tab-scroll");
-  tabScroll.append(pinnedLabel, pinnedTabs, tabsList, footer);
+  const workspaceHeading = create("div", "fluxion-workspace-heading");
+  const workspaceHeadingLabel = create("span");
+  workspaceHeading.append(workspaceSymbol(workspaces.find(item => item.id === currentWorkspace)?.icon), workspaceHeadingLabel);
+  tabScroll.append(workspaceHeading, pinnedLabel, pinnedTabs, tabsList, footer);
   const sidebarResizer = create("div");
   sidebarResizer.id = "fluxion-sidebar-resizer";
   sidebarResizer.setAttribute("role", "separator");
@@ -2458,6 +2468,12 @@
     const signature = JSON.stringify([currentWorkspace, workspaces]);
     if (signature === workspaceRenderSignature) return;
     workspaceRenderSignature = signature;
+    const activeWorkspace = workspaces.find(item => item.id === currentWorkspace) || workspaces[0];
+    if (workspaceHeadingLabel.textContent !== activeWorkspace.name) workspaceHeadingLabel.textContent = activeWorkspace.name;
+    if (workspaceHeading.dataset.icon !== activeWorkspace.icon) {
+      workspaceHeading.firstChild.replaceWith(workspaceSymbol(activeWorkspace.icon));
+      workspaceHeading.dataset.icon = activeWorkspace.icon;
+    }
     const focusedButton = [...workspaceElements.values()].find(button => button === document.activeElement);
     const colours = { slate: "#68747b", blue: "#51748a", ochre: "#92794d", sage: "#667c69", rose: "#8b646b" };
     for (const [workspaceIndex, workspace] of workspaces.entries()) {
@@ -3413,6 +3429,7 @@
       const originalWorkspace = currentWorkspace;
       const originalTab = gBrowser.selectedTab;
       try {
+        if (!workspaces.some(item => item.id === "build")) createWorkspace("Build", { activate: false });
         if (!workspaces.some(item => item.id === "focus") ||
             !workspaces.some(item => item.id === "build")) {
           throw new Error("The packaged workspace fixture requires Focus and Build");

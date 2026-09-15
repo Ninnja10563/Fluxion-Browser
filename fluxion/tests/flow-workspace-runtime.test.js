@@ -88,9 +88,9 @@ test("Flow Recently Closed uses the same selection reconciliation as native undo
 function buttonsFixture() {
   const document = { body: {}, documentElement: {}, activeElement: null };
   class Element {
-    constructor() { this.children = []; this.listeners = {}; this.attrs = {}; this.style = { setProperty() {} }; }
+    constructor() { this.children = []; this.listeners = {}; this.attrs = {}; this.dataset = {}; this.style = { setProperty() {} }; }
     get firstChild() { return this.children[0]; }
-    get isConnected() { return this === list || Boolean(this.parentNode?.isConnected); }
+    get isConnected() { return this === list || this === heading || Boolean(this.parentNode?.isConnected); }
     append(...nodes) { for (const node of nodes) this.insertBefore(node, null); }
     insertBefore(node, before) {
       node.remove();
@@ -107,18 +107,20 @@ function buttonsFixture() {
     addEventListener(type, listener) { this.listeners[type] = listener; }
     focus() { document.activeElement = this; }
   }
-  const list = new Element(), map = new Map();
+  const list = new Element(), map = new Map(), heading = new Element(), headingLabel = new Element();
+  heading.append(new Element(), headingLabel);
   const workspaces = ["a", "b", "c"].map(id => ({ id, name: id, icon: "circle", accent: "slate" }));
   const switches = [];
   const context = vm.createContext({ document, workspaces, currentWorkspace: "a", workspaceRenderSignature: "",
     flow: { dataset: { state: "expanded" } },
-    workspaceList: list, workspaceElements: map, addWorkspaceButton: {}, create: () => new Element(),
+    workspaceList: list, workspaceElements: map, workspaceHeading: heading, workspaceHeadingLabel: headingLabel,
+    addWorkspaceButton: {}, create: () => new Element(),
     workspaceSymbol: () => new Element(), FluxionWorkspaces: { MAX_WORKSPACES: 20 },
     FluxionFlowNavigation: require("../chrome/core/flow-navigation.js"), switchWorkspace: id => switches.push(id),
   });
   vm.runInContext(block("  function renderWorkspaces()", "  function render()"), context);
   context.renderWorkspaces();
-  return { context, document, list, map, switches };
+  return { context, document, list, map, switches, heading, headingLabel };
 }
 
 test("workspace metadata refresh retains focused button and label identity; reordered arrows use live indices", () => {
@@ -131,6 +133,32 @@ test("workspace metadata refresh retains focused button and label identity; reor
   assert.ok(f.document.activeElement === b); assert.equal(label.textContent, "Renamed");
   b.listeners.keydown({ key: "ArrowRight", preventDefault() {}, stopPropagation() {} });
   assert.deepEqual(f.switches, ["c"]);
+});
+
+test("workspace heading follows the active name and symbol without replacing stable nodes or stealing focus", () => {
+  const f = buttonsFixture(), label = f.headingLabel, originalIcon = f.heading.firstChild;
+  const focused = f.map.get("b");
+  focused.focus();
+  assert.equal(label.textContent, "a");
+  assert.equal(f.heading.dataset.icon, "circle");
+  f.context.renderWorkspaces();
+  assert.equal(f.heading.firstChild, originalIcon);
+  f.context.workspaces[1] = { ...f.context.workspaces[1], name: "Development", icon: "diamond" };
+  f.context.renderWorkspaces();
+  assert.equal(label.textContent, "a", "Updating another workspace must not replace the active heading");
+  assert.equal(f.heading.firstChild, originalIcon);
+  f.context.currentWorkspace = "b";
+  f.context.renderWorkspaces();
+  assert.equal(label.textContent, "Development");
+  assert.equal(f.heading.dataset.icon, "diamond");
+  assert.notEqual(f.heading.firstChild, originalIcon);
+  const activeIcon = f.heading.firstChild;
+  f.context.workspaces[1] = { ...f.context.workspaces[1], name: "Research" };
+  f.context.renderWorkspaces();
+  assert.equal(label.textContent, "Research");
+  assert.equal(f.heading.firstChild, activeIcon, "Renaming retains the unchanged icon node");
+  assert.equal(f.heading.children[1], label, "The heading label remains the same DOM node");
+  assert.equal(f.document.activeElement, focused);
 });
 
 test("deleted workspace focus falls back only when the workspace strip owned focus", () => {

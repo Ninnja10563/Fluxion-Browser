@@ -129,6 +129,16 @@
   async function seedNormalSession({ crash = false } = {}) {
     const urls = FluxionSessionRecovery.URLS;
     write("fluxion.recovery.seed.progress", "starting");
+    // Recovery exercises a deliberately rich saved profile; the product's fresh
+    // profile is intentionally a single workspace.
+    for (const fixture of [
+      { name: "Build", id: "build", accent: "blue", icon: "diamond" },
+      { name: "Life", id: "life", accent: "ochre", icon: "arc" },
+    ]) {
+      if (window.FluxionUI.workspaces().some(workspace => workspace.id === fixture.id)) continue;
+      const created = window.FluxionUI.createWorkspace(fixture.name, { ...fixture, activate: false });
+      if (created?.id !== fixture.id) throw new Error(`Recovery fixture could not create ${fixture.name}`);
+    }
     Services.prefs.setIntPref("browser.startup.page", crash ? 0 : 3);
     Services.prefs.setBoolPref("browser.sessionstore.resume_from_crash", true);
     Services.prefs.setBoolPref("browser.sessionstore.resume_session_once", !crash);

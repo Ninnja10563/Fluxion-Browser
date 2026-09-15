@@ -14,6 +14,12 @@ const {
   updateWorkspace,
 } = require("../chrome/core/workspaces.js");
 
+const SAVED_WORKSPACES = Object.freeze([
+  { id: "focus", name: "Focus", accent: "slate", icon: "circle" },
+  { id: "build", name: "Build", accent: "blue", icon: "diamond" },
+  { id: "life", name: "Life", accent: "ochre", icon: "arc" },
+]);
+
 test("falls back to independent default workspace records", () => {
   const first = parseWorkspaces("not json");
   const second = parseWorkspaces("[]");
@@ -21,6 +27,35 @@ test("falls back to independent default workspace records", () => {
   assert.deepEqual(second, DEFAULTS);
   first[0].name = "Changed";
   assert.equal(second[0].name, "Focus");
+});
+
+test("new profiles start with exactly one workspace and keep it through persistence", () => {
+  const initial = parseWorkspaces("");
+  assert.deepEqual(initial, [{ id: "focus", name: "Focus", accent: "slate", icon: "circle" }]);
+  assert.deepEqual(parseWorkspaces(JSON.stringify(initial)), initial);
+  assert.equal(removeWorkspace(initial, "focus"), null);
+  assert.equal(nextWorkspaceId(initial, "focus", 1), "focus");
+  assert.equal(nextWorkspaceId(initial, "focus", -1), "focus");
+});
+
+test("a new default does not delete, reorder, rename, or remap existing workspaces", () => {
+  const saved = [
+    { id: "life", name: "Home", accent: "rose", icon: "grid" },
+    { id: "build", name: "Client work", accent: "sage", icon: "square" },
+    { id: "focus", name: "Research", accent: "blue", icon: "diamond" },
+    { id: "reading", name: "Reading", accent: "slate", icon: "arc" },
+  ];
+  const restored = parseWorkspaces(JSON.stringify(saved));
+  assert.deepEqual(restored, saved);
+  assert.deepEqual(parseWorkspaces(JSON.stringify(restored)), saved);
+  const savedTabWorkspaces = ["build", "life", "reading", "focus", "build"];
+  assert.deepEqual(savedTabWorkspaces.filter(id => restored.some(item => item.id === id)), savedTabWorkspaces);
+});
+
+test("legacy records without icons retain their old symbols without recreating missing workspaces", () => {
+  const legacy = SAVED_WORKSPACES.map(({ icon: _icon, ...workspace }) => workspace);
+  assert.deepEqual(parseWorkspaces(JSON.stringify(legacy)), SAVED_WORKSPACES);
+  assert.deepEqual(parseWorkspaces(JSON.stringify([legacy[1]])), [SAVED_WORKSPACES[1]]);
 });
 
 test("sanitises persisted workspace data", () => {
@@ -70,28 +105,28 @@ test("creates stable unique IDs without changing them on rename", () => {
 });
 
 test("updates only supported workspace appearance values", () => {
-  const updated = updateWorkspace(DEFAULTS, "build", { accent: "sage", icon: "square" });
+  const updated = updateWorkspace(SAVED_WORKSPACES, "build", { accent: "sage", icon: "square" });
   assert.equal(updated[1].accent, "sage");
   assert.equal(updated[1].icon, "square");
   const ignored = updateWorkspace(updated, "build", { accent: "neon", icon: "emoji" });
   assert.equal(ignored[1].accent, "sage");
   assert.equal(ignored[1].icon, "square");
-  assert.equal(updateWorkspace(DEFAULTS, "build", { name: "   " }), null);
+  assert.equal(updateWorkspace(SAVED_WORKSPACES, "build", { name: "   " }), null);
 });
 
 test("reorders one position at a time without wrapping", () => {
   assert.deepEqual(
-    moveWorkspace(DEFAULTS, "build", -1).map(item => item.id),
+    moveWorkspace(SAVED_WORKSPACES, "build", -1).map(item => item.id),
     ["build", "focus", "life"],
   );
   assert.deepEqual(
-    moveWorkspace(DEFAULTS, "focus", -1).map(item => item.id),
+    moveWorkspace(SAVED_WORKSPACES, "focus", -1).map(item => item.id),
     ["focus", "build", "life"],
   );
 });
 
 test("workspace deletion always retains an adjacent destination", () => {
-  const removed = removeWorkspace(DEFAULTS, "build");
+  const removed = removeWorkspace(SAVED_WORKSPACES, "build");
   assert.equal(removed.fallbackId, "life");
   assert.deepEqual(removed.items.map(item => item.id), ["focus", "life"]);
   assert.equal(removeWorkspace([DEFAULTS[0]], "focus"), null);
@@ -99,7 +134,7 @@ test("workspace deletion always retains an adjacent destination", () => {
 });
 
 test("a settings-style edit sequence preserves identity and a deterministic migration target", () => {
-  const created = createWorkspace(DEFAULTS, "Reference Lab", { icon: "square", accent: "sage" });
+  const created = createWorkspace(SAVED_WORKSPACES, "Reference Lab", { icon: "square", accent: "sage" });
   const renamed = updateWorkspace(created.items, created.workspace.id, { name: "Reference Desk" });
   const reordered = moveWorkspace(renamed, created.workspace.id, -1);
   const configured = reordered.find(item => item.id === created.workspace.id);
@@ -108,5 +143,5 @@ test("a settings-style edit sequence preserves identity and a deterministic migr
   });
   const removed = removeWorkspace(reordered, configured.id);
   assert.equal(removed.fallbackId, "life");
-  assert.deepEqual(removed.items, DEFAULTS);
+  assert.deepEqual(removed.items, SAVED_WORKSPACES);
 });
