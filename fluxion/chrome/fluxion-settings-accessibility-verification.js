@@ -143,10 +143,7 @@
         evidence.controls.push({ id, pref, inverse, before: original, after: !original });
       }
       Services.prefs.savePrefFile(null);
-      const persisted = await IOUtils.readUTF8(PathUtils.join(PathUtils.profileDir, "prefs.js"));
-      for (const item of evidence.controls) {
-        assert(persisted.includes(`user_pref("${item.pref}", ${item.after});`), `${item.id} was not saved to prefs.js`);
-      }
+      evidence.persistenceReads = await waitForPersistedPreferences(evidence.controls);
       evidence.persisted = true;
       companion = window.OpenBrowserWindow();
       await waitFor(() => !companion.closed && companion.FluxionUI && checkbox(companion, "https-only"),
@@ -195,6 +192,23 @@
       window.focus();
     }
     write("report", JSON.stringify(report));
+  }
+  async function waitForPersistedPreferences(expected) {
+    // Gecko's service savePrefFile(null) schedules/coalesces background writes;
+    // returning does not mean prefs.js already contains the newest snapshot.
+    // Observe real disk completion without introducing blocking product I/O.
+    let attempts = 0, missing = expected.map(item => item.id);
+    do {
+      const persisted = await IOUtils.readUTF8(PathUtils.join(PathUtils.profileDir, "prefs.js"));
+      attempts++;
+      const lines = new Set(persisted.split(/\r?\n/).map(line => line.trim()));
+      missing = expected.filter(item => !lines.has(`user_pref("${item.pref}", ${item.after});`) ||
+        !Services.prefs.prefHasUserValue(item.pref) || Services.prefs.getBoolPref(item.pref) !== item.after)
+        .map(item => item.id);
+      if (!missing.length) return attempts;
+      await pause();
+    } while (Date.now() < deadline);
+    throw new Error(`Preferences were not saved to prefs.js after ${attempts} reads: ${missing.join(", ")}`);
   }
   async function seedExclusionList() {
     const memory = window.FluxionMemory;
