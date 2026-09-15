@@ -112,6 +112,13 @@
     Services.prefs.setBoolPref("browser.search.suggest.enabled", false);
     Services.prefs.setBoolPref("browser.urlbar.suggest.searches", false);
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
+    // Session restoration does not await the fresh-profile bookmark import.
+    // As in our native defaults/Library gates, seed only after that import has
+    // finished so it cannot replace the fixture's newly inserted bookmark.
+    const { PlacesBrowserStartup } = ChromeUtils.importESModule(
+      "moz-src:///browser/components/places/PlacesBrowserStartup.sys.mjs");
+    await wait(() => PlacesBrowserStartup._placesBrowserInitComplete,
+      "Native Places startup and default bookmark import did not complete", 20000);
     const fixtureURL = "https://example.org/fluxion-product-chrome";
     const fixtureTitle = "Fluxion navigation geometry fixture";
     const bookmark = await PlacesUtils.bookmarks.insert({ parentGuid: PlacesUtils.bookmarks.menuGuid,
