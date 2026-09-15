@@ -127,6 +127,17 @@ test("a close from the held pointer set retains anti-repeat protection until exp
   assert.equal(f.tabElements.get(f.tabs[1]), neighbor);
 });
 
+test("closing the trailing row does not hold New tab in an obsolete position", async () => {
+  const f = fixture(), last = f.tabs.at(-1), row = f.tabElements.get(last);
+  assert.equal(f.hold(last), null);
+  f.context.closeWithStability(last, row, { closeButton: { getBoundingClientRect: () => ({ left: 10, top: 10, width: 20, height: 20 }) },
+    event: { detail: 1, clientX: 20, clientY: 20 } });
+  await f.finishTimers(); f.flush();
+  assert.equal(f.context.pointerCloseHold, null);
+  assert.equal(f.tabElements.has(last), false);
+  assert.equal(f.tabElements.size, 3);
+});
+
 test("keyboard activation of a close button does not start a pointer guard at synthetic coordinates", () => {
   const f = fixture();
   assert.equal(f.hold(f.tabs[0], 0), null);

@@ -85,15 +85,17 @@
     const evidence = items.map(node => ({ label: node.getAttribute("label"), kind: node.localName,
       disabled: node.getAttribute("disabled") === "true", type: node.getAttribute("type"),
       name: node.getAttribute("name"), checked: node.getAttribute("checked") === "true" }));
-    for (const label of ["Rename Workspace…", "Change Icon", "Change Accent", "Edit Workspace Theme…", "Move Workspace Earlier",
+    for (const label of ["Rename Workspace…", "Change Icon", "Workspace Appearance…", "Move Workspace Earlier",
       "Move Workspace Later", "New Workspace…", "Delete Workspace…"]) {
       const node = items.find(item => item.getAttribute("label") === label);
       assert(node && !node.hidden && node.getAttribute("hidden") !== "true", `Workspace menu action is missing: ${label}`);
-      if (label === "Change Icon" || label === "Change Accent") {
+      if (label === "Change Icon") {
         assert(node.localName === "menu" && node.querySelector("menupopup")?.children.length > 1,
           `Workspace appearance command has no native choices: ${label}`);
       }
     }
+    assert(!items.some(item => ["Change Accent", "Edit Workspace Theme…"].includes(item.getAttribute("label"))),
+      "Workspace appearance is still split between competing native menu commands");
     const radio = evidence.filter(item => item.name === "fluxion-workspace-switch");
     assert(radio.length === workspaces.length && radio.every((item, index) =>
       item.label === workspaces[index].name && item.type === "radio" &&
@@ -270,11 +272,25 @@
     const persisted = () => JSON.parse(Services.prefs.getStringPref("fluxion.workspaces")).find(item => item.id === id);
     const projection = () => root.style.getPropertyValue("--fluxion-bg").trim();
     const baseline = projection(), globalBefore = JSON.stringify(window.FluxionColors.current());
+    const scheme = () => window.getComputedStyle(document.getElementById("navigator-toolbox")).colorScheme;
+    const baselineScheme = scheme(), globalTheme = window.FluxionTheme.current();
+    const globalRootScheme = window.getComputedStyle(root).colorScheme;
+    const globalSchemeChanges = [];
+    const schemeObserver = new window.MutationObserver(() => {
+      const value = window.getComputedStyle(root).colorScheme;
+      if (value !== globalRootScheme) globalSchemeChanges.push(value);
+    });
+    schemeObserver.observe(root, { attributes: true, attributeFilter: ["style", "data-fluxion-workspace-appearance"] });
     const evidence = report.workspaceTheme = { input: "Supported privileged editor API, real HTML form clicks, native macOS typed hex input; OS color-picker dialog not tested",
-      baseline, geometry: [], inputEvents: [] };
+      baseline, baselineScheme, globalRootScheme, geometry: [], inputEvents: [], previews: [] };
     async function open() {
       window.FluxionWorkspaceTheme.open(id, anchor);
-      await wait(() => panel.state === "open" && painted(field("hex")), "Native workspace theme panel did not open");
+      await wait(() => panel.state === "open" && painted(field("appearance")) && !painted(field("hex")),
+        "Native workspace appearance panel did not open its overview");
+      await geometry("appearance");
+    }
+    async function geometry(page) {
+      await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
       const panelBox = rect(panel);
       const surface = panel.panelContent, form = panel.querySelector(".fluxion-workspace-theme-form");
       assert(surface && form, "Workspace theme panel has no actual Gecko content surface");
@@ -282,66 +298,125 @@
       const padding = ["Top", "Right", "Bottom", "Left"].map(side => Number.parseFloat(surfaceStyle[`padding${side}`]));
       assert(surfaceStyle.backgroundColor === formStyle.backgroundColor && padding.every(value => value === 0),
         "Workspace theme panel retains a mismatched native backdrop or duplicate content padding");
-      assert(window.getComputedStyle(field("mode")).backgroundImage.includes("arrow-down-12.svg"),
+      const selector = page === "colors" ? "mode" : "appearance";
+      assert(window.getComputedStyle(field(selector)).backgroundImage.includes("arrow-down-12.svg"),
         "Workspace theme appearance selector has no visible disclosure arrow");
-      const controls = ["mode", "color", "hex", "save", "cancel", "reset"].map(name => {
+      const names = page === "colors" ? ["back", "mode", "color", "hex", "accent-color", "accent-hex"] : ["appearance", "colors"];
+      const controls = [...names, "save", "cancel", "reset"].map(name => {
         const node = field(name); assert(painted(node), `Workspace theme control is not painted: ${name}`);
         return { name, ...rect(node) };
       });
-      evidence.geometry.push({ panel: panelBox, controls, surface: { background: surfaceStyle.backgroundColor,
-        formBackground: formStyle.backgroundColor, padding, selectArrow: window.getComputedStyle(field("mode")).backgroundImage } });
+      evidence.geometry.push({ page, panel: panelBox, controls, surface: { background: surfaceStyle.backgroundColor,
+        formBackground: formStyle.backgroundColor, padding, selectArrow: window.getComputedStyle(field(selector)).backgroundImage } });
       for (const box of controls) assert(contains(panelBox, box), `Workspace theme control is clipped: ${box.name}`);
       for (let first = 0; first < controls.length; first++) for (let second = first + 1; second < controls.length; second++) {
         assert(!overlaps(controls[first], controls[second]), `Workspace theme controls overlap: ${controls[first].name}/${controls[second].name}`);
       }
-      assert(field("color").type === "color", "Workspace theme swatch does not expose the native color input");
+      assert(field("color").type === "color" && field("accent-color").type === "color", "Workspace swatches do not expose native color inputs");
     }
-    async function type(mode, value, action) {
+    async function colors() {
+      field("colors").click();
+      await wait(() => painted(field("hex")) && !painted(field("appearance")), "Colors action did not replace overview inside the same panel");
+      assert(panel.state === "open", "Workspace Colors navigation opened a separate popup");
+      await geometry("colors");
+    }
+    async function appearance(value) {
+      field("appearance").value = value;
+      field("appearance").dispatchEvent(new window.Event("change", { bubbles: true }));
+      await wait(() => scheme() === value, "Workspace appearance choice did not visibly change the active chrome scheme");
+      evidence.previews.push({ action: `appearance-${value}`, scheme: scheme(), projection: projection() });
+    }
+    async function type(mode, value, action, part = "base") {
       field("mode").value = mode;
       field("mode").dispatchEvent(new window.Event("change", { bubbles: true }));
-      field("hex").focus();
-      await wait(() => document.activeElement === field("hex"), "Workspace hex field did not receive focus");
-      const events = [], onInput = event => events.push({ trusted: event.isTrusted, value: field("hex").value });
-      field("hex").addEventListener("input", onInput);
+      await wait(() => scheme() === mode, "Editing palette does not preview its light/dark appearance");
+      const hex = field(part === "base" ? "hex" : "accent-hex"), color = field(part === "base" ? "color" : "accent-color");
+      hex.focus();
+      await wait(() => document.activeElement === hex, "Workspace hex field did not receive focus");
+      const events = [], onInput = event => events.push({ trusted: event.isTrusted, value: hex.value });
+      hex.addEventListener("input", onInput);
       try {
         const name = `type-product-workspace-${action}`;
         await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
         await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Native theme input was not acknowledged: ${action}`, 20000);
         await wait(() => events.some(event => event.trusted && event.value === value), "Native theme hex input did not arrive through trusted events");
-        assert(field("color").value === value, "Native color control did not synchronize with the hex input");
-        evidence.inputEvents.push({ mode, value, events });
-      } finally { field("hex").removeEventListener("input", onInput); }
+        assert(color.value === value, "Native color control did not synchronize with the hex input");
+        evidence.inputEvents.push({ mode, part, value, events });
+      } finally { hex.removeEventListener("input", onInput); }
     }
+    try {
     await open();
+    await appearance("light");
+    assert(!workspace().theme && !persisted().theme && window.FluxionTheme.current() === globalTheme,
+      "Unsaved workspace appearance changed persisted workspace data or global browser theme");
+    await capture("capture-product-workspace-appearance");
+    await colors();
     await type("dark", "#304050", "dark");
+    await type("dark", "#7baabb", "accent", "accent");
     await type("light", "#dde6dc", "light");
-    assert(!workspace().theme && projection() === baseline, "Unsaved workspace color draft leaked into persistence or browser chrome");
+    assert(!workspace().theme && !persisted().theme && projection() === "#dde6dc",
+      "Workspace palette must preview live without changing persisted workspace data");
+    field("mode").value = "dark"; field("mode").dispatchEvent(new window.Event("change", { bubbles: true }));
+    await wait(() => scheme() === "dark", "Editing dark palette did not change the temporary preview scheme");
+    assert(projection() === "#304050", "Dark palette preview did not project the actual dark base");
+    await geometry("colors");
     await capture("capture-product-workspace-theme");
+    field("back").click();
+    await wait(() => painted(field("appearance")) && !painted(field("hex")) && scheme() === "light",
+      "Back did not restore overview and the chosen workspace appearance independently of palette editing");
+    await geometry("appearance");
     field("save").click();
-    await wait(() => panel.state === "closed" && workspace().theme?.dark === "#304050" && workspace().theme?.light === "#dde6dc",
+    await wait(() => panel.state === "closed" && workspace().theme?.dark === "#304050" && workspace().theme?.light === "#dde6dc" &&
+      workspace().theme?.darkAccent === "#7baabb" && workspace().theme?.mode === "light" && scheme() === "light",
       "Workspace theme Save did not commit both appearance modes");
-    await wait(() => projection().includes("#304050") && projection().includes("#dde6dc"), "Saved workspace bases did not project into browser chrome");
-    assert(persisted().theme?.dark === "#304050" && persisted().theme?.light === "#dde6dc", "Workspace theme was not persisted with workspace state");
-    const saved = projection(); evidence.savedProjection = saved; evidence.persistedTheme = persisted().theme;
+    await wait(() => projection() === "#dde6dc", "Saved light workspace appearance did not project its concrete base into browser chrome");
+    assert(persisted().theme?.dark === "#304050" && persisted().theme?.light === "#dde6dc" &&
+      persisted().theme?.darkAccent === "#7baabb" && persisted().theme?.mode === "light", "Workspace appearance was not persisted with workspace state");
+    const saved = projection(), savedTheme = JSON.stringify(persisted().theme);
+    evidence.savedProjection = saved; evidence.persistedTheme = persisted().theme; evidence.savedScheme = scheme();
     ui.switchWorkspace(other);
-    await wait(() => ui.currentWorkspace() === other && projection() === baseline, "Unthemed workspace inherited another workspace's colors");
+    await wait(() => ui.currentWorkspace() === other && projection() === baseline && scheme() === baselineScheme,
+      "Unthemed workspace inherited another workspace's colors or appearance");
     ui.switchWorkspace(id);
-    await wait(() => ui.currentWorkspace() === id && projection() === saved, "Returning to workspace did not restore its saved color projection");
+    await wait(() => ui.currentWorkspace() === id && projection() === saved && scheme() === "light",
+      "Returning to workspace did not restore its saved color projection and appearance");
     await open();
+    await colors();
     await type("dark", "#405060", "cancel");
+    assert(projection().includes("#405060") && scheme() === "dark" && JSON.stringify(persisted().theme) === savedTheme,
+      "Changed draft was not previewed independently of persisted appearance");
     field("cancel").click();
     await wait(() => panel.state === "closed", "Workspace theme Cancel did not dismiss the editor");
-    assert(workspace().theme?.dark === "#304050" && persisted().theme?.dark === "#304050" && projection() === saved,
+    assert(workspace().theme?.dark === "#304050" && JSON.stringify(persisted().theme) === savedTheme && projection() === saved && scheme() === "light",
       "Canceled workspace theme draft changed persistence or active colors");
+    // A native Escape must roll back a real preview as reliably as Cancel.
+    await open(); await appearance("dark");
+    await nativeWorkspaceKey("escape-theme");
+    await wait(() => panel.state === "closed" && scheme() === "light" && projection() === saved,
+      "Native Escape failed to roll back workspace appearance preview");
+    assert(JSON.stringify(persisted().theme) === savedTheme, "Escape committed the workspace appearance draft");
     await open();
     field("reset").click();
-    await wait(() => panel.state === "closed" && !workspace().theme && projection() === baseline, "Workspace theme Reset did not restore inherited appearance");
-    assert(!persisted().theme && JSON.stringify(window.FluxionColors.current()) === globalBefore,
+    await wait(() => panel.state === "open" && projection() === baseline && scheme() === baselineScheme,
+      "Reset did not preview inherited appearance while keeping the editor open");
+    assert(JSON.stringify(persisted().theme) === savedTheme, "Reset removed saved workspace appearance without Save");
+    field("cancel").click();
+    await wait(() => panel.state === "closed" && projection() === saved && scheme() === "light", "Cancel did not undo staged Reset");
+    await open(); field("reset").click(); field("save").click();
+    await wait(() => panel.state === "closed" && !workspace().theme && projection() === baseline && scheme() === baselineScheme,
+      "Reset followed by Save did not remove the workspace appearance override");
+    assert(!persisted().theme && JSON.stringify(window.FluxionColors.current()) === globalBefore && window.FluxionTheme.current() === globalTheme,
       "Workspace theme controls changed global colors or left reset data behind");
+    assert(window.getComputedStyle(root).colorScheme === globalRootScheme && globalSchemeChanges.length === 0,
+      "Workspace appearance changed the global embedder color-scheme used by webpage media queries");
     evidence.resetProjection = projection();
+    evidence.globalSchemeChanges = globalSchemeChanges;
     report.checks.push("workspace-dock-symbol-group-centered-with-one-and-two-workspaces",
       "native-workspace-theme-controls-visible-contained-and-nonoverlapping",
-      "workspace-theme-native-hex-save-persistence-switch-restoration-cancel-and-reset");
+      "workspace-two-page-appearance-and-native-base-accent-live-preview",
+      "workspace-theme-native-hex-save-persistence-switch-restoration-cancel-escape-and-staged-reset",
+      "workspace-preview-preserves-global-embedder-color-scheme");
+    } finally { schemeObserver.disconnect(); }
   }
   function sidebarColumns(label) {
     const flow = document.getElementById("fluxion-flow");

@@ -114,9 +114,16 @@
       --fluxion-fast: 140ms cubic-bezier(.2,.7,.2,1);
     }
     #toolbar-menubar, #TabsToolbar { visibility: collapse !important; }
+    :root[data-fluxion-workspace-appearance="light"] :is(#navigator-toolbox, #fluxion-flow, #fluxion-settings, #fluxion-library) {
+      color-scheme: light;
+    }
+    :root[data-fluxion-workspace-appearance="dark"] :is(#navigator-toolbox, #fluxion-flow, #fluxion-settings, #fluxion-library) {
+      color-scheme: dark;
+    }
     #navigator-toolbox {
       appearance: none !important; background: var(--fluxion-bg) !important;
       border: 0 !important;
+      box-shadow: none !important;
       color: var(--fluxion-ink) !important;
       --toolbar-color: var(--fluxion-ink);
       --toolbar-field-color: var(--fluxion-ink);
@@ -127,6 +134,7 @@
       --toolbar-field-focus-background-color: var(--fluxion-bg-raised);
       --toolbarbutton-icon-fill: var(--fluxion-ink);
     }
+    #navigator-toolbox::after { display: none !important; }
     #nav-bar {
       box-sizing: border-box; min-height: 44px !important; padding: 6px 8px !important;
       background: var(--fluxion-bg) !important; box-shadow: none !important;
@@ -282,28 +290,30 @@
     #fluxion-flow[data-state="compact"] { width: 44px; min-width: 44px; max-width: 44px; }
     #fluxion-flow[data-state="focus"] {
       width: 3px; min-width: 3px; max-width: 3px; cursor: pointer;
-      background: var(--fluxion-line);
+      background: transparent;
     }
     #fluxion-flow[data-state="focus"]::before {
       content: ""; position: absolute; inset-block: 0; inset-inline-start: 0;
-      width: calc(3px + var(--fluxion-page-inset));
+      width: calc(6px + var(--fluxion-page-inset));
     }
     #fluxion-flow[data-state="focus"]:hover,
-    #fluxion-flow[data-state="focus"]:focus-visible { background: var(--fluxion-accent); }
+    #fluxion-flow[data-state="focus"]:focus-visible { background: transparent; }
     #fluxion-flow[data-state="focus"]:focus-visible {
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
     #fluxion-flow[data-state="focus"] > .fluxion-surface {
-      position: absolute; inset-block: 0; inset-inline-start: 0; width: var(--fluxion-sidebar-width);
+      position: absolute; inset-block: 6px; inset-inline-start: 6px;
+      height: calc(100% - 12px); width: var(--fluxion-sidebar-width);
       border-radius: 8px;
-      pointer-events: none; transform: translateX(calc(-100% + 3px)); box-shadow: none;
+      visibility: hidden; opacity: 0; pointer-events: none;
+      transform: translateX(calc(-100% - 6px)); box-shadow: none;
     }
     #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
-      pointer-events: auto; transform: translateX(0);
+      visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0);
       box-shadow: inset 0 0 0 1px var(--fluxion-line), 4px 0 12px rgba(0, 0, 0, .14);
     }
     :root[chromedir="rtl"] #fluxion-flow[data-state="focus"] > .fluxion-surface {
-      transform: translateX(calc(100% - 3px)); transform-origin: right center;
+      transform: translateX(calc(100% + 6px)); transform-origin: right center;
     }
     :root[chromedir="rtl"] #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
       transform: translateX(0);
@@ -411,8 +421,10 @@
         height 120ms cubic-bezier(.2,.7,.2,1), margin 120ms cubic-bezier(.2,.7,.2,1),
         padding 120ms cubic-bezier(.2,.7,.2,1), background-color 80ms linear;
     }
-    :root[data-fluxion-density="compact"] .fluxion-tab { height: 28px; }
-    :root[data-fluxion-density="roomy"] .fluxion-tab { height: 36px; }
+    :root[data-fluxion-density="compact"] .fluxion-tab,
+    :root[data-fluxion-density="compact"] .fluxion-new-tab { height: 28px; }
+    :root[data-fluxion-density="roomy"] .fluxion-tab,
+    :root[data-fluxion-density="roomy"] .fluxion-new-tab { height: 36px; }
     :root[data-fluxion-no-motion] #fluxion-flow,
     :root[data-fluxion-no-motion] .fluxion-surface,
     :root[data-fluxion-no-motion] .fluxion-tab,
@@ -530,10 +542,10 @@
     .fluxion-audio .fluxion-control-glyph { width: 14px; height: 14px; }
     .fluxion-tab:hover .fluxion-close, .fluxion-tab:focus-within .fluxion-close, .fluxion-audio { opacity: 1; }
     .fluxion-footer {
-      height: 36px; display: flex; align-items: center; gap: 6px; padding: 2px 7px;
+      flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 7px;
     }
     .fluxion-new-tab {
-      flex: 1; height: 26px; border: 0; border-radius: 3px; background: transparent;
+      flex: 1; height: 34px; border: 0; border-radius: 7px; background: transparent;
       display: flex; align-items: center; gap: 9px;
       color: var(--fluxion-muted); font: inherit; text-align: start; padding: 0 8px;
     }
@@ -1669,9 +1681,12 @@
   let focusKeyboardOwned = false;
   const focusOpenMenus = new Set();
   on(document, "popupshowing", event => {
-    if (event.target.id !== "fluxion-workspace-theme") return;
+    if (event.defaultPrevented || event.target.id !== "fluxion-workspace-theme") return;
     focusOpenMenus.add(event.target);
     clearFocusHideTimer();
+    Promise.resolve().then(() => {
+      if (!window.closed && event.defaultPrevented && focusOpenMenus.delete(event.target)) scheduleFocusSurfaceHide();
+    });
   }, true);
   on(document, "popuphidden", event => {
     if (event.target.id !== "fluxion-workspace-theme") return;
@@ -1963,6 +1978,15 @@
       return;
     }
     if (pointerCloseHold) releasePointerCloseHold({ animate: false });
+    // A trailing close cannot move another close control beneath the pointer.
+    // Let its row disappear normally so New tab follows immediately; preserve
+    // the stationary-pointer safeguard whenever surviving rows follow it.
+    if (!tabs.some(tab => tab.pinned)) {
+      const rows = renderedTabElements(), closing = new Set(tabs);
+      const first = rows.findIndex(row => closing.has(row._fluxionTab));
+      if (first >= 0 && !rows.slice(first + 1).some(row => !closing.has(row._fluxionTab) &&
+          row._fluxionTab?.parentNode && !row._fluxionTab.closing)) return;
+    }
     pointerCloseHold = {
       closed: new Set(),
       elements,
@@ -2016,6 +2040,7 @@
     for (const candidate of closingElements) candidate.classList.add("is-closing");
     beginPointerCloseHold(tabs, closingElements, pointer?.closeButton, pointer?.event);
     const ownHold = pointerCloseHold?.tabs.has(tab) ? pointerCloseHold : null;
+    if (!ownHold) for (const candidate of closingElements) candidate.classList.add("is-close-releasing");
     const ownFocusRequest = focusTabAfterRender;
     window.setTimeout(() => {
       try {
@@ -3159,21 +3184,6 @@
     openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event);
   });
   appendAction(workspaceMenu, "Rename Workspace…", () => renameWorkspace(contextWorkspace));
-  const accentMenu = xul("menu", { label: "Change Accent" });
-  const accentPopup = xul("menupopup");
-  const accentItems = new Map();
-  for (const accent of FluxionWorkspaces.ACCENTS) {
-    const item = appendAction(
-      accentPopup,
-      accent[0].toUpperCase() + accent.slice(1),
-      () => updateWorkspaceAppearance(contextWorkspace, { accent }),
-      { type: "radio", name: "fluxion-workspace-accent" },
-    );
-    accentItems.set(accent, item);
-  }
-  accentMenu.appendChild(accentPopup);
-  workspaceMenu.appendChild(accentMenu);
-
   const symbolMenu = xul("menu", { label: "Change Icon" });
   const symbolPopup = xul("menupopup");
   const symbolItems = new Map();
@@ -3187,8 +3197,8 @@
     symbolItems.set(icon, item);
   }
   symbolMenu.appendChild(symbolPopup);
-  workspaceMenu.insertBefore(symbolMenu, accentMenu);
-  appendAction(workspaceMenu, "Edit Workspace Theme…", () => {
+  workspaceMenu.appendChild(symbolMenu);
+  appendAction(workspaceMenu, "Workspace Appearance…", () => {
     const id = contextWorkspace, anchor = contextWorkspaceAnchor || workspaceMoreButton;
     window.requestAnimationFrame(() => window.FluxionWorkspaceTheme?.open(id, anchor));
   });
@@ -3232,9 +3242,6 @@
     setNativeMenuFlag(moveWorkspaceLeft, "disabled", index <= 0);
     setNativeMenuFlag(moveWorkspaceRight, "disabled", index < 0 || index >= workspaces.length - 1);
     setNativeMenuFlag(deleteWorkspaceItem, "disabled", workspaces.length <= 1);
-    for (const [accent, item] of accentItems) {
-      setNativeMenuFlag(item, "checked", workspace?.accent === accent);
-    }
     for (const [icon, item] of symbolItems) {
       setNativeMenuFlag(item, "checked", workspace?.icon === icon);
     }
@@ -4176,10 +4183,12 @@
         const railRect = flow.getBoundingClientRect();
         const hiddenSurfaceRect = surface.getBoundingClientRect();
         const contentBefore = gBrowser.tabpanels.getBoundingClientRect();
+        const rtl = window.getComputedStyle(flow).direction === "rtl";
         const hidden = railRect.width >= 2 && railRect.width <= 4 &&
           surface.inert && flow.tabIndex === 0 && flow.getAttribute("aria-expanded") === "false" &&
           hiddenSurfaceRect.width >= 228 && hiddenSurfaceRect.width <= 236 &&
-          Math.abs(hiddenSurfaceRect.right - railRect.right) <= 1.5;
+          window.getComputedStyle(surface).visibility === "hidden" &&
+          (rtl ? hiddenSurfaceRect.left >= railRect.right - 1 : hiddenSurfaceRect.right <= railRect.left + 1);
         revealFocusSurface();
         window.setTimeout(() => {
           const revealedSurfaceRect = surface.getBoundingClientRect();
@@ -4189,7 +4198,10 @@
           const revealed = flow.dataset.revealed === "true" && !surface.inert &&
             flow.getAttribute("aria-expanded") === "true" &&
             revealedSurfaceRect.width >= 228 && revealedSurfaceRect.width <= 236 &&
-            Math.abs(revealedSurfaceRect.left - railRect.left) <= 1.5;
+            window.getComputedStyle(surface).visibility === "visible" &&
+            Math.abs((rtl ? railRect.right - revealedSurfaceRect.right : revealedSurfaceRect.left - railRect.left) - 6) <= 1.5 &&
+            Math.abs(revealedSurfaceRect.top - railRect.top - 6) <= 1.5 &&
+            Math.abs(railRect.bottom - revealedSurfaceRect.bottom - 6) <= 1.5;
           if (hidden && revealed && contentStable) {
             Services.prefs.setStringPref(
               "fluxion.focus.health",

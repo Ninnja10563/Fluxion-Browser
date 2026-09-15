@@ -91,9 +91,11 @@ test("registered Settings capture receives existing global shortcuts before thei
   const h = fixture(), { api, window } = h.openWindow();
   const targetListeners = new Map(), capturing = [], calls = [], notes = [];
   const key = { localName: "button", ownerDocument: window.document, isConnected: true, dataset: {}, textContent: "",
-    contains: node => node === key, addEventListener: (type, fn) => targetListeners.set(type, fn) };
+    contains: node => node === key, addEventListener: (type, fn) => targetListeners.set(type, fn),
+    focus() { window.document.activeElement = key; } };
   window.document.getElementById = id => id === "fluxion-settings" ? { contains: node => node === key } : null;
   const context = vm.createContext({ window, key, action: { id: "sidebar", label: "Toggle Flow sidebar" },
+    shortcutCaptureStops: [],
     document: { activeElement: key }, flow: {}, surface: { contains: () => false }, focusOpenMenus: new Set(),
     setNote: text => notes.push(text), refreshShortcutButtons() {},
     on(_target, _type, fn, capture) { assert.equal(capture, true); capturing.push(fn); },
@@ -109,7 +111,7 @@ test("registered Settings capture receives existing global shortcuts before thei
   execute("fluxion-settings.js", "    let beforeCapture = key.textContent;", '    key.addEventListener("blur", stopCapture);');
   execute("fluxion-palette.js", '  on(window, "keydown", event => {\n    if (window.FluxionShortcuts?.matches', '  }, true);');
   execute("fluxion-chrome.js", '  on(window, "keydown", event => {\n    if (document.activeElement === flow', '  }, true);');
-  function dispatch(code, fields = {}, target = key) {
+  function dispatch(code, fields = {}, target = window.document.activeElement) {
     const event = { code, key: code === "Escape" ? "Escape" : code.replace("Key", ""), metaKey: true,
       target, composedPath: () => [target, window], prevented: false, stopped: false,
       preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...fields };
@@ -117,7 +119,9 @@ test("registered Settings capture receives existing global shortcuts before thei
     if (!event.stopped && target === key) targetListeners.get("keydown")(event);
     return event;
   }
+  window.document.activeElement = { localName: "input" };
   targetListeners.get("click")();
+  assert.equal(window.document.activeElement, key, "macOS click without implicit button focus must transfer capture focus");
   for (const [code, fields] of [["KeyK", {}], ["KeyA", { shiftKey: true }], ["BracketRight", { altKey: true }]]) {
     const event = dispatch(code, fields);
     assert.equal(event.prevented, true);
@@ -127,6 +131,14 @@ test("registered Settings capture receives existing global shortcuts before thei
   dispatch("KeyK", { altKey: true, shiftKey: true });
   assert.equal(api.get("sidebar"), "Accel+Alt+Shift+KeyK");
   assert.equal(key.dataset.capturing, "false");
+  dispatch("KeyK", { altKey: true, shiftKey: true });
+  assert.deepEqual(calls, ["sidebar"], "edited chord must activate the actual registered command handler");
+  calls.length = 0;
+  dispatch("Backslash", { shiftKey: true });
+  assert.deepEqual(calls, [], "old chord must stop activating the edited action");
+  const reopened = h.openWindow();
+  assert.equal(reopened.api.matches({ code: "KeyK", metaKey: true, altKey: true, shiftKey: true }, "sidebar"), true);
+  assert.equal(reopened.api.matches({ code: "Backslash", metaKey: true, shiftKey: true }, "sidebar"), false);
   dispatch("KeyK"); assert.deepEqual(calls, ["all"]);
   targetListeners.get("click")();
   dispatch("Escape", { metaKey: false });
@@ -141,4 +153,69 @@ test("registered Settings capture receives existing global shortcuts before thei
   assert.equal(key.dataset.capturing, "false");
   dispatch("BracketRight", { altKey: true });
   assert.deepEqual(calls, ["all", "tabs", 1], "blur must restore normal workspace shortcut dispatch");
+  targetListeners.get("click")();
+  const persisted = h.prefs.getStringPref("fluxion.shortcuts");
+  dispatch("KeyW");
+  assert.match(notes.at(-1), /reserved/);
+  assert.equal(h.prefs.getStringPref("fluxion.shortcuts"), persisted);
+  assert.equal(key.dataset.capturing, "true");
+  dispatch("Escape", { metaKey: false });
+  reopened.api.reset("sidebar");
+  calls.length = 0;
+  dispatch("KeyK", { altKey: true, shiftKey: true });
+  assert.deepEqual(calls, []);
+  dispatch("Backslash", { shiftKey: true });
+  assert.deepEqual(calls, ["sidebar"], "reset must reactivate the default command in an existing window");
+});
+
+test("pointer switching recording controls releases the previous label and capture, and blur never steals normal input", () => {
+  const h = fixture(), { api, window } = h.openWindow();
+  const controls = [], source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8");
+  const shortcutCaptureStops = [];
+  const start = source.indexOf("    let beforeCapture = key.textContent;"), end = source.indexOf('    key.addEventListener("blur", stopCapture);', start);
+  window.document.getElementById = id => id === "fluxion-settings" ? { contains: node => controls.includes(node) } : null;
+  const moveFocus = node => {
+    const old = window.document.activeElement;
+    window.document.activeElement = node;
+    if (old !== node) old?.listeners?.get("blur")?.();
+  };
+  for (const id of ["palette", "sidebar"]) {
+    const key = { localName: "button", ownerDocument: window.document, isConnected: true,
+      dataset: {}, textContent: api.format(id), listeners: new Map(), contains: node => node === key,
+      addEventListener(type, callback) { this.listeners.set(type, callback); }, focus() { moveFocus(key); } };
+    controls.push(key);
+    vm.runInNewContext(source.slice(start, end + '    key.addEventListener("blur", stopCapture);'.length), {
+      window, key, action: { id, label: id }, shortcutCaptureStops, setNote() {}, refreshShortcutButtons() {},
+    });
+  }
+  const [first, second] = controls;
+  first.listeners.get("click")();
+  assert.equal(first.dataset.capturing, "true");
+  second.listeners.get("click")();
+  assert.equal(first.dataset.capturing, "false");
+  assert.equal(first.textContent, api.format("palette"));
+  assert.equal(second.dataset.capturing, "true");
+  assert.equal(window.document.activeElement, second);
+  const event = { code: "KeyK", metaKey: true, target: second, composedPath: () => [second, window] };
+  assert.equal(api.matches(event, "palette"), false);
+  moveFocus({ localName: "input" });
+  assert.equal(second.dataset.capturing, "false");
+  assert.equal(second.textContent, api.format("sidebar"));
+  assert.equal(api.matches({ ...event, target: window.document.activeElement, composedPath: () => [window.document.activeElement] }, "palette"), true);
+  second.listeners.get("click")();
+  const sections = new Map([["keyboard", { panel: {}, button: { setAttribute() {} } }], ["general", { panel: {}, button: { setAttribute() {} } }]]);
+  const routeStart = source.indexOf("  function showSection("), routeEnd = source.indexOf("\n  function section(", routeStart);
+  const routeContext = vm.createContext({ sections, activeSection: "keyboard", cancelShortcutCapture: () => shortcutCaptureStops.forEach(stop => stop()),
+    gBrowser: { selectedBrowser: { currentURI: { spec: "about:preferences" } } }, tabSections: new Map(), renderPermissions() {}, renderWorkspaces() {} });
+  vm.runInContext(`${source.slice(routeStart, routeEnd)}\nshowSection("general");`, routeContext);
+  assert.equal(second.dataset.capturing, "false", "section dismissal ends capture even without a blur event");
+  assert.equal(second.textContent, api.format("sidebar"));
+  second.listeners.get("click")();
+  const visibilityStart = source.indexOf("  function syncVisibility() {"), visibilityEnd = source.indexOf("\n  const progressListener", visibilityStart);
+  vm.runInNewContext(`${source.slice(visibilityStart, visibilityEnd)}\nsyncVisibility();`, {
+    isSettingsTab: () => false, cancelShortcutCapture: () => shortcutCaptureStops.forEach(stop => stop()), root: {}, contentDeck: {},
+    document: { documentElement: { hasAttribute: () => false, toggleAttribute() {} } },
+  });
+  assert.equal(second.dataset.capturing, "false", "tab dismissal ends capture even without a blur event");
+  assert.equal(second.textContent, api.format("sidebar"));
 });

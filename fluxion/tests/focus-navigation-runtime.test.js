@@ -1,0 +1,111 @@
+"use strict";
+const test = require("node:test"), assert = require("node:assert/strict");
+const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
+const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-focus-mode.js"), "utf8");
+function fixture() {
+  const timers = new Map(), observers = [], listeners = new Map();
+  let sequence = 0, geometryReads = 0;
+  const document = { activeElement: null };
+  function node(id = "", parent = null, localName = "div") {
+    const attrs = new Map();
+    const n = { id, parent, localName, ownerDocument: document, nodePrincipal: { isSystemPrincipal: true },
+      dataset: {}, children: [], attrs, addEventListener(type, fn) {
+        const map = listeners.get(this) || new Map();
+        map.set(type, [...(map.get(type) || []), fn]); listeners.set(this, map);
+      }, removeEventListener(type, fn) { const map = listeners.get(this); map?.set(type, (map.get(type) || []).filter(f => f !== fn)); },
+      append(...nodes) { for (const child of nodes) { child.parent = this; this.children.push(child); } },
+      remove() { this.removed = true; },
+      contains(target) { for (let current = target; current; current = current.parent) if (current === this) return true; return false; },
+      hasAttribute: name => attrs.has(name), getAttribute: name => attrs.get(name) ?? null,
+      setAttribute: (name, value) => attrs.set(name, String(value)), removeAttribute: name => attrs.delete(name),
+      toggleAttribute(name, value) { if (value) attrs.set(name, ""); else attrs.delete(name); },
+      getBoundingClientRect() { geometryReads++; return { top: 0, height: 44 }; },
+    };
+    return n;
+  }
+  const root = node("root"), toolbox = node("navigator-toolbox", root), flow = node("fluxion-flow", root);
+  const page = node("page"), input = node("urlbar-input", toolbox);
+  flow.dataset.state = "expanded"; document.activeElement = page;
+  document.documentElement = root;
+  document.getElementById = id => ({ "navigator-toolbox": toolbox, "fluxion-flow": flow })[id];
+  document.createElementNS = (_, name) => node("", null, name);
+  document.addEventListener = toolbox.addEventListener; document.removeEventListener = toolbox.removeEventListener;
+  const window = { document, gURLBar: { view: { isOpen: false } }, FluxionChromeLayout: { refresh() {} },
+    setTimeout(fn) { const id = ++sequence; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
+    addEventListener: toolbox.addEventListener, removeEventListener: toolbox.removeEventListener,
+    MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} disconnect() { this.disconnected = true; } },
+  };
+  vm.runInNewContext(source, { window });
+  const edge = root.children.find(n => n.id === "fluxion-navigation-edge");
+  const emit = (owner, type, target = owner, extra = {}) => {
+    const event = { target, type, isTrusted: true, ...extra };
+    for (const fn of [...(listeners.get(owner)?.get(type) || [])]) fn(event);
+    return event;
+  };
+  return { window, document, root, toolbox, flow, input, page, edge, timers, observers, node, emit,
+    get reads() { return geometryReads; },
+    enterFocus() { flow.dataset.state = "focus"; window.FluxionFocusMode.refresh(); },
+    flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
+  };
+}
+test("top-edge reveal hides after leaving, without rewriting sidebar mode or moving native controls", () => {
+  const f = fixture(); f.enterFocus();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  f.emit(f.edge, "pointerenter"); assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.emit(f.edge, "pointerleave"); f.emit(f.toolbox, "pointerenter"); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true, "crossing edge-to-toolbar gap must retain reveal");
+  f.emit(f.toolbox, "pointerleave"); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  assert.equal(f.flow.dataset.state, "focus"); assert.equal(f.input.parent, f.toolbox);
+});
+test("native address focus reveals immediately, suggestions and focus retain it until page focus", () => {
+  const f = fixture(); f.enterFocus(); f.document.activeElement = f.input;
+  f.emit(f.toolbox, "focusin", f.input);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true); assert.equal(f.reads, 1);
+  f.emit(f.toolbox, "pointerleave"); f.flush(); assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.document.activeElement = f.page; f.window.gURLBar.view.isOpen = true;
+  f.emit(f.toolbox, "focusout", f.input); f.flush(); assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.window.gURLBar.view.isOpen = false; f.emit(f.toolbox, "focusout", f.input); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});
+test("native security panels retain an unanimated toolbar; content and workspace popups cannot trigger it", () => {
+  const f = fixture(); f.enterFocus();
+  const panel = f.node("identity-popup", null, "panel");
+  f.emit(f.document, "popupshowing", panel); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  assert.equal(f.root.hasAttribute("data-fluxion-navigation-pinned"), true);
+  f.emit(f.toolbox, "pointerleave"); f.flush(); assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.emit(f.document, "popuphidden", panel); f.flush(); assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  const content = f.node("spoof", null, "panel"); content.nodePrincipal.isSystemPrincipal = false;
+  f.emit(f.document, "popupshowing", content);
+  f.emit(f.document, "popupshowing", f.node("fluxion-workspace-theme", null, "panel"));
+  f.emit(f.edge, "pointerenter", f.edge, { isTrusted: false });
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});
+test("native fullscreen, customization, expanded state and unload release overlay ownership", () => {
+  const f = fixture(); f.enterFocus();
+  for (const attr of ["inFullscreen", "inDOMFullscreen", "customizing"]) {
+    f.root.setAttribute(attr, "true"); f.window.FluxionFocusMode.refresh();
+    assert.equal(f.window.FluxionFocusMode.state().enabled, false);
+    f.root.removeAttribute(attr); f.window.FluxionFocusMode.refresh();
+    assert.equal(f.window.FluxionFocusMode.state().enabled, true);
+  }
+  f.flow.dataset.state = "expanded"; f.window.FluxionFocusMode.refresh();
+  assert.equal(f.root.hasAttribute("data-fluxion-focus-mode"), false);
+  f.enterFocus(); f.emit(f.edge, "pointerenter"); f.emit(f.edge, "pointerleave");
+  f.emit(f.window, "unload"); assert.equal(f.timers.size, 0);
+  assert.equal(f.observers[0].disconnected, true); assert.equal(f.edge.removed, true);
+  assert.equal(f.root.hasAttribute("data-fluxion-focus-mode"), false);
+});
+test("canceled native popup opening cannot leave Focus navigation pinned open", async () => {
+  const f = fixture(); f.enterFocus();
+  const panel = f.node("identity-popup", null, "panel");
+  const event = f.emit(f.document, "popupshowing", panel);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  event.defaultPrevented = true;
+  await Promise.resolve(); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  assert.equal(f.root.hasAttribute("data-fluxion-navigation-pinned"), false);
+  f.emit(f.document, "popupshowing", panel, { defaultPrevented: true });
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});

@@ -51,6 +51,22 @@ window's global base colors. The theme editor keeps drafts private to its panel
 and commits through workspace persistence; it does not expose a webpage bridge
 or alter content styles. A single color projector owns the chrome variables.
 
+Workspace appearance may now select its own system/light/dark scheme and
+palette accents. The projector resolves concrete tokens and sets a chrome-only
+attribute, never the root `color-scheme` used by Gecko's embedded webpage media
+queries. Scoped rules apply to navigation, Flow, Settings and Library only.
+The two-page appearance panel owns a window-local preview token, validates
+hex values and checks the saved workspace revision before an atomic commit.
+Dismissal, cancellation, deletion and workspace changes invalidate the preview.
+
+`fluxion-focus-mode.js` separately owns the top-edge navigation overlay. It
+does not reparent native controls or remove them from keyboard navigation:
+address focus reveals the toolbox immediately, and native popup anchoring
+resolves its final geometry before positioning. Canceled popup openings release
+their provisional owner even when Gecko emits no `popuphidden`. The sidebar
+uses an inset floating surface with a transparent pointer bridge; neither
+overlay resizes the webpage. Fullscreen/customization defer to native chrome.
+
 `core/browser-preferences.js` is a bounded, typed adapter for six everyday
 Gecko settings presented in Fluxion's custom General and Privacy sections.
 It reads actual engine defaults, respects locked/unavailable preferences,
@@ -296,8 +312,8 @@ branch, preserving explicit web, local-file, and blank user homepages. Earlier
 previews' managed bundle-path homepages migrate to that default so moving the
 app doesn't leave a stale path. The native bookmarks-toolbar choice is likewise
 a default, not a forced setting, and its visibility remains owned by Gecko.
-Startup deliberately does not write
-`browser.startup.page`. The value selected in General settings therefore
+Startup sets `browser.startup.page=3` and bookmarks visibility `always` on the
+default branch only. The value selected in General settings therefore
 survives the next privileged startup and Gecko, rather than Fluxion, decides
 whether to reopen the previous windows and tabs. The recovery gate keeps that
 preference at Gecko's restore value across every controlled relaunch, guarding
@@ -305,6 +321,33 @@ against startup configuration accidentally replacing a saved session with the
 homepage. It overrides future new-tab destinations without navigating the
 selected browser: a SessionStore tab can still report `about:blank` while its
 saved page is being restored.
+
+### macOS last-window policy (0.69 candidate)
+
+Firefox 155.0.1 normally restores only pinned tabs after closing its final macOS
+window, even with restore-session startup selected. Fluxion's build-time
+`scripts/install-macos-session-policy.py` makes that specific path follow the
+user's startup choice. It checks the exact 155.0.1 application version and full
+SHA-256 digests of `modules/sessionstore/SessionStore.sys.mjs` and
+`SessionSaver.sys.mjs` before changing either member. Unknown upstream sources
+fail the build; a Gecko update requires explicit review and new native evidence.
+The archive is replaced atomically after CRC validation, preserving all other
+member contents/metadata, order, and Mozilla's optimized directory/preload layout.
+
+Only the last regular, non-private window is marked. Earlier closed windows stay
+closed. Reopening uses Gecko's existing window restoration and external-URL merge
+rules; explicit home-page/blank startup choices retain upstream behavior. The
+save snapshot projects a clone of the marked window for a subsequent launch,
+without consuming the live closed-window record needed by `undoCloseWindow`.
+Private-only activity cannot consume the normal restore marker, and permanent
+private browsing is explicitly excluded. There is no new session database or
+runtime replacement of SessionStore methods.
+
+`verify-macos-last-window.sh` exercises actual close/reopen, pinned and normal
+tabs, custom session metadata, private exclusion, external-URL preservation,
+repeated disk checkpoints, a separate process relaunch, and both startup opt-outs.
+Its isolated-profile JSON reports are retained as release artifacts. Candidate
+code and unit tests alone are not evidence that this native gate has passed.
 
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,
@@ -1046,6 +1089,14 @@ prevents duplicate Fluxion bindings, and reserves operating-system or mature
 Gecko combinations such as quit, close tab, new tab, location, reload, find,
 and print. Standard browser shortcuts remain Gecko-owned and are displayed as
 reference-only rows rather than being intercepted by Fluxion.
+
+Recording explicitly focuses the selected Settings button: macOS pointer
+activation does not guarantee button focus. The registry suppresses Fluxion
+commands only for that owned recorder, and its key handler validates before
+saving. Blur, switching Settings sections, and leaving the Settings tab release
+recording. The native gate clicks an initially unfocused control through Gecko
+hit testing, then sends actual macOS keys for protected-command rejection,
+save, and activation; an earlier pre-focused test concealed this regression.
 
 ## Tab organisation boundary
 

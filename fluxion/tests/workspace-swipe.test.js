@@ -61,6 +61,30 @@ test("irregular same-direction inertia, small sign noise and brief weak rebounds
   }
 });
 
+test("gentle fresh gestures accumulate after a decayed tail instead of requiring one large first event", () => {
+  for (const direction of [-1, 1]) {
+    const gesture = swipe.create();
+    let time = 0;
+    assert.equal(push(gesture, direction * 60, 0, time).direction, direction);
+    for (let repeat = 0; repeat < 4; repeat++) {
+      for (const delta of [24, 12, 4, 2]) assert.equal(push(gesture, direction * delta, 0, time += 16).direction, 0);
+      for (const delta of [8, 12, 16]) assert.equal(push(gesture, direction * delta, 0, time += 16).direction, 0);
+      assert.equal(push(gesture, direction * 20, 0, time += 16).direction, direction);
+    }
+  }
+});
+
+test("weak renewed tails must not count continuing decay or an abandoned ramp as another gesture", () => {
+  for (const direction of [-1, 1]) {
+    const gesture = swipe.create();
+    let time = 0;
+    assert.equal(push(gesture, direction * 60, 0, time).direction, direction);
+    for (const delta of [24, 12, 4, 2, 10, 9, 8, 7, 6, 5, 4, 2, 8, 12, 2, 1, 8, 12, 2, 1]) {
+      assert.equal(push(gesture, direction * delta, 0, time += 16).direction, 0);
+    }
+  }
+});
+
 test("a rejected gesture cannot become a switch when its modifier or popup is released", () => {
   const gesture = swipe.create();
   push(gesture, 20, 0, 0);

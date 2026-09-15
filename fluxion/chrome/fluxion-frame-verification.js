@@ -8,7 +8,7 @@
   const { document, gBrowser } = window;
   const driver = Services.env.get("FLUXION_FRAME_DRIVER_DIR");
   const report = {
-    keyboard: "native macOS System Events Cmd-W and Cmd-Shift-T",
+    keyboard: "native macOS System Events Cmd-W, Cmd-Shift-T, Cmd-L and Escape",
     pointer: "Gecko Window.synthesizeMouseEvent input routing; no OS pointer movement claimed",
     fullscreenTested: false, checks: [], captures: [], geometry: [], keys: [],
   };
@@ -76,6 +76,126 @@
   async function action(name) {
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Native driver did not acknowledge ${name}`, 20000);
+  }
+  function floatingSidebarEvidence(flow, surface, revealed) {
+    const rail = rect(flow), box = rect(surface), style = window.getComputedStyle(surface);
+    const rtl = window.getComputedStyle(flow).direction === "rtl";
+    if (revealed) {
+      assert(style.visibility === "visible" && !surface.inert && style.pointerEvents !== "none",
+        "Floating sidebar is not visible and interactive after reveal");
+      const inlineInset = rtl ? rail.right - box.right : box.left - rail.left;
+      assert(near(inlineInset, 6) && near(box.top - rail.top, 6) && near(rail.bottom - box.bottom, 6),
+        `Floating sidebar does not retain six-pixel side/top/bottom clearance: ${JSON.stringify({ rail, box, inlineInset })}`);
+    } else {
+      assert(style.visibility === "hidden" && surface.inert && style.pointerEvents === "none",
+        "Hidden sidebar retains a painted or interactive rounded-corner sliver");
+      assert(rtl ? box.left >= rail.right - 1 : box.right <= rail.left + 1,
+        `Hidden sidebar has not moved fully beyond the window edge: ${JSON.stringify({ rail, box })}`);
+    }
+    return { mode: revealed ? "floating-revealed-insets" : "floating-hidden-offscreen", rail, box,
+      visibility: style.visibility, pointerEvents: style.pointerEvents, inert: surface.inert };
+  }
+  function newTabGeometryEvidence(density, row, button, before) {
+    const tab = rect(row), after = rect(button), style = window.getComputedStyle(button), tabStyle = window.getComputedStyle(row);
+    const expected = { compact: 28, standard: 34, roomy: 36 }[density];
+    assert(near(tab.height, expected) && near(after.height, expected) && near(after.width, tab.width) && near(after.left, tab.left),
+      `New tab does not share normal ${density} tab geometry: ${JSON.stringify({ tab, after })}`);
+    assert(["left", "top", "width", "height"].every(key => near(before[key], after[key])), "Hover changed New tab geometry");
+    const corners = ["borderTopLeftRadius", "borderTopRightRadius", "borderBottomLeftRadius", "borderBottomRightRadius"];
+    assert(corners.every(corner => style[corner] === tabStyle[corner]), "New tab hover radius differs from normal tabs");
+    return { density, tab, before, after, radii: corners.map(corner => style[corner]) };
+  }
+  async function focusNavigation() {
+    stage("native-focus-navigation");
+    const controller = window.FluxionFocusMode, toolbox = document.getElementById("navigator-toolbox");
+    const edge = document.getElementById("fluxion-navigation-edge"), nav = document.getElementById("nav-bar");
+    assert(controller && toolbox && edge && nav && controller.state().enabled, "Focus navigation modules are unavailable");
+    const evidence = report.focusNavigation = { keys: [], geometry: [], captures: [] };
+    const page = () => rect(gBrowser.selectedBrowser);
+    const baseline = page();
+    const unchangedPage = label => {
+      const current = page(); evidence.geometry.push({ label, page: current, toolbox: rect(toolbox) });
+      assert(["left", "top", "width", "height"].every(key => near(current[key], baseline[key])),
+        `Focus navigation ${label} reflowed the webpage`);
+    };
+    const hidden = async label => {
+      await wait(() => !controller.state().revealed && Number(window.getComputedStyle(toolbox).opacity) === 0 &&
+        rect(toolbox).bottom <= 1, `Focus navigation did not move fully offscreen: ${label}`);
+      assert(window.getComputedStyle(toolbox).pointerEvents === "none", "Hidden navigation intercepts webpage input");
+      unchangedPage(label);
+    };
+    const shown = async label => {
+      await wait(() => controller.state().revealed && Number(window.getComputedStyle(toolbox).opacity) === 1 &&
+        rect(toolbox).top >= -1, `Focus navigation did not reveal: ${label}`);
+      const navigation = rect(nav), field = rect(document.querySelector("#urlbar > .urlbar-input-container"));
+      assert(near(field.height, 32) && near(field.top - navigation.top, 6) && near(navigation.bottom - field.bottom, 6),
+        "Focus navigation changed the normal address field height or balanced padding");
+      unchangedPage(label);
+    };
+    const moveToPage = () => routePointer(baseline.right - 60, baseline.top + Math.min(150, baseline.height / 2));
+    const clickPage = () => {
+      const x = baseline.right - 60, y = baseline.top + Math.min(150, baseline.height / 2);
+      routePointer(x, y); routePointer(x, y, "mousedown", 1); routePointer(x, y, "mouseup", 0);
+    };
+    const revealFromEdge = async label => {
+      const box = rect(edge);
+      assert(near(box.height, 4) && box.width > 200, "Focus navigation has no usable four-pixel top reveal target");
+      const x = box.left + box.width / 2, y = box.top + box.height / 2;
+      assert(edge.contains(document.elementFromPoint(x, y)), "Focus navigation top edge is obscured");
+      routePointer(x, y);
+      await shown(label);
+    };
+    const capture = async name => { await action(name); evidence.captures.push(name); };
+    const onKey = event => {
+      if ((event.metaKey && event.key.toLowerCase() === "l") || event.key === "Escape") {
+        evidence.keys.push({ key: event.key, trusted: event.isTrusted, meta: event.metaKey, shift: event.shiftKey,
+          alt: event.altKey, control: event.ctrlKey });
+      }
+    };
+    window.addEventListener("keydown", onKey, true);
+    try {
+      gBrowser.selectedBrowser.focus(); moveToPage();
+      await hidden("initial-hidden");
+      await capture("capture-focus-navigation-hidden");
+      await revealFromEdge("top-edge-hover");
+      await capture("capture-focus-navigation-revealed");
+      moveToPage(); await hidden("pointer-left");
+      await action("focus-location");
+      await wait(() => evidence.keys.some(key => key.key.toLowerCase() === "l" && key.trusted && key.meta &&
+        !key.shift && !key.alt && !key.control) && document.activeElement === window.gURLBar.inputField,
+      "Native Cmd-L did not focus the hidden address bar");
+      await shown("native-cmd-l");
+      moveToPage(); await delay(250);
+      assert(controller.state().revealed && document.activeElement === window.gURLBar.inputField,
+        "Pointer exit hid keyboard-owned address input");
+      await action("focus-location-escape");
+      await wait(() => !window.gURLBar.view.isOpen && evidence.keys.some(key => key.key === "Escape" && key.trusted),
+        "Native Escape did not dismiss address suggestions");
+      if (document.activeElement === window.gURLBar.inputField) assert(controller.state().revealed, "Focused address input hid after Escape");
+      clickPage(); await hidden("page-click-after-cmd-l");
+      await revealFromEdge("identity-popup-anchor");
+      const identity = document.getElementById("identity-icon-box") || document.getElementById("identity-box");
+      assert(identity, "Native HTTPS identity control is missing");
+      const identityBox = rect(identity), identityX = identityBox.left + identityBox.width / 2,
+        identityY = identityBox.top + identityBox.height / 2;
+      assert(identityBox.width > 0 && identityBox.height > 0 && identity.contains(document.elementFromPoint(identityX, identityY)),
+        "Native HTTPS identity control is clipped or obscured");
+      routePointer(identityX, identityY); routePointer(identityX, identityY, "mousedown", 1); routePointer(identityX, identityY, "mouseup", 0);
+      const popup = document.getElementById("identity-popup");
+      await wait(() => popup?.state === "open", "Real HTTPS identity popup did not open");
+      moveToPage(); await delay(300);
+      await shown("identity-popup-held-open");
+      assert(popup.state === "open", "Leaving navigation dismissed the native identity popup");
+      evidence.identity = { state: popup.state, panel: rect(popup), anchor: rect(identity) };
+      await capture("capture-focus-navigation-security");
+      await action("focus-identity-escape");
+      await wait(() => popup.state === "closed", "Native Escape did not close the identity popup");
+      clickPage(); await hidden("page-click-after-identity");
+      assert(evidence.keys.filter(key => key.key.toLowerCase() === "l" && key.trusted && key.meta).length === 1,
+        "Focus navigation fixture did not receive exactly one trusted native Cmd-L");
+      report.checks.push("focus-top-edge-navigation-reveal-without-page-reflow", "native-cmd-l-reveals-hidden-navigation-and-retains-keyboard-focus",
+        "native-security-popup-retains-navigation-until-dismissed");
+    } finally { window.removeEventListener("keydown", onKey, true); }
   }
   async function run() {
     assert(/\/fluxion-frame-check\.[^/]+\/profile\/?$/.test(PathUtils.profileDir), "Frame fixture requires an isolated profile");
@@ -253,10 +373,12 @@
       await delay(200);
       workspaceControls("focus", true);
       const appearance = sidebarSurfaceEvidence(surface, "revealed");
+      const floating = floatingSidebarEvidence(flow, surface, true);
       const pageAfter = rect(gBrowser.tabpanels);
       assert(["left", "top", "width", "height"].every(key => near(pageBefore[key], pageAfter[key])), "Routed edge reveal reflowed page content");
       if (cycle === 0) {
         report.geometry.push(appearance);
+        report.geometry.push(floating);
         await action("capture-sidebar-revealed");
         assert(flow.dataset.revealed === "true" && !surface.inert, "Sidebar hid before the revealed-state screenshot completed");
         report.captures.push({ name: "capture-sidebar-revealed", theme: window.FluxionTheme.current(),
@@ -271,10 +393,12 @@
       routePointer(outside.x, outside.y);
       await wait(() => flow.dataset.revealed === "false" && surface.inert, `Leaving the overlay did not hide sidebar on cycle ${cycle}`);
       await delay(200);
+      report.geometry.push(floatingSidebarEvidence(flow, surface, false));
     }
     assert(report.hoverEvents.filter(event => event.type === "pointerenter" && event.trusted).length >= 3 &&
       report.hoverEvents.filter(event => event.type === "pointerleave" && event.trusted).length >= 3,
     "Repeated edge hover lacks trusted Gecko routed enter/leave evidence");
+    await focusNavigation();
     const toggle = flow.querySelector(".fluxion-workspaces > .fluxion-icon-button");
     ui.setSidebarState("compact");
     await wait(() => near(rect(flow).width, 44), "Compact sidebar did not settle before its expand click");
@@ -306,6 +430,35 @@
       "Tab list and inline new-tab control do not share a scroll area separate from the dock");
     const inlineGap = rect(newTab).top - rect(tabTree).bottom;
     assert(inlineGap >= -1 && inlineGap <= 16, `New tab is not immediately below the last tab: ${inlineGap}px`);
+    stage("stationary-pointer-tail-close");
+    const tail = add("about:blank?fluxion-frame=tail-close");
+    await select(tail);
+    const tailRow = rowFor(tail);
+    tailRow.scrollIntoView({ block: "nearest" });
+    await delay(200);
+    assert(tabTree.querySelector(".fluxion-tab:last-child") === tailRow && tailRow.nextElementSibling === null,
+      "Tail-close fixture does not own the final ordinary tab row");
+    const tailBefore = liveTabs(), newTabBeforeTailClose = rect(newTab), tailStarted = window.performance.now();
+    const tailClose = tailRow.querySelector(".fluxion-close"), tailCloseBox = rect(tailClose);
+    const tailX = tailCloseBox.left + tailCloseBox.width / 2, tailY = tailCloseBox.top + tailCloseBox.height / 2;
+    assert(tailCloseBox.width > 0 && tailCloseBox.height > 0 && tailClose.contains(document.elementFromPoint(tailX, tailY)),
+      "Final tab close control is clipped or obscured");
+    routePointer(tailX, tailY); routePointer(tailX, tailY, "mousedown", 1); routePointer(tailX, tailY, "mouseup", 0);
+    const tailPointerMoves = pointerMoves;
+    await wait(() => !tail.parentNode && !tailRow.isConnected && rect(newTab).top < newTabBeforeTailClose.top - 10,
+      "Closing the final tab retained a safety gap above New tab beyond 500ms", 500);
+    const tailElapsed = window.performance.now() - tailStarted;
+    assert(pointerMoves === tailPointerMoves, "Pointer moved while testing stationary final-tab closure");
+    assert(liveTabs().length === tailBefore.length - 1 && tailBefore.filter(tab => tab !== tail).every(tab => tab.parentNode && !tab.closing),
+      "Closing the final tab affected another native tab");
+    const tailTree = rect(tabTree), tailNewTab = rect(newTab);
+    assert(tailNewTab.top >= tailTree.bottom - 1 && tailNewTab.top - tailTree.bottom <= 16,
+      "New tab did not return immediately below the surviving tab list");
+    report.geometry.push({ mode: "stationary-tail-close", elapsed: tailElapsed, before: newTabBeforeTailClose,
+      after: tailNewTab, tree: tailTree, pointerMoves: tailPointerMoves });
+    report.checks.push("stationary-pointer-final-tab-close-settles-new-tab-within-500ms-with-survivors-preserved");
+    await select(webpage);
+    stage("inline-new-tab-and-scroll-stable-workspace-dock");
     const dockBefore = rect(dock);
     const overflowTabs = Array.from({ length: Math.ceil(rect(scrollArea).height / 28) + 4 }, (_, index) =>
       add(`about:blank?fluxion-frame=overflow-${index}`));
@@ -331,6 +484,22 @@
     await wait(() => !createdTab.parentNode && !rowFor(createdTab) && overflowTabs.every(tab => !tab.parentNode && !rowFor(tab)),
       "Dense-tab fixture cleanup left stale Flow rows");
     scrollArea.scrollTop = 0; await delay(200);
+    stage("normal-size-new-tab-hover");
+    const previousDensity = Services.prefs.getStringPref("fluxion.tabs.density", "standard");
+    try {
+      for (const density of ["compact", "standard", "roomy"]) {
+        ui.setTabDensity(density);
+        await delay(250);
+        routePointer(rect(deck).right - 20, rect(deck).top + 100);
+        const before = rect(newTab), row = rowFor(webpage);
+        assert(row, "New-tab density fixture lost its ordinary tab row");
+        routePointer(before.left + before.width / 2, before.top + before.height / 2);
+        await wait(() => newTab.matches(":hover"), "Gecko-routed pointer did not hover New tab");
+        report.geometry.push({ mode: "new-tab-hover", ...newTabGeometryEvidence(density, row, newTab, before) });
+      }
+    } finally { ui.setTabDensity(previousDensity); }
+    await delay(200);
+    report.checks.push("new-tab-hover-matches-normal-tab-size-and-radius-in-all-three-densities");
     report.checks.push("inline-new-tab-follows-last-tab-and-bottom-workspace-dock-survives-scroll-overflow");
     stage("compact-dock-with-twelve-workspaces-in-short-window");
     const originalSize = { width: window.outerWidth, height: window.outerHeight };

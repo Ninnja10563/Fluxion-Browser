@@ -43,7 +43,9 @@
     notifyActivity() {
       if (this.destroyed) return;
       this.lastActivity = this.now();
-      if (this.queue.size) this.schedule(this.quietMs);
+      // Wheel/typing bursts only move the quiet deadline. The pending wake
+      // rechecks that deadline, avoiding timer cancellation on every event.
+      if (this.queue.size && this.timer == null) this.schedule(this.quietMs);
     }
 
     defer(reason, milliseconds) {

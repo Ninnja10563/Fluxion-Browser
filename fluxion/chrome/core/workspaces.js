@@ -20,7 +20,17 @@
     if (!value || typeof value !== "object" || Array.isArray(value)) return null;
     if (!["light", "dark"].every(key => Object.hasOwn(value, key) &&
       typeof value[key] === "string" && /^#[0-9a-f]{6}$/i.test(value[key]))) return null;
-    return { light: value.light.toLowerCase(), dark: value.dark.toLowerCase() };
+    const result = { light: value.light.toLowerCase(), dark: value.dark.toLowerCase() };
+    if (Object.hasOwn(value, "mode")) {
+      if (!["system", "light", "dark"].includes(value.mode)) return null;
+      result.mode = value.mode;
+    }
+    for (const key of ["lightAccent", "darkAccent"]) {
+      if (!Object.hasOwn(value, key)) continue;
+      if (typeof value[key] !== "string" || !/^#[0-9a-f]{6}$/i.test(value[key])) return null;
+      result[key] = value[key].toLowerCase();
+    }
+    return result;
   }
 
   function cloneWorkspace(item) {

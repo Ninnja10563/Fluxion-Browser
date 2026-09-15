@@ -6,7 +6,7 @@
   if (Services.prefs.getBoolPref(`${prefix}.claimed`, false)) return;
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
   const report = { eventSource: "synthetic-DOM-keyboard-events-in-packaged-Gecko", nativeOSKeyboardTest: false,
-    keyboardEventTrustedFlags: [], checks: [] };
+    keyboardEventTrustedFlags: [], nativeKeys: [], checks: [] };
   const { document, gBrowser } = window;
   const assert = (value, message) => { if (!value) throw new Error(message); };
   let companion;
@@ -160,14 +160,59 @@
     await waitFor(() => Services.focus.activeWindow === window && document.hasFocus(),
       "Primary shortcut fixture window did not regain native focus");
     Services.prefs.setStringPref(`${prefix}.foreground`, "confirmed");
-    await focusControl(capture, "Shortcut capture"); capture.click();
-    key(capture, "KeyK", { altKey: true, shiftKey: true });
+    const nativeKey = async action => {
+      const location = `${foregroundAck.slice(0, foregroundAck.lastIndexOf("/"))}/${action}`;
+      const observed = [], listener = event => {
+        if (event.metaKey && ["KeyW", "KeyK"].includes(event.code)) {
+          const record = { code: event.code, meta: event.metaKey, alt: event.altKey, shift: event.shiftKey,
+            trusted: event.isTrusted, captureTarget: event.target === capture };
+          observed.push(record); report.nativeKeys.push({ action, ...record });
+        }
+      };
+      window.addEventListener("keydown", listener, true);
+      try {
+        await IOUtils.writeUTF8(`${location}.ready`, "ready");
+        await waitFor(() => IOUtils.exists(`${location}.sent`), `Native shortcut driver did not acknowledge ${action}`);
+        await waitFor(() => observed.some(event => event.trusted), `No trusted OS shortcut arrived for ${action}`);
+        assert(observed.length === 1, `Native shortcut ${action} arrived more than once`);
+      } finally { window.removeEventListener("keydown", listener, true); }
+    };
+    const pointerClick = control => {
+      const box = control.getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2;
+      assert(box.width >= 24 && box.height >= 24 && control.contains(document.elementFromPoint(x, y)),
+        "Shortcut recording button is clipped or obscured");
+      assert(typeof window.synthesizeMouseEvent === "function", "Gecko widget pointer routing is unavailable");
+      for (const type of ["mousemove", "mousedown", "mouseup"]) window.synthesizeMouseEvent(type, x, y, {
+        identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons: type === "mousedown" ? 1 : 0,
+        clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
+      }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+    };
+    await focusControl(button("Command palette"), "Unfocused recording origin");
+    assert(document.activeElement !== capture, "Recording regression requires an initially unfocused button");
+    pointerClick(capture);
+    await waitFor(() => document.activeElement === capture && capture.dataset.capturing === "true",
+      "Pointer recording did not explicitly acquire keyboard focus on macOS");
+    const tabCount = gBrowser.tabs.length;
+    await nativeKey("shortcut-reserved");
+    assert(gBrowser.tabs.length === tabCount && gBrowser.selectedTab === settingsTab && capture.dataset.capturing === "true" &&
+      /reserved/.test(panel.querySelector(".fluxion-settings-note")?.textContent || ""),
+    "Native Cmd-W escaped recording instead of reporting a protected shortcut");
+    await nativeKey("shortcut-save");
     const custom = "Accel+Alt+Shift+KeyK";
     assert(capture.dataset.capturing === "false" && window.FluxionShortcuts.get("sidebar") === custom &&
       companion.FluxionShortcuts.get("sidebar") === custom &&
       JSON.parse(Services.prefs.getStringPref("fluxion.shortcuts")).sidebar === custom,
     "Shortcut editing did not save and propagate the binding");
     report.checks.push("settings-custom-save-cross-window-and-persisted-pref");
+    const beforeActivation = document.getElementById("fluxion-flow").dataset.state;
+    await nativeKey("shortcut-activate");
+    await waitFor(() => document.getElementById("fluxion-flow").dataset.state !== beforeActivation,
+      "Saved native keyboard shortcut did not activate the actual sidebar command");
+    window.FluxionUI.setSidebarState(flowState);
+    report.nativeOSKeyboardTest = true;
+    report.eventSource = "mixed DOM fixture events and native macOS System Events shortcut recording/activation";
+    report.pointerSource = "Gecko widget-routed pointer click, not OS mouse movement";
+    report.checks.push("unfocused-pointer-recording-acquires-focus-and-native-reserved-save-activation");
     stage("capture-exit-and-dispatch");
     await focusControl(capture, "Escape capture"); capture.click(); key(capture, "Escape", { metaKey: false });
     assert(capture.dataset.capturing === "false", "Escape did not end shortcut capture");

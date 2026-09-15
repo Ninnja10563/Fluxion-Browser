@@ -3,12 +3,19 @@
   "use strict";
 
   const DEFAULTS = Object.freeze({ threshold: 56, axisSlop: 12, axisRatio: 1.35,
-    diagonalLimit: 24, idle: 220, tailDelta: 4, restartDelta: 24 });
+    diagonalLimit: 24, idle: 220, tailDelta: 4 });
 
   function create() {
     let last = -Infinity, x = 0, y = 0, axis = null, firedDirection = 0, reverse = 0, quietTail = 0;
+    let tailArmed = false, restartDistance = 0, restartPrevious = 0, restartRenewed = false;
+    function clearRestart() {
+      restartDistance = 0; restartPrevious = 0; restartRenewed = false;
+    }
+    function clearTail() {
+      quietTail = 0; tailArmed = false; clearRestart();
+    }
     function reset() {
-      last = -Infinity; x = 0; y = 0; axis = null; firedDirection = 0; reverse = 0; quietTail = 0;
+      last = -Infinity; x = 0; y = 0; axis = null; firedDirection = 0; reverse = 0; clearTail();
     }
     function advance(time) {
       if (!Number.isFinite(time)) return false;
@@ -30,25 +37,38 @@
       const scale = deltaMode === 1 ? 16 : 1;
       const dx = deltaX * scale, dy = deltaY * scale;
       if (firedDirection) {
-        if (Math.abs(dx) <= DEFAULTS.tailDelta) quietTail++;
-        // WheelEvent does not expose macOS gesture phases. A fresh strong
-        // impulse after a decayed tail can begin another gesture without an
-        // artificial idle wait; constant or decaying inertia cannot do so.
-        else if (quietTail >= 2 && Math.abs(dx) >= DEFAULTS.restartDelta && Math.abs(dx) >= Math.abs(dy) * DEFAULTS.axisRatio) {
-          x = 0; y = 0; firedDirection = 0; reverse = 0; quietTail = 0;
-        } else quietTail = 0;
-        if (firedDirection) {
-          if (Math.sign(dx) === -firedDirection && Math.abs(dx) >= Math.abs(dy) * DEFAULTS.axisRatio) reverse += Math.abs(dx);
-          else if (Math.sign(dx) === firedDirection) reverse = 0;
-          if (reverse >= DEFAULTS.threshold) {
-            // A purposeful reversal is new input, not the old direction's
-            // momentum. Small opposite-direction jitter never reaches this.
-            firedDirection *= -1;
-            reverse = 0; quietTail = 0;
+        const magnitude = Math.abs(dx), horizontal = magnitude >= Math.abs(dy) * DEFAULTS.axisRatio;
+        if (magnitude <= DEFAULTS.tailDelta) {
+          if (++quietTail >= 2) tailArmed = true;
+          clearRestart();
+        } else if (tailArmed && Math.sign(dx) === firedDirection && horizontal) {
+          // macOS phases are not exposed by WheelEvent. Keep the decayed tail
+          // rearmed across a gentle new ramp instead of requiring its first
+          // event to be large. Continuing decay does not qualify as renewed
+          // input; an abandoned ramp returning to the tail is discarded.
+          restartRenewed ||= magnitude >= DEFAULTS.threshold ||
+            (restartPrevious > 0 && magnitude >= restartPrevious);
+          restartDistance += magnitude;
+          restartPrevious = magnitude;
+          quietTail = 0;
+          if (restartRenewed && restartDistance >= DEFAULTS.threshold) {
+            reverse = 0; clearTail();
             return { consume: true, direction: firedDirection };
           }
-          return { consume: true, direction: 0 };
+        } else {
+          quietTail = 0;
+          clearRestart();
         }
+        if (Math.sign(dx) === -firedDirection && horizontal) reverse += magnitude;
+        else if (Math.sign(dx) === firedDirection) reverse = 0;
+        if (reverse >= DEFAULTS.threshold) {
+          // A purposeful reversal is new input, not the old direction's
+          // momentum. Small opposite-direction jitter never reaches this.
+          firedDirection *= -1;
+          reverse = 0; clearTail();
+          return { consume: true, direction: firedDirection };
+        }
+        return { consume: true, direction: 0 };
       }
       x += dx;
       y += dy;

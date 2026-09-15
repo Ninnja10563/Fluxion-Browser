@@ -196,3 +196,21 @@ test("explicit null resets only that workspace theme; ordinary edits preserve it
   assert.deepEqual(created.workspace.theme, { light: "#faf0e6", dark: "#20252a" });
   assert.equal(Object.hasOwn(createWorkspace(DEFAULTS, "Plain", { theme: null }).workspace, "theme"), false);
 });
+
+test("workspace appearance mode and palette accents persist atomically without changing legacy theme records", () => {
+  const theme = { light: "#EEDDCC", dark: "#112233", lightAccent: "#225588", darkAccent: "#AADDFF", mode: "dark" };
+  const created = createWorkspace(DEFAULTS, "Studio", { theme });
+  assert.deepEqual(created.workspace.theme, { light: "#eeddcc", dark: "#112233", lightAccent: "#225588", darkAccent: "#aaddff", mode: "dark" });
+  assert.deepEqual(parseWorkspaces(JSON.stringify(created.items)), created.items);
+  for (const mode of ["system", "light", "dark"]) {
+    const updated = updateWorkspace(created.items, created.workspace.id, { theme: { ...theme, mode } });
+    assert.equal(updated[1].theme.mode, mode);
+    assert.equal(updated[1].theme.darkAccent, "#aaddff");
+    assert.equal(moveWorkspace(updated, created.workspace.id, -1)[0].theme.mode, mode);
+  }
+  for (const invalid of [{ mode: "inherit" }, { mode: "url(secret)" }, { lightAccent: "#fff" },
+    { darkAccent: "red" }, { darkAccent: undefined }]) {
+    assert.equal(updateWorkspace(created.items, created.workspace.id, { name: "Must not rename", theme: { ...theme, ...invalid } }), null);
+  }
+  assert.deepEqual(sanitiseTheme({ light: "#ffffff", dark: "#000000" }), { light: "#ffffff", dark: "#000000" });
+});

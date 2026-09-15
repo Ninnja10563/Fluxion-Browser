@@ -48,6 +48,10 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- workspace-associated account containers with tab placement independent of
+  account identity ([audited design](workspace-containers.md); **not implemented,
+  outside 0.69**, pending native cookie/storage isolation, creation-routing,
+  private-window and session/crash recovery gates)
 - hover/focus workspace-heading options, native workspace menus, per-workspace
   light/dark color editing, centered bottom symbols and refined bidirectional
   swipe heuristics with a reduced-motion-aware 150ms transition (published in

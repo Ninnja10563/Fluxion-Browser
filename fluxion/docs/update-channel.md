@@ -1,5 +1,33 @@
 # Verified update channel
 
+## One-click installation: pending
+
+The released browser checks for updates and opens a download only on request.
+It does **not** yet replace the installed application or restart into an update.
+The current C launcher exits into Gecko; it cannot host a long-lived Cocoa
+updater by simply linking another framework.
+
+The selected direction for this additional milestone is a maintained native
+[Sparkle 2 integration](https://sparkle-project.org/documentation/), with a
+dedicated native integration layer, rather than an unsigned shell installer.
+Before enabling an Update and Restart control, the release pipeline needs a
+maintainer-controlled Ed25519 signing key, its public key embedded in the app,
+signed update archives and an appcast. Private keys must never be committed,
+printed in build logs, or included in release artifacts. Developer ID signing
+and notarization remain separate distribution work; the ad-hoc preview needs
+explicit native compatibility testing, not relaxed production security checks.
+
+Installation must honor canceled browser quit and finish normal SessionStore
+and profile flushing before replacement. Native old-to-new tests must cover
+corrupt payloads, wrong app identity, downgrade refusal, read-only destinations,
+interrupted replacement, recovery and relaunch. Profile data is never part of
+application replacement. The existing HTTPS feed and SHA-256 records are useful
+integrity evidence, but do not substitute for a release-signing trust anchor.
+Users will need one manual installation of the first updater-enabled version.
+No signing key or automatic installer has been provisioned by this design note.
+
+## Existing manual discovery
+
 The published 0.64 preview uses this feed for manual update discovery. Published 0.63
 and earlier keep their existing explicit GitHub API request; their successful
 native release evidence and shipped binaries have not been changed.

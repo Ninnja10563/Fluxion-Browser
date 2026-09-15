@@ -65,9 +65,13 @@
   on(document, "dragstart", () => { dragging = true; block(); }, true);
   for (const type of ["dragend", "drop"]) on(document, type, () => { dragging = false; block(); }, true);
   on(document, "popupshowing", event => {
-    if (!["menupopup", "panel"].includes(event.target.localName)) return;
+    if (event.defaultPrevented || !["menupopup", "panel"].includes(event.target.localName)) return;
     popups.add(event.target);
     block();
+    // A canceled native popup has no popuphidden event to release its owner.
+    Promise.resolve().then(() => {
+      if (!disposed && event.defaultPrevented && popups.delete(event.target)) block();
+    });
   }, true);
   on(document, "popuphidden", event => { if (popups.delete(event.target)) block(); }, true);
   on(window, "blur", () => {

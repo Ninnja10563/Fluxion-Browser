@@ -63,6 +63,7 @@ function fixture() {
     return event;
   }
   return { context, flow, surface, modeButton, workspaceList, selectedRow, page, document, writes, timers, frames, emit,
+    emitPopup(type, event) { for (const listener of listeners.get(document)?.get(type) || []) listener(event); },
     get renders() { return renders; },
     flushTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
     flushFrames() { while (frames.length) frames.shift()(); },
@@ -119,6 +120,17 @@ test("reentering the edge cancels a queued hide rather than flickering the revea
   assert.equal(f.timers.size, 1);
   f.emit("pointerenter"); assert.equal(f.timers.size, 0);
   f.flushTimers(); assert.equal(f.flow.dataset.revealed, "true");
+});
+
+test("canceled appearance-panel opening releases the hover sidebar without waiting for popuphidden", async () => {
+  const f = fixture(); f.context.setSidebarState("focus"); f.emit("pointerenter");
+  const event = { target: { id: "fluxion-workspace-theme" }, defaultPrevented: false };
+  f.emitPopup("popupshowing", event);
+  f.emit("pointerleave"); f.flushTimers();
+  assert.equal(f.flow.dataset.revealed, "true");
+  event.defaultPrevented = true;
+  await Promise.resolve(); f.flushTimers();
+  assert.equal(f.flow.dataset.revealed, "false"); assert.equal(f.surface.inert, true);
 });
 
 test("keyboard entry reveals the active row and Escape safely returns focus to the edge", () => {

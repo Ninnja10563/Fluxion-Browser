@@ -79,9 +79,14 @@
       accent: readable(accent, ink, surfaces),
     };
   }
-  function variables(settings) {
+  function variables(settings, mode = null) {
     const normalized = normalise(settings);
     if (!normalized.enabled) return {};
+    if (mode !== null) {
+      if (!["light", "dark"].includes(mode)) throw new TypeError("Choose a light or dark color projection.");
+      const chosen = palette(normalized[mode]);
+      return Object.fromEntries(TOKENS.map(token => [`--fluxion-${token}`, chosen[token]]));
+    }
     const light = palette(normalized.light), dark = palette(normalized.dark);
     return Object.fromEntries(TOKENS.map(token => [
       `--fluxion-${token}`, `light-dark(${light[token]}, ${dark[token]})`,

@@ -52,9 +52,10 @@
     const first = ui.workspaces()[0];
     const second = ui.createWorkspace("Gesture second", { activate: false });
     const third = ui.createWorkspace("Gesture third", { activate: false });
-    assert(second && third, "Gesture fixture workspaces could not be created");
+    const fourth = ui.createWorkspace("Gesture fourth", { activate: false });
+    assert(second && third && fourth, "Gesture fixture workspaces could not be created");
     const fixtures = [];
-    for (const workspace of [first, second, third]) {
+    for (const workspace of [first, second, third, fourth]) {
       // Initial about:blank entries are replaceable by the next navigation.
       // A titled, committed document gives this fixture real Back history.
       const initialTitle = `Fluxion swipe ${workspace.id} initial`;
@@ -150,6 +151,37 @@
     await wait(() => ui.currentWorkspace() === first.id, "A fresh reverse gesture after the tail was ignored");
     assert(JSON.stringify(history()) === originalHistory, "Repeated sidebar gestures changed native page history");
     report.checks.push("rapid-bidirectional-reversal-small-bounce-suppression-and-fresh-impulses-after-decayed-tails");
+
+    stage("four-workspaces-gentle-repeated-gestures");
+    const route = [];
+    const expectWorkspace = async (workspace, message) => {
+      await wait(() => ui.currentWorkspace() === workspace.id, message);
+      route.push(workspace.id);
+    };
+    const gentleGesture = direction => {
+      for (const dx of [24, 12, 4, 2]) wheel(point, direction * dx, 0, true);
+      for (const dx of [8, 12, 16, 20]) wheel(point, direction * dx);
+    };
+    await delay(300);
+    wheel(point, 60);
+    await expectWorkspace(second, "Four-workspace traversal did not reach the second workspace");
+    gentleGesture(1);
+    await expectWorkspace(third, "A gentle repeated swipe was stuck at the second workspace");
+    gentleGesture(1);
+    await expectWorkspace(fourth, "A gentle repeated swipe did not reach the fourth workspace");
+    gentleGesture(1);
+    assert(ui.currentWorkspace() === fourth.id, "Repeated forward swipe wrapped beyond the fourth workspace");
+    wheel(point, -60);
+    await expectWorkspace(third, "Reverse gesture did not leave the fourth workspace");
+    gentleGesture(-1);
+    await expectWorkspace(second, "Repeated gentle reverse did not reach the second workspace");
+    gentleGesture(-1);
+    await expectWorkspace(first, "Repeated gentle reverse did not return to the first workspace");
+    gentleGesture(-1);
+    assert(ui.currentWorkspace() === first.id, "Repeated reverse swipe wrapped before the first workspace");
+    assert(JSON.stringify(history()) === originalHistory, "Four-workspace gestures changed a page's URI or native session history");
+    report.fourWorkspaceRoute = route;
+    report.checks.push("four-workspace-forward-reverse-gentle-ramp-traversal-and-both-end-boundaries");
 
     stage("vertical-native-scroll");
     for (let index = 0; index < 55; index++) {

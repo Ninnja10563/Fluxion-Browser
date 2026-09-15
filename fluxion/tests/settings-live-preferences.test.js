@@ -103,3 +103,37 @@ test("unload removes live observers and queued notifications cannot mutate destr
   observers[0].observe(null, "nsPref:changed", "fluxion.sidebar.state");
   assert.equal(h.field("Flow sidebar").value, before);
 });
+
+test("bookmarks visibility is native, preserves choices on opening, and synchronizes windows without writeback", () => {
+  const name = "browser.toolbars.bookmarks.visibility";
+  for (const initial of ["always", "newtab", "never"]) {
+    const prefs = preferences([[name, initial]]), a = fixture(prefs), b = fixture(prefs);
+    const bookmarkWrites = () => prefs.writes.filter(item => item.name === name);
+    assert.equal(a.field("Bookmarks bar").value, initial);
+    assert.equal(bookmarkWrites().length, 0, "opening Settings must not replace an explicit toolbar choice");
+    for (const value of ["always", "newtab", "never"]) {
+      const control = a.field("Bookmarks bar");
+      control.value = value; control.dispatchEvent({ type: "change" });
+      assert.equal(prefs.values.get(name), value);
+      assert.equal(b.field("Bookmarks bar").value, value);
+    }
+    assert.equal(bookmarkWrites().length, 3, "one native preference write per committed choice");
+    a.field("Bookmarks bar").value = "forged";
+    a.field("Bookmarks bar").dispatchEvent({ type: "change" });
+    assert.equal(bookmarkWrites().length, 3);
+    assert.equal(a.field("Bookmarks bar").value, "never");
+    a.unload(); b.unload();
+    assert.equal(prefs.observers.get(name).size, 0);
+  }
+});
+
+test("bookmarks visibility respects policy locks even if a synthetic change is sent", () => {
+  const name = "browser.toolbars.bookmarks.visibility";
+  const prefs = preferences([[name, "never"]]);
+  prefs.prefIsLocked = key => key === name;
+  const h = fixture(prefs), control = h.field("Bookmarks bar");
+  assert.equal(control.disabled, true);
+  control.value = "always"; control.dispatchEvent({ type: "change" });
+  assert.equal(control.value, "never");
+  assert.equal(prefs.writes.filter(item => item.name === name).length, 0);
+});

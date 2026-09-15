@@ -115,6 +115,42 @@ test("actual controller accepts deliberate rapid reversals and fresh same-direct
   assert.deepEqual(env.switched, ["two", "one", "two", "three", "two", "one"]);
 });
 
+test("four-workspace traversal supports repeated gentle gestures, reversals and both end boundaries", () => {
+  for (const reduced of [false, true]) {
+    const env = runtime();
+    env.reducedMotion.matches = reduced;
+    env.setWorkspaces(["one", "two", "three", "four"].map(id => ({ id })));
+    env.setCurrent("one");
+    const gesture = direction => {
+      for (const delta of [24, 12, 4, 2]) env.wheel({ deltaX: direction * delta });
+      for (const delta of [8, 12, 16, 20]) env.wheel({ deltaX: direction * delta });
+    };
+    env.wheel();
+    gesture(1); gesture(1);
+    assert.deepEqual(env.switched, ["two", "three", "four"]);
+    gesture(1);
+    assert.deepEqual(env.switched, ["two", "three", "four"], "the last workspace does not wrap");
+    env.wheel({ deltaX: -60 });
+    gesture(-1); gesture(-1);
+    assert.deepEqual(env.switched, ["two", "three", "four", "three", "two", "one"]);
+    gesture(-1);
+    assert.deepEqual(env.switched, ["two", "three", "four", "three", "two", "one"], "the first workspace does not wrap");
+    env.wheel();
+    assert.equal(env.switched.at(-1), "two", "a strong reverse leaves the end boundary immediately");
+  }
+});
+
+test("a canceled native menu does not permanently block later workspace gestures", async () => {
+  const env = runtime();
+  const event = { target: { localName: "menupopup" }, defaultPrevented: false };
+  env.document.emit("popupshowing", event);
+  env.wheel(); assert.deepEqual(env.switched, []);
+  event.defaultPrevented = true;
+  await Promise.resolve();
+  env.wheel({}, 1000);
+  assert.deepEqual(env.switched, ["three"]);
+});
+
 test("workspace animation affects only the tab list, waits for the render frame and replaces superseded motion", () => {
   const env = runtime(), api = env.window.FluxionWorkspaceGestures;
   api.animateSwitch(1);

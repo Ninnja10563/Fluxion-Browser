@@ -41,6 +41,7 @@ function startupFixture(selectedURL, saved = [], options = {}) {
       setBoolPref: (key, value) => preferences.set(key, value),
       getStringPref: (key, fallback) => effectivePref(key) ?? fallback,
       getBoolPref: (key, fallback) => effectivePref(key) ?? fallback,
+      getIntPref: (key, fallback) => effectivePref(key) ?? fallback,
       prefHasUserValue: key => preferences.has(key),
       prefIsLocked: key => locked.has(key),
       lockPref: key => locked.add(key),
@@ -48,6 +49,7 @@ function startupFixture(selectedURL, saved = [], options = {}) {
       getDefaultBranch: () => ({
         setStringPref: (key, value) => defaults.set(key, value),
         setBoolPref: (key, value) => defaults.set(key, value),
+        setIntPref: (key, value) => defaults.set(key, value),
         getBoolPref: (key, fallback) => defaults.get(key) ?? fallback,
       }),
       clearUserPref: key => preferences.delete(key),
@@ -101,6 +103,29 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   return { preferences, defaults, prefs: Services.prefs, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser,
     profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
     get managerCalls() { return managerCalls; }, boundaryEvents };
+}
+
+test("fresh profiles restore normal sessions and show bookmarks using defaults, not user overrides", () => {
+  const h = startupFixture("about:blank");
+  assert.deepEqual(h.errors, []);
+  assert.equal(h.prefs.getIntPref("browser.startup.page"), 3);
+  assert.equal(h.prefs.getStringPref("browser.toolbars.bookmarks.visibility"), "always");
+  for (const name of ["browser.startup.page", "browser.toolbars.bookmarks.visibility"]) {
+    assert.equal(h.preferences.has(name), false);
+    assert.equal(h.prefs.prefIsLocked(name), false);
+  }
+});
+
+for (const startup of [0, 1, 3]) for (const visibility of ["always", "newtab", "never"]) {
+  test(`startup preserves explicit session=${startup} and bookmarks=${visibility}`, () => {
+    const h = startupFixture("https://example.com/restored", [
+      ["browser.startup.page", startup], ["browser.toolbars.bookmarks.visibility", visibility],
+    ]);
+    assert.deepEqual(h.errors, []);
+    assert.equal(h.prefs.getIntPref("browser.startup.page"), startup);
+    assert.equal(h.prefs.getStringPref("browser.toolbars.bookmarks.visibility"), visibility);
+    assert.deepEqual(h.navigations, []);
+  });
 }
 
 test("full startup disables an inherited Firefox VPN enrollment without altering the selected page", () => {

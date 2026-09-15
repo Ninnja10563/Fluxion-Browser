@@ -311,7 +311,7 @@ test("workspace menu retains working create, rename, appearance, reorder and del
     assert.ok(item); assert.notEqual(item.getAttribute("disabled"), "true");
     f.activate(item); assert.deepEqual(f.actions, [expected]);
   }
-  for (const [menuLabel, entryLabel, field, value] of [["Change Accent", "Sage", "accent", "sage"], ["Change Icon", "Leaf", "icon", "arc"]]) {
+  for (const [menuLabel, entryLabel, field, value] of [["Change Icon", "Leaf", "icon", "arc"]]) {
     const f = fixture(); f.workspaceMoreButton.dispatch("click");
     const menu = f.workspaceMenu.children.find(item => item.getAttribute("label") === menuLabel);
     const item = menu.children[0].children.find(item => item.getAttribute("label") === entryLabel);

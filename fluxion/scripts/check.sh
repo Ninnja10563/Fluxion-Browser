@@ -37,7 +37,8 @@ bash -n \
   scripts/verify-macos-library.sh \
   scripts/verify-macos-workspaces.sh \
   scripts/verify-macos-default-bookmarks.sh \
-  scripts/verify-macos-session.sh
+  scripts/verify-macos-session.sh \
+  scripts/verify-macos-last-window.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
 node --check scripts/benchmark-tab-search.cjs
@@ -87,6 +88,7 @@ node --check chrome/core/workspace-editor.js
 node --check chrome/core/workspace-tabs.js
 node --check chrome/fluxion-chrome.js
 node --check chrome/fluxion-chrome-layout.js
+node --check chrome/fluxion-focus-mode.js
 node --check chrome/fluxion-workspace-gestures.js
 node --check chrome/fluxion-sidebar-width.js
 node --check chrome/fluxion-sidebar-width-verification.js
@@ -95,6 +97,7 @@ node --check chrome/fluxion-structure-verification.js
 node --check chrome/fluxion-frame-verification.js
 node --check chrome/fluxion-product-chrome-verification.js
 node --check chrome/fluxion-workspace-gesture-verification.js
+node --check chrome/fluxion-last-window-verification.js
 node --check chrome/fluxion-colors-verification.js
 node --check chrome/fluxion-flow-performance.js
 node --check chrome/fluxion-browsing-verification.js

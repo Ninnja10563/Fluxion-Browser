@@ -100,3 +100,18 @@ test("bounds the queue and discards oldest superseded work", () => {
   task.scheduler.destroy();
   assert.equal(task.timerCount(), 0);
 });
+
+test("ten thousand activity events reuse one wake and still require a full quiet period", async () => {
+  let now = 0, created = 0, cancelled = 0, callback, runs = 0;
+  const scheduler = new IndexScheduler({ now: () => now, quietMs: 100,
+    setTimer(fn) { callback = fn; return ++created; }, clearTimer() { cancelled++; },
+    run: async () => { runs++; } });
+  scheduler.enqueue("page");
+  for (let i = 0; i < 10000; i++) { now += 1; scheduler.notifyActivity(); }
+  assert.equal(created, 1); assert.equal(cancelled, 0);
+  await callback(); await Promise.resolve();
+  assert.equal(runs, 0); assert.equal(created, 2);
+  now += 99; await callback(); await Promise.resolve(); assert.equal(runs, 0);
+  now += 1; await callback(); await Promise.resolve(); assert.equal(runs, 1);
+  scheduler.destroy(); scheduler.notifyActivity(); assert.equal(scheduler.timer, null);
+});

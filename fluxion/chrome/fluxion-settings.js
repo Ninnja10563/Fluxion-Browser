@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.68.0";
-  const PRODUCT_RELEASE = "0.68.0-preview.1";
+  const PRODUCT_VERSION = "0.69.0";
+  const PRODUCT_RELEASE = "0.69.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -268,6 +268,7 @@
   const notes = new Map();
   let renderPermissions = () => {};
   let renderWorkspaces = () => {};
+  let cancelShortcutCapture = () => {};
 
   function sectionFromLocation(spec) {
     const queryRoute = spec.match(/[?&]fluxion=([^&#]+)/)?.[1];
@@ -283,6 +284,7 @@
 
   function showSection(id, { remember = true } = {}) {
     if (!sections.has(id)) id = "general";
+    if (id !== "keyboard") cancelShortcutCapture();
     activeSection = id;
     const selectedBrowser = gBrowser.selectedBrowser;
     const spec = selectedBrowser?.currentURI?.spec;
@@ -432,6 +434,23 @@
   const linksChoice = row(general, "Open links in tabs", "Keep links from other applications in the current Fluxion window.", toggle("Enabled", pref.int("browser.link.open_newwindow", 3) !== 2, checked => {
     pref.setInt("browser.link.open_newwindow", checked ? 3 : 2);
   }));
+  const bookmarksVisibilityPref = "browser.toolbars.bookmarks.visibility";
+  const bookmarksValues = ["always", "newtab", "never"];
+  const bookmarksChoice = row(general, "Bookmarks bar", "Show your saved bookmarks below the address bar. Folders use the browser’s native menus.", select([
+    ["always", "Always show"], ["newtab", "Only on new tabs"], ["never", "Never show"],
+  ], pref.string(bookmarksVisibilityPref, "always"), value => {
+    try {
+      if (Services.prefs.prefIsLocked?.(bookmarksVisibilityPref)) {
+        setNote("The bookmarks bar is controlled by policy and was not changed.", "general");
+      } else if (bookmarksValues.includes(value)) {
+        pref.setString(bookmarksVisibilityPref, value);
+      }
+    } catch (error) { setNote(`Bookmarks bar could not be saved: ${error.message}`, "general"); }
+    bookmarksChoice.value = pref.string(bookmarksVisibilityPref, "always");
+    lastDisplayed.set(bookmarksChoice, bookmarksChoice.value);
+    syncLivePreferences();
+  }));
+  bookmarksChoice.id = "fluxion-bookmarks-bar-visibility";
   const searchEngine = create("select");
   searchEngine.appendChild(create("option", "", "Loading search engines…"));
   searchEngine.disabled = true;
@@ -665,7 +684,7 @@
   }));
 
   const livePreferenceNames = ["browser.startup.page", "browser.startup.homepage", "fluxion.newtab.url",
-    "browser.link.open_newwindow", "fluxion.sidebar.state", "fluxion.sidebar.width", "fluxion.tabs.density", "fluxion.animations.enabled"];
+    "browser.link.open_newwindow", bookmarksVisibilityPref, "fluxion.sidebar.state", "fluxion.sidebar.width", "fluxion.tabs.density", "fluxion.animations.enabled"];
   const lastDisplayed = new WeakMap();
   let livePreferencesDisposed = false;
   function syncChoice(control, value) {
@@ -680,6 +699,8 @@
   function syncLivePreferences() {
     if (livePreferencesDisposed) return;
     syncChoice(startupChoice, FluxionSettings.startupPage(pref.int("browser.startup.page", 1)));
+    syncChoice(bookmarksChoice, pref.string(bookmarksVisibilityPref, "always"));
+    bookmarksChoice.disabled = !!Services.prefs.prefIsLocked?.(bookmarksVisibilityPref);
     syncChoice(sidebarChoice, FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")));
     syncSidebarWidth();
     syncChoice(densityChoice, FluxionSettings.normaliseDensity(pref.string("fluxion.tabs.density", "standard")));
@@ -692,7 +713,7 @@
   }
   const livePreferenceObserver = { observe: syncLivePreferences };
   for (const name of livePreferenceNames) Services.prefs.addObserver(name, livePreferenceObserver);
-  for (const choice of [startupChoice, sidebarChoice, densityChoice]) choice.addEventListener("blur", syncLivePreferences);
+  for (const choice of [startupChoice, bookmarksChoice, sidebarChoice, densityChoice]) choice.addEventListener("blur", syncLivePreferences);
   syncLivePreferences();
 
   const tabs = section("tabs", "Tabs", "Control tab prompts and the behaviour of large sessions.");
@@ -1349,6 +1370,8 @@
 
   const keyboard = section("keyboard", "Keyboard", "Change Fluxion commands without overriding protected browser or macOS shortcuts.");
   const shortcutButtons = new Map();
+  const shortcutCaptureStops = [];
+  cancelShortcutCapture = () => shortcutCaptureStops.forEach(stop => stop());
   function refreshShortcutButtons() {
     for (const [id, button] of shortcutButtons) {
       if (button.dataset.capturing !== "true") button.textContent = window.FluxionShortcuts.format(id);
@@ -1370,8 +1393,12 @@
       key.dataset.capturing = "false";
       key.textContent = window.FluxionShortcuts.format(action.id) || beforeCapture;
     };
+    shortcutCaptureStops.push(stopCapture);
     key.addEventListener("click", () => {
       if (!window.FluxionShortcuts.beginCapture(key)) return;
+      // macOS pointer clicks need not focus buttons. Recording must own the
+      // keyboard target, also blurring and releasing any prior capture.
+      key.focus({ preventScroll: true });
       beforeCapture = key.textContent;
       key.dataset.capturing = "true";
       key.textContent = "Press shortcut…";
@@ -1551,6 +1578,7 @@
 
   function syncVisibility() {
     const visible = isSettingsTab();
+    if (!visible) cancelShortcutCapture();
     root.hidden = !visible;
     if (visible) contentDeck.hidden = true;
     else if (!document.documentElement.hasAttribute("data-fluxion-library-visible")) contentDeck.hidden = false;

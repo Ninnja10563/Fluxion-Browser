@@ -57,6 +57,8 @@ on run arguments
             keystroke "#dde6dc"
           else if captureName is "type-product-workspace-cancel" then
             keystroke "#405060"
+          else if captureName is "type-product-workspace-accent" then
+            keystroke "#7baabb"
           else
             error "Unsupported workspace color action"
           end if
@@ -68,7 +70,7 @@ on run arguments
             key code 36
           else if captureName is "key-product-workspace-down" or captureName starts with "key-product-workspace-select-" then
             key code 125
-          else if captureName is "key-product-workspace-escape-pointer" or captureName is "key-product-workspace-escape-keyboard" then
+          else if captureName is "key-product-workspace-escape-pointer" or captureName is "key-product-workspace-escape-keyboard" or captureName is "key-product-workspace-escape-theme" then
             key code 53
           else
             error "Unsupported workspace key action"
@@ -102,7 +104,8 @@ for ((attempt=0; attempt<720; attempt++)); do
     key-product-workspace-select-open key-product-workspace-select-0 key-product-workspace-select-1 key-product-workspace-select-2 \
     key-product-workspace-select-3 key-product-workspace-select-4 key-product-workspace-select-5 key-product-workspace-select-6 \
     key-product-workspace-select-7 key-product-workspace-select-8 key-product-workspace-select-9 key-product-workspace-select-return \
-    type-product-workspace-dark type-product-workspace-light capture-product-workspace-theme type-product-workspace-cancel; do
+    capture-product-workspace-appearance type-product-workspace-dark type-product-workspace-accent type-product-workspace-light \
+    capture-product-workspace-theme type-product-workspace-cancel key-product-workspace-escape-theme; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       owned || exit 1

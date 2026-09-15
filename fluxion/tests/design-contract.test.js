@@ -88,9 +88,10 @@ test("site permissions use Gecko records and expose exact reset scopes", () => {
 test("packaged recovery gate crosses real normal and private app launches", () => {
   assert.doesNotMatch(
     runtimeConfig,
-    /setIntPref\("browser\.startup\.page"/,
+    /Services\.prefs\.setIntPref\("browser\.startup\.page"/,
     "startup configuration must not overwrite the user's session-restoration choice",
   );
+  assert.match(runtimeConfig, /getDefaultBranch\(""\)\.setIntPref\("browser\.startup\.page", 3\)/);
   assert.match(sessionRecovery, /requestTabStateFlush/);
   assert.match(sessionRecovery, /Promise\.race/);
   assert.match(sessionRecovery, /SessionStore\.getWindowState/);
@@ -259,7 +260,8 @@ test("compact Flow uses the researched 44px rail", () => {
 test("Focus Flow is an inert, keyboard-revealable overlay that preserves page geometry", () => {
   assert.match(chrome, /data-state="focus"[^}]*width:\s*3px/);
   assert.match(chrome, /\.fluxion-surface/);
-  assert.match(chrome, /translateX\(calc\(-100% \+ 3px\)\)/);
+  assert.match(chrome, /translateX\(calc\(-100% - 6px\)\)/);
+  assert.match(chrome, /inset-block: 6px; inset-inline-start: 6px/);
   assert.match(chrome, /surface\.inert = !surfaceVisible/);
   assert.match(chrome, /\["Enter", " ", "ArrowRight"\]/);
   assert.match(chrome, /event\.key === "Escape"/);
