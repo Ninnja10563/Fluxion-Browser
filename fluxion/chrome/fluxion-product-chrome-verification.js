@@ -118,8 +118,18 @@
       url: fixtureURL, title: fixtureTitle });
     // Model a visited bookmark, using the native history API rather than
     // inserting a result into the URL-bar provider or editing ranking scores.
-    await PlacesUtils.history.insert({ url: fixtureURL, title: fixtureTitle,
-      visits: [{ date: new Date(), transition: PlacesUtils.history.TRANSITION_TYPED }] });
+    const transition = PlacesUtils.history.TRANSITIONS.TYPED;
+    const inserted = await PlacesUtils.history.insert({ url: fixtureURL, title: fixtureTitle,
+      visits: [{ date: new Date(), transition }] });
+    report.historyInsert = { guid: inserted.guid, visits: inserted.visits,
+      historyEnabled: Services.prefs.getBoolPref("places.history.enabled", true) };
+    // Native history completion does not guarantee read-only connections have
+    // caught up. PlacesTestUtils also waits for history.fetch after insertion.
+    await wait(async () => {
+      const observed = await PlacesUtils.history.fetch(fixtureURL, { includeVisits: true });
+      report.historyRead = observed ? { guid: observed.guid, visits: observed.visits } : null;
+      return observed?.visits?.length === 1 && observed.visits[0].transition === transition;
+    }, "Native read-only history did not observe the fixture's exact typed visit");
     // Places defers bookmark frecency updates; the real address-bar provider
     // excludes zero-frecency pages. Await Gecko's native fixture-readiness API
     // instead of depending on an idle task firing during this short check.
@@ -129,19 +139,23 @@
       .getService(Ci.nsIObserver).wrappedJSObject;
     await frecency.recalculateAnyOutdatedFrecencies();
     const db = await PlacesUtils.promiseDBConnection();
-    const stored = await db.executeCached(`SELECT h.url, h.frecency, h.alt_frecency,
-      h.visit_count, b.title AS bookmark_title FROM moz_places h
-      JOIN moz_bookmarks b ON b.fk = h.id WHERE h.url = :url AND b.guid = :guid`,
-    { url: fixtureURL, guid: bookmark.guid });
-    assert(stored.length === 1, "The fixture's visited bookmark is not present in the native Places database");
-    report.placesFixture = Object.fromEntries(["url", "frecency", "alt_frecency", "visit_count", "bookmark_title"]
-      .map(name => [name, stored[0].getResultByName(name)]));
-    report.placesFixture.alternativeEnabled = PlacesUtils.history.isAlternativeFrecencyEnabled;
-    report.placesFixture.bookmarkSuggestionsEnabled = Services.prefs.getBoolPref("browser.urlbar.suggest.bookmark", false);
-    const rank = report.placesFixture.alternativeEnabled ? report.placesFixture.alt_frecency : report.placesFixture.frecency;
-    assert(report.placesFixture.bookmarkSuggestionsEnabled && report.placesFixture.visit_count === 1 &&
-      report.placesFixture.bookmark_title === fixtureTitle && rank > 0,
-    `Native visited-bookmark fixture is not ready for retrieval: ${JSON.stringify(report.placesFixture)}`);
+    await wait(async () => {
+      const stored = await db.executeCached(`SELECT h.url, h.frecency, h.alt_frecency,
+        h.visit_count, b.title AS bookmark_title,
+        (SELECT count(*) FROM moz_historyvisits WHERE place_id = h.id) AS stored_visits,
+        (SELECT visit_type FROM moz_historyvisits WHERE place_id = h.id ORDER BY id DESC LIMIT 1) AS visit_type
+        FROM moz_places h JOIN moz_bookmarks b ON b.fk = h.id WHERE h.url = :url AND b.guid = :guid`,
+      { url: fixtureURL, guid: bookmark.guid });
+      if (stored.length !== 1) { report.placesFixture = { matchingRows: stored.length }; return false; }
+      report.placesFixture = Object.fromEntries(["url", "frecency", "alt_frecency", "visit_count", "bookmark_title", "stored_visits", "visit_type"]
+        .map(name => [name, stored[0].getResultByName(name)]));
+      report.placesFixture.alternativeEnabled = PlacesUtils.history.isAlternativeFrecencyEnabled;
+      report.placesFixture.bookmarkSuggestionsEnabled = Services.prefs.getBoolPref("browser.urlbar.suggest.bookmark", false);
+      const rank = report.placesFixture.alternativeEnabled ? report.placesFixture.alt_frecency : report.placesFixture.frecency;
+      return report.placesFixture.bookmarkSuggestionsEnabled && report.placesFixture.visit_count === 1 &&
+        report.placesFixture.stored_visits === 1 && report.placesFixture.visit_type === transition &&
+        report.placesFixture.bookmark_title === fixtureTitle && rank > 0;
+    }, "Native visited-bookmark fixture did not become visible to the read-only Places connection");
     window.FluxionUI.setSidebarState("expanded");
     window.FluxionSidebarWidth?.setWidth(232);
     await window.FluxionTheme.set("dark");
