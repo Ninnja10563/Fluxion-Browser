@@ -8,6 +8,15 @@ This is an early development preview, not a stable release. Fluxion retains
 Gecko's browser services and security boundaries while its independent product
 interface is built out incrementally.
 
+Version 0.66 is a published sidebar and appearance preview. Collapse reveals
+on edge hover; Expand stays open. New tab follows the last tab, with recognizable
+workspace symbols in a bottom dock. Appearance adds custom light/dark colors,
+native pickers, readable text and Reset. Native address-bar styling and dropdown
+disclosure are corrected. All 871 tests and every mandatory macOS gate passed,
+including twelve-workspace overflow, repeated hover, cross-window colors and
+clean restart with unchanged webpage pixels. See
+[release provenance](provenance/v0.66.0-preview.1.md).
+
 Version 0.65 is a published tab-closure and visual-restraint preview. Command-W
 removes stale rows; pointer-close safety survives native content focus changes.
 One workspace band, clear compact controls, a thin shared content frame and

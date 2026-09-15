@@ -1,6 +1,9 @@
 # 0.66 — a predictable sidebar and personal colors
 
-Candidate milestone; native macOS validation and publication are pending.
+Published as [0.66.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.66.0-preview.1).
+All 871 tests and every mandatory macOS gate passed. The exact staged DMG,
+public download and update feed were verified; see
+[release provenance](../release/provenance/v0.66.0-preview.1.md).
 
 ## Sidebar interaction
 
@@ -29,6 +32,12 @@ native color pickers, validated hexadecimal fields and Reset colors. Changes
 are stored locally in one atomic preference and reflected in every window.
 Derived text and surface colors are checked for readable contrast. The colors
 apply to privileged browser chrome, not webpages or site-security states.
+
+The native gate exposed an obsolete address-background selector: Gecko 155
+uses a class instead of the older ID. Styling now reaches the real address
+surface. Visual review also caught the Settings background shorthand erasing
+native select arrows; explicit Gecko disclosure artwork restores their
+affordance without replacing native popup behavior.
 
 The requested unslop-ui skill informed the flat bottom dock, compact controls,
 consistent inline symbols and restrained color hierarchy. No gradients,

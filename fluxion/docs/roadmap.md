@@ -43,6 +43,11 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- predictable collapse/expand with edge-hover reveal, keyboard/menu focus
+  ownership, inline New tab and a bottom symbol workspace dock; optional
+  cross-window light/dark chrome palettes with readable text and Reset
+  (published in 0.66; native short-window/twelve-workspace, repeated hover,
+  palette restart, content-boundary and Settings accessibility gates passed)
 - native cross-window tab transfer with coherent workspace, pin, group, and
   split-page handling; normal/private separation and explicit Peek promotion
   before transfer (implemented; packaged live-document, menu/drag routing,

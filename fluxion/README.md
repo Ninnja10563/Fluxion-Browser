@@ -8,15 +8,16 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-Fluxion 0.65 is published: Command-W no longer leaves ghost tabs, pointer-close
-spacing survives native content focus transfer, and Flow has a quieter single
-workspace band with clearer controls. A thin content frame, simpler Settings
-navigation and label-sized actions follow an unslop-ui design audit. All 846
-tests and every mandatory native macOS gate passed, including real keyboard
-closure, light/dark webpage captures, split view and responsive Settings.
-Download the [latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.65.0-preview.1)
+Fluxion 0.66 is published: collapse reveals on edge hover, Expand stays open,
+New tab follows the final tab, and recognizable workspace symbols sit in a
+bottom dock. Custom light/dark colors live in Appearance. Corrected Gecko
+address-bar styling and native dropdown arrows resolve mismatched controls.
+The unslop-ui audit kept the layout flat and restrained. All 871 tests and
+every mandatory native macOS gate passed, including hover cycles, short-window
+overflow, cross-window colors, clean restart and unchanged webpage pixels.
+Download the [latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.66.0-preview.1)
 for Apple Silicon (including M3) and Intel. See
-[release provenance](release/provenance/v0.65.0-preview.1.md).
+[release provenance](release/provenance/v0.66.0-preview.1.md).
 
 Fluxion 0.64 is published: manual update discovery now uses a small, expiring
 public feed instead of GitHub's anonymous repository API. The feed publisher
@@ -129,17 +130,17 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.65](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.65.0-preview.1)
+[Fluxion 0.66](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.66.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 Quit the old app, then replace Fluxion.app using the DMG. Your separate Fluxion
-profile is retained. The adjustable sidebar retains Compact/Focus behavior,
+profile is retained. The adjustable sidebar includes Compact and edge-hover collapse,
 workspace keyboard navigation and the native browser's services.
 
-All 846 regression tests and every mandatory native release gate passed,
+All 871 regression tests and every mandatory native release gate passed,
 including Command-W, real webpage/split rendering, 1,000-tab structural changes,
 native menus, clean/crash recovery, private-data exclusion, local Memory,
 responsive Settings and actual anonymous update discovery. See
-[verified release provenance](release/provenance/v0.65.0-preview.1.md).
+[verified release provenance](release/provenance/v0.66.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 
@@ -183,8 +184,8 @@ The current preview is runnable and includes:
   command-palette, context-menu, and direct center-drop creation, Shift-drag
   stacking, precise edge-drop reordering, order swapping, separation, and
   orientation-aware native session restoration;
-- three-state sidebar with expanded and compact layouts plus a 3px Focus rail
-  that reveals the full Flow as a non-reflowing pointer or keyboard overlay;
+- predictable collapse/expand toggle, explicit Compact layout, and a 3px edge
+  that reveals Flow without page reflow; inline New tab and a bottom symbol dock;
 - persistent workspace creation, renaming, reordering, symbols, restrained
   accents, deletion with safe cross-window tab migration, and drag-to-workspace
   movement, available from both Flow and a dedicated live Settings section;
@@ -234,6 +235,8 @@ The current preview is runnable and includes:
 - live System, Light, and Dark appearance choices backed by Gecko's installed
   theme lifecycle, with third-party Firefox-compatible themes preserved and
   every major Settings destination searchable from the command palette;
+- optional custom light/dark base and accent palettes with native pickers,
+  readable derived text, cross-window persistence and Reset;
 - browsing-data and site-data clearing through Gecko's coordinated native
   Sanitizer dialog, available from both Settings and the command palette, so
   history, downloads, forms, cookies, cache, storage, logins, and site settings
