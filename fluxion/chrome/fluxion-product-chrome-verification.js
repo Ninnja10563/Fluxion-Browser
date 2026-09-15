@@ -112,8 +112,14 @@
     Services.prefs.setBoolPref("browser.search.suggest.enabled", false);
     Services.prefs.setBoolPref("browser.urlbar.suggest.searches", false);
     const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
-    await PlacesUtils.bookmarks.insert({ parentGuid: PlacesUtils.bookmarks.menuGuid,
-      url: "https://example.org/fluxion-product-chrome", title: "Fluxion navigation geometry fixture" });
+    const fixtureURL = "https://example.org/fluxion-product-chrome";
+    const fixtureTitle = "Fluxion navigation geometry fixture";
+    const bookmark = await PlacesUtils.bookmarks.insert({ parentGuid: PlacesUtils.bookmarks.menuGuid,
+      url: fixtureURL, title: fixtureTitle });
+    // Model a visited bookmark, using the native history API rather than
+    // inserting a result into the URL-bar provider or editing ranking scores.
+    await PlacesUtils.history.insert({ url: fixtureURL, title: fixtureTitle,
+      visits: [{ date: new Date(), transition: PlacesUtils.history.TRANSITION_TYPED }] });
     // Places defers bookmark frecency updates; the real address-bar provider
     // excludes zero-frecency pages. Await Gecko's native fixture-readiness API
     // instead of depending on an idle task firing during this short check.
@@ -122,6 +128,20 @@
     const frecency = Cc["@mozilla.org/places/frecency-recalculator;1"]
       .getService(Ci.nsIObserver).wrappedJSObject;
     await frecency.recalculateAnyOutdatedFrecencies();
+    const db = await PlacesUtils.promiseDBConnection();
+    const stored = await db.executeCached(`SELECT h.url, h.frecency, h.alt_frecency,
+      h.visit_count, b.title AS bookmark_title FROM moz_places h
+      JOIN moz_bookmarks b ON b.fk = h.id WHERE h.url = :url AND b.guid = :guid`,
+    { url: fixtureURL, guid: bookmark.guid });
+    assert(stored.length === 1, "The fixture's visited bookmark is not present in the native Places database");
+    report.placesFixture = Object.fromEntries(["url", "frecency", "alt_frecency", "visit_count", "bookmark_title"]
+      .map(name => [name, stored[0].getResultByName(name)]));
+    report.placesFixture.alternativeEnabled = PlacesUtils.history.isAlternativeFrecencyEnabled;
+    report.placesFixture.bookmarkSuggestionsEnabled = Services.prefs.getBoolPref("browser.urlbar.suggest.bookmark", false);
+    const rank = report.placesFixture.alternativeEnabled ? report.placesFixture.alt_frecency : report.placesFixture.frecency;
+    assert(report.placesFixture.bookmarkSuggestionsEnabled && report.placesFixture.visit_count === 1 &&
+      report.placesFixture.bookmark_title === fixtureTitle && rank > 0,
+    `Native visited-bookmark fixture is not ready for retrieval: ${JSON.stringify(report.placesFixture)}`);
     window.FluxionUI.setSidebarState("expanded");
     window.FluxionSidebarWidth?.setWidth(232);
     await window.FluxionTheme.set("dark");
@@ -131,6 +151,7 @@
       window.resizeTo(width, Math.min(850, window.screen.availHeight));
       await wait(() => Math.abs(window.outerWidth - width) <= 2, `Native window did not reach requested ${width}px width`);
       gURLBar.view.close();
+      gURLBar.searchMode = null;
       gBrowser.selectedBrowser.focus();
       await delay(350);
       geometry(`${width}-normal`);
@@ -141,12 +162,15 @@
       const focused = geometry(`${width}-focused`);
       // Use Gecko's normal input-event path, including its typed-value state.
       // startQuery() itself returns void, not the query completion promise.
-      gURLBar.search("fluxion-product-chrome");
+      // Gecko's user-facing '*' restriction scopes this exact-title query to
+      // real bookmarks; neither remote search heuristics nor AI can satisfy it.
+      gURLBar.search(`* ${fixtureTitle}`);
       await wait(() => {
         const rows = [...document.querySelectorAll(".urlbarView-row")];
         report.suggestions = {
           width, open: gURLBar.view.isOpen, panelPainted: painted(gURLBar.view.panel),
           value: gURLBar.value, searchString: gURLBar.view.queryContext?.searchString,
+          searchMode: gURLBar.searchMode,
           results: (gURLBar.view.queryContext?.results || []).slice(0, 12).map(result => ({
             type: result.type, source: result.source, provider: result.providerName,
             title: result.payload?.title, url: result.payload?.url,
@@ -155,7 +179,7 @@
             type: row.getAttribute("type"), text: row.textContent.slice(0, 220) })),
         };
         return gURLBar.view.isOpen && painted(gURLBar.view.panel) && rows.some(row =>
-          painted(row) && row.textContent.includes("Fluxion navigation geometry fixture"));
+          painted(row) && row.getAttribute("type") === "bookmark" && row.textContent.includes(fixtureTitle));
       },
       "Native Places suggestion did not render in the real address-bar view");
       const view = rect(gURLBar.view.panel), input = rect(document.querySelector("#urlbar > .urlbar-input-container"));
