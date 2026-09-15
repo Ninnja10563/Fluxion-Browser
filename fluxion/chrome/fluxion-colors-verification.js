@@ -21,7 +21,13 @@
     while (!(await condition())) { assert(Date.now() < deadline, message); await delay(50); }
   };
   const rgb = hex => `rgb(${[1, 3, 5].map(index => Number.parseInt(hex.slice(index, index + 2), 16)).join(", ")})`;
-  const computed = (target, id, property) => target.getComputedStyle(target.document.getElementById(id))[property];
+  const computed = (target, id, property) => {
+    const node = id === "urlbar-background"
+      ? target.document.querySelector("#urlbar > .urlbar-background") || target.document.getElementById(id)
+      : target.document.getElementById(id);
+    assert(node, `Native color target is missing: ${id}`);
+    return target.getComputedStyle(node)[property];
+  };
   const inline = target => target.document.documentElement.style.getPropertyValue("--fluxion-bg");
   let companion = null;
   const stage = value => { Services.prefs.setStringPref(`${prefix}.stage`, value); Services.prefs.savePrefFile(null); };

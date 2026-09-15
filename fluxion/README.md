@@ -389,7 +389,7 @@ Firefox shortcuts remain available. Fluxion adds:
 
 | Action | macOS | Windows/Linux |
 | --- | --- | --- |
-| Cycle Flow sidebar | `Cmd+Shift+\\` | `Ctrl+Shift+\\` |
+| Toggle Flow sidebar | `Cmd+Shift+\\` | `Ctrl+Shift+\\` |
 | Next workspace | `Cmd+Option+]` | `Ctrl+Alt+]` |
 | Previous workspace | `Cmd+Option+[` | `Ctrl+Alt+[` |
 | New tab | `Cmd+T` | `Ctrl+T` |
@@ -397,18 +397,29 @@ Firefox shortcuts remain available. Fluxion adds:
 | Tab search | `Cmd+Shift+A` | `Ctrl+Shift+A` |
 | Command palette | `Cmd+K` | `Ctrl+K` |
 
-Use the `+` beside the workspace strip to create a workspace. Right-click a
-workspace name or symbol to rename, reorder, recolour, change its symbol, or
+Use the `+` in the bottom workspace dock to create a workspace. Right-click a
+workspace symbol to rename, reorder, recolour, change its symbol, or
 delete it. Deleting a workspace never closes its tabs; Fluxion moves them to an
 adjacent workspace after confirmation.
 
-In the 0.56 candidate, drag Flow's inner edge to resize the expanded sidebar
-or its revealed Focus overlay. Release to save; Escape cancels the current
+The sidebar button collapses Flow to an edge. Hover over that edge to reveal
+your tabs; move away to hide it. Press Expand to keep it open. Keyboard focus
+and open context menus keep the revealed controls available. Compact remains
+a separate option in Settings → Appearance. New tab follows the last tab;
+the workspace dock stays at the bottom while the tab list scrolls.
+
+Settings → Appearance → Custom colors lets you choose separate light and dark
+base/accent colors using native color pickers or six-digit hex values. Changes
+apply across windows and survive restarts. Reset colors restores the default
+palette without changing the theme or workspaces. Webpage colors are untouched.
+
+Drag Flow's inner edge to resize the expanded sidebar
+or its revealed overlay. Release to save; Escape cancels the current
 drag. Double-click the edge to reset to 232 pixels. The keyboard-focusable
 separator supports Left/Right (8 pixels), Shift+Left/Right (24 pixels), Home
 (minimum) and End (available maximum); arrows follow the interface direction.
 Appearance also provides **Sidebar width** and **Reset** controls, with a
-180–420 pixel saved range. Compact and Focus retain their 44/3 pixel rails.
+180–420 pixel saved range. Compact and Collapsed retain their 44/3 pixel rails.
 Narrowing a window does not overwrite your saved width.
 
 Right-click a Flow tab or group heading and choose

@@ -112,6 +112,8 @@
       --toolbar-color: var(--fluxion-ink);
       --toolbar-field-color: var(--fluxion-ink);
       --toolbar-field-focus-color: var(--fluxion-ink);
+      --toolbar-field-text-color: var(--fluxion-ink);
+      --toolbar-field-text-color-focus: var(--fluxion-ink);
       --toolbar-field-background-color: var(--fluxion-bg-raised);
       --toolbar-field-focus-background-color: var(--fluxion-bg-raised);
       --toolbarbutton-icon-fill: var(--fluxion-ink);
@@ -142,14 +144,21 @@
       background: var(--fluxion-hover) !important;
     }
     #urlbar-container { margin-inline: 7px !important; padding: 0 !important; }
-    #urlbar { --urlbar-height: 34px; font-size: 13px !important; }
-    #urlbar-background {
+    #urlbar {
+      --urlbar-height: 34px; font-size: 13px !important;
+      --urlbar-background-color: var(--fluxion-bg-raised);
+      --urlbar-background-color-focus: var(--fluxion-bg-raised);
+    }
+    /* Gecko 155 uses a class; ESR 140 retains the legacy background ID. */
+    #urlbar > .urlbar-background, #urlbar-background {
       background: var(--fluxion-bg-raised) !important;
       border: 1px solid var(--fluxion-line) !important;
       border-radius: 6px !important; box-shadow: none !important;
     }
     #urlbar[focused] > #urlbar-background,
-    #urlbar[open] > #urlbar-background {
+    #urlbar[open] > #urlbar-background,
+    #urlbar[focused] > .urlbar-background,
+    #urlbar[open] > .urlbar-background {
       border-color: color-mix(in srgb, var(--fluxion-accent) 66%, transparent) !important;
       outline: 2px solid color-mix(in srgb, var(--fluxion-accent) 17%, transparent) !important;
       outline-offset: -1px !important;

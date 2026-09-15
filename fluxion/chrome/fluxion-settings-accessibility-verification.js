@@ -40,13 +40,24 @@
       await waitFor(() => !panel.hidden && panel.getBoundingClientRect().height > 0 &&
         navigation.getAttribute("aria-current") === "true", `${section} did not become the visible section`);
       let fields = 0;
+      const colorNames = new Map();
+      for (const mode of ["light", "dark"]) for (const part of ["base", "accent"]) {
+        const id = `fluxion-color-${mode}-${part}`;
+        colorNames.set(id, `${mode === "light" ? "Light" : "Dark"} ${part} color, six-digit hexadecimal`);
+        colorNames.set(`${id}-picker`, `Pick ${mode} ${part} color`);
+      }
+      let colorFields = 0;
       for (const row of panel.querySelectorAll(".fluxion-setting")) {
         const label = normalize(row.querySelector(".fluxion-setting-copy b")?.textContent);
         const description = normalize(row.querySelector(".fluxion-setting-copy small")?.textContent);
         assert(label && description, `${section} has an unlabeled settings row`);
         for (const control of row.querySelectorAll("input, select, textarea, button, a")) {
           const isAction = ["button", "a"].includes(control.localName);
-          const expectedName = isAction ? normalize(control.getAttribute("aria-label") || control.textContent) : label;
+          // Composite palettes have four distinct inputs per row, not four
+          // indistinguishable "Light colors" fields. Keep exact expectations.
+          const expectedName = colorNames.get(control.id) ||
+            (isAction ? normalize(control.getAttribute("aria-label") || control.textContent) : label);
+          if (colorNames.has(control.id)) colorFields++;
           const expectedDescription = !isAction || control.classList.contains("fluxion-settings-control") ? description : null;
           control.scrollIntoView({ block: "center", behavior: "instant" });
           let actual = null;
@@ -68,6 +79,7 @@
         }
       }
       assert(fields >= 3, `${section} did not expose its expected native fields`);
+      if (section === "appearance") assert(colorFields === 8, "Appearance did not expose all eight distinctly named color inputs");
       report.sections.push({ section, fields });
     }
     write("report", JSON.stringify(report));

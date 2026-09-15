@@ -25,6 +25,23 @@ function fixture() {
   return { a: open(), b: open(), service, writes };
 }
 
+test("every native color picker and hex field has a distinct name and the palette description", () => {
+  const h = fixture().a;
+  const names = new Set();
+  for (const mode of ["light", "dark"]) for (const key of ["base", "accent"]) {
+    for (const picker of [false, true]) {
+      const field = h.field(mode, key, picker);
+      const name = picker ? `Pick ${mode} ${key} color`
+        : `${mode === "light" ? "Light" : "Dark"} ${key} color, six-digit hexadecimal`;
+      assert.equal(field.getAttribute("aria-label"), name);
+      names.add(name);
+      const description = h.document.getElementById(field.getAttribute("aria-describedby"));
+      assert.match(description.textContent, /Text contrast is kept readable automatically/);
+    }
+  }
+  assert.equal(names.size, 8);
+});
+
 test("actual Appearance controls enable native pickers, save independent palettes and reset in both windows", async () => {
   const h = fixture();
   assert.equal(h.a.enabled.checked, false);
