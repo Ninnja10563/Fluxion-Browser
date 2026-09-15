@@ -88,6 +88,7 @@ function fixture(size = 1000) {
     scrollIntoView() { this.scrolled = true; }
   }
   const create = (_tag, className) => new Element(className);
+  document.createElementNS = () => new Element();
   const pinnedTabs = new Element("fluxion-pinned-tabs"), tabsList = new Element("fluxion-tabs");
   pinnedTabs.root = tabsList.root = true;
   const tabs = Array.from({ length: size }, (_, index) => ({
@@ -143,6 +144,7 @@ function fixture(size = 1000) {
   // Execute the shipped renderer, row event handlers, projections and scheduler
   // together. Only browser services and native DOM are supplied by this fixture.
   vm.runInContext(block("  function renderedTreeItems()", "  function clearTabDropFeedback()") +
+    block("  function vectorGlyph(", "  function statusGlyph(") +
     block("  function refreshTabElement(", "  function workspaceSymbol(") +
     block("  function refreshGroupElement(", "  function renderWorkspaces()") +
     block("  function reconcileFlowTabs(", "  const popupSet =") +

@@ -95,7 +95,7 @@
   style.textContent = `
     :root {
       --fluxion-bg: light-dark(#e9eae7, #1c1e20);
-      --fluxion-bg-raised: light-dark(#fafaf8, #292a27);
+      --fluxion-bg-raised: light-dark(#fafaf8, #282a2c);
       --fluxion-ink: light-dark(#20211f, #efefeb);
       --fluxion-muted: light-dark(#696a65, #a8a9a3);
       --fluxion-line: light-dark(rgba(25,26,23,.11), rgba(255,255,250,.10));
@@ -434,7 +434,7 @@
     }
     .fluxion-fallback {
       width: 16px; height: 16px; flex: none; display: grid; place-items: center;
-      color: var(--fluxion-muted); font-size: 11px; border: 1px solid var(--fluxion-line); border-radius: 50%;
+      color: var(--fluxion-muted);
     }
     .fluxion-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fluxion-peek-badge {
@@ -921,18 +921,21 @@
   const modeButton = create("button", "fluxion-icon-button");
   modeButton.type = "button";
   const updateModeButtonTitle = () => {
-    modeButton.title = `Cycle sidebar (${window.FluxionShortcuts?.format("sidebar") || "shortcut"})`;
+    const action = { expanded: "Collapse sidebar to icons", compact: "Hide sidebar", focus: "Expand sidebar" }[flow.dataset.state];
+    modeButton.title = `${action} (${window.FluxionShortcuts?.format("sidebar") || "shortcut"})`;
+    modeButton.setAttribute("aria-label", action);
   };
   updateModeButtonTitle();
-  modeButton.setAttribute("aria-label", "Cycle sidebar size");
-  modeButton.textContent = flow.dataset.state === "expanded" ? "‹" :
-    flow.dataset.state === "compact" ? "·" : "›";
+  modeButton.appendChild(vectorGlyph("fluxion-control-glyph", [
+    ["rect", { x: "1.5", y: "2.5", width: "13", height: "11", rx: "1" }],
+    ["path", { d: "M5.5 2.5v11" }],
+  ]));
 
   const workspaceBar = create("div", "fluxion-workspaces");
   const workspaceList = create("div", "fluxion-workspace-list");
   workspaceList.setAttribute("role", "tablist");
   workspaceList.setAttribute("aria-label", "Workspaces");
-  workspaceList.setAttribute("aria-orientation", "horizontal");
+  workspaceList.setAttribute("aria-orientation", flow.dataset.state === "compact" ? "vertical" : "horizontal");
   const addWorkspaceButton = create("button", "fluxion-add-workspace");
   addWorkspaceButton.type = "button";
   addWorkspaceButton.textContent = "+";
@@ -1638,7 +1641,8 @@
     syncSidebarAccessibility(false);
     Services.prefs.setStringPref(PREF_SIDEBAR, state);
     Services.prefs.savePrefFile(null);
-    modeButton.textContent = state === "expanded" ? "‹" : state === "compact" ? "·" : "›";
+    updateModeButtonTitle();
+    workspaceList.setAttribute("aria-orientation", state === "compact" ? "vertical" : "horizontal");
     scheduleRender();
   }
 
@@ -2224,7 +2228,9 @@
 
   function fallbackIcon() {
     const fallback = create("span", "fluxion-fallback");
-    fallback.textContent = "·";
+    fallback.appendChild(vectorGlyph("fluxion-control-glyph", [
+      ["path", { d: "M3.5 1.5h6l3 3v10h-9ZM9.5 1.5v3h3" }],
+    ]));
     return fallback;
   }
 
@@ -2433,11 +2439,12 @@
         button._fluxionWorkspaceIcon = workspace.icon;
         button.addEventListener("click", () => switchWorkspace(workspace.id));
         button.addEventListener("keydown", event => {
-          if (!FluxionFlowNavigation.handlesRovingKey(event.key, "horizontal")) return;
+          const orientation = flow.dataset.state === "compact" ? "vertical" : "horizontal";
+          if (!FluxionFlowNavigation.handlesRovingKey(event.key, orientation)) return;
           event.preventDefault();
           event.stopPropagation();
           const targetIndex = FluxionFlowNavigation.rovingIndex(
-            workspaces.length, workspaces.findIndex(item => item.id === workspace.id), event.key, "horizontal",
+            workspaces.length, workspaces.findIndex(item => item.id === workspace.id), event.key, orientation,
           );
           const target = workspaces[targetIndex];
           if (target) {
@@ -2629,6 +2636,7 @@
       const element = workspaceElements.get(focusWorkspaceAfterRender);
       focusWorkspaceAfterRender = null;
       element?.focus({ preventScroll: true });
+      element?.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
     }
   }
 

@@ -27,10 +27,12 @@
   const rowFor = tab => rows().find(row => row._fluxionTab === tab);
   const liveTabs = () => [...gBrowser.tabs].filter(tab => !tab.closing);
   let pointerMoves = 0;
+  const diagnosticListeners = [];
   const onPointerMove = () => { pointerMoves++; };
   const onKey = event => {
     if (event.metaKey && ["w", "t"].includes(event.key?.toLowerCase())) {
-      report.keys.push({ key: event.key, meta: event.metaKey, shift: event.shiftKey, trusted: event.isTrusted });
+      report.keys.push({ key: event.key, meta: event.metaKey, shift: event.shiftKey,
+        alt: event.altKey, control: event.ctrlKey, repeat: event.repeat, trusted: event.isTrusted });
     }
   };
   const stage = value => {
@@ -96,14 +98,40 @@
     assert(closeRect.width > 0 && closeRect.height > 0, "Pointer close control has no hit area");
     const x = closeRect.left + closeRect.width / 2, y = closeRect.top + closeRect.height / 2;
     const nextTop = rect(nextRow).top;
+    report.pointerHoldEvents = [];
+    const observe = (target, type, options) => {
+      const listener = event => {
+        if (report.pointerHoldEvents.length >= 80) return;
+        report.pointerHoldEvents.push({ type, target: event.target?.id || event.target?.className || event.target?.localName || "window",
+          trusted: event.isTrusted, detail: event.detail, x: event.clientX, y: event.clientY,
+          related: event.relatedTarget?.id || event.relatedTarget?.className || event.relatedTarget?.localName || "",
+          active: document.activeElement?.id || document.activeElement?.className || document.activeElement?.localName,
+          activeLocalName: document.activeElement?.localName, activeWindow: Services.focus.activeWindow === window,
+          targetIsWindow: event.target === window,
+          rowConnected: pointerRow.isConnected, rowClass: pointerRow.className, nextTop: rect(nextRow).top,
+          at: window.performance.now() });
+      };
+      target.addEventListener(type, listener, options);
+      diagnosticListeners.push(() => target.removeEventListener(type, listener, options));
+    };
+    observe(close, "click", true);
+    observe(flow, "pointerleave", false);
+    observe(flow.querySelector(".fluxion-tabs:not(.fluxion-pinned-tabs)"), "scroll", { passive: true });
+    observe(window, "blur", false);
+    report.pointerHoldStart = { closeRect, nextTop, flow: rect(flow), x, y };
     assert(typeof window.synthesizeMouseEvent === "function", "Gecko native widget input router is unavailable");
     const mouse = (type, buttons) => window.synthesizeMouseEvent(type, x, y, {
       identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons,
       clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
     }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
     mouse("mousemove", 0); mouse("mousedown", 1); mouse("mouseup", 0);
+    report.pointerHoldAfterClick = { connected: pointerRow.isConnected, className: pointerRow.className,
+      nextTop: rect(nextRow).top, nativeConnected: Boolean(pointerTab.parentNode) };
     await wait(() => !pointerTab.parentNode, "Routed pointer close did not close its native tab");
-    assert(pointerRow.isConnected && pointerRow.classList.contains("is-closing") && near(rect(nextRow).top, nextTop), "Pointer close did not retain its stationary safety space");
+    report.pointerHoldAfterNativeClose = { connected: pointerRow.isConnected, className: pointerRow.className,
+      nextConnected: nextRow.isConnected, nextTop: rect(nextRow).top, initialNextTop: nextTop, pointerMoves };
+    assert(pointerRow.isConnected && pointerRow.classList.contains("is-closing") && near(rect(nextRow).top, nextTop),
+      `Pointer close did not retain its stationary safety space: ${JSON.stringify(report.pointerHoldAfterNativeClose)}`);
     await delay(100);
     const heldMoves = pointerMoves;
     const keyboardTab = gBrowser.selectedTab;
@@ -117,6 +145,12 @@
     assert(pointerMoves === heldMoves, "Pointer moved during the pointer-hold keyboard fixture");
     assert(liveTabs().length === heldBefore.length - 1 && heldBefore.filter(tab => tab !== keyboardTab).every(tab => tab.parentNode && !tab.closing), "Keyboard close after pointer hold closed an extra tab");
     assert(survivor.parentNode, "The protected survivor was unexpectedly closed");
+    const trustedCommand = key => key.trusted && key.meta && !key.alt && !key.control && !key.repeat;
+    const closes = report.keys.filter(key => key.key.toLowerCase() === "w" && !key.shift && trustedCommand(key));
+    const restores = report.keys.filter(key => key.key.toLowerCase() === "t" && key.shift && trustedCommand(key));
+    assert(report.keys.length === 3 && closes.length === 2 && restores.length === 1,
+      `Native keyboard event evidence is incomplete or contains extra commands: ${JSON.stringify(report.keys)}`);
+    report.nativeKeyCounts = { close: closes.length, restore: restores.length, total: report.keys.length };
     report.checks.push("pointer-close-hold-preserved-until-native-keyboard-close-with-no-pointer-motion");
 
     stage("real-page-and-frame-geometry");
@@ -132,11 +166,30 @@
       assert(page.width > 200 && page.height > 100, "Frame squeezed the page below a usable size");
       report.geometry.push({ mode, outer, sidebar, page, gaps: values });
     };
+    const workspaceControls = (mode, visible) => {
+      const list = flow.querySelector(".fluxion-workspace-list");
+      const orientation = mode === "compact" ? "vertical" : "horizontal";
+      assert(list?.getAttribute("aria-orientation") === orientation &&
+        window.getComputedStyle(list).flexDirection === (mode === "compact" ? "column" : "row"),
+      `Workspace keyboard orientation disagrees with its visible ${mode} layout`);
+      const button = flow.querySelector(".fluxion-workspaces > .fluxion-icon-button");
+      const label = { expanded: "Collapse sidebar to icons", compact: "Hide sidebar", focus: "Expand sidebar" }[mode];
+      assert(button?.getAttribute("aria-label") === label && button.title.startsWith(`${label} (`),
+        `Sidebar toggle lacks its actionable ${mode} accessible name or shortcut hint`);
+      if (visible) {
+        const box = rect(button), surface = rect(flow.querySelector(".fluxion-surface"));
+        assert(box.width >= 24 && box.height >= 24 && box.left >= surface.left - 1 && box.right <= surface.right + 1 &&
+          box.top >= surface.top - 1 && box.bottom <= surface.bottom + 1 &&
+          button.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)),
+        `Sidebar toggle is clipped, hidden, or has an insufficient hit area in ${mode}`);
+      }
+    };
     for (const [mode, expected] of [["expanded", 232], ["compact", 44], ["focus", 3]]) {
       ui.setSidebarState(mode);
       await wait(() => near(rect(flow).width, expected), `Sidebar ${mode} geometry did not settle`);
       await delay(200);
       gap(mode);
+      workspaceControls(mode, mode !== "focus");
     }
     const pageBefore = rect(gBrowser.tabpanels);
     ui.revealSidebar({ focusActive: false });
@@ -144,9 +197,11 @@
     await delay(250);
     const pageAfter = rect(gBrowser.tabpanels);
     assert(["left", "top", "width", "height"].every(key => near(pageBefore[key], pageAfter[key])), "Focus reveal reflowed page content");
+    workspaceControls("focus", true);
     ui.hideSidebar({ force: true }); ui.setSidebarState("expanded");
     await wait(() => near(rect(flow).width, 232), "Expanded sidebar did not return for captures");
     report.checks.push("expanded-compact-focus-consistent-insets-and-overlay-without-page-reflow");
+    report.checks.push("workspace-orientation-and-visible-actionable-sidebar-toggle-in-each-mode");
     const capture = async (name, theme) => {
       await window.FluxionTheme.set(theme);
       await wait(() => document.documentElement.dataset.fluxionTheme === theme, "Capture theme did not settle");
@@ -166,6 +221,16 @@
     assert(deck.hidden, "Settings left the underlying webpage deck visible");
     report.geometry.push({ mode: "settings", page: settingsRect });
     await capture("capture-settings", "light");
+    const libraryTab = add("about:downloads#history");
+    await select(libraryTab);
+    const library = document.getElementById("fluxion-library");
+    await wait(() => library && !library.hidden && settings.hidden && rect(library).height > 100, "Library surface did not replace Settings");
+    const libraryRect = rect(library), libraryOuter = rect(browser), libraryFlow = rect(flow);
+    assert(near(libraryRect.left - libraryFlow.right, 4) && near(libraryOuter.right - libraryRect.right, 4) &&
+      near(libraryRect.top - libraryOuter.top, 4) && near(libraryOuter.bottom - libraryRect.bottom, 4), "Library inset does not match the page frame");
+    assert(deck.hidden, "Library left the underlying webpage deck visible");
+    report.geometry.push({ mode: "library", page: libraryRect });
+    report.checks.push("settings-and-library-share-the-native-page-frame-boundary");
     report.checks.push("actual-light-dark-webpage-and-settings-captures");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-frame-keyboard-close-and-captures-verified"))
@@ -173,6 +238,7 @@
     .finally(async () => {
       window.removeEventListener("pointermove", onPointerMove, true);
       window.removeEventListener("keydown", onKey, true);
+      for (const remove of diagnosticListeners) remove();
       report.pointerMoves = pointerMoves;
       Services.prefs.setStringPref(`${prefix}.report`, JSON.stringify(report));
       Services.prefs.savePrefFile(null);

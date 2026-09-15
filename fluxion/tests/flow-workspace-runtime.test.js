@@ -111,6 +111,7 @@ function buttonsFixture() {
   const workspaces = ["a", "b", "c"].map(id => ({ id, name: id, icon: "circle", accent: "slate" }));
   const switches = [];
   const context = vm.createContext({ document, workspaces, currentWorkspace: "a", workspaceRenderSignature: "",
+    flow: { dataset: { state: "expanded" } },
     workspaceList: list, workspaceElements: map, addWorkspaceButton: {}, create: () => new Element(),
     workspaceSymbol: () => new Element(), FluxionWorkspaces: { MAX_WORKSPACES: 20 },
     FluxionFlowNavigation: require("../chrome/core/flow-navigation.js"), switchWorkspace: id => switches.push(id),
@@ -140,6 +141,46 @@ test("deleted workspace focus falls back only when the workspace strip owned foc
     f.context.renderWorkspaces();
     assert.ok(f.document.activeElement === (owned ? f.map.get("a") : external));
     assert.equal(f.map.has("b"), false);
+  }
+});
+
+test("workspace arrow routing follows live sidebar orientation while Home and End work in both layouts", () => {
+  const f = buttonsFixture(), b = f.map.get("b");
+  const route = (key, target) => {
+    let prevented = 0, stopped = 0;
+    const before = f.switches.length;
+    f.context.focusWorkspaceAfterRender = null;
+    b.listeners.keydown({ key, preventDefault() { prevented++; }, stopPropagation() { stopped++; } });
+    assert.equal(prevented, target ? 1 : 0, `${key} default handling`);
+    assert.equal(stopped, target ? 1 : 0, `${key} propagation`);
+    assert.equal(f.switches.length, before + (target ? 1 : 0));
+    assert.equal(f.context.focusWorkspaceAfterRender, target || null);
+    if (target) assert.equal(f.switches.at(-1), target);
+  };
+  route("ArrowLeft", "a"); route("ArrowRight", "c");
+  route("ArrowUp", null); route("ArrowDown", null);
+  route("Home", "a"); route("End", "c");
+  // No reconstruction or metadata render: existing listeners must observe the
+  // current sidebar mode, not the mode in which their buttons were created.
+  f.context.flow.dataset.state = "compact";
+  route("ArrowUp", "a"); route("ArrowDown", "c");
+  route("ArrowLeft", null); route("ArrowRight", null);
+  route("Home", "a"); route("End", "c");
+  route("Enter", null); route("Tab", null);
+  f.context.flow.dataset.state = "expanded";
+  route("ArrowRight", "c"); route("ArrowDown", null);
+  assert.equal(f.map.get("b"), b);
+});
+
+test("compact workspace arrows wrap at live endpoints after reordering", () => {
+  const f = buttonsFixture();
+  f.context.flow.dataset.state = "compact";
+  f.context.workspaces = [f.context.workspaces[2], f.context.workspaces[0], f.context.workspaces[1]];
+  f.context.renderWorkspaces();
+  for (const [id, key, expected] of [["c", "ArrowUp", "b"], ["b", "ArrowDown", "c"]]) {
+    f.map.get(id).listeners.keydown({ key, preventDefault() {}, stopPropagation() {} });
+    assert.equal(f.switches.at(-1), expected);
+    assert.equal(f.context.focusWorkspaceAfterRender, expected);
   }
 });
 

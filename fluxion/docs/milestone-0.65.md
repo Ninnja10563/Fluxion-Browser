@@ -28,7 +28,11 @@ frame and a clear page/control distinction, not claims of exact typography or
 pixel matching. A full-resolution reference was requested for further passes.
 
 The workspace band now includes the sidebar mode control; it remains visible
-in Compact. A four-pixel solid frame is shared by the native tabbox, Settings
+in Compact, uses a sidebar glyph and names its next action. Compact workspace
+navigation uses Up/Down, matching its vertical layout; expanded uses Left/Right.
+Keyboard workspace selection scrolls only as far as needed to expose the item.
+Missing favicons use a small page glyph rather than decorative outlined dots.
+A four-pixel solid frame is shared by the native tabbox, Settings
 and Library. No native browser container is clipped or transformed for this
 effect. Native security, address completion, file dialogs and page rendering
 remain Gecko-owned.

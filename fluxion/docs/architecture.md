@@ -66,6 +66,24 @@ explicit multi-profile path.
 Retaining these systems is deliberate. Reimplementing them would reduce
 security and compatibility while producing no product differentiation.
 
+### Native tab closure boundary
+
+Flow projects only attached, non-closing native tabs. In pinned Gecko 155.0.1,
+`gBrowser.tabs` includes DOM children during removal, and `TabClose` is emitted
+after setting `tab.closing` but before detaching the tab. Treating membership
+alone as liveness produces a ghost row after Command-W. The native
+`removeTab`/`removeTabs` permission handling is synchronous in this revision;
+canceled `beforeunload` returns without `TabClose`. Fluxion restores surviving
+rows after that call, and does not replace Gecko's permission handling.
+
+The pointer-close guard is owned by its exact set of closing tabs. A native
+close outside that set ends the guard even while a release animation is in
+progress. A cancellation only cleans up its own guard, since Gecko permission
+handling may spin a nested event loop. Re-audit these lifecycle assumptions
+against `browser/components/tabbrowser/content/tabbrowser.js` when upgrading
+Gecko; keep the isolated native macOS keyboard gate alongside the extracted
+renderer/state regression tests.
+
 ### Cross-window tab adoption
 
 `fluxion-tab-transfer.js` is the privileged transfer adapter;
