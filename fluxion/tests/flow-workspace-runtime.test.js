@@ -69,6 +69,33 @@ test("initial restoration and intentional workspace transitions are not overridd
   assert.equal(f.context.currentWorkspace, "a");
 });
 
+test("workspace switch animates only genuine settled changes after scheduling the new native tab projection", () => {
+  const f = selectionFixture(), events = [];
+  f.context.scheduleRender = () => events.push(["render", f.context.currentWorkspace]);
+  f.context.window.FluxionWorkspaceGestures = { animateSwitch(direction) {
+    assert.equal(f.gBrowser.selectedTab.id, f.context.currentWorkspace);
+    assert.equal(f.gBrowser.selectedTab.hidden, false);
+    assert.ok(f.gBrowser.tabs.filter(tab => tab !== f.gBrowser.selectedTab).every(tab => tab.hidden));
+    assert.equal(events.at(-1)[0], "render", "Animation may not precede scheduling the new workspace projection");
+    events.push(["animate", direction]);
+  } };
+  f.context.switchWorkspace("a");
+  assert.deepEqual(events, [["render", "a"]]);
+  events.length = 0;
+  f.context.switchWorkspace("b");
+  assert.deepEqual(events, [["render", "b"], ["animate", 1]]);
+  events.length = 0;
+  f.context.switchWorkspace("a");
+  assert.deepEqual(events, [["render", "a"], ["animate", -1]]);
+  events.length = 0;
+  f.context.sessionRestoreSettled = false;
+  f.context.switchWorkspace("b");
+  assert.deepEqual(events, [["render", "b"]], "Session startup cannot trigger user-facing workspace motion");
+  events.length = 0;
+  f.context.switchWorkspace("missing");
+  assert.deepEqual(events, [], "An invalid target must not render or animate");
+});
+
 test("Flow Recently Closed uses the same selection reconciliation as native undo-close", async () => {
   const f = selectionFixture();
   f.context.closedTabs = () => [{ sourceIndex: 0 }];
@@ -107,8 +134,8 @@ function buttonsFixture() {
     addEventListener(type, listener) { this.listeners[type] = listener; }
     focus() { document.activeElement = this; }
   }
-  const list = new Element(), map = new Map(), heading = new Element(), headingLabel = new Element();
-  heading.append(new Element(), headingLabel);
+  const list = new Element(), map = new Map(), heading = new Element(), headingLabel = new Element(), more = new Element();
+  heading.append(new Element(), headingLabel, more);
   const workspaces = ["a", "b", "c"].map(id => ({ id, name: id, icon: "circle", accent: "slate" }));
   const switches = [];
   const context = vm.createContext({ document, workspaces, currentWorkspace: "a", workspaceRenderSignature: "",
@@ -120,7 +147,7 @@ function buttonsFixture() {
   });
   vm.runInContext(block("  function renderWorkspaces()", "  function render()"), context);
   context.renderWorkspaces();
-  return { context, document, list, map, switches, heading, headingLabel };
+  return { context, document, list, map, switches, heading, headingLabel, more };
 }
 
 test("workspace metadata refresh retains focused button and label identity; reordered arrows use live indices", () => {
@@ -159,6 +186,18 @@ test("workspace heading follows the active name and symbol without replacing sta
   assert.equal(f.heading.firstChild, activeIcon, "Renaming retains the unchanged icon node");
   assert.equal(f.heading.children[1], label, "The heading label remains the same DOM node");
   assert.equal(f.document.activeElement, focused);
+});
+
+test("heading options remains the same focused control across workspace updates and retains open state", () => {
+  const f = buttonsFixture(), button = f.more;
+  button.focus(); button.setAttribute("aria-expanded", "true"); f.heading.dataset.menuOpen = "true";
+  f.context.workspaces[0] = { ...f.context.workspaces[0], name: "Research", icon: "grid" };
+  f.context.renderWorkspaces();
+  assert.equal(f.heading.children[2], button); assert.equal(f.document.activeElement, button);
+  assert.equal(button.attrs["aria-expanded"], "true"); assert.equal(f.heading.dataset.menuOpen, "true");
+  f.context.currentWorkspace = "b"; f.context.renderWorkspaces();
+  assert.equal(f.heading.children[2], button); assert.equal(f.document.activeElement, button);
+  assert.equal(f.heading.children.length, 3, "Refresh must not append duplicate heading action controls");
 });
 
 test("deleted workspace focus falls back only when the workspace strip owned focus", () => {

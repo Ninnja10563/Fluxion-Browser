@@ -16,6 +16,17 @@
     return String(value || "").trim().replace(/\s+/g, " ").slice(0, 32);
   }
 
+  function sanitiseTheme(value) {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+    if (!["light", "dark"].every(key => Object.hasOwn(value, key) &&
+      typeof value[key] === "string" && /^#[0-9a-f]{6}$/i.test(value[key]))) return null;
+    return { light: value.light.toLowerCase(), dark: value.dark.toLowerCase() };
+  }
+
+  function cloneWorkspace(item) {
+    return { ...item, ...(item.theme ? { theme: { ...item.theme } } : {}) };
+  }
+
   function sanitiseWorkspace(value, fallback) {
     if (!value || typeof value !== "object") return fallback;
     const id = String(value.id || "").toLowerCase().replace(/[^a-z0-9_-]/g, "").slice(0, 32);
@@ -26,7 +37,8 @@
       : "slate";
     const inheritedIcon = Object.hasOwn(LEGACY_ICONS, id) ? LEGACY_ICONS[id] : null;
     const icon = ICONS.includes(value.icon) ? value.icon : inheritedIcon || "circle";
-    return { id, name, accent, icon };
+    const theme = Object.hasOwn(value, "theme") ? sanitiseTheme(value.theme) : null;
+    return { id, name, accent, icon, ...(theme ? { theme } : {}) };
   }
 
   function parseWorkspaces(serialised) {
@@ -67,6 +79,9 @@
     if (!Array.isArray(items) || items.length >= MAX_WORKSPACES) return null;
     const cleanName = sanitiseName(name);
     if (!cleanName) return null;
+    const hasTheme = Object.hasOwn(options, "theme");
+    const theme = hasTheme ? sanitiseTheme(options.theme) : null;
+    if (hasTheme && options.theme !== null && !theme) return null;
     const id = makeWorkspaceId(cleanName, items.map(item => item.id));
     if (!id) return null;
     const workspace = {
@@ -74,22 +89,31 @@
       name: cleanName,
       accent: ACCENTS.includes(options.accent) ? options.accent : ACCENTS[items.length % ACCENTS.length],
       icon: ICONS.includes(options.icon) ? options.icon : ICONS[items.length % ICONS.length],
+      ...(theme ? { theme } : {}),
     };
-    return { items: [...items.map(item => ({ ...item })), workspace], workspace };
+    return { items: [...items.map(cloneWorkspace), workspace], workspace };
   }
 
   function updateWorkspace(items, id, changes = {}) {
     if (!Array.isArray(items) || !items.some(item => item.id === id)) return null;
     const name = changes.name === undefined ? null : sanitiseName(changes.name);
     if (changes.name !== undefined && !name) return null;
+    const hasTheme = Object.hasOwn(changes, "theme");
+    const theme = hasTheme ? sanitiseTheme(changes.theme) : null;
+    if (hasTheme && changes.theme !== null && !theme) return null;
     return items.map(item => {
-      if (item.id !== id) return { ...item };
-      return {
-        ...item,
+      if (item.id !== id) return cloneWorkspace(item);
+      const next = {
+        ...cloneWorkspace(item),
         ...(name ? { name } : {}),
         ...(ACCENTS.includes(changes.accent) ? { accent: changes.accent } : {}),
         ...(ICONS.includes(changes.icon) ? { icon: changes.icon } : {}),
       };
+      if (hasTheme) {
+        if (theme) next.theme = theme;
+        else delete next.theme;
+      }
+      return next;
     });
   }
 
@@ -98,7 +122,7 @@
     const from = items.findIndex(item => item.id === id);
     const to = Math.max(0, Math.min(items.length - 1, from + Math.sign(direction)));
     if (from < 0) return null;
-    const next = items.map(item => ({ ...item }));
+    const next = items.map(cloneWorkspace);
     if (from !== to) next.splice(to, 0, next.splice(from, 1)[0]);
     return next;
   }
@@ -107,9 +131,9 @@
     if (!Array.isArray(items) || items.length <= 1) return null;
     const index = items.findIndex(item => item.id === id);
     if (index < 0) return null;
-    const next = items.filter(item => item.id !== id).map(item => ({ ...item }));
+    const next = items.filter(item => item.id !== id).map(cloneWorkspace);
     const fallback = next[Math.min(index, next.length - 1)];
-    return { items: next, fallbackId: fallback.id, removed: { ...items[index] } };
+    return { items: next, fallbackId: fallback.id, removed: cloneWorkspace(items[index]) };
   }
 
   function nextWorkspaceId(items, currentId, direction = 1) {
@@ -130,6 +154,7 @@
     parseWorkspaces,
     removeWorkspace,
     sanitiseWorkspace,
+    sanitiseTheme,
     updateWorkspace,
   });
   scope.FluxionWorkspaces = api;

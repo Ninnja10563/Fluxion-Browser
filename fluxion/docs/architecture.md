@@ -35,12 +35,21 @@ controls, URL input and toolbar overflow intact. Workspace wheel routing lives
 in `fluxion-workspace-gestures.js`; its independent axis/momentum state machine
 is in `core/workspace-swipe.js`. Only trusted events inside the visible
 system-principal sidebar reach workspace commands. No content listener is used.
+Workspace switching applies a cancelable, short transform/opacity transition
+only to the sidebar list after its scheduled render; native page selection is
+immediate. Both system reduced motion and the browser motion setting suppress
+it. The heading's native options menu uses the same snapshot/revalidation
+lifecycle as tab menus, retaining the actual opener for cancellation focus.
 Firefox-only cloud VPN enrollment is gated at startup rather than relabeled;
 see [product service policy](product-service-policy.md).
 
 `core/colors.js` validates local base/accent preferences and derives readable
 light/dark chrome tokens. `fluxion-colors.js` projects those tokens into each
 privileged browser document and observes one atomic preference across windows.
+An optional validated workspace light/dark base pair overrides the active
+window's global base colors. The theme editor keeps drafts private to its panel
+and commits through workspace persistence; it does not expose a webpage bridge
+or alter content styles. A single color projector owns the chrome variables.
 It never injects content CSS or exposes page access to preferences. Reset
 removes the inline token overrides, leaving the existing Gecko theme choice
 intact. Workspace SVG data is a small pinned, licensed Lucide subset; persisted

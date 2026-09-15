@@ -11,6 +11,7 @@ const {
   parseWorkspaces,
   removeWorkspace,
   sanitiseWorkspace,
+  sanitiseTheme,
   updateWorkspace,
 } = require("../chrome/core/workspaces.js");
 
@@ -144,4 +145,54 @@ test("a settings-style edit sequence preserves identity and a deterministic migr
   const removed = removeWorkspace(reordered, configured.id);
   assert.equal(removed.fallbackId, "life");
   assert.deepEqual(removed.items, SAVED_WORKSPACES);
+});
+
+test("optional workspace themes persist only complete six-digit hex pairs with canonical lowercase", () => {
+  const theme = { light: "#F8EEDD", dark: "#172A32" };
+  const created = createWorkspace(DEFAULTS, "Studio", { theme });
+  assert.deepEqual(created.workspace.theme, { light: "#f8eedd", dark: "#172a32" });
+  const restored = parseWorkspaces(JSON.stringify(created.items));
+  assert.deepEqual(restored, created.items);
+  assert.equal(Object.hasOwn(restored[0], "theme"), false, "Existing unthemed workspaces must retain their exact schema");
+  theme.light = "#000000";
+  assert.equal(created.workspace.theme.light, "#f8eedd", "Caller-owned input must not alias stored theme data");
+  assert.deepEqual(sanitiseTheme({ light: "#ABCDEF", dark: "#001122", extra: "ignored" }),
+    { light: "#abcdef", dark: "#001122" });
+});
+
+test("malformed theme edits reject the entire transaction while corrupt optional persistence preserves workspace identity", () => {
+  const saved = [{ ...SAVED_WORKSPACES[1], theme: { light: "#f1f2f3", dark: "#212223" } }];
+  for (const theme of [undefined, false, "#123456", [], {}, { light: "#123456" },
+    { light: "#fff", dark: "#000000" }, { light: "#123456ff", dark: "#000000" },
+    { light: "red", dark: "#000000" }, { light: " #123456", dark: "#000000" },
+    { light: "#123456", dark: "var(--page)" }, Object.create({ light: "#123456", dark: "#000000" })]) {
+    const before = JSON.stringify(saved);
+    assert.equal(updateWorkspace(saved, "build", { name: "Should not apply", theme }), null);
+    assert.equal(createWorkspace(saved, "Should not create", { theme }), null);
+    assert.equal(JSON.stringify(saved), before);
+    const restored = parseWorkspaces(JSON.stringify([{ ...SAVED_WORKSPACES[1], theme }]));
+    assert.deepEqual(restored, [SAVED_WORKSPACES[1]], "Invalid optional colors must not remove or rename a saved workspace");
+  }
+});
+
+test("explicit null resets only that workspace theme; ordinary edits preserve it independently", () => {
+  const created = createWorkspace(DEFAULTS, "Studio", { theme: { light: "#faf0e6", dark: "#20252a" } });
+  const id = created.workspace.id;
+  const updated = updateWorkspace(created.items, id, { name: "Design", icon: "grid", accent: "rose" });
+  assert.deepEqual(updated[1].theme, created.workspace.theme);
+  const moved = moveWorkspace(updated, id, -1);
+  assert.deepEqual(moved[0].theme, created.workspace.theme);
+  const removed = removeWorkspace(moved, "focus");
+  assert.deepEqual(removed.items[0].theme, created.workspace.theme);
+  removed.items[0].theme.dark = "#000000";
+  assert.equal(moved[0].theme.dark, "#20252a");
+  moved[0].theme.light = "#ffffff";
+  assert.equal(updated[1].theme.light, "#faf0e6");
+  updated[1].theme.light = "#000000";
+  assert.equal(created.workspace.theme.light, "#faf0e6");
+  const reset = updateWorkspace(created.items, id, { theme: null });
+  assert.equal(Object.hasOwn(reset[1], "theme"), false);
+  assert.deepEqual(reset[0], created.items[0]);
+  assert.deepEqual(created.workspace.theme, { light: "#faf0e6", dark: "#20252a" });
+  assert.equal(Object.hasOwn(createWorkspace(DEFAULTS, "Plain", { theme: null }).workspace, "theme"), false);
 });

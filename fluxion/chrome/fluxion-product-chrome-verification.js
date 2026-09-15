@@ -68,6 +68,222 @@
       gURLBar.inputField.removeEventListener("input", onInput);
     }
   }
+  const routePointer = (x, y, type = "mousemove", buttons = 0) => {
+    assert(typeof window.synthesizeMouseEvent === "function", "Gecko native widget input router is unavailable");
+    window.synthesizeMouseEvent(type, x, y, {
+      identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons,
+      clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
+    }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+  };
+  function workspaceMenuEvidence(menu, workspaces, current) {
+    assert(menu.state === "open", "Workspace menu did not open as a native popup");
+    const items = [...menu.children].filter(node => ["menu", "menuitem"].includes(node.localName));
+    const evidence = items.map(node => ({ label: node.getAttribute("label"), kind: node.localName,
+      disabled: node.getAttribute("disabled") === "true", type: node.getAttribute("type"),
+      name: node.getAttribute("name"), checked: node.getAttribute("checked") === "true" }));
+    for (const label of ["Rename Workspace…", "Change Icon", "Change Accent", "Edit Workspace Theme…", "Move Workspace Earlier",
+      "Move Workspace Later", "New Workspace…", "Delete Workspace…"]) {
+      const node = items.find(item => item.getAttribute("label") === label);
+      assert(node && !node.hidden && node.getAttribute("hidden") !== "true", `Workspace menu action is missing: ${label}`);
+      if (label === "Change Icon" || label === "Change Accent") {
+        assert(node.localName === "menu" && node.querySelector("menupopup")?.children.length > 1,
+          `Workspace appearance command has no native choices: ${label}`);
+      }
+    }
+    const radio = evidence.filter(item => item.name === "fluxion-workspace-switch");
+    assert(radio.length === workspaces.length && radio.every((item, index) =>
+      item.label === workspaces[index].name && item.type === "radio" &&
+      item.checked === (workspaces[index].id === current)), "Workspace radio entries do not match live workspace order and selection");
+    const index = workspaces.findIndex(workspace => workspace.id === current);
+    assert(index >= 0, "Current workspace is absent from the native menu fixture");
+    const disabled = label => evidence.find(item => item.label === label).disabled;
+    assert(disabled("Delete Workspace…") === (workspaces.length === 1), "Last-workspace deletion safety is incorrect");
+    assert(disabled("Move Workspace Earlier") === (index === 0) &&
+      disabled("Move Workspace Later") === (index === workspaces.length - 1), "Workspace reorder bounds are incorrect");
+    assert(!disabled("Rename Workspace…") && !disabled("New Workspace…"), "Workspace rename/create command is unexpectedly disabled");
+    return { state: menu.state, isNativeMenu: menu.isNativeMenu, items: evidence };
+  }
+  async function nativeWorkspaceKey(action) {
+    const name = `key-product-workspace-${action}`;
+    await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
+    await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)),
+      `Native workspace key driver did not acknowledge ${name}`, 20000);
+  }
+  function workspaceDock(count) {
+    const flow = document.getElementById("fluxion-flow"), outer = rect(flow);
+    const buttons = [...flow.querySelectorAll(".fluxion-workspace-list > .fluxion-workspace")].filter(painted);
+    assert(buttons.length === count, "Bottom workspace dock has stale or hidden workspace symbols");
+    const boxes = buttons.map(rect), symbols = buttons.map(button => {
+      const symbol = button.querySelector(".fluxion-workspace-symbol");
+      assert(painted(symbol), "Centered workspace dock is missing a visible symbol");
+      return rect(symbol);
+    });
+    const left = Math.min(...symbols.map(box => box.left)), right = Math.max(...symbols.map(box => box.right));
+    const center = (left + right) / 2, sidebarCenter = (outer.left + outer.right) / 2;
+    const evidence = { count, center, sidebarCenter, offset: center - sidebarCenter, buttons: boxes, symbols };
+    report.workspaceDock ||= [];
+    report.workspaceDock.push(evidence);
+    assert(Math.abs(evidence.offset) <= 1, `Workspace symbols are not centered in the sidebar: ${JSON.stringify(evidence)}`);
+    for (const box of boxes) assert(contains(outer, box), "Centered workspace dock clips a symbol outside the sidebar");
+    for (let index = 1; index < boxes.length; index++) assert(!overlaps(boxes[index - 1], boxes[index]), "Centered workspace symbols overlap");
+  }
+  async function workspaceHeading() {
+    stage("native-workspace-heading-menu");
+    const ui = window.FluxionUI;
+    const heading = document.querySelector(".fluxion-workspace-heading");
+    const label = heading?.querySelector(":scope > span");
+    const button = heading?.querySelector(".fluxion-workspace-more");
+    const menu = document.getElementById("fluxion-workspace-context");
+    assert(painted(heading) && painted(label) && button && menu, "Workspace heading controls are missing");
+    assert(button.getAttribute("aria-haspopup") === "menu" && button.getAttribute("aria-controls") === menu.id &&
+      button.getAttribute("aria-expanded") === "false", "Workspace heading menu accessibility contract is missing");
+    const evidence = report.workspaceHeading = { pointer: "Gecko Window.synthesizeMouseEvent routing; no OS pointer movement claimed",
+      keyboard: "macOS System Events Escape and ArrowDown", states: [], menus: [] };
+    const baseline = rect(label);
+    const state = name => {
+      const labelBox = rect(label), buttonStyle = window.getComputedStyle(button), headingStyle = window.getComputedStyle(heading);
+      const entry = { name, label: labelBox, button: rect(button), opacity: buttonStyle.opacity,
+        pointerEvents: buttonStyle.pointerEvents, background: headingStyle.backgroundColor,
+        hover: heading.matches(":hover"), focusWithin: heading.matches(":focus-within"),
+        expanded: button.getAttribute("aria-expanded"), menuOpen: heading.dataset.menuOpen || null };
+      evidence.states.push(entry);
+      assert(["left", "right", "top", "bottom"].every(edge => Math.abs(labelBox[edge] - baseline[edge]) <= 1),
+        `Workspace label shifts when heading controls change: ${JSON.stringify(entry)}`);
+      return entry;
+    };
+    const outside = rect(gBrowser.selectedBrowser);
+    const moveAway = () => routePointer(outside.left + outside.width / 2, outside.top + Math.min(140, outside.height / 2));
+    gBrowser.selectedBrowser.focus(); moveAway();
+    await wait(() => !heading.matches(":hover") && !heading.matches(":focus-within") &&
+      Number(window.getComputedStyle(button).opacity) === 0, "Workspace ellipsis remains visible outside hover or focus");
+    const idle = state("idle");
+    workspaceDock(1);
+    assert(idle.pointerEvents === "none" && idle.button.width >= 24 && idle.button.height >= 24,
+      "Hidden workspace ellipsis must reserve its hit-target geometry without intercepting clicks");
+    await capture("capture-product-workspace-idle");
+    const headingBox = rect(heading);
+    routePointer(headingBox.left + 12, headingBox.top + headingBox.height / 2);
+    await wait(() => heading.matches(":hover") && Number(window.getComputedStyle(button).opacity) === 1,
+      "Gecko-routed heading hover did not reveal the ellipsis");
+    const hover = state("hover");
+    assert(hover.background !== idle.background && hover.pointerEvents === "auto", "Workspace hover lacks meaningful highlight or usable control");
+    await capture("capture-product-workspace-hover");
+    const buttonBox = rect(button), x = buttonBox.left + buttonBox.width / 2, y = buttonBox.top + buttonBox.height / 2;
+    assert(button.contains(document.elementFromPoint(x, y)), "Workspace ellipsis is clipped or obscured");
+    routePointer(x, y); routePointer(x, y, "mousedown", 1); routePointer(x, y, "mouseup", 0);
+    await wait(() => menu.state === "open", "Routed ellipsis click did not open the native workspace menu");
+    assert(button.getAttribute("aria-expanded") === "true" && heading.dataset.menuOpen === "true",
+      "Open native workspace menu is not reflected in the heading state");
+    state("pointer-menu-open");
+    evidence.menus.push(workspaceMenuEvidence(menu, ui.workspaces(), ui.currentWorkspace()));
+    await capture("capture-product-workspace-menu");
+    await nativeWorkspaceKey("escape-pointer");
+    await wait(() => menu.state === "closed" && document.activeElement === button &&
+      button.getAttribute("aria-expanded") === "false" && !heading.hasAttribute("data-menu-open"),
+    "Native Escape did not dismiss the workspace popup and restore ellipsis focus");
+    moveAway();
+    await wait(() => !heading.matches(":hover") && Number(window.getComputedStyle(button).opacity) === 1,
+      "Focused workspace ellipsis disappeared when the pointer left");
+    const focused = state("focus-without-hover");
+    assert(focused.focusWithin && focused.background !== idle.background, "Keyboard focus lacks the workspace heading highlight");
+    // Seed only through the product's workspace manager, then require the next
+    // native popup to rebuild its radio choices from the actual updated state.
+    assert(ui.workspaces().length === 1, "Fresh product fixture must begin with one workspace");
+    ui.createWorkspace("Workspace menu fixture", { activate: false });
+    await wait(() => ui.workspaces().length === 2, "Workspace manager did not create the menu fixture");
+    await wait(() => document.querySelectorAll(".fluxion-workspace-list > .fluxion-workspace").length === 2,
+      "Bottom workspace dock did not render the second workspace");
+    workspaceDock(2);
+    button.focus({ preventScroll: true });
+    await nativeWorkspaceKey("down");
+    await wait(() => menu.state === "open", "Native ArrowDown did not open the focused workspace menu");
+    state("keyboard-menu-open");
+    evidence.menus.push(workspaceMenuEvidence(menu, ui.workspaces(), ui.currentWorkspace()));
+    await capture("capture-product-workspace-menu-updated");
+    await nativeWorkspaceKey("escape-keyboard");
+    await wait(() => menu.state === "closed" && document.activeElement === button &&
+      button.getAttribute("aria-expanded") === "false" && !heading.hasAttribute("data-menu-open"),
+    "Native keyboard popup dismissal did not restore its heading anchor");
+    state("keyboard-escape-restored");
+    report.checks.push("workspace-heading-hover-and-focus-reveal-without-label-shift",
+      "native-workspace-menu-actions-dynamic-radio-order-and-last-workspace-safety",
+      "native-workspace-arrowdown-open-and-escape-anchor-focus-restoration");
+  }
+  async function workspaceTheme() {
+    stage("native-workspace-theme-editor");
+    await wait(() => window.FluxionWorkspaceTheme && window.FluxionColors, "Workspace theme editor did not initialize");
+    const ui = window.FluxionUI, id = ui.currentWorkspace(), other = ui.workspaces().find(workspace => workspace.id !== id).id;
+    const anchor = document.querySelector(".fluxion-workspace-more"), root = document.documentElement;
+    const panel = document.getElementById("fluxion-workspace-theme");
+    const field = name => document.getElementById(`fluxion-workspace-theme-${name}`);
+    const workspace = () => ui.workspaces().find(item => item.id === id);
+    const persisted = () => JSON.parse(Services.prefs.getStringPref("fluxion.workspaces")).find(item => item.id === id);
+    const projection = () => root.style.getPropertyValue("--fluxion-bg").trim();
+    const baseline = projection(), globalBefore = JSON.stringify(window.FluxionColors.current());
+    const evidence = report.workspaceTheme = { input: "Supported privileged editor API, real HTML form clicks, native macOS typed hex input; OS color-picker dialog not tested",
+      baseline, geometry: [], inputEvents: [] };
+    async function open() {
+      window.FluxionWorkspaceTheme.open(id, anchor);
+      await wait(() => panel.state === "open" && painted(field("hex")), "Native workspace theme panel did not open");
+      const panelBox = rect(panel);
+      const controls = ["mode", "color", "hex", "save", "cancel", "reset"].map(name => {
+        const node = field(name); assert(painted(node), `Workspace theme control is not painted: ${name}`);
+        return { name, ...rect(node) };
+      });
+      evidence.geometry.push({ panel: panelBox, controls });
+      for (const box of controls) assert(contains(panelBox, box), `Workspace theme control is clipped: ${box.name}`);
+      for (let first = 0; first < controls.length; first++) for (let second = first + 1; second < controls.length; second++) {
+        assert(!overlaps(controls[first], controls[second]), `Workspace theme controls overlap: ${controls[first].name}/${controls[second].name}`);
+      }
+      assert(field("color").type === "color", "Workspace theme swatch does not expose the native color input");
+    }
+    async function type(mode, value, action) {
+      field("mode").value = mode;
+      field("mode").dispatchEvent(new window.Event("change", { bubbles: true }));
+      field("hex").focus();
+      await wait(() => document.activeElement === field("hex"), "Workspace hex field did not receive focus");
+      const events = [], onInput = event => events.push({ trusted: event.isTrusted, value: field("hex").value });
+      field("hex").addEventListener("input", onInput);
+      try {
+        const name = `type-product-workspace-${action}`;
+        await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
+        await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Native theme input was not acknowledged: ${action}`, 20000);
+        await wait(() => events.some(event => event.trusted && event.value === value), "Native theme hex input did not arrive through trusted events");
+        assert(field("color").value === value, "Native color control did not synchronize with the hex input");
+        evidence.inputEvents.push({ mode, value, events });
+      } finally { field("hex").removeEventListener("input", onInput); }
+    }
+    await open();
+    await type("dark", "#304050", "dark");
+    await type("light", "#dde6dc", "light");
+    assert(!workspace().theme && projection() === baseline, "Unsaved workspace color draft leaked into persistence or browser chrome");
+    await capture("capture-product-workspace-theme");
+    field("save").click();
+    await wait(() => panel.state === "closed" && workspace().theme?.dark === "#304050" && workspace().theme?.light === "#dde6dc",
+      "Workspace theme Save did not commit both appearance modes");
+    await wait(() => projection().includes("#304050") && projection().includes("#dde6dc"), "Saved workspace bases did not project into browser chrome");
+    assert(persisted().theme?.dark === "#304050" && persisted().theme?.light === "#dde6dc", "Workspace theme was not persisted with workspace state");
+    const saved = projection(); evidence.savedProjection = saved; evidence.persistedTheme = persisted().theme;
+    ui.switchWorkspace(other);
+    await wait(() => ui.currentWorkspace() === other && projection() === baseline, "Unthemed workspace inherited another workspace's colors");
+    ui.switchWorkspace(id);
+    await wait(() => ui.currentWorkspace() === id && projection() === saved, "Returning to workspace did not restore its saved color projection");
+    await open();
+    await type("dark", "#405060", "cancel");
+    field("cancel").click();
+    await wait(() => panel.state === "closed", "Workspace theme Cancel did not dismiss the editor");
+    assert(workspace().theme?.dark === "#304050" && persisted().theme?.dark === "#304050" && projection() === saved,
+      "Canceled workspace theme draft changed persistence or active colors");
+    await open();
+    field("reset").click();
+    await wait(() => panel.state === "closed" && !workspace().theme && projection() === baseline, "Workspace theme Reset did not restore inherited appearance");
+    assert(!persisted().theme && JSON.stringify(window.FluxionColors.current()) === globalBefore,
+      "Workspace theme controls changed global colors or left reset data behind");
+    evidence.resetProjection = projection();
+    report.checks.push("workspace-dock-symbol-group-centered-with-one-and-two-workspaces",
+      "native-workspace-theme-controls-visible-contained-and-nonoverlapping",
+      "workspace-theme-native-hex-save-persistence-switch-restoration-cancel-and-reset");
+  }
   function sidebarColumns(label) {
     const flow = document.getElementById("fluxion-flow");
     assert(flow?.dataset.state === "expanded", "Sidebar column check requires expanded Flow");
@@ -256,6 +472,8 @@
       gBrowser.selectedBrowser.focus();
     }
     report.checks.push("normal-and-focused-address-field-balanced-at-1280-and-800", "visible-toolbar-controls-contained-with-no-pairwise-overlap", "expanded-workspace-tab-and-new-tab-labels-share-one-column", "native-places-suggestions-retain-address-field-anchor", "native-suggestion-group-branding-disabled-without-duplicate-inner-frame");
+    await workspaceHeading();
+    await workspaceTheme();
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-product-policy-and-toolbar-geometry-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack}`); Cu.reportError(error); })

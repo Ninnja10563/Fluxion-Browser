@@ -8,6 +8,27 @@
 
   const gesture = swipe.create(), cleanups = [], popups = new Set();
   let dragging = false, disposed = false;
+  let animation = null, animationFrame = 0;
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+  const stopAnimation = () => {
+    if (animationFrame) window.cancelAnimationFrame(animationFrame);
+    animationFrame = 0;
+    animation?.cancel();
+    animation = null;
+  };
+  const animateSwitch = direction => {
+    stopAnimation();
+    if (disposed || ![-1, 1].includes(direction) || reducedMotion.matches ||
+        document.documentElement.hasAttribute("data-fluxion-no-motion")) return;
+    animationFrame = window.requestAnimationFrame(() => {
+      animationFrame = 0;
+      if (disposed || !visible() || reducedMotion.matches || document.documentElement.hasAttribute("data-fluxion-no-motion")) return;
+      const list = surface.querySelector(".fluxion-tab-scroll");
+      if (!list?.animate) return;
+      animation = list.animate([{ transform: `translateX(${direction * 4}px)`, opacity: 0.94 },
+        { transform: "translateX(0)", opacity: 1 }], { duration: 150, easing: "cubic-bezier(.2,.7,.2,1)" });
+    });
+  };
   const on = (target, type, callback, options) => {
     target.addEventListener(type, callback, options);
     cleanups.push(() => target.removeEventListener(type, callback, options));
@@ -58,10 +79,17 @@
   });
   on(window, "unload", () => {
     disposed = true;
+    stopAnimation();
     while (cleanups.length) cleanups.pop()();
     popups.clear();
     gesture.reset();
     delete window.FluxionWorkspaceGestures;
   }, { once: true });
-  window.FluxionWorkspaceGestures = Object.freeze({ enabled: true });
+  on(reducedMotion, "change", () => { if (reducedMotion.matches) stopAnimation(); });
+  const motionObserver = new window.MutationObserver(() => {
+    if (document.documentElement.hasAttribute("data-fluxion-no-motion")) stopAnimation();
+  });
+  motionObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["data-fluxion-no-motion"] });
+  cleanups.push(() => motionObserver.disconnect());
+  window.FluxionWorkspaceGestures = Object.freeze({ enabled: true, animateSwitch });
 })(window);

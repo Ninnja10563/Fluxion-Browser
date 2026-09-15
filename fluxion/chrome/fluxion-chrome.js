@@ -25,6 +25,7 @@
   let contextTab = null;
   let contextGroup = null;
   let contextWorkspace = null;
+  let contextWorkspaceAnchor = null;
   let flowMenuSession = null;
   let dragTab = null;
   let dragTabs = [];
@@ -329,19 +330,35 @@
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
     .fluxion-workspaces {
-      display: flex; flex: none; align-items: center; gap: 3px; padding: 6px 7px;
+      display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px;
+      flex: none; align-items: center; gap: 3px; padding: 6px 7px;
     }
     .fluxion-workspace-heading {
-      display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 15px;
+      display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 8px; margin: 0 7px;
       color: var(--fluxion-muted); font-weight: 600; overflow: hidden;
+      border-radius: 7px;
     }
-    .fluxion-workspace-heading > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .fluxion-workspace-heading:hover, .fluxion-workspace-heading:focus-within,
+    .fluxion-workspace-heading[data-menu-open="true"] {
+      background: color-mix(in srgb, var(--fluxion-hover) 80%, #667c6918);
+      color: var(--fluxion-ink);
+    }
+    .fluxion-workspace-heading > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .fluxion-workspace-heading > .fluxion-workspace-symbol { width: 16px; height: 16px; }
+    .fluxion-workspace-more { opacity: 0; pointer-events: none; transition: opacity 100ms ease; }
+    .fluxion-workspace-heading:hover .fluxion-workspace-more,
+    .fluxion-workspace-heading:focus-within .fluxion-workspace-more,
+    .fluxion-workspace-heading[data-menu-open="true"] .fluxion-workspace-more {
+      opacity: 1; pointer-events: auto;
+    }
+    .fluxion-workspace-more > svg { width: 16px; height: 16px; }
     #fluxion-flow[data-state="compact"] .fluxion-workspace-heading { display: none; }
     .fluxion-workspace-list {
       min-width: 0; flex: 1; display: flex; align-items: center; gap: 2px;
       overflow-x: auto; scrollbar-width: none;
     }
+    .fluxion-workspace-list > :first-child { margin-inline-start: auto; }
+    .fluxion-workspace-list > :last-child { margin-inline-end: auto; }
     .fluxion-workspace-list::-webkit-scrollbar { display: none; }
     .fluxion-workspace {
       position: relative; min-width: 30px; max-width: 30px; height: 30px; flex: 0 0 30px;
@@ -389,6 +406,7 @@
     :root[data-fluxion-no-motion] #fluxion-flow,
     :root[data-fluxion-no-motion] .fluxion-surface,
     :root[data-fluxion-no-motion] .fluxion-tab,
+    :root[data-fluxion-no-motion] .fluxion-workspace-more,
     :root[data-fluxion-no-motion] .fluxion-group-disclosure { transition: none !important; }
     :root[data-fluxion-no-motion] #fluxion-settings,
     :root[data-fluxion-no-motion] #fluxion-library { transition: none !important; }
@@ -550,11 +568,12 @@
     .fluxion-pinned-tabs .fluxion-audio .fluxion-control-glyph,
     #fluxion-flow[data-state="compact"] .fluxion-audio .fluxion-control-glyph { width: 12px; height: 12px; }
     #fluxion-flow[data-state="compact"] .fluxion-workspaces {
-      flex-direction: column; gap: 2px; padding: 4px 7px; max-height: 45%; min-height: 0;
+      display: flex; flex-direction: column; gap: 2px; padding: 4px 7px; max-height: 45%; min-height: 0;
     }
     #fluxion-flow[data-state="compact"] .fluxion-workspace-list {
       width: 30px; min-height: 0; flex: 1 1 auto; flex-direction: column; overflow-x: hidden; overflow-y: auto;
     }
+    #fluxion-flow[data-state="compact"] .fluxion-workspace-list > .fluxion-workspace { margin-inline: 0; }
     #fluxion-flow[data-state="compact"] .fluxion-workspace {
       min-width: 30px; width: 30px; height: 28px; flex: none; padding: 0;
     }
@@ -572,6 +591,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-footer { padding-inline: 7px; }
     #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
+      .fluxion-workspace-more { transition: none !important; }
       #fluxion-flow, .fluxion-surface, .fluxion-tab { transition-duration: 0.01ms !important; }
       #fluxion-settings, #fluxion-library { transition: none !important; }
       .fluxion-status[data-kind="loading"]::before { animation: none !important; }
@@ -979,7 +999,7 @@
   addWorkspaceButton.textContent = "+";
   addWorkspaceButton.title = "New workspace";
   addWorkspaceButton.setAttribute("aria-label", "New workspace");
-  workspaceBar.append(workspaceList, addWorkspaceButton, modeButton);
+  workspaceBar.append(modeButton, workspaceList, addWorkspaceButton);
   const pinnedLabel = create("div", "fluxion-section-label");
   pinnedLabel.textContent = "Pinned";
   const pinnedTabs = create("div", "fluxion-tabs fluxion-pinned-tabs");
@@ -1008,7 +1028,15 @@
   const tabScroll = create("div", "fluxion-tab-scroll");
   const workspaceHeading = create("div", "fluxion-workspace-heading");
   const workspaceHeadingLabel = create("span");
-  workspaceHeading.append(workspaceSymbol(workspaces.find(item => item.id === currentWorkspace)?.icon), workspaceHeadingLabel);
+  const workspaceMoreButton = create("button", "fluxion-icon-button fluxion-workspace-more");
+  workspaceMoreButton.type = "button";
+  workspaceMoreButton.setAttribute("aria-label", "Workspace options");
+  workspaceMoreButton.setAttribute("aria-haspopup", "menu");
+  workspaceMoreButton.setAttribute("aria-expanded", "false");
+  workspaceMoreButton.setAttribute("aria-controls", "fluxion-workspace-context");
+  workspaceMoreButton.title = "Workspace options";
+  workspaceMoreButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></svg>`;
+  workspaceHeading.append(workspaceSymbol(workspaces.find(item => item.id === currentWorkspace)?.icon), workspaceHeadingLabel, workspaceMoreButton);
   tabScroll.append(workspaceHeading, pinnedLabel, pinnedTabs, tabsList, footer);
   const sidebarResizer = create("div");
   sidebarResizer.id = "fluxion-sidebar-resizer";
@@ -1211,7 +1239,7 @@
   }
 
   function workspaceSnapshot() {
-    return workspaces.map(workspace => ({ ...workspace }));
+    return workspaces.map(workspace => ({ ...workspace, ...(workspace.theme ? { theme: { ...workspace.theme } } : {}) }));
   }
 
   function notifyWorkspaceChange() {
@@ -1224,7 +1252,7 @@
   }
 
   function saveWorkspaces(next) {
-    workspaces = next.map(workspace => ({ ...workspace }));
+    workspaces = next.map(workspace => ({ ...workspace, ...(workspace.theme ? { theme: { ...workspace.theme } } : {}) }));
     Services.prefs.setStringPref(PREF_WORKSPACES, JSON.stringify(workspaces));
     Services.prefs.savePrefFile(null);
     notifyWorkspaceChange();
@@ -1245,7 +1273,7 @@
     if (!result) return null;
     saveWorkspaces(result.items);
     if (options.activate !== false) switchWorkspace(result.workspace.id);
-    return { ...result.workspace };
+    return { ...result.workspace, ...(result.workspace.theme ? { theme: { ...result.workspace.theme } } : {}) };
   }
 
   function addWorkspace() {
@@ -1268,7 +1296,7 @@
     const next = FluxionWorkspaces.updateWorkspace(workspaces, id, changes);
     if (!next) return null;
     saveWorkspaces(next);
-    return workspaces.find(workspace => workspace.id === id) || null;
+    return workspaceSnapshot().find(workspace => workspace.id === id) || null;
   }
 
   function renameWorkspace(id) {
@@ -1350,6 +1378,9 @@
 
   function switchWorkspace(id, options = {}) {
     if (!workspaces.some(item => item.id === id)) return;
+    const transitionDirection = id === currentWorkspace ? 0 : Math.sign(
+      workspaces.findIndex(item => item.id === id) - workspaces.findIndex(item => item.id === currentWorkspace),
+    );
     workspaceSwitchDepth += 1;
     try {
       if (!sessionRestoreSettled && options.reconcileRestore !== false) {
@@ -1391,6 +1422,10 @@
         }
       }
       scheduleRender();
+      if (transitionDirection && sessionRestoreSettled) {
+        window.FluxionWorkspaceGestures?.animateSwitch(transitionDirection);
+      }
+      if (transitionDirection) window.FluxionColors?.project();
     } finally {
       workspaceSwitchDepth -= 1;
     }
@@ -1623,6 +1658,16 @@
   let focusPointerInside = false;
   let focusKeyboardOwned = false;
   const focusOpenMenus = new Set();
+  on(document, "popupshowing", event => {
+    if (event.target.id !== "fluxion-workspace-theme") return;
+    focusOpenMenus.add(event.target);
+    clearFocusHideTimer();
+  }, true);
+  on(document, "popuphidden", event => {
+    if (event.target.id !== "fluxion-workspace-theme") return;
+    focusOpenMenus.delete(event.target);
+    scheduleFocusSurfaceHide();
+  }, true);
 
   function clearFocusHideTimer() {
     if (!focusHideTimer) return;
@@ -2509,8 +2554,7 @@
         });
         button.addEventListener("contextmenu", event => {
           event.preventDefault();
-          contextWorkspace = workspace.id;
-          workspaceMenu.openPopupAtScreen(event.screenX, event.screenY, true);
+          openWorkspaceMenu(workspace.id, button, event);
         });
         button.addEventListener("dragover", event => {
           if (!dragTab || tabWorkspace(dragTab) === workspace.id) return;
@@ -3078,20 +3122,34 @@
   });
 
   const workspaceMenu = xul("menupopup", { id: "fluxion-workspace-context" });
+  function openWorkspaceMenu(id, anchor, event = null) {
+    if (!workspaces.some(item => item.id === id)) return;
+    if (workspaceMenu.state === "open" || workspaceMenu.state === "showing") {
+      workspaceMenu.hidePopup();
+      return;
+    }
+    contextWorkspace = id;
+    contextWorkspaceAnchor = anchor;
+    if (event?.type === "contextmenu" && event.button === 2) {
+      workspaceMenu.openPopupAtScreen(event.screenX, event.screenY, true);
+    } else {
+      anchor.focus({ preventScroll: true });
+      workspaceMenu.openPopup(anchor, "after_start", 0, 2, false, false, event);
+    }
+  }
+  on(workspaceMoreButton, "click", event => openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event));
+  on(workspaceMoreButton, "keydown", event => {
+    if (event.key !== "ArrowDown") return;
+    event.preventDefault();
+    event.stopPropagation();
+    openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event);
+  });
+  on(workspaceHeading, "contextmenu", event => {
+    event.preventDefault();
+    openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event);
+  });
   appendAction(workspaceMenu, "Rename Workspace…", () => renameWorkspace(contextWorkspace));
-  const moveWorkspaceLeft = appendAction(
-    workspaceMenu,
-    "Move Workspace Left",
-    () => reorderWorkspace(contextWorkspace, -1),
-  );
-  const moveWorkspaceRight = appendAction(
-    workspaceMenu,
-    "Move Workspace Right",
-    () => reorderWorkspace(contextWorkspace, 1),
-  );
-  workspaceMenu.appendChild(xul("menuseparator"));
-
-  const accentMenu = xul("menu", { label: "Accent" });
+  const accentMenu = xul("menu", { label: "Change Accent" });
   const accentPopup = xul("menupopup");
   const accentItems = new Map();
   for (const accent of FluxionWorkspaces.ACCENTS) {
@@ -3106,7 +3164,7 @@
   accentMenu.appendChild(accentPopup);
   workspaceMenu.appendChild(accentMenu);
 
-  const symbolMenu = xul("menu", { label: "Symbol" });
+  const symbolMenu = xul("menu", { label: "Change Icon" });
   const symbolPopup = xul("menupopup");
   const symbolItems = new Map();
   for (const icon of FluxionWorkspaces.ICONS) {
@@ -3119,8 +3177,23 @@
     symbolItems.set(icon, item);
   }
   symbolMenu.appendChild(symbolPopup);
-  workspaceMenu.appendChild(symbolMenu);
+  workspaceMenu.insertBefore(symbolMenu, accentMenu);
+  appendAction(workspaceMenu, "Edit Workspace Theme…", () => {
+    const id = contextWorkspace, anchor = contextWorkspaceAnchor || workspaceMoreButton;
+    window.requestAnimationFrame(() => window.FluxionWorkspaceTheme?.open(id, anchor));
+  });
+  const workspaceSwitchStart = xul("menuseparator");
+  workspaceMenu.appendChild(workspaceSwitchStart);
+  const workspaceSwitchItems = [];
   workspaceMenu.appendChild(xul("menuseparator"));
+  const moveWorkspaceLeft = appendAction(
+    workspaceMenu, "Move Workspace Earlier", () => reorderWorkspace(contextWorkspace, -1),
+  );
+  const moveWorkspaceRight = appendAction(
+    workspaceMenu, "Move Workspace Later", () => reorderWorkspace(contextWorkspace, 1),
+  );
+  workspaceMenu.appendChild(xul("menuseparator"));
+  const newWorkspaceItem = appendAction(workspaceMenu, "New Workspace…", addWorkspace);
   const deleteWorkspaceItem = appendAction(
     workspaceMenu,
     "Delete Workspace…",
@@ -3130,6 +3203,22 @@
     if (event.target !== workspaceMenu) return;
     const index = workspaces.findIndex(item => item.id === contextWorkspace);
     const workspace = workspaces[index];
+    for (const item of workspaceSwitchItems) item.remove();
+    workspaceSwitchItems.length = 0;
+    let previous = workspaceSwitchStart;
+    for (const item of workspaces) {
+      const entry = appendAction(workspaceMenu, item.name, () => switchWorkspace(item.id), {
+        type: "radio", name: "fluxion-workspace-switch", checked: String(item.id === currentWorkspace),
+      });
+      workspaceMenu.insertBefore(entry, previous.nextSibling);
+      workspaceSwitchItems.push(entry);
+      previous = entry;
+    }
+    newWorkspaceItem.setAttribute("disabled", String(workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES));
+    if (contextWorkspaceAnchor === workspaceMoreButton) {
+      workspaceHeading.dataset.menuOpen = "true";
+      workspaceMoreButton.setAttribute("aria-expanded", "true");
+    }
     moveWorkspaceLeft.setAttribute("disabled", String(index <= 0));
     moveWorkspaceRight.setAttribute("disabled", String(index < 0 || index >= workspaces.length - 1));
     deleteWorkspaceItem.setAttribute("disabled", String(workspaces.length <= 1));
@@ -3151,7 +3240,7 @@
       snapshot(input, root) {
         const kind = root === contextMenu ? "tab" : root === groupMenu ? "group" : "workspace";
         const anchor = kind === "tab" ? tabElements.get(input.tab) :
-          kind === "group" ? groupElements.get(input.group) : workspaceElements.get(input.workspaceId);
+          kind === "group" ? groupElements.get(input.group) : input.workspaceAnchor || workspaceElements.get(input.workspaceId);
         const tabs = kind === "tab" ? FluxionTabSelection.contextTabs(input.tab, gBrowser.selectedTabs) :
           kind === "group" ? [...(input.group?.tabs || [])] : [];
         return { ...input, kind, workspace: currentWorkspace, workspaceRevision: JSON.stringify(workspaces),
@@ -3185,6 +3274,10 @@
             active !== flow && active !== matching && !matching?.contains(active) &&
             active !== context.anchor && !context.anchor?.contains(active) && !root.contains(active)) return;
         if (context.kind === "workspace") {
+          if (context.anchor === workspaceMoreButton && workspaceMoreButton.isConnected && flow.dataset.state !== "compact") {
+            workspaceMoreButton.focus({ preventScroll: true });
+            return;
+          }
           (workspaceElements.get(context.workspaceId) || workspaceElements.get(currentWorkspace))?.focus({ preventScroll: true });
           return;
         }
@@ -3197,7 +3290,7 @@
     for (const root of roots) {
       on(root, "popupshowing", event => {
         if (event.target !== root) return;
-        const input = { tab: contextTab, group: contextGroup, workspaceId: contextWorkspace };
+        const input = { tab: contextTab, group: contextGroup, workspaceId: contextWorkspace, workspaceAnchor: contextWorkspaceAnchor };
         if (flowMenuSession.context(root)) return;
         const context = flowMenuSession.begin(root, input);
         if (!context) { event.preventDefault(); return; }
@@ -3217,7 +3310,12 @@
         flowMenuSession.afterHidden(root);
         if (root === contextMenu) contextTab = null;
         else if (root === groupMenu) contextGroup = null;
-        else contextWorkspace = null;
+        else {
+          contextWorkspace = null;
+          contextWorkspaceAnchor = null;
+          delete workspaceHeading.dataset.menuOpen;
+          workspaceMoreButton.setAttribute("aria-expanded", "false");
+        }
       });
     }
     cleanup.push(() => flowMenuSession.dispose());

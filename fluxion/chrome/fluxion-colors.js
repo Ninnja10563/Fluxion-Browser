@@ -5,17 +5,31 @@
 
   const PREF = "fluxion.appearance.colors.v1";
   const root = window.document.documentElement;
+  let projected = null, lastSettings = "", lastEffective = "";
   function current() {
     return FluxionColorsCore.decode(Services.prefs.getStringPref(PREF, ""));
   }
   function project() {
     const settings = current();
-    const values = FluxionColorsCore.variables(settings);
+    const workspace = window.FluxionUI?.workspaces().find(item => item.id === window.FluxionUI.currentWorkspace());
+    const theme = workspace?.theme;
+    const light = FluxionColorsCore.hex(theme?.light), dark = FluxionColorsCore.hex(theme?.dark);
+    const base = settings.enabled ? settings : FluxionColorsCore.DEFAULTS;
+    const effective = light && dark ? { enabled: true,
+      light: { ...base.light, base: light }, dark: { ...base.dark, base: dark } } : settings;
+    const settingsKey = JSON.stringify(settings);
+    const effectiveKey = JSON.stringify(effective.enabled ? effective : { enabled: false });
+    if (projected && effectiveKey === lastEffective && settingsKey === lastSettings) return;
+    const values = effectiveKey === lastEffective && projected ? projected : FluxionColorsCore.variables(effective);
     for (const token of FluxionColorsCore.TOKENS) {
       const name = `--fluxion-${token}`;
+      if (projected && values[name] === projected[name]) continue;
       if (values[name]) root.style.setProperty(name, values[name]);
       else root.style.removeProperty(name);
     }
+    projected = values;
+    lastSettings = settingsKey;
+    lastEffective = effectiveKey;
     window.dispatchEvent(new window.CustomEvent("FluxionColorsChanged", { detail: settings }));
   }
   function save(settings) {
@@ -38,9 +52,11 @@
   }
   const observer = { observe: project };
   Services.prefs.addObserver(PREF, observer);
+  window.addEventListener("FluxionWorkspacesChanged", project);
   window.addEventListener("unload", () => {
     Services.prefs.removeObserver(PREF, observer);
+    window.removeEventListener("FluxionWorkspacesChanged", project);
   }, { once: true });
-  window.FluxionColors = Object.freeze({ current, setEnabled, setPalette, reset });
+  window.FluxionColors = Object.freeze({ current, setEnabled, setPalette, reset, project });
   project();
 })(window);

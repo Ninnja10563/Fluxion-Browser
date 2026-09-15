@@ -119,6 +119,7 @@ node --check scripts/tab-transfer-fixture.mjs
 node --check chrome/fluxion-data-clearing.js
 node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-colors.js
+node --check chrome/fluxion-workspace-theme.js
 node --check chrome/fluxion-shortcuts.js
 node --check chrome/fluxion-memory.js
 node --check chrome/fluxion-ai.js

@@ -47,7 +47,32 @@ on run arguments
           keystroke "l" using command down
           keystroke "* Fluxion navigation geometry fixture"
         end tell
-      else if captureName starts with "capture-product-suggestions-" then
+      else if captureName starts with "type-product-workspace-" then
+        if not frontmost of ownedProcess then error "Workspace color input lost its foreground owner"
+        tell ownedProcess
+          keystroke "a" using command down
+          if captureName is "type-product-workspace-dark" then
+            keystroke "#304050"
+          else if captureName is "type-product-workspace-light" then
+            keystroke "#dde6dc"
+          else if captureName is "type-product-workspace-cancel" then
+            keystroke "#405060"
+          else
+            error "Unsupported workspace color action"
+          end if
+        end tell
+      else if captureName starts with "key-product-workspace-" then
+        if not frontmost of ownedProcess then error "Workspace key input lost its foreground owner"
+        tell ownedProcess
+          if captureName is "key-product-workspace-down" then
+            key code 125
+          else if captureName is "key-product-workspace-escape-pointer" or captureName is "key-product-workspace-escape-keyboard" then
+            key code 53
+          else
+            error "Unsupported workspace key action"
+          end if
+        end tell
+      else if captureName starts with "capture-product-suggestions-" or captureName starts with "capture-product-workspace-" then
         if not frontmost of ownedProcess then error "Popup capture lost its foreground owner"
       else if not frontmost of ownedProcess then
         set frontmost of ownedProcess to true
@@ -69,7 +94,10 @@ FLUXION_PROFILE="$profile" FLUXION_PRODUCT_CHROME_TEST=1 FLUXION_PRODUCT_CHROME_
 process_id=$!
 for ((attempt=0; attempt<720; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
-  for action in capture-product-chrome-1280 query-product-suggestions-1280 capture-product-suggestions-1280 capture-product-chrome-800 query-product-suggestions-800 capture-product-suggestions-800; do
+  for action in capture-product-chrome-1280 query-product-suggestions-1280 capture-product-suggestions-1280 capture-product-chrome-800 query-product-suggestions-800 capture-product-suggestions-800 \
+    capture-product-workspace-idle capture-product-workspace-hover capture-product-workspace-menu key-product-workspace-escape-pointer \
+    key-product-workspace-down capture-product-workspace-menu-updated key-product-workspace-escape-keyboard \
+    type-product-workspace-dark type-product-workspace-light capture-product-workspace-theme type-product-workspace-cancel; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       owned || exit 1
@@ -90,4 +118,4 @@ if [[ "$result" != 0 ]] || ! grep -Fq 'user_pref("fluxion.productChrome.verifica
   exit 1
 fi
 grep 'fluxion.productChrome.verification' "$profile/prefs.js"
-printf 'Verified inherited VPN feature exclusion, actual nonoverlapping toolbar controls, balanced normal/focused address padding at 1280/800px, and native Places suggestions after macOS Cmd-L and typed input.\n'
+printf 'Verified product policy, nonoverlapping toolbar controls, balanced address padding at 1280/800px, native Places suggestions, and workspace heading hover/menu geometry with macOS ArrowDown/Escape focus restoration.\n'

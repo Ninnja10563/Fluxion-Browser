@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.67.0";
-  const PRODUCT_RELEASE = "0.67.0-preview.1";
+  const PRODUCT_VERSION = "0.68.0";
+  const PRODUCT_RELEASE = "0.68.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -455,7 +455,7 @@
   window.addEventListener("FluxionThemeChanged", syncThemeChoice);
   const colorService = window.FluxionColors;
   const colorEditors = new Map();
-  const customColorsChoice = row(appearance, "Custom colors", "Choose separate light and dark browser colors. Page colors and security indicators are not changed.", toggle("Enabled", colorService?.current().enabled || false, checked => {
+  const customColorsChoice = row(appearance, "Custom colors", "Global light and dark colors. Workspace themes can override the base color; page colors and security indicators are unchanged.", toggle("Enabled", colorService?.current().enabled || false, checked => {
     try { colorService.setEnabled(checked); }
     catch (error) { setNote(`Colors could not be saved: ${error.message}`, "appearance"); syncColors(); }
   }));

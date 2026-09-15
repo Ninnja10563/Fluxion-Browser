@@ -23,17 +23,33 @@ function target() {
 
 function runtime() {
   let time = 0, current = "two", editing = false;
-  const switched = [], attributes = new Set(), timers = [];
+  const switched = [], attributes = new Set(), timers = [], frames = new Map(), animations = [], observers = [];
+  let frameID = 0;
   let workspaces = [{ id: "one" }, { id: "two" }, { id: "three" }];
   const document = target(), surface = target(), flow = { dataset: { state: "expanded" }, querySelector: () => surface };
   const row = { ownerDocument: document, closest: () => editing ? {} : null };
   surface.nodePrincipal = { isSystemPrincipal: true };
   surface.contains = node => node === row;
+  const list = { animate(keyframes, options) {
+    const animation = { keyframes, options, cancelled: false, cancel() { this.cancelled = true; } };
+    animations.push(animation);
+    return animation;
+  } };
+  surface.querySelector = selector => selector === ".fluxion-tab-scroll" ? list : null;
   document.documentElement = { hasAttribute: name => attributes.has(name) };
   document.getElementById = id => id === "fluxion-flow" ? flow : null;
+  const reducedMotion = Object.assign(target(), { matches: false });
   const window = Object.assign(target(), {
     document, gBrowser: {}, FluxionWorkspaceSwipe: swipe, performance: { now: () => time },
     setTimeout(callback, delay) { assert.equal(delay, 0); timers.push(callback); },
+    matchMedia: () => reducedMotion,
+    requestAnimationFrame(callback) { frames.set(++frameID, callback); return frameID; },
+    cancelAnimationFrame: id => frames.delete(id),
+    MutationObserver: class {
+      constructor(callback) { this.callback = callback; observers.push(this); }
+      observe() {}
+      disconnect() { this.disconnected = true; }
+    },
     FluxionUI: {
       currentWorkspace: () => current,
       workspaces: () => workspaces,
@@ -56,8 +72,10 @@ function runtime() {
     surface.emit("wheel", event);
     return event;
   }
-  return { window, document, flow, surface, row, wheel, switched, attributes, load, focus,
+  return { window, document, flow, surface, row, wheel, switched, attributes, load, focus, animations, reducedMotion,
     flushTimers: () => { while (timers.length) timers.shift()(); },
+    flushFrames: () => { const callbacks = [...frames.values()]; frames.clear(); for (const callback of callbacks) callback(); },
+    updateMotion: () => { for (const observer of observers) if (!observer.disconnected) observer.callback(); },
     setEditing: value => { editing = value; },
     setWorkspaces: value => { workspaces = value; },
     setCurrent: value => { current = value; },
@@ -70,13 +88,75 @@ test("actual controller registers a nonpassive sidebar-only wheel route, with th
   assert.equal(env.surface.listeners.get("wheel")[0].options.passive, false);
   assert.equal(env.document.listeners.has("wheel"), false);
   assert.equal(env.window.listeners.has("wheel"), false);
-  assert.equal(env.wheel({ deltaX: 10 }).defaultPrevented, true);
+  assert.equal(env.wheel({ deltaX: 12 }).defaultPrevented, true);
   assert.deepEqual(env.switched, []);
-  env.wheel({ deltaX: 46 });
+  env.wheel({ deltaX: 44 });
   for (let i = 0; i < 40; i++) env.wheel();
   assert.deepEqual(env.switched, ["three"]);
   env.wheel({ deltaX: -70 }, 240);
   assert.deepEqual(env.switched, ["three", "two"]);
+});
+
+test("actual controller accepts deliberate rapid reversals and fresh same-direction gestures in both directions", () => {
+  const env = runtime();
+  env.setCurrent("one");
+  env.wheel();
+  env.wheel({ deltaX: -28 });
+  assert.deepEqual(env.switched, ["two"]);
+  env.wheel({ deltaX: -28 });
+  env.wheel();
+  assert.deepEqual(env.switched, ["two", "one", "two"]);
+  for (const delta of [24, 12, 4, 2]) env.wheel({ deltaX: delta });
+  env.wheel();
+  assert.deepEqual(env.switched, ["two", "one", "two", "three"]);
+  env.wheel({ deltaX: -60 });
+  for (const delta of [-24, -12, -4, -2]) env.wheel({ deltaX: delta });
+  env.wheel({ deltaX: -60 });
+  assert.deepEqual(env.switched, ["two", "one", "two", "three", "two", "one"]);
+});
+
+test("workspace animation affects only the tab list, waits for the render frame and replaces superseded motion", () => {
+  const env = runtime(), api = env.window.FluxionWorkspaceGestures;
+  api.animateSwitch(1);
+  api.animateSwitch(-1);
+  assert.equal(env.animations.length, 0, "no animation before the pending render frame");
+  env.flushFrames();
+  assert.equal(env.animations.length, 1);
+  assert.equal(env.animations[0].keyframes[0].transform, "translateX(-4px)");
+  assert.equal(env.animations[0].options.duration, 150);
+  api.animateSwitch(1);
+  assert.equal(env.animations[0].cancelled, true);
+  env.flushFrames();
+  assert.equal(env.animations[1].keyframes[0].transform, "translateX(4px)");
+  assert.deepEqual(env.switched, [], "animation never navigates or delays a workspace operation");
+  env.window.emit("unload");
+  assert.equal(env.animations[1].cancelled, true);
+});
+
+test("workspace animation respects reduced motion, the Settings toggle, hidden state and unload", () => {
+  const env = runtime(), api = env.window.FluxionWorkspaceGestures;
+  api.animateSwitch(0); env.flushFrames();
+  env.flow.dataset.state = "focus"; env.flow.dataset.revealed = "false";
+  api.animateSwitch(1); env.flushFrames();
+  env.flow.dataset.state = "expanded";
+  env.reducedMotion.matches = true;
+  api.animateSwitch(1); env.flushFrames();
+  env.reducedMotion.matches = false;
+  env.attributes.add("data-fluxion-no-motion");
+  api.animateSwitch(1); env.flushFrames();
+  assert.equal(env.animations.length, 0);
+  env.attributes.clear();
+  api.animateSwitch(1); env.flushFrames();
+  env.attributes.add("data-fluxion-no-motion"); env.updateMotion();
+  assert.equal(env.animations[0].cancelled, true, "disabling interface motion stops an in-flight transition");
+  env.attributes.clear();
+  api.animateSwitch(1); env.flushFrames();
+  env.reducedMotion.matches = true; env.reducedMotion.emit("change");
+  assert.equal(env.animations[1].cancelled, true);
+  env.reducedMotion.matches = false;
+  api.animateSwitch(1);
+  env.window.emit("unload"); env.flushFrames();
+  assert.equal(env.animations.length, 2, "unload cancels a pending animation frame");
 });
 
 test("vertical scrolling and page, synthetic, or non-system events cannot change workspaces", () => {

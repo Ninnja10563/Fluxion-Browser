@@ -122,6 +122,35 @@
     assert(JSON.stringify(history()) === originalHistory, "Sidebar gesture navigated a webpage or changed its session history");
     report.checks.push("trusted-horizontal-next-previous-one-switch-per-momentum-gesture-no-boundary-wrap-no-page-navigation");
 
+    stage("rapid-reversal-and-repeated-gestures");
+    for (let attempt = 0; attempt < 3; attempt++) {
+      wheel(point, 60);
+      await wait(() => ui.currentWorkspace() === second.id, "Rapid rightward workspace selection was ignored");
+      wheel(point, -28);
+      assert(ui.currentWorkspace() === second.id, "A subthreshold reverse gesture switched too soon");
+      wheel(point, -28);
+      await wait(() => ui.currentWorkspace() === first.id, "Rapid leftward workspace selection was ignored");
+      for (const dx of [2, -2, 2, -2]) wheel(point, dx, 0, true);
+      assert(ui.currentWorkspace() === first.id, "Small direction bounce changed the selected workspace");
+    }
+    await delay(300);
+    wheel(point, 60);
+    await wait(() => ui.currentWorkspace() === second.id, "Repeated-gesture baseline did not select the middle workspace");
+    for (const dx of [24, 12, 4, 2]) wheel(point, dx, 0, true);
+    assert(ui.currentWorkspace() === second.id, "Decaying momentum caused an extra forward workspace switch");
+    wheel(point, 60);
+    await wait(() => ui.currentWorkspace() === third.id, "A fresh forward gesture after the tail was ignored");
+    wheel(point, 60, 0, true);
+    assert(ui.currentWorkspace() === third.id, "Continued forward inertia switched another workspace");
+    wheel(point, -60);
+    await wait(() => ui.currentWorkspace() === second.id, "Reverse gesture from the last workspace was ignored");
+    for (const dx of [-24, -12, -4, -2]) wheel(point, dx, 0, true);
+    assert(ui.currentWorkspace() === second.id, "Decaying momentum caused an extra reverse workspace switch");
+    wheel(point, -60);
+    await wait(() => ui.currentWorkspace() === first.id, "A fresh reverse gesture after the tail was ignored");
+    assert(JSON.stringify(history()) === originalHistory, "Repeated sidebar gestures changed native page history");
+    report.checks.push("rapid-bidirectional-reversal-small-bounce-suppression-and-fresh-impulses-after-decayed-tails");
+
     stage("vertical-native-scroll");
     for (let index = 0; index < 55; index++) {
       const tab = gBrowser.addTrustedTab(`about:blank?fluxion-swipe-scroll=${index}`, { skipAnimation: true });
