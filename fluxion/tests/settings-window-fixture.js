@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth, permissions, prompt } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth, colors, permissions, prompt } = {}) {
   const preferences = new Map(saved);
   const elements = [];
   class Element {
@@ -36,6 +36,8 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     hasAttribute(key) { return this.attributes.has(key); }
     removeAttribute(key) { this.attributes.delete(key); }
     toggleAttribute(key, value) { if (value) this.setAttribute(key, ""); else this.removeAttribute(key); }
+    setCustomValidity(message) { this.validationMessage = message; }
+    reportValidity() { this.validityReported = true; return !this.validationMessage; }
     addEventListener(type, callback) {
       this.listeners.set(type, [...(this.listeners.get(type) || []), callback]);
     }
@@ -64,6 +66,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     document, FluxionMemory: memory, FluxionPermissions: permissions, Event: class { constructor(type) { this.type = type; } },
     FluxionUI: { workspaces: () => [], currentWorkspace: () => "work", setTabWorkspace() {} },
     FluxionTheme: { current: () => "system" },
+    FluxionColors: colors,
     FluxionAI: ai || { config: () => ({ provider: "disabled", endpoint: "", model: "" }) },
     FluxionShortcuts: { actions: () => [] },
   });

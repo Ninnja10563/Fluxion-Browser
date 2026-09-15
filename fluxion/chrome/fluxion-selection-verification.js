@@ -32,6 +32,8 @@
     ui.setSidebarState("expanded");
     const workspace = ui.currentWorkspace(), flow = document.getElementById("fluxion-flow");
     const tree = flow.querySelector('[aria-label="Open tabs in current workspace"]');
+    const scrollArea = flow.querySelector(".fluxion-tab-scroll");
+    assert(scrollArea?.contains(tree), "Flow tree is not inside its shared tab scroll area");
     for (let i = 0; i < 1000; i++) {
       const tab = gBrowser.addTrustedTab("about:blank", { skipAnimation: true, createLazyBrowser: i >= 40 });
       ui.setTabWorkspace(tab, workspace); fixtures.push(tab);
@@ -44,11 +46,12 @@
     await settle();
     let baseline = rows(), closeButtons = new Map([...baseline].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
     const input = document.getElementById("urlbar-input");
-    input.focus(); tree.scrollTop = 400; await settle();
+    input.focus(); scrollArea.scrollTop = 400; await settle();
+    assert(scrollArea.scrollTop > 0, "Selection fixture did not establish a nonzero Flow scroll offset");
     const snapshot = destination => ({ activeId: document.activeElement?.id || "",
       activeTag: document.activeElement?.localName || "", inputFocused: document.activeElement === input,
       destinationBrowserFocused: document.activeElement === destination.linkedBrowser,
-      activeWindow: Services.focus.activeWindow === window, scrollTop: tree.scrollTop,
+      activeWindow: Services.focus.activeWindow === window, scrollTop: scrollArea.scrollTop,
       savedUrlbarFocus: Boolean(window.gURLBar.getBrowserState(destination.linkedBrowser).urlbarFocused),
       selected: gBrowser.selectedTab === destination });
     assert(document.activeElement === input, `Could not establish initial URLbar focus: ${JSON.stringify(snapshot(fixtures[0]))}`);
@@ -62,7 +65,7 @@
       await wait(() => document.activeElement === nativeOwner(), "Cold selection did not restore Gecko's saved destination focus policy");
     } finally { report.coldSelection.final = snapshot(cold); }
     assert(!document.activeElement?.closest?.("#fluxion-flow"), "Flow stole focus after cold native selection");
-    assert(Math.abs(tree.scrollTop - report.coldSelection.before.scrollTop) <= 1,
+    assert(Math.abs(scrollArea.scrollTop - report.coldSelection.before.scrollTop) <= 1,
       `Cold native selection scrolled Flow: ${JSON.stringify(report.coldSelection)}`);
     // Native Gecko remembers URLbar focus per tab. Establish that state by
     // actually visiting and focusing each destination, never changing its store.
@@ -72,11 +75,12 @@
     }
     ui.selectTab(fixtures[0]); await settle();
     await wait(() => document.activeElement === input, "Primed native tab did not restore URLbar focus");
-    tree.scrollTop = 400; await settle();
+    scrollArea.scrollTop = 400; await settle();
+    assert(scrollArea.scrollTop > 0, "Measured selections lost their nonzero Flow scroll baseline");
     baseline = rows();
     closeButtons = new Map([...baseline].map(([tab, row]) => [tab, row.querySelector(".fluxion-close")]));
     report.focusContract = "One cold Gecko-policy selection, then 33 tabs primed by real selection+input.focus before 30 measured selections";
-    const scroll = tree.scrollTop;
+    const scroll = scrollArea.scrollTop;
     observer = new window.MutationObserver(records => mutations.push(...records));
     observer.observe(flow, { attributes: true, attributeOldValue: true, childList: true, characterData: true, subtree: true });
     const drain = () => { mutations.push(...observer.takeRecords()); const records = mutations; mutations = []; return records; };
@@ -155,7 +159,7 @@
       evidence.immediate = snapshot(next); await frame();
       latencies.push(window.performance.now() - start);
       await settle(); evidence.final = snapshot(next); verify(new Set([previous, next]));
-      assert(document.activeElement === input && Math.abs(tree.scrollTop - scroll) <= 1,
+      assert(document.activeElement === input && Math.abs(scrollArea.scrollTop - scroll) <= 1,
         `Background native selection stole input focus or scrolled Flow: ${JSON.stringify(evidence)}`);
       report.selections++;
     }

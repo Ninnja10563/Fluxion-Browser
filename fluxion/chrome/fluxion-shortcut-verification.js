@@ -61,14 +61,14 @@
     const sidebar = field(appearance, "Flow sidebar");
     window.FluxionUI.setSidebarState("expanded");
     const cycle = document.querySelector('.fluxion-workspaces > button.fluxion-icon-button');
-    assert(cycle, "The shipped Flow sidebar cycle button is missing");
-    assert(cycle.getAttribute("aria-label") === "Collapse sidebar to icons",
+    assert(cycle, "The shipped Flow sidebar toggle button is missing");
+    assert(cycle.getAttribute("aria-label") === "Collapse sidebar",
       "Expanded sidebar control does not describe its next action");
     cycle.click();
-    await waitFor(() => sidebar.value === "compact" && field(remoteAppearance, "Flow sidebar").value === "compact",
+    await waitFor(() => sidebar.value === "focus" && field(remoteAppearance, "Flow sidebar").value === "focus",
       "Toolbar sidebar change left an open Settings window stale");
-    assert(cycle.getAttribute("aria-label") === "Hide sidebar",
-      "Compact sidebar control does not describe its next action");
+    assert(cycle.getAttribute("aria-label") === "Expand sidebar",
+      "Collapsed sidebar control does not describe its next action");
     change(companion, field(remoteAppearance, "Flow sidebar"), "expanded");
     change(companion, field(remoteAppearance, "Tab density"), "roomy");
     change(companion, field(remoteAppearance, "Interface motion"), false);
@@ -116,7 +116,7 @@
         !settingsTab.hasAttribute("busy") && node?.getBoundingClientRect().height > 0 && node;
     }, "Keyboard Settings did not become visible");
     const button = label => panel.querySelector(`button[aria-label="Change ${label} shortcut"]`);
-    const capture = button("Cycle Flow sidebar");
+    const capture = button("Toggle Flow sidebar");
     assert(capture, "Sidebar shortcut capture control is missing");
     const key = (target, code, extra = {}) => {
       const event = new window.KeyboardEvent("keydown", {

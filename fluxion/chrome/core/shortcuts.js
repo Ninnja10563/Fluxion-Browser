@@ -5,7 +5,7 @@
   const ACTIONS = Object.freeze({
     palette: Object.freeze({ label: "Command palette", defaultChord: "Accel+KeyK" }),
     tabSearch: Object.freeze({ label: "Search open tabs", defaultChord: "Accel+Shift+KeyA" }),
-    sidebar: Object.freeze({ label: "Cycle Flow sidebar", defaultChord: "Accel+Shift+Backslash" }),
+    sidebar: Object.freeze({ label: "Toggle Flow sidebar", defaultChord: "Accel+Shift+Backslash" }),
     workspaceNext: Object.freeze({ label: "Next workspace", defaultChord: "Accel+Alt+BracketRight" }),
     workspacePrevious: Object.freeze({ label: "Previous workspace", defaultChord: "Accel+Alt+BracketLeft" }),
   });

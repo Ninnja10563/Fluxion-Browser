@@ -53,6 +53,20 @@ jobs:
           path: ${{ runner.temp }}/fluxion-frame-evidence
           if-no-files-found: warn
 
+      - name: Check custom chrome colors and clean relaunch
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_COLORS_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-colors-evidence
+        run: ./fluxion/scripts/verify-macos-colors.sh '.runtime/Fluxion.app'
+
+      - name: Preserve custom color evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-colors-diagnostic
+          path: ${{ runner.temp }}/fluxion-colors-evidence
+          if-no-files-found: warn
+
       - name: Check native Settings accessibility
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:

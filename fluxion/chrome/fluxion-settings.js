@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.65.0";
-  const PRODUCT_RELEASE = "0.65.0-preview.1";
+  const PRODUCT_VERSION = "0.66.0";
+  const PRODUCT_RELEASE = "0.66.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -105,6 +105,13 @@
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .fluxion-settings-actions > .fluxion-settings-button { width: 100%; justify-self: stretch; }
     #fluxion-sidebar-width-controls { grid-template-columns: minmax(0, 1fr) auto; }
+    .fluxion-color-palette { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+    .fluxion-color-field { display: grid; gap: 5px; min-width: 0; }
+    .fluxion-color-field > span { font-size: 12px; color: var(--fluxion-muted); }
+    .fluxion-color-inputs { display: flex; align-items: center; gap: 5px; min-width: 0; }
+    .fluxion-color-inputs input[type=color] { box-sizing: border-box; width: 28px; min-width: 28px; height: 28px; padding: 2px; border: 1px solid var(--fluxion-line); background: transparent; }
+    .fluxion-color-inputs input[type=text] { width: 100%; min-width: 0; padding-inline: 5px; font-family: ui-monospace, monospace; font-size: 11px; }
+    .fluxion-color-inputs input:focus-visible { outline: 2px solid var(--fluxion-accent); outline-offset: 1px; }
     .fluxion-workspace-create {
       display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 7px;
       align-items: center; margin-bottom: 18px;
@@ -435,8 +442,107 @@
     themeChoice.value = value;
   };
   window.addEventListener("FluxionThemeChanged", syncThemeChoice);
-  const sidebarChoice = row(appearance, "Flow sidebar", "Expanded shows titles; compact keeps the rail; focus leaves a reveal edge.", select([
-    ["expanded", "Expanded"], ["compact", "Compact"], ["focus", "Focus"],
+  const colorService = window.FluxionColors;
+  const colorEditors = new Map();
+  const customColorsChoice = row(appearance, "Custom colors", "Choose separate light and dark browser colors. Page colors and security indicators are not changed.", toggle("Enabled", colorService?.current().enabled || false, checked => {
+    try { colorService.setEnabled(checked); }
+    catch (error) { setNote(`Colors could not be saved: ${error.message}`, "appearance"); syncColors(); }
+  }));
+  customColorsChoice.querySelector("input").id = "fluxion-colors-enabled";
+  customColorsChoice.querySelector("input").disabled = !colorService;
+  for (const mode of ["light", "dark"]) {
+    const controls = create("div", "fluxion-color-palette");
+    const editor = { draft: false, fields: {} };
+    colorEditors.set(mode, editor);
+    for (const [key, title] of [["base", "Base"], ["accent", "Accent"]]) {
+      const field = create("div", "fluxion-color-field");
+      const label = create("span", "", title);
+      const inputs = create("div", "fluxion-color-inputs");
+      const picker = create("input");
+      picker.type = "color";
+      picker.id = `fluxion-color-${mode}-${key}-picker`;
+      picker.setAttribute("aria-label", `Pick ${mode} ${key} color`);
+      const text = create("input", "fluxion-settings-control");
+      text.type = "text";
+      text.id = `fluxion-color-${mode}-${key}`;
+      text.maxLength = 7;
+      text.pattern = "#[0-9a-fA-F]{6}";
+      text.required = true;
+      text.spellcheck = false;
+      picker.disabled = text.disabled = !colorService;
+      text.setAttribute("aria-label", `${mode === "light" ? "Light" : "Dark"} ${key} color, six-digit hexadecimal`);
+      text.addEventListener("input", () => { editor.draft = true; text.setCustomValidity(""); text.removeAttribute("aria-invalid"); });
+      const commit = () => {
+        const values = Object.fromEntries(Object.entries(editor.fields).map(([name, pair]) => [name, pair.text.value.trim()]));
+        for (const pair of Object.values(editor.fields)) {
+          const valid = /^#[0-9a-f]{6}$/i.test(pair.text.value.trim());
+          pair.text.setCustomValidity(valid ? "" : "Use # followed by six hexadecimal digits.");
+          if (valid) pair.text.removeAttribute("aria-invalid");
+          else pair.text.setAttribute("aria-invalid", "true");
+          if (!valid) {
+            editor.draft = true;
+            setNote("Use # followed by six hexadecimal digits, such as #1c1e20. Colors have not been changed.", "appearance");
+            pair.text.reportValidity();
+            return;
+          }
+        }
+        try {
+          colorService.setPalette(mode, values);
+          editor.draft = false;
+          syncColors();
+          setNote(`${mode === "light" ? "Light" : "Dark"} browser colors saved. Text and accent contrast are adjusted for readability.`, "appearance");
+        } catch (error) { setNote(`Colors could not be saved: ${error.message}`, "appearance"); }
+      };
+      text.addEventListener("change", commit);
+      text.addEventListener("keydown", event => {
+        if (event.key !== "Escape") return;
+        event.preventDefault(); event.stopPropagation();
+        editor.draft = false;
+        syncColors();
+      });
+      picker.addEventListener("change", () => { text.value = picker.value; editor.draft = true; commit(); });
+      editor.fields[key] = { picker, text };
+      inputs.append(picker, text);
+      field.append(label, inputs);
+      controls.appendChild(field);
+    }
+    row(appearance, `${mode === "light" ? "Light" : "Dark"} colors`, "Base sets the browser frame; accent marks focus and selection. Text contrast is kept readable automatically.", controls);
+    for (const pair of Object.values(editor.fields)) {
+      pair.picker.setAttribute("aria-describedby", controls.getAttribute("aria-describedby"));
+      pair.text.setAttribute("aria-describedby", controls.getAttribute("aria-describedby"));
+    }
+  }
+  const resetColors = create("button", "fluxion-settings-button", "Reset colors");
+  resetColors.id = "fluxion-colors-reset";
+  resetColors.type = "button";
+  resetColors.disabled = !colorService;
+  resetColors.addEventListener("click", () => {
+    try {
+      for (const editor of colorEditors.values()) editor.draft = false;
+      colorService.reset();
+      setNote("Default browser colors restored. Your theme choice has not changed.", "appearance");
+    } catch (error) { setNote(`Colors could not be reset: ${error.message}`, "appearance"); }
+  });
+  row(appearance, "Default colors", "Disable custom colors and restore both palettes without changing your theme or workspaces.", resetColors);
+  function syncColors() {
+    const saved = colorService?.current();
+    if (!saved) return;
+    customColorsChoice.querySelector("input").checked = saved.enabled;
+    for (const [mode, editor] of colorEditors) {
+      for (const [key, pair] of Object.entries(editor.fields)) {
+        pair.picker.disabled = pair.text.disabled = !saved.enabled;
+        if (editor.draft && saved.enabled) continue;
+        editor.draft = false;
+        pair.picker.value = pair.text.value = saved[mode][key];
+        pair.text.setCustomValidity("");
+        pair.text.removeAttribute("aria-invalid");
+      }
+    }
+  }
+  window.addEventListener("FluxionColorsChanged", syncColors);
+  syncColors();
+  const sidebarChoice = row(appearance, "Flow sidebar", "Expanded shows titles. Compact keeps an icon rail. Collapsed reveals the sidebar when you hover over the window edge.", select([
+    ["expanded", "Expanded"], ["compact", "Compact"], ["focus", "Collapsed · reveal on hover"],
   ], FluxionSettings.normaliseSidebar(pref.string("fluxion.sidebar.state", "expanded")), value => {
     window.FluxionUI.setSidebarState(value);
   }));
@@ -1427,6 +1533,7 @@
     style.remove();
     document.documentElement.removeAttribute("data-fluxion-settings-visible");
     window.removeEventListener("FluxionThemeChanged", syncThemeChoice);
+    window.removeEventListener("FluxionColorsChanged", syncColors);
     window.removeEventListener("FluxionWorkspacesChanged", syncWorkspaceSettings);
     window.removeEventListener("FluxionMemoryEmbeddingProviderChanged", syncEmbeddingChoice);
     for (const name of memoryPreferenceNames) Services.prefs.removeObserver(name, memoryPreferenceObserver);

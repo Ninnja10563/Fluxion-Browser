@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.65.0-preview.1
+        default: 0.66.0-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.65.0-preview.1
+        default: v0.66.0-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -128,6 +128,20 @@ jobs:
         with:
           name: Fluxion-${{ inputs.version }}-frame-evidence
           path: ${{ runner.temp }}/fluxion-frame-evidence
+          if-no-files-found: warn
+
+      - name: Verify custom chrome colors and clean relaunch
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_COLORS_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-colors-evidence
+        run: ./fluxion/scripts/verify-macos-colors.sh '.runtime/Fluxion.app'
+
+      - name: Preserve custom color evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-colors-evidence
+          path: ${{ runner.temp }}/fluxion-colors-evidence
           if-no-files-found: warn
 
       - name: Preserve Flow structure evidence

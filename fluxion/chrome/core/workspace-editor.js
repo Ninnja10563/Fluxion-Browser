@@ -1,5 +1,7 @@
 (function exposeWorkspaceEditor(scope) {
   "use strict";
+  const symbols = typeof module !== "undefined" && module.exports
+    ? require("./workspace-icons.js") : scope.FluxionWorkspaceIcons;
 
   // DOM state belongs to a workspace ID, not its current position or label.
   function attach(list, { create, select, mark, update, move, remove, note, scrollContainer }) {
@@ -38,7 +40,7 @@
         field.classList.add("fluxion-settings-control");
         return field;
       };
-      const symbol = choice("icon", [["circle", "Circle"], ["diamond", "Diamond"], ["square", "Square"], ["arc", "Arc"], ["grid", "Grid"]]);
+      const symbol = choice("icon", symbols.choices);
       const accent = choice("accent", [["slate", "Slate"], ["blue", "Blue"], ["ochre", "Ochre"], ["sage", "Sage"], ["rose", "Rose"]]);
       const actions = create("div", "fluxion-settings-workspace-actions");
       const button = (label, action, danger = false) => {

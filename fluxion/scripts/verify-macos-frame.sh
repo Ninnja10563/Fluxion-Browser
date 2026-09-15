@@ -84,4 +84,4 @@ if [[ "$result" != 0 ]] || ! grep -Fq 'user_pref("fluxion.frame.verification.hea
   exit 1
 fi
 grep 'fluxion.frame.verification' "$profile/prefs.js"
-printf 'Verified native macOS keyboard closure, Flow/frame geometry, and actual webpage/Settings captures. OS mouse movement and fullscreen are not claimed.\n'
+printf 'Verified native macOS keyboard closure, routed edge-hover/sidebar toggles, inline new-tab placement, scroll-stable workspace dock, frame geometry, and actual webpage/Settings captures. OS mouse movement and fullscreen are not claimed.\n'

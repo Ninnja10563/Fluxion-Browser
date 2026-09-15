@@ -26,6 +26,16 @@ pages retain Firefox's process, principal, and sandbox boundaries.
 
 ## Reused Firefox/Gecko components
 
+### Browser appearance boundary
+
+`core/colors.js` validates local base/accent preferences and derives readable
+light/dark chrome tokens. `fluxion-colors.js` projects those tokens into each
+privileged browser document and observes one atomic preference across windows.
+It never injects content CSS or exposes page access to preferences. Reset
+removes the inline token overrides, leaving the existing Gecko theme choice
+intact. Workspace SVG data is a small pinned, licensed Lucide subset; persisted
+workspace icon IDs stay stable across the visual upgrade.
+
 ### macOS process and external-open integration
 
 The native launcher uses `execv` to preserve the application process that

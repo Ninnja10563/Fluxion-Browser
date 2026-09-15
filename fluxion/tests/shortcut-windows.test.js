@@ -93,7 +93,8 @@ test("registered Settings capture receives existing global shortcuts before thei
   const key = { localName: "button", ownerDocument: window.document, isConnected: true, dataset: {}, textContent: "",
     contains: node => node === key, addEventListener: (type, fn) => targetListeners.set(type, fn) };
   window.document.getElementById = id => id === "fluxion-settings" ? { contains: node => node === key } : null;
-  const context = vm.createContext({ window, key, action: { id: "sidebar", label: "Cycle Flow sidebar" },
+  const context = vm.createContext({ window, key, action: { id: "sidebar", label: "Toggle Flow sidebar" },
+    document: { activeElement: key }, flow: {}, surface: { contains: () => false }, focusOpenMenus: new Set(),
     setNote: text => notes.push(text), refreshShortcutButtons() {},
     on(_target, _type, fn, capture) { assert.equal(capture, true); capturing.push(fn); },
     layer: { hidden: true }, open: mode => calls.push(mode), close: () => calls.push("close"),
@@ -107,7 +108,7 @@ test("registered Settings capture receives existing global shortcuts before thei
   }
   execute("fluxion-settings.js", "    let beforeCapture = key.textContent;", '    key.addEventListener("blur", stopCapture);');
   execute("fluxion-palette.js", '  on(window, "keydown", event => {\n    if (window.FluxionShortcuts?.matches', '  }, true);');
-  execute("fluxion-chrome.js", '  on(window, "keydown", event => {\n    releasePointerCloseHold', '  }, true);');
+  execute("fluxion-chrome.js", '  on(window, "keydown", event => {\n    if (document.activeElement === flow', '  }, true);');
   function dispatch(code, fields = {}, target = key) {
     const event = { code, key: code === "Escape" ? "Escape" : code.replace("Key", ""), metaKey: true,
       target, composedPath: () => [target, window], prevented: false, stopped: false,

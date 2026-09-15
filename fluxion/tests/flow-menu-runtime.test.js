@@ -47,6 +47,7 @@ function fixture() {
   const context = vm.createContext({ window, document, Services, gBrowser, flow, contextMenu, groupMenu, workspaceMenu,
     currentWorkspace: "build", workspaces: [{ id: "build" }, { id: "focus" }],
     contextTab: a, contextGroup: null, contextWorkspace: "build", flowMenuSession: null,
+    focusOpenMenus: new Set(), scheduleFocusSurfaceHide() {},
     tabElements, groupElements, workspaceElements, cleanup, newTabButton: row("new-tab"),
     renderedPinnedTabElements: () => [], renderedTreeItems: () => [...tabElements.values(), ...groupElements.values()],
     tabWorkspace: tab => tab.workspace, focusFlowItem: element => element?.focus(),

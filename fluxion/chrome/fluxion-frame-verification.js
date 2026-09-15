@@ -23,6 +23,18 @@
     const r = node.getBoundingClientRect();
     return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
   };
+  const routePointer = (x, y, type = "mousemove", buttons = 0) => {
+    assert(typeof window.synthesizeMouseEvent === "function", "Gecko native widget input router is unavailable");
+    window.synthesizeMouseEvent(type, x, y, {
+      identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons,
+      clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
+    }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+  };
+  const clickControl = node => {
+    const box = rect(node), x = box.left + box.width / 2, y = box.top + box.height / 2;
+    assert(box.width >= 24 && box.height >= 24 && node.contains(document.elementFromPoint(x, y)), "Routed control is clipped or obscured");
+    routePointer(x, y); routePointer(x, y, "mousedown", 1); routePointer(x, y, "mouseup", 0);
+  };
   const rows = () => [...document.querySelectorAll(".fluxion-tab")];
   const rowFor = tab => rows().find(row => row._fluxionTab === tab);
   const liveTabs = () => [...gBrowser.tabs].filter(tab => !tab.closing);
@@ -116,14 +128,10 @@
     };
     observe(close, "click", true);
     observe(flow, "pointerleave", false);
-    observe(flow.querySelector(".fluxion-tabs:not(.fluxion-pinned-tabs)"), "scroll", { passive: true });
+    observe(flow.querySelector(".fluxion-tab-scroll"), "scroll", { passive: true });
     observe(window, "blur", false);
     report.pointerHoldStart = { closeRect, nextTop, flow: rect(flow), x, y };
-    assert(typeof window.synthesizeMouseEvent === "function", "Gecko native widget input router is unavailable");
-    const mouse = (type, buttons) => window.synthesizeMouseEvent(type, x, y, {
-      identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons,
-      clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
-    }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+    const mouse = (type, buttons) => routePointer(x, y, type, buttons);
     mouse("mousemove", 0); mouse("mousedown", 1); mouse("mouseup", 0);
     report.pointerHoldAfterClick = { connected: pointerRow.isConnected, className: pointerRow.className,
       nextTop: rect(nextRow).top, nativeConnected: Boolean(pointerTab.parentNode) };
@@ -173,7 +181,7 @@
         window.getComputedStyle(list).flexDirection === (mode === "compact" ? "column" : "row"),
       `Workspace keyboard orientation disagrees with its visible ${mode} layout`);
       const button = flow.querySelector(".fluxion-workspaces > .fluxion-icon-button");
-      const label = { expanded: "Collapse sidebar to icons", compact: "Hide sidebar", focus: "Expand sidebar" }[mode];
+      const label = mode === "expanded" ? "Collapse sidebar" : "Expand sidebar";
       assert(button?.getAttribute("aria-label") === label && button.title.startsWith(`${label} (`),
         `Sidebar toggle lacks its actionable ${mode} accessible name or shortcut hint`);
       if (visible) {
@@ -182,10 +190,13 @@
           box.top >= surface.top - 1 && box.bottom <= surface.bottom + 1 &&
           button.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2)),
         `Sidebar toggle is clipped, hidden, or has an insufficient hit area in ${mode}`);
-        if (mode !== "compact") {
-          for (const label of list.querySelectorAll(".fluxion-workspace-name")) {
-            assert(label.scrollWidth <= label.clientWidth + 1,
-              `Default workspace label is clipped in ${mode}: ${label.textContent}`);
+        const dock = rect(flow.querySelector(".fluxion-workspaces"));
+        assert(near(dock.bottom, surface.bottom), `Workspace dock is not anchored to the bottom in ${mode}`);
+        for (const workspace of list.querySelectorAll(".fluxion-workspace")) {
+          assert(workspace.getAttribute("aria-label") && workspace.querySelector("svg"), "Workspace symbol lost its accessible name or vector icon");
+          for (const name of workspace.querySelectorAll(".fluxion-workspace-name")) {
+            assert(window.getComputedStyle(name).display === "none" || rect(name).width === 0,
+              `Workspace dock is not icon-only in ${mode}`);
           }
         }
       }
@@ -197,17 +208,146 @@
       gap(mode);
       workspaceControls(mode, mode !== "focus");
     }
+    stage("routed-edge-hover-and-sidebar-toggle");
+    report.hoverEvents = [];
+    for (const type of ["pointerenter", "pointerleave"]) {
+      const handler = event => report.hoverEvents.push({ type, trusted: event.isTrusted, x: event.clientX, y: event.clientY });
+      flow.addEventListener(type, handler);
+      diagnosticListeners.push(() => flow.removeEventListener(type, handler));
+    }
+    const surface = flow.querySelector(".fluxion-surface");
     const pageBefore = rect(gBrowser.tabpanels);
-    ui.revealSidebar({ focusActive: false });
-    await wait(() => flow.dataset.revealed === "true", "Focus sidebar did not reveal");
+    const outside = { x: rect(deck).right - 20, y: rect(deck).top + 60 };
+    // Move away before approaching the three-pixel edge so native hit testing,
+    // not a direct call to revealSidebar(), owns every enter/leave transition.
+    gBrowser.selectedBrowser.focus();
+    routePointer(outside.x, outside.y);
     await delay(250);
-    const pageAfter = rect(gBrowser.tabpanels);
-    assert(["left", "top", "width", "height"].every(key => near(pageBefore[key], pageAfter[key])), "Focus reveal reflowed page content");
-    workspaceControls("focus", true);
-    ui.hideSidebar({ force: true }); ui.setSidebarState("expanded");
+    for (let cycle = 0; cycle < 3; cycle++) {
+      const edge = rect(flow);
+      routePointer(edge.left + edge.width / 2, edge.top + Math.min(140, edge.height / 2));
+      await wait(() => flow.dataset.revealed === "true" && !surface.inert, `Edge hover did not reveal sidebar on cycle ${cycle}`);
+      await delay(200);
+      workspaceControls("focus", true);
+      const pageAfter = rect(gBrowser.tabpanels);
+      assert(["left", "top", "width", "height"].every(key => near(pageBefore[key], pageAfter[key])), "Routed edge reveal reflowed page content");
+      if (cycle === 1) {
+        const selected = rowFor(gBrowser.selectedTab);
+        assert(selected, "Hover fixture lost the selected Flow row");
+        clickControl(selected);
+        await delay(100);
+      }
+      routePointer(outside.x, outside.y);
+      await wait(() => flow.dataset.revealed === "false" && surface.inert, `Leaving the overlay did not hide sidebar on cycle ${cycle}`);
+      await delay(200);
+    }
+    assert(report.hoverEvents.filter(event => event.type === "pointerenter" && event.trusted).length >= 3 &&
+      report.hoverEvents.filter(event => event.type === "pointerleave" && event.trusted).length >= 3,
+    "Repeated edge hover lacks trusted Gecko routed enter/leave evidence");
+    const toggle = flow.querySelector(".fluxion-workspaces > .fluxion-icon-button");
+    ui.setSidebarState("compact");
+    await wait(() => near(rect(flow).width, 44), "Compact sidebar did not settle before its expand click");
+    await delay(200);
+    clickControl(toggle);
+    await wait(() => flow.dataset.state === "expanded" && near(rect(flow).width, 232), "Clicking expand in Compact hid the sidebar instead");
+    await delay(200);
+    clickControl(toggle);
+    await wait(() => flow.dataset.state === "focus" && near(rect(flow).width, 3), "Primary collapse did not leave the hover edge");
+    routePointer(outside.x, outside.y); await delay(250);
+    const edge = rect(flow);
+    routePointer(edge.left + edge.width / 2, edge.top + 100);
+    await wait(() => flow.dataset.revealed === "true" && !surface.inert, "Collapsed sidebar did not return after a real edge approach");
+    await delay(200);
+    clickControl(toggle);
     await wait(() => near(rect(flow).width, 232), "Expanded sidebar did not return for captures");
+    assert(flow.dataset.state === "expanded" && !surface.inert, "Expand left the sidebar surface hidden or inert");
     report.checks.push("expanded-compact-focus-consistent-insets-and-overlay-without-page-reflow");
-    report.checks.push("workspace-orientation-and-visible-actionable-sidebar-toggle-in-each-mode");
+    report.checks.push("routed-pointer-edge-reveal-three-cycles-and-compact-expand-never-hides");
+    report.checks.push("bottom-symbol-workspace-dock-with-accessible-toggle-in-each-mode");
+    stage("inline-new-tab-and-scroll-stable-workspace-dock");
+    const scrollArea = flow.querySelector(".fluxion-tab-scroll");
+    const tabTree = flow.querySelector(".fluxion-tabs:not(.fluxion-pinned-tabs)");
+    const newTab = flow.querySelector(".fluxion-new-tab");
+    const dock = flow.querySelector(".fluxion-workspaces");
+    assert(scrollArea && scrollArea.contains(tabTree) && scrollArea.contains(newTab) && !scrollArea.contains(dock),
+      "Tab list and inline new-tab control do not share a scroll area separate from the dock");
+    const inlineGap = rect(newTab).top - rect(tabTree).bottom;
+    assert(inlineGap >= -1 && inlineGap <= 16, `New tab is not immediately below the last tab: ${inlineGap}px`);
+    const dockBefore = rect(dock);
+    const overflowTabs = Array.from({ length: Math.ceil(rect(scrollArea).height / 28) + 4 }, (_, index) =>
+      add(`about:blank?fluxion-frame=overflow-${index}`));
+    await wait(() => overflowTabs.every(tab => rowFor(tab)) && scrollArea.scrollHeight > scrollArea.clientHeight + 30,
+      "Dense-tab fixture did not overflow its intended scroll area");
+    newTab.scrollIntoView({ block: "nearest" }); await delay(200);
+    const dockAfter = rect(dock), newTabRect = rect(newTab), lastRow = rect(rowFor(overflowTabs.at(-1)));
+    assert(["left", "top", "width", "height"].every(key => near(dockBefore[key], dockAfter[key])), "Scrolling many tabs moved the workspace dock");
+    assert(newTabRect.top >= lastRow.bottom - 1 && newTabRect.top - lastRow.bottom <= 24 &&
+      newTabRect.bottom <= dockAfter.top + 1 && newTabRect.top >= rect(scrollArea).top - 1,
+    "Inline new-tab control is not reachable immediately after the lowest tab when scrolling");
+    assert(newTab.contains(document.elementFromPoint(newTabRect.left + newTabRect.width / 2, newTabRect.top + newTabRect.height / 2)),
+      "Inline new-tab control is obscured at the end of a long tab list");
+    const beforeNewTab = liveTabs();
+    clickControl(newTab);
+    await wait(() => liveTabs().length === beforeNewTab.length + 1 && !beforeNewTab.includes(gBrowser.selectedTab) &&
+      rowFor(gBrowser.selectedTab)?.getAttribute("aria-selected") === "true",
+    "Inline New tab did not create and select a real tab in the visible workspace");
+    const createdTab = gBrowser.selectedTab;
+    await select(webpage);
+    gBrowser.removeTab(createdTab, { animate: false });
+    gBrowser.removeTabs(overflowTabs, { animate: false });
+    await wait(() => !createdTab.parentNode && !rowFor(createdTab) && overflowTabs.every(tab => !tab.parentNode && !rowFor(tab)),
+      "Dense-tab fixture cleanup left stale Flow rows");
+    scrollArea.scrollTop = 0; await delay(200);
+    report.checks.push("inline-new-tab-follows-last-tab-and-bottom-workspace-dock-survives-scroll-overflow");
+    stage("compact-dock-with-twelve-workspaces-in-short-window");
+    const originalSize = { width: window.outerWidth, height: window.outerHeight };
+    const originalWorkspace = ui.currentWorkspace();
+    const addedWorkspaces = [];
+    try {
+      while (ui.workspaces().length < 12) {
+        const workspace = ui.createWorkspace(`Frame dock ${addedWorkspaces.length + 1}`, { activate: false });
+        assert(workspace, "Dense workspace fixture could not reach the supported twelve-workspace limit");
+        addedWorkspaces.push(workspace);
+      }
+      ui.setSidebarState("compact");
+      window.resizeTo(originalSize.width, Math.min(620, originalSize.height));
+      await wait(() => near(rect(flow).width, 44) && rect(flow).height < 650 &&
+        flow.querySelectorAll(".fluxion-workspace").length === 12, "Short-window compact workspace fixture did not settle");
+      await delay(250);
+      const workspaceList = flow.querySelector(".fluxion-workspace-list");
+      const compactDock = rect(dock), compactSurface = rect(surface), compactScroll = rect(scrollArea);
+      assert(compactDock.height <= compactSurface.height * .45 + 2 && near(compactDock.bottom, compactSurface.bottom),
+        "Twelve-workspace Compact dock exceeded its bounded share of the sidebar or left the bottom edge");
+      assert(compactScroll.height >= 120 && compactScroll.bottom <= compactDock.top + 1,
+        "Dense Compact dock squeezed out or overlapped the actual tab scrolling area");
+      assert(workspaceList.scrollHeight > workspaceList.clientHeight + 20,
+        "Short-window workspace symbols did not establish an independently scrollable dock");
+      const lastWorkspace = workspaceList.querySelector(".fluxion-workspace:last-child");
+      lastWorkspace.focus({ preventScroll: true });
+      lastWorkspace.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "instant" });
+      await delay(200);
+      const lastBox = rect(lastWorkspace), listBox = rect(workspaceList);
+      assert(workspaceList.scrollTop > 0 && lastBox.top >= listBox.top - 1 && lastBox.bottom <= listBox.bottom + 1 &&
+        lastWorkspace.contains(document.elementFromPoint(lastBox.left + lastBox.width / 2, lastBox.top + lastBox.height / 2)),
+      "The final workspace symbol is not reachable in a short Compact dock");
+      workspaceControls("compact", true);
+      report.geometry.push({ mode: "compact-twelve-workspaces-short-window", surface: compactSurface,
+        dock: compactDock, tabs: compactScroll, workspaceList: listBox, lastWorkspace: lastBox,
+        workspaceScrollTop: workspaceList.scrollTop });
+      clickControl(toggle);
+      await wait(() => flow.dataset.state === "expanded" && near(rect(flow).width, 232) && !surface.inert,
+        "Dense Compact dock clipped or disabled the expand control");
+      assert(ui.currentWorkspace() === originalWorkspace, "Scrolling the workspace dock unexpectedly switched workspaces");
+      report.checks.push("twelve-workspace-short-window-dock-scrolls-with-visible-expand-and-usable-tabs");
+    } finally {
+      for (const workspace of addedWorkspaces) ui.deleteWorkspace(workspace.id, { confirm: false });
+      ui.setSidebarState("expanded");
+      window.resizeTo(originalSize.width, originalSize.height);
+    }
+    await wait(() => near(window.outerWidth, originalSize.width) && near(window.outerHeight, originalSize.height) &&
+      addedWorkspaces.every(workspace => !ui.workspaces().some(item => item.id === workspace.id)),
+    "Dense workspace fixture did not restore its original window and workspace state");
+    await delay(250);
     const capture = async (name, theme) => {
       await window.FluxionTheme.set(theme);
       await wait(() => document.documentElement.dataset.fluxionTheme === theme, "Capture theme did not settle");
