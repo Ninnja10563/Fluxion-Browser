@@ -8,12 +8,18 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-The [0.68 candidate](docs/milestone-0.68.md) adds workspace-heading options,
-per-workspace color editing, centered dock symbols, bidirectional swipe
-refinements, short transitions and six everyday controls in Fluxion's custom
-Settings. All 949 local tests pass; final native validation and publication
-are pending because GitHub is rejecting new workflow dispatches with HTTP 500.
-The downloadable release remains 0.67 until the corrected candidate is verified.
+Fluxion 0.68 is published: workspace-heading options, per-workspace color
+editing, centered dock symbols, bidirectional swipe refinements and short
+transitions. Expanded Flow stays flat; the hover-revealed sidebar uses a thin
+outline and subtle corners. Fluxion's custom Settings adds six everyday
+browsing/privacy controls without automatically changing Gecko defaults.
+All 951 tests and every mandatory native macOS gate passed. Download the
+[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.68.0-preview.1)
+for Apple Silicon (including M3) and Intel. See the
+[milestone](docs/milestone-0.68.md) and
+[release provenance](release/provenance/v0.68.0-preview.1.md).
+Physical trackpad checks remain; the candidate audit records unresolved
+intermittent capture and initial fixture-request observations.
 
 Fluxion 0.67 is published: navigation follows the page column, the address field
 has equal 6px top/bottom spacing, and workspace/tab/New tab labels share one
@@ -22,7 +28,7 @@ Sidebar swipes change workspaces; fresh profiles start with one workspace,
 without removing existing ones. Firefox VPN promotion and Suggest branding are
 removed while native browser services remain. All 899 tests and every mandatory
 native macOS gate passed. Download the
-[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.67.0-preview.1)
+[0.67 universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.67.0-preview.1)
 for Apple Silicon (including M3) and Intel. See
 [release provenance](release/provenance/v0.67.0-preview.1.md).
 The first wide address-popup screenshot has an unresolved capture/compositing

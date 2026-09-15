@@ -13,6 +13,11 @@ controls work and its failure paths have been tested.
 
 ## Phase 2 — browser fundamentals hardening
 
+- custom General/Privacy controls for smooth scrolling, hardware acceleration,
+  download-location prompting, password saving, popup blocking and HTTPS-only
+  mode (published in 0.68; exact asynchronous disk persistence, cross-window
+  synchronization, policy locks and scoped resets verified without retuning
+  defaults on Settings open)
 - Fluxion-owned history, bookmarks, downloads, permissions, and settings
   surfaces backed by Firefox services (settings, unified Library, native
   bookmark-folder editing, per-site permission management, and SearchService-
@@ -43,6 +48,13 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- hover/focus workspace-heading options, native workspace menus, per-workspace
+  light/dark color editing, centered bottom symbols and refined bidirectional
+  swipe heuristics with a reduced-motion-aware 150ms transition (published in
+  0.68; native menu keyboard activation, theme persistence and routed swipe
+  verification passed); expanded/edge-revealed surfaces retain a shared layout
+  with a thin outline and subtle corners only for the overlay, confirmed by
+  actual captures and native no-reflow/hover-cycle checks
 - coherent navigation/page-column alignment, equal address-field insets, quiet
   single-frame suggestions, single-workspace fresh defaults and horizontal
   sidebar workspace gestures (published in 0.67; native first-focus keyboard,

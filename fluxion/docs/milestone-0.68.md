@@ -1,13 +1,12 @@
 # Fluxion 0.68 — workspace interaction details
 
-Candidate: publication requires the full native macOS release workflow. All
-951 local tests pass. The second candidate's native Settings persistence
-assertion exposed a test race with asynchronous Gecko writes; the correction
-is pushed, and GitHub has accepted native staging after its earlier HTTP 500
-dispatch failures. The final candidate also checks the refined hover-overlay
-surface against the user's sidebar references. Nothing from 0.68 has been
-published yet. See the
-[candidate audit](validation/0.68-candidate.md).
+Published as [0.68.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.68.0-preview.1).
+All 951 tests and every mandatory native macOS gate passed in the final full
+run, including the corrected asynchronous Settings persistence check and the
+refined hover-overlay surface. The exact tested universal DMG was promoted.
+See the [candidate audit](validation/0.68-candidate.md) for failures, corrections
+and unresolved observations, and the
+[release provenance](../release/provenance/v0.68.0-preview.1.md) for artifact identity.
 
 The current workspace heading reveals an options button on hover or keyboard
 focus. A quiet sage-neutral highlight connects the title and action; no badge,
