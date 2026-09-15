@@ -34,6 +34,14 @@ not a claim of direct hardware gesture-phase detection.
 Workspace changes receive a 150ms, 4px sidebar-only transition after the pending
 render. Native page selection is immediate. A superseding switch cancels the
 old animation; system reduced motion and the browser motion setting cancel and
-suppress it. Neither screenshots nor routed Gecko wheel
-events establish physical M3 trackpad reliability. The known first wide
-address-popup capture limitation from 0.67 remains under a hardware audit.
+suppress it. Neither screenshots nor routed Gecko wheel events establish
+physical M3 trackpad reliability. Address-popup captures intermittently omit
+the main-window backdrop at different widths; the 0.67 symptom remains under
+a hardware audit rather than being claimed fixed.
+
+Fluxion's own General and Privacy sections add six everyday browser controls:
+smooth scrolling, hardware acceleration (restart required), download-location
+prompting, password saving, popup blocking and HTTPS-only mode. Opening Settings
+does not write defaults. These are explicit user choices, not unmeasured engine
+"speed tweaks". Existing startup, search, tabs, workspaces, Memory, AI,
+permissions, shortcuts and update controls remain in the custom screen.

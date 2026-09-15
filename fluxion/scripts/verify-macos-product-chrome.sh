@@ -64,7 +64,9 @@ on run arguments
       else if captureName starts with "key-product-workspace-" then
         if not frontmost of ownedProcess then error "Workspace key input lost its foreground owner"
         tell ownedProcess
-          if captureName is "key-product-workspace-down" then
+          if captureName is "key-product-workspace-select-return" then
+            key code 36
+          else if captureName is "key-product-workspace-down" or captureName starts with "key-product-workspace-select-" then
             key code 125
           else if captureName is "key-product-workspace-escape-pointer" or captureName is "key-product-workspace-escape-keyboard" then
             key code 53
@@ -97,6 +99,9 @@ for ((attempt=0; attempt<720; attempt++)); do
   for action in capture-product-chrome-1280 query-product-suggestions-1280 capture-product-suggestions-1280 capture-product-chrome-800 query-product-suggestions-800 capture-product-suggestions-800 \
     capture-product-workspace-idle capture-product-workspace-hover capture-product-workspace-menu key-product-workspace-escape-pointer \
     key-product-workspace-down capture-product-workspace-menu-updated key-product-workspace-escape-keyboard \
+    key-product-workspace-select-open key-product-workspace-select-0 key-product-workspace-select-1 key-product-workspace-select-2 \
+    key-product-workspace-select-3 key-product-workspace-select-4 key-product-workspace-select-5 key-product-workspace-select-6 \
+    key-product-workspace-select-7 key-product-workspace-select-8 key-product-workspace-select-9 key-product-workspace-select-return \
     type-product-workspace-dark type-product-workspace-light capture-product-workspace-theme type-product-workspace-cancel; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"

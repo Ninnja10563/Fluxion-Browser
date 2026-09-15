@@ -13,6 +13,7 @@ function fixture({ count = 1, currentIndex = 0 } = {}) {
   const node = (label, attributes = {}, localName = "menuitem") => ({
     localName, hidden: false, attributes: { label, ...attributes },
     getAttribute(name) { return this.attributes[name] ?? null; },
+    hasAttribute(name) { return Object.hasOwn(this.attributes, name); },
     querySelector(selector) { return selector === "menupopup" && this.localName === "menu" ? { children: [{}, {}] } : null; },
   });
   const menu = { state: "open", isNativeMenu: true, children: [
@@ -24,6 +25,10 @@ function fixture({ count = 1, currentIndex = 0 } = {}) {
     node("Move Workspace Later", { disabled: String(currentIndex === count - 1) }),
     node("New Workspace…"), node("Delete Workspace…", { disabled: String(count === 1) }),
   ] };
+  for (const item of menu.children) for (const key of ["disabled", "checked"]) {
+    if (item.attributes[key] === "false") delete item.attributes[key];
+  }
+  menu.querySelectorAll = () => menu.children;
   const sandbox = vm.createContext({ assert(value, message) { if (!value) throw Error(message); } });
   vm.runInContext(source.slice(first, last), sandbox);
   return { menu, workspaces, item: label => menu.children.find(item => item.getAttribute("label") === label),
@@ -69,6 +74,63 @@ test("native menu assertion refuses unsafe deletion, unavailable creation and wr
     const h = fixture(); h.item(label).attributes.disabled = value;
     assert.throws(h.run, /Workspace|workspace/);
   }
+});
+
+test("native menu assertion rejects false-valued boolean attributes that mislead Cocoa rendering", () => {
+  for (const [label, key] of [["New Workspace…", "disabled"], ["Research", "checked"]]) {
+    const h = fixture({ count: 2 }); h.item(label).attributes[key] = "false";
+    assert.throws(h.run, /must remove false/);
+  }
+});
+
+function activationFixture({ untrusted = false, wrongActivation = false } = {}) {
+  const start = source.indexOf("  async function activateWorkspaceRadio("), end = source.indexOf("  function workspaceDock(", start);
+  assert.ok(start > 0 && end > start);
+  const h = fixture({ count: 2 });
+  let observe, selectedIndex = -1, current = "focus";
+  h.menu.state = "closed";
+  h.menu.addEventListener = (_type, listener) => { observe = listener; };
+  h.menu.removeEventListener = () => { observe = null; };
+  for (const item of h.menu.children) {
+    item.parentNode = h.menu;
+    item.disabled = item.getAttribute("disabled") === "true";
+  }
+  const enabled = h.menu.children.filter(item => !item.disabled), keys = [], report = { workspaceHeading: {} };
+  const sandbox = vm.createContext({ report,
+    window: { FluxionUI: { workspaces: () => h.workspaces, currentWorkspace: () => current, switchWorkspace: id => { current = id; } } },
+    assert(value, message) { if (!value) throw Error(message); },
+    wait(predicate, message) { if (!predicate()) throw Error(message); }, delay() {},
+    async nativeWorkspaceKey(action) {
+      keys.push(action);
+      if (action === "select-open") { h.menu.state = "open"; return; }
+      if (action === "select-return") { h.menu.state = "closed"; if (!wrongActivation) current = "research"; return; }
+      const target = enabled[++selectedIndex];
+      if (target.localName === "menuitem") observe({ target, isTrusted: !untrusted });
+    },
+  });
+  vm.runInContext(source.slice(start, end), sandbox);
+  return { run: () => sandbox.activateWorkspaceRadio(h.menu, { focus() {} }, "research"), keys, report,
+    current: () => current, listenerRemoved: () => observe === null };
+}
+
+test("native workspace activation waits for observed leaves before Return and restores fixture workspace", async () => {
+  const h = activationFixture(); await h.run();
+  assert.equal(h.report.workspaceHeading.activation.activated, "research");
+  assert.deepEqual(Array.from(h.report.workspaceHeading.activation.highlighted),
+    ["Rename Workspace…", "Edit Workspace Theme…", "Focus", "Research"]);
+  assert.equal(h.keys.at(-1), "select-return");
+  assert.equal(h.current(), "focus");
+  assert.equal(h.listenerRemoved(), true);
+});
+
+test("native workspace activation rejects untrusted selection and a Return that changes no workspace", async () => {
+  const untrusted = activationFixture({ untrusted: true });
+  await assert.rejects(untrusted.run(), /first highlighted leaf/);
+  assert.equal(untrusted.keys.includes("select-return"), false);
+  assert.equal(untrusted.listenerRemoved(), true);
+  const unchanged = activationFixture({ wrongActivation: true });
+  await assert.rejects(unchanged.run(), /did not activate/);
+  assert.equal(unchanged.report.workspaceHeading.activation.activated, undefined);
 });
 
 function dockFixture(boxes) {

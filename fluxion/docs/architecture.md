@@ -50,6 +50,13 @@ An optional validated workspace light/dark base pair overrides the active
 window's global base colors. The theme editor keeps drafts private to its panel
 and commits through workspace persistence; it does not expose a webpage bridge
 or alter content styles. A single color projector owns the chrome variables.
+
+`core/browser-preferences.js` is a bounded, typed adapter for six everyday
+Gecko settings presented in Fluxion's custom General and Privacy sections.
+It reads actual engine defaults, respects locked/unavailable preferences,
+observes cross-window changes and resets only explicitly named preferences.
+Opening Settings never writes defaults. Hardware acceleration remains subject
+to Gecko's device safety checks and requires restart after a user change.
 It never injects content CSS or exposes page access to preferences. Reset
 removes the inline token overrides, leaving the existing Gecko theme choice
 intact. Workspace SVG data is a small pinned, licensed Lucide subset; persisted

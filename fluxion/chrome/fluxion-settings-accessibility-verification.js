@@ -29,7 +29,7 @@
     const root = window.document.getElementById("fluxion-settings");
     await waitFor(() => tab.linkedBrowser.currentURI.spec === "about:preferences?fluxion=general" &&
       root && !root.hidden && root.getBoundingClientRect().height > 0, "Native Settings route did not become visible");
-    for (const section of ["general", "appearance", "tabs", "search", "ai"]) {
+    for (const section of ["general", "appearance", "tabs", "search", "ai", "privacy"]) {
       const panel = root.querySelector(`[data-section="${section}"]`);
       assert(panel, `Missing ${section} panel`);
       const heading = normalize(panel.querySelector("h2").textContent);
@@ -88,9 +88,113 @@
       if (section === "appearance") assert(colorFields === 8, "Appearance did not expose all eight distinctly named color inputs");
       report.sections.push({ section, fields });
     }
+    await verifyBrowserPreferences(root);
     write("report", JSON.stringify(report));
     write("health", "native-control-names-and-descriptions-verified");
     await verifyResponsiveSettings(root);
+  }
+  async function verifyBrowserPreferences(root) {
+    deadline = Date.now() + 45000;
+    // Keep this expectation independent of the binding definitions: a wrong
+    // native preference or inversion must fail the packaged browser gate.
+    const definitions = [
+      ["smooth-scrolling", "general", "general.smoothScroll", false],
+      ["hardware-acceleration", "general", "layers.acceleration.disabled", true],
+      ["ask-download-location", "general", "browser.download.useDownloadDir", true],
+      ["save-passwords", "privacy", "signon.rememberSignons", false],
+      ["block-popups", "privacy", "dom.disable_open_during_load", false],
+      ["https-only", "privacy", "dom.security.https_only_mode", false],
+    ];
+    const originals = definitions.map(([, , pref]) => ({ pref,
+      hadUserValue: Services.prefs.prefHasUserValue(pref), value: Services.prefs.getBoolPref(pref) }));
+    assert(originals.every(item => !Services.prefs.prefIsLocked(item.pref)),
+      "Browser-preference round trip requires unlocked preferences in its isolated profile");
+    let companion;
+    let lockedFixturePref;
+    const evidence = { controls: [], source: "Actual Settings checkbox clicks, shared Gecko preferences and persisted prefs.js" };
+    report.browserPreferences = evidence;
+    const show = async section => {
+      const panel = root.querySelector(`[data-section="${section}"]`);
+      const heading = normalize(panel.querySelector("h2").textContent);
+      const navigation = [...root.querySelectorAll(".fluxion-settings-nav button")]
+        .find(button => normalize(button.textContent) === heading);
+      navigation.click();
+      await waitFor(() => !panel.hidden, `Browser controls section ${section} did not open`);
+    };
+    const checkbox = (owner, id) => owner.document.getElementById(`fluxion-browser-${id}`);
+    try {
+      for (const [id, section, pref, inverse] of definitions) {
+        await show(section);
+        const control = checkbox(window, id);
+        const original = Services.prefs.getBoolPref(pref);
+        assert(control && !control.disabled && control.checked === (inverse ? !original : original),
+          `${id} did not read the existing Gecko preference without retuning it`);
+        control.scrollIntoView({ block: "center", behavior: "instant" });
+        assert(control.getBoundingClientRect().height > 0, `${id} is not visible`);
+        control.focus();
+        control.click();
+        await waitFor(() => Services.prefs.getBoolPref(pref) === !original &&
+          control.checked === (inverse ? original : !original), `${id} did not persist its native preference`);
+        assert(window.document.activeElement === control, `${id} lost focus during preference synchronization`);
+        if (id === "hardware-acceleration") {
+          assert(/restart/i.test(root.querySelector('[data-section="general"] .fluxion-settings-note')?.textContent || ""),
+            "Hardware acceleration did not disclose its restart requirement");
+        }
+        evidence.controls.push({ id, pref, inverse, before: original, after: !original });
+      }
+      Services.prefs.savePrefFile(null);
+      const persisted = await IOUtils.readUTF8(PathUtils.join(PathUtils.profileDir, "prefs.js"));
+      for (const item of evidence.controls) {
+        assert(persisted.includes(`user_pref("${item.pref}", ${item.after});`), `${item.id} was not saved to prefs.js`);
+      }
+      evidence.persisted = true;
+      companion = window.OpenBrowserWindow();
+      await waitFor(() => !companion.closed && companion.FluxionUI && checkbox(companion, "https-only"),
+        "Companion browser window did not initialize its custom Settings controls");
+      for (const [id, , pref, inverse] of definitions) {
+        const expected = Services.prefs.getBoolPref(pref);
+        assert(checkbox(companion, id).checked === (inverse ? !expected : expected),
+          `${id} did not restore the saved native preference in a new window`);
+      }
+      evidence.restoredInNewWindow = true;
+      for (const section of ["general", "privacy"]) {
+        await show(section);
+        const reset = window.document.getElementById(`fluxion-browser-reset-${section}`);
+        assert(reset && !reset.disabled, `${section} reset must be available after user changes`);
+        reset.click();
+        for (const [id, owner, pref, inverse] of definitions.filter(item => item[1] === section)) {
+          const expected = Services.prefs.getDefaultBranch("").getBoolPref(pref);
+          await waitFor(() => !Services.prefs.prefHasUserValue(pref) && Services.prefs.getBoolPref(pref) === expected &&
+            checkbox(window, id).checked === (inverse ? !expected : expected) &&
+            checkbox(companion, id).checked === (inverse ? !expected : expected),
+          `${owner}/${id} did not reset to the Gecko default across both windows`);
+        }
+      }
+      evidence.resetAcrossWindows = true;
+      await show("general");
+      const managed = checkbox(window, "smooth-scrolling");
+      managed.click();
+      lockedFixturePref = "general.smoothScroll";
+      Services.prefs.lockPref(lockedFixturePref);
+      await waitFor(() => managed.disabled && checkbox(companion, "smooth-scrolling").disabled,
+        "Live policy lock did not disable the managed control in both windows");
+      const lockedValue = Services.prefs.getBoolPref(lockedFixturePref);
+      managed.checked = !lockedValue;
+      managed.dispatchEvent(new window.Event("change", { bubbles: true }));
+      assert(Services.prefs.getBoolPref(lockedFixturePref) === lockedValue && managed.checked === lockedValue,
+        "A synthetic change bypassed the native preference lock");
+      evidence.policyLockAcrossWindows = true;
+    } finally {
+      if (lockedFixturePref) Services.prefs.unlockPref(lockedFixturePref);
+      for (const { pref, hadUserValue, value } of originals) {
+        if (hadUserValue) Services.prefs.setBoolPref(pref, value);
+        else Services.prefs.clearUserPref(pref);
+      }
+      Services.prefs.savePrefFile(null);
+      if (companion && !companion.closed) companion.close();
+      window.focus();
+    }
+    write("report", JSON.stringify(report));
   }
   async function seedExclusionList() {
     const memory = window.FluxionMemory;

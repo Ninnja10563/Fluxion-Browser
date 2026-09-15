@@ -70,6 +70,7 @@ node --check chrome/core/memory-ranking.js
 node --check chrome/core/memory-grounding.js
 node --check chrome/core/peek.js
 node --check chrome/core/settings.js
+node --check chrome/core/browser-preferences.js
 node --check chrome/core/sidebar-width.js
 node --check chrome/core/shortcuts.js
 node --check chrome/core/tab-sleeping.js

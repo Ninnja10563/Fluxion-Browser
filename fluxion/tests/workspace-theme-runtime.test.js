@@ -74,6 +74,23 @@ test("native theme panel keeps local per-mode drafts, validates both colors, and
   assert.equal(env.document.activeElement, env.anchor);
 });
 
+test("theme panel styles bind Gecko's actual content surface tokens and preserve the native select disclosure", () => {
+  const env = runtime();
+  const css = env.get().children.find(node => node.localName === "style").textContent;
+  const panelRule = css.match(/#fluxion-workspace-theme \{([^}]+)\}/)[1];
+  assert.match(panelRule, /--panel-background-color:\s*var\(--fluxion-bg-raised\)/);
+  assert.match(panelRule, /--panel-text-color:\s*var\(--fluxion-ink\)/);
+  assert.match(panelRule, /--panel-border-color:\s*var\(--fluxion-line\)/);
+  assert.match(panelRule, /--panel-padding:\s*0/);
+  assert.match(panelRule, /color-scheme:\s*inherit/);
+  assert.doesNotMatch(panelRule, /--panel-(?:background|color):/);
+  const selectRule = css.match(/\.fluxion-workspace-theme-form select \{([^}]+)\}/)[1];
+  assert.match(selectRule, /background-image:\s*url\("chrome:\/\/global\/skin\/icons\/arrow-down-12\.svg"\)/);
+  assert.match(selectRule, /padding-inline-end:\s*28px/);
+  assert.match(selectRule, /fill:\s*currentColor/);
+  assert.match(css, /select:dir\(rtl\).*background-position:\s*left 8px center/);
+});
+
 test("invalid or stale theme drafts cannot overwrite storage; unrelated metadata edits are preserved", () => {
   const env = runtime(); env.open();
   env.input("hex", "url(x)"); env.input("mode", "dark"); env.submit();

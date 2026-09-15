@@ -68,6 +68,7 @@ function settingsFixture(initialURL = "about:preferences", saved = []) {
     Services: { prefs, env: { get: () => "" }, appinfo: { platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
     FluxionSettings: globalThis.FluxionSettings,
+    FluxionBrowserPreferences: require("../chrome/core/browser-preferences.js"),
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),
     FluxionPermissionPolicy: require("../chrome/core/permissions.js"),
     FluxionWorkspaces: require("../chrome/core/workspaces.js"),
@@ -106,6 +107,19 @@ test("home setting maps new-tab choice to Fluxion and preserves explicit custom 
 test("settings respects the initial query and hash deep links", () => {
   assert.equal(settingsFixture("about:preferences?fluxion=search").section(), "search");
   assert.equal(settingsFixture("about:preferences#privacy").section(), "privacy");
+  assert.equal(settingsFixture("about:preferences#general").section(), "general");
+});
+
+test("native preferences destination uses Fluxion's custom surface rather than the content settings page", () => {
+  for (const destination of ["about:preferences", "about:preferences#general", "about:preferences#privacy"]) {
+    const h = settingsFixture(destination);
+    assert.equal(h.root.hidden, false, `${destination} exposes custom settings`);
+    assert.equal(h.deck.hidden, true, `${destination} conceals the native content settings surface`);
+    assert.equal(h.section(), destination.endsWith("#privacy") ? "privacy" : "general");
+    h.select({ currentURI: { spec: "https://example.com/" } });
+    assert.equal(h.root.hidden, true);
+    assert.equal(h.deck.hidden, false, "ordinary browser content is restored");
+  }
 });
 
 test("same-URI progress preserves the section selected in settings", () => {

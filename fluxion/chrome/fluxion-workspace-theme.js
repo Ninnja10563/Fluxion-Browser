@@ -16,13 +16,19 @@
   panel.setAttribute("role", "dialog");
   panel.setAttribute("aria-labelledby", "fluxion-workspace-theme-title");
   const style = make("style", {}, `
-    #fluxion-workspace-theme { --panel-background: var(--fluxion-bg-raised); --panel-color: var(--fluxion-ink); }
-    .fluxion-workspace-theme-form { width: 280px; box-sizing: border-box; padding: 14px; color: var(--fluxion-ink); font: 13px system-ui, sans-serif; }
+    /* Gecko's native panel content part consumes these exact variables. Its
+       default padding is removed because the form owns the single inset. */
+    #fluxion-workspace-theme { color-scheme: inherit; --panel-background-color: var(--fluxion-bg-raised); --panel-text-color: var(--fluxion-ink); --panel-border-color: var(--fluxion-line); --panel-padding: 0; }
+    .fluxion-workspace-theme-form { width: 280px; box-sizing: border-box; padding: 14px; background: var(--fluxion-bg-raised); color: var(--fluxion-ink); font: 13px system-ui, sans-serif; }
     .fluxion-workspace-theme-form h2 { margin: 0 0 12px; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
     .fluxion-workspace-theme-form label { display: block; margin-block: 10px 5px; }
     .fluxion-workspace-theme-form select, .fluxion-workspace-theme-form input, .fluxion-workspace-theme-form button { font: inherit; color: inherit; }
     .fluxion-workspace-theme-form select, .fluxion-workspace-theme-form input[type=text] { box-sizing: border-box; min-height: 30px; background: var(--fluxion-bg); border: 1px solid var(--fluxion-line); border-radius: 3px; padding: 4px 7px; }
-    .fluxion-workspace-theme-form select { width: 100%; }
+    .fluxion-workspace-theme-form select { width: 100%; appearance: none; padding-inline-end: 28px;
+      background-image: url("chrome://global/skin/icons/arrow-down-12.svg");
+      background-position: right 8px center; background-size: 12px 12px; background-repeat: no-repeat;
+      -moz-context-properties: fill; fill: currentColor; }
+    .fluxion-workspace-theme-form select:dir(rtl) { background-position: left 8px center; }
     .fluxion-workspace-theme-fields { display: flex; align-items: center; gap: 8px; }
     .fluxion-workspace-theme-fields input[type=color] { box-sizing: border-box; width: 36px; height: 30px; padding: 2px; border: 1px solid var(--fluxion-line); border-radius: 3px; background: var(--fluxion-bg); }
     .fluxion-workspace-theme-fields input[type=text] { width: 100%; min-width: 0; }

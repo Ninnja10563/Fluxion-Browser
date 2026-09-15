@@ -91,6 +91,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     Services: { prefs, prompt, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
     FluxionSettings: globalThis.FluxionSettings,
+    FluxionBrowserPreferences: require("../chrome/core/browser-preferences.js"),
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),
     FluxionPermissionPolicy: require("../chrome/core/permissions.js"),
     FluxionWorkspaces: require("../chrome/core/workspaces.js"),

@@ -1,4 +1,4 @@
-/* global Cu, gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy, FluxionWorkspaces, FluxionWorkspaceEditor */
+/* global Cu, gBrowser, Services, FluxionSettings, FluxionAIProviders, FluxionPermissionPolicy, FluxionWorkspaces, FluxionWorkspaceEditor, FluxionBrowserPreferences */
 (function initialiseFluxionSettings(window) {
   "use strict";
 
@@ -365,6 +365,48 @@
     return wrapper;
   }
 
+  const browserPreferences = FluxionBrowserPreferences.create(Services.prefs);
+  const browserPreferenceControls = new Map(), browserPreferenceResets = new Map();
+  function syncBrowserPreferences() {
+    for (const [id, input] of browserPreferenceControls) {
+      const state = browserPreferences.read(id);
+      input.checked = state.checked;
+      input.disabled = state.locked;
+    }
+    for (const [sectionId, button] of browserPreferenceResets) {
+      button.disabled = !FluxionBrowserPreferences.DEFINITIONS.some(item => item.section === sectionId &&
+        browserPreferences.read(item.id).modified && !browserPreferences.read(item.id).locked);
+    }
+  }
+  function addBrowserPreferences(panel, sectionId) {
+    const definitions = FluxionBrowserPreferences.DEFINITIONS.filter(item => item.section === sectionId);
+    for (const item of definitions) {
+      const control = row(panel, item.title, item.description, toggle("Enabled", browserPreferences.read(item.id).checked, checked => {
+        try {
+          const saved = browserPreferences.write(item.id, checked);
+          setNote(saved ? `${item.title} saved.${item.restart ? " Restart Fluxion to apply this change." : ""}` :
+            "This setting is controlled by policy and was not changed.", sectionId);
+        } catch (error) { setNote(`Setting could not be saved: ${error.message}`, sectionId); }
+        syncBrowserPreferences();
+      }));
+      const input = control.querySelector("input");
+      input.id = `fluxion-browser-${item.id}`;
+      browserPreferenceControls.set(item.id, input);
+    }
+    const reset = create("button", "fluxion-settings-button", sectionId === "general" ? "Reset browsing controls" : "Reset privacy controls");
+    reset.type = "button"; reset.id = `fluxion-browser-reset-${sectionId}`;
+    reset.addEventListener("click", () => {
+      try {
+        for (const item of definitions) browserPreferences.reset(item.id);
+        setNote(`These controls now use Gecko defaults; policy-managed values are unchanged.${sectionId === "general" ? " Restart Fluxion if hardware acceleration changed." : ""}`, sectionId);
+      } catch (error) { setNote(`Controls could not be reset: ${error.message}`, sectionId); }
+      syncBrowserPreferences();
+    });
+    row(panel, "Restore these defaults", `Reset only ${definitions.map(item => item.title.toLowerCase()).join(", ")}. Other preferences and stored data are unchanged.`, reset);
+    browserPreferenceResets.set(sectionId, reset);
+    syncBrowserPreferences();
+  }
+
   const general = section("general", "General", "Startup, home, and everyday browsing behaviour.");
   const startupChoice = row(general, "When Fluxion starts", "Choose whether to begin fresh or restore your previous windows and tabs.", select([
     ["1", "Open home page"], ["3", "Restore previous session"], ["0", "Open a blank page"],
@@ -416,6 +458,7 @@
     searchEngine.replaceChildren(create("option", "", "Search engines unavailable"));
     setNote(`Could not load search engines: ${error.message}`, "general");
   });
+  addBrowserPreferences(general, "general");
 
   const appearance = section("appearance", "Appearance", "Choose your theme, sidebar size, tab spacing, and motion preferences.");
   const themeOptions = [
@@ -1174,6 +1217,8 @@
   row(ai, "Connection tools", "Tests the configured model service without sharing a webpage.", aiActions);
 
   const privacy = section("privacy", "Privacy", "Manage locally stored browsing data using Gecko’s mature security services.");
+  addBrowserPreferences(privacy, "privacy");
+  const stopBrowserPreferenceSync = browserPreferences.subscribe(syncBrowserPreferences);
   const clearBrowsingData = create("button", "fluxion-settings-button danger", "Choose what to clear…");
   clearBrowsingData.type = "button";
   clearBrowsingData.addEventListener("click", async () => {
@@ -1531,6 +1576,7 @@
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
+    stopBrowserPreferenceSync();
     livePreferencesDisposed = true;
     for (const name of livePreferenceNames) Services.prefs.removeObserver(name, livePreferenceObserver);
     workspaceEditor.destroy();

@@ -78,10 +78,18 @@
     return element;
   };
 
+  function setNativeMenuFlag(item, name, enabled) {
+    // Cocoa menu state can follow attribute presence. "false" must not leave
+    // an attribute that paints an enabled item disabled or an unchecked radio checked.
+    if (enabled) item.setAttribute(name, "true");
+    else item.removeAttribute(name);
+  }
+
   const xul = (tag, attributes = {}) => {
     const element = document.createElementNS(XUL, tag);
     for (const [name, value] of Object.entries(attributes)) {
-      element.setAttribute(name, value);
+      if (name === "checked" || name === "disabled") setNativeMenuFlag(element, name, value === true || value === "true");
+      else element.setAttribute(name, value);
     }
     return element;
   };
@@ -766,7 +774,7 @@
   on(nativeSidebarPopup, "popupshowing", event => {
     if (event.target !== nativeSidebarPopup) return;
     for (const [state, item] of nativeSidebarItems) {
-      item.setAttribute("checked", String(flow.dataset.state === state));
+      setNativeMenuFlag(item, "checked", flow.dataset.state === state);
     }
   });
   nativeSidebarMenu.appendChild(nativeSidebarPopup);
@@ -3104,10 +3112,10 @@
       "label",
       contextGroup?.collapsed ? "Expand Group" : "Collapse Group",
     );
-    moveGroupUp.setAttribute("disabled", String(!adjacentGroupTarget(contextGroup, -1)));
-    moveGroupDown.setAttribute("disabled", String(!adjacentGroupTarget(contextGroup, 1)));
+    setNativeMenuFlag(moveGroupUp, "disabled", !adjacentGroupTarget(contextGroup, -1));
+    setNativeMenuFlag(moveGroupDown, "disabled", !adjacentGroupTarget(contextGroup, 1));
     for (const [colour, item] of groupColourItems) {
-      item.setAttribute("checked", String(contextGroup?.color === colour));
+      setNativeMenuFlag(item, "checked", contextGroup?.color === colour);
     }
     groupWorkspacePopup.replaceChildren();
     for (const workspace of workspaces) {
@@ -3214,19 +3222,19 @@
       workspaceSwitchItems.push(entry);
       previous = entry;
     }
-    newWorkspaceItem.setAttribute("disabled", String(workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES));
+    setNativeMenuFlag(newWorkspaceItem, "disabled", workspaces.length >= FluxionWorkspaces.MAX_WORKSPACES);
     if (contextWorkspaceAnchor === workspaceMoreButton) {
       workspaceHeading.dataset.menuOpen = "true";
       workspaceMoreButton.setAttribute("aria-expanded", "true");
     }
-    moveWorkspaceLeft.setAttribute("disabled", String(index <= 0));
-    moveWorkspaceRight.setAttribute("disabled", String(index < 0 || index >= workspaces.length - 1));
-    deleteWorkspaceItem.setAttribute("disabled", String(workspaces.length <= 1));
+    setNativeMenuFlag(moveWorkspaceLeft, "disabled", index <= 0);
+    setNativeMenuFlag(moveWorkspaceRight, "disabled", index < 0 || index >= workspaces.length - 1);
+    setNativeMenuFlag(deleteWorkspaceItem, "disabled", workspaces.length <= 1);
     for (const [accent, item] of accentItems) {
-      item.setAttribute("checked", String(workspace?.accent === accent));
+      setNativeMenuFlag(item, "checked", workspace?.accent === accent);
     }
     for (const [icon, item] of symbolItems) {
-      item.setAttribute("checked", String(workspace?.icon === icon));
+      setNativeMenuFlag(item, "checked", workspace?.icon === icon);
     }
   });
 

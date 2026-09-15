@@ -18,6 +18,7 @@ function fixture() {
     constructor(name) { this.name = name; this.listeners = new Map(); this.isConnected = true;
       this.attrs = {}; this.dataset = {}; this.state = "closed"; this.children = []; }
     setAttribute(name, value) { this.attrs[name] = String(value); }
+    removeAttribute(name) { delete this.attrs[name]; }
     getAttribute(name) { return this.attrs[name] ?? null; }
     get nextSibling() { return this.parent?.children[this.parent.children.indexOf(this) + 1] || null; }
     appendChild(node) { this.insertBefore(node, null); return node; }
@@ -76,9 +77,13 @@ function fixture() {
   vm.runInContext(fs.readFileSync(path.join(__dirname, "../chrome/core/tab-selection.js"), "utf8"), context);
   vm.runInContext(block("  function contextTabs(", "  function splitOrientation("), context);
   const actions = [];
+  vm.runInContext(block("  function setNativeMenuFlag(", "  const xul ="), context);
   Object.assign(context, {
     FluxionWorkspaces: require("../chrome/core/workspaces.js"), FluxionWorkspaceIcons: require("../chrome/core/workspace-icons.js"),
-    xul(name, attributes = {}) { const node = new Node(name); for (const [key, value] of Object.entries(attributes)) node.setAttribute(key, value); return node; },
+    xul(name, attributes = {}) { const node = new Node(name); for (const [key, value] of Object.entries(attributes)) {
+      if (key === "checked" || key === "disabled") context.setNativeMenuFlag(node, key, value === true || value === "true");
+      else node.setAttribute(key, value);
+    } return node; },
     appendAction(parent, label, callback, attributes = {}) {
       const node = context.xul("menuitem", { label, ...attributes });
       node.addEventListener("command", callback); parent.appendChild(node); return node;
@@ -264,21 +269,21 @@ test("workspace radios rebuild from live order and names, use current checked st
   const f = fixture(), radios = () => f.workspaceMenu.children.filter(item => item.getAttribute("name") === "fluxion-workspace-switch");
   f.workspaceMoreButton.dispatch("click");
   const old = radios();
-  assert.deepEqual(old.map(item => [item.getAttribute("label"), item.getAttribute("checked")]), [["Build", "true"], ["Focus", "false"]]);
+  assert.deepEqual(old.map(item => [item.getAttribute("label"), item.getAttribute("checked")]), [["Build", "true"], ["Focus", null]]);
   f.workspaceMenu.hidePopup(); f.flush();
   f.context.workspaces = [f.context.workspaces[1], { ...f.context.workspaces[0], name: "Development" }];
   f.workspaceMoreButton.dispatch("click");
   const current = radios();
   assert.deepEqual(current.map(item => item.getAttribute("label")), ["Focus", "Development"]);
   assert.ok(old.every(item => item.parent === null));
-  assert.equal(current[0].getAttribute("checked"), "false");
+  assert.equal(current[0].getAttribute("checked"), null);
   assert.equal(f.activate(current[0]).defaultPrevented, false);
   assert.deepEqual(f.actions, [["switch", "focus"]]);
   const content = {}; f.document.activeElement = content;
   f.workspaceMenu.hidePopup(); f.flush();
   assert.equal(f.document.activeElement, content, "Successful command must not trigger cancel-focus restoration");
   f.workspaceMoreButton.dispatch("click");
-  assert.deepEqual(radios().map(item => item.getAttribute("checked")), ["true", "false"]);
+  assert.deepEqual(radios().map(item => item.getAttribute("checked")), ["true", null]);
 });
 
 test("stale workspace menu commands are rejected and reset heading state before any action", () => {

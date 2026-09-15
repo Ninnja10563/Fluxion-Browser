@@ -71,7 +71,8 @@ APPLESCRIPT
     if grep -Fq 'user_pref("fluxion.settingsAccessibility.error"' "$profile/prefs.js"; then break; fi
     if grep -Fq 'user_pref("fluxion.settingsAccessibility.health", "native-control-names-and-descriptions-verified")' "$profile/prefs.js" &&
        grep -Fq 'user_pref("fluxion.settingsAccessibility.geometry.health", "all-settings-sections-fit-320-and-600px")' "$profile/prefs.js"; then
-      printf 'Verified actual Gecko accessible field names and descriptions across five Settings sections.\n'
+      printf 'Verified actual Gecko accessible field names and descriptions across six Settings sections.\n'
+      printf 'Verified native browsing/privacy preferences persist, restore and reset across windows.\n'
       printf 'Verified every Settings section at320px and600px with real permission expiry and workspace edits.\n'
       grep 'user_pref("fluxion.settingsAccessibility.report"' "$profile/prefs.js"
       exit 0

@@ -78,6 +78,10 @@
   function workspaceMenuEvidence(menu, workspaces, current) {
     assert(menu.state === "open", "Workspace menu did not open as a native popup");
     const items = [...menu.children].filter(node => ["menu", "menuitem"].includes(node.localName));
+    for (const node of menu.querySelectorAll("menu, menuitem")) for (const attribute of ["disabled", "checked"]) {
+      assert(!node.hasAttribute(attribute) || node.getAttribute(attribute) === "true",
+        `Native workspace menu must remove false ${attribute} attributes: ${node.getAttribute("label")}`);
+    }
     const evidence = items.map(node => ({ label: node.getAttribute("label"), kind: node.localName,
       disabled: node.getAttribute("disabled") === "true", type: node.getAttribute("type"),
       name: node.getAttribute("name"), checked: node.getAttribute("checked") === "true" }));
@@ -108,6 +112,51 @@
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)),
       `Native workspace key driver did not acknowledge ${name}`, 20000);
+  }
+  async function activateWorkspaceRadio(menu, button, targetId) {
+    const ui = window.FluxionUI, original = ui.currentWorkspace();
+    const targetName = ui.workspaces().find(workspace => workspace.id === targetId).name;
+    const evidence = report.workspaceHeading.activation = { targetId, targetName, highlighted: [], keys: [] };
+    let selected = null;
+    const observe = event => {
+      if (event.isTrusted && event.target.parentNode === menu) {
+        selected = event.target;
+        evidence.highlighted.push(selected.getAttribute("label"));
+      }
+    };
+    menu.addEventListener("DOMMenuItemActive", observe);
+    try {
+      button.focus({ preventScroll: true });
+      await nativeWorkspaceKey("select-open");
+      await wait(() => menu.state === "open", "Native workspace selection menu did not open");
+      assert(menu.isNativeMenu, "Workspace radio selection is not using an OS-native menu");
+      await nativeWorkspaceKey("select-0");
+      await wait(() => selected?.parentNode === menu, "Native workspace menu did not expose its first highlighted leaf");
+      const items = [...menu.children].filter(node => ["menu", "menuitem"].includes(node.localName) && !node.hidden && !node.disabled);
+      const target = items.find(node => node.getAttribute("name") === "fluxion-workspace-switch" && node.getAttribute("label") === targetName);
+      const first = items.indexOf(selected), last = items.indexOf(target);
+      assert(first >= 0 && last >= first && last - first <= 9, "Native workspace radio navigation is not bounded");
+      for (let index = first + 1; index <= last; index++) {
+        const expected = items[index], before = evidence.highlighted.length;
+        await nativeWorkspaceKey(`select-${index - first}`);
+        evidence.keys.push(expected.getAttribute("label"));
+        if (expected.localName === "menuitem") {
+          await wait(() => selected === expected && evidence.highlighted.length > before,
+            `Native workspace ArrowDown did not highlight ${expected.getAttribute("label")}`);
+        } else {
+          // As in the tab-transfer gate, Cocoa emits no active-leaf event for
+          // submenu headers; the eventual observed radio is the actual barrier.
+          await delay(0); await delay(0);
+        }
+      }
+      assert(selected === target, "Native workspace Return would activate an unobserved menu item");
+      await nativeWorkspaceKey("select-return");
+      await wait(() => menu.state === "closed" && ui.currentWorkspace() === targetId,
+        "Native Return did not activate the highlighted workspace radio command");
+      evidence.activated = ui.currentWorkspace();
+      ui.switchWorkspace(original);
+      await wait(() => ui.currentWorkspace() === original, "Workspace fixture did not return to its original workspace");
+    } finally { menu.removeEventListener("DOMMenuItemActive", observe); }
   }
   function workspaceDock(count) {
     const flow = document.getElementById("fluxion-flow"), outer = rect(flow);
@@ -205,9 +254,10 @@
       button.getAttribute("aria-expanded") === "false" && !heading.hasAttribute("data-menu-open"),
     "Native keyboard popup dismissal did not restore its heading anchor");
     state("keyboard-escape-restored");
+    await activateWorkspaceRadio(menu, button, ui.workspaces().find(workspace => workspace.id !== ui.currentWorkspace()).id);
     report.checks.push("workspace-heading-hover-and-focus-reveal-without-label-shift",
       "native-workspace-menu-actions-dynamic-radio-order-and-last-workspace-safety",
-      "native-workspace-arrowdown-open-and-escape-anchor-focus-restoration");
+      "native-workspace-arrowdown-open-and-escape-anchor-focus-restoration", "native-workspace-radio-selection-through-observed-arrowdown-and-return");
   }
   async function workspaceTheme() {
     stage("native-workspace-theme-editor");
@@ -226,11 +276,20 @@
       window.FluxionWorkspaceTheme.open(id, anchor);
       await wait(() => panel.state === "open" && painted(field("hex")), "Native workspace theme panel did not open");
       const panelBox = rect(panel);
+      const surface = panel.panelContent, form = panel.querySelector(".fluxion-workspace-theme-form");
+      assert(surface && form, "Workspace theme panel has no actual Gecko content surface");
+      const surfaceStyle = window.getComputedStyle(surface), formStyle = window.getComputedStyle(form);
+      const padding = ["Top", "Right", "Bottom", "Left"].map(side => Number.parseFloat(surfaceStyle[`padding${side}`]));
+      assert(surfaceStyle.backgroundColor === formStyle.backgroundColor && padding.every(value => value === 0),
+        "Workspace theme panel retains a mismatched native backdrop or duplicate content padding");
+      assert(window.getComputedStyle(field("mode")).backgroundImage.includes("arrow-down-12.svg"),
+        "Workspace theme appearance selector has no visible disclosure arrow");
       const controls = ["mode", "color", "hex", "save", "cancel", "reset"].map(name => {
         const node = field(name); assert(painted(node), `Workspace theme control is not painted: ${name}`);
         return { name, ...rect(node) };
       });
-      evidence.geometry.push({ panel: panelBox, controls });
+      evidence.geometry.push({ panel: panelBox, controls, surface: { background: surfaceStyle.backgroundColor,
+        formBackground: formStyle.backgroundColor, padding, selectArrow: window.getComputedStyle(field("mode")).backgroundImage } });
       for (const box of controls) assert(contains(panelBox, box), `Workspace theme control is clipped: ${box.name}`);
       for (let first = 0; first < controls.length; first++) for (let second = first + 1; second < controls.length; second++) {
         assert(!overlaps(controls[first], controls[second]), `Workspace theme controls overlap: ${controls[first].name}/${controls[second].name}`);
