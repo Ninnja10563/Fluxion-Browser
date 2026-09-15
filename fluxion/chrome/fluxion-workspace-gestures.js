@@ -1,3 +1,4 @@
+/* global Services */
 (function initialiseWorkspaceGestures(window) {
   "use strict";
   const { document, FluxionWorkspaceSwipe: swipe } = window;
@@ -6,7 +7,7 @@
   if (!window.gBrowser || !window.FluxionUI || !swipe || !surface || window.FluxionWorkspaceGestures) return;
 
   const gesture = swipe.create(), cleanups = [], popups = new Set();
-  let dragging = false;
+  let dragging = false, disposed = false;
   const on = (target, type, callback, options) => {
     target.addEventListener(type, callback, options);
     cleanups.push(() => target.removeEventListener(type, callback, options));
@@ -48,8 +49,15 @@
     block();
   }, true);
   on(document, "popuphidden", event => { if (popups.delete(event.target)) block(); }, true);
-  on(window, "blur", () => { dragging = false; block(); });
+  on(window, "blur", () => {
+    // Selecting a native tab can transfer focus between chrome and content.
+    // Only actual window deactivation relinquishes this wheel gesture.
+    window.setTimeout(() => {
+      if (!disposed && Services.focus.activeWindow !== window) { dragging = false; block(); }
+    }, 0);
+  });
   on(window, "unload", () => {
+    disposed = true;
     while (cleanups.length) cleanups.pop()();
     popups.clear();
     gesture.reset();

@@ -23,7 +23,7 @@ function target() {
 
 function runtime() {
   let time = 0, current = "two", editing = false;
-  const switched = [], attributes = new Set();
+  const switched = [], attributes = new Set(), timers = [];
   let workspaces = [{ id: "one" }, { id: "two" }, { id: "three" }];
   const document = target(), surface = target(), flow = { dataset: { state: "expanded" }, querySelector: () => surface };
   const row = { ownerDocument: document, closest: () => editing ? {} : null };
@@ -33,13 +33,15 @@ function runtime() {
   document.getElementById = id => id === "fluxion-flow" ? flow : null;
   const window = Object.assign(target(), {
     document, gBrowser: {}, FluxionWorkspaceSwipe: swipe, performance: { now: () => time },
+    setTimeout(callback, delay) { assert.equal(delay, 0); timers.push(callback); },
     FluxionUI: {
       currentWorkspace: () => current,
       workspaces: () => workspaces,
       switchWorkspace(id) { switched.push(id); current = id; },
     },
   });
-  const context = { window };
+  const focus = { activeWindow: window };
+  const context = { window, Services: { focus } };
   const load = () => vm.runInNewContext(source, context);
   load();
   function wheel(overrides = {}, advance = 16) {
@@ -54,7 +56,8 @@ function runtime() {
     surface.emit("wheel", event);
     return event;
   }
-  return { window, document, flow, surface, row, wheel, switched, attributes, load,
+  return { window, document, flow, surface, row, wheel, switched, attributes, load, focus,
+    flushTimers: () => { while (timers.length) timers.shift()(); },
     setEditing: value => { editing = value; },
     setWorkspaces: value => { workspaces = value; },
     setCurrent: value => { current = value; },
@@ -150,6 +153,26 @@ test("leaving and reentering the sidebar does not convert the same wheel gesture
   env.surface.emit("pointerleave");
   env.wheel({ deltaX: -60 });
   assert.deepEqual(env.switched, ["three"]);
+  env.wheel({ deltaX: -60 }, 300);
+  assert.deepEqual(env.switched, ["three", "two"]);
+});
+
+test("native tab focus transfer preserves a gesture; actual window deactivation rejects its remaining momentum", () => {
+  const env = runtime();
+  env.wheel({ deltaX: 10 });
+  env.focus.activeWindow = null;
+  env.window.emit("blur");
+  env.focus.activeWindow = env.window;
+  env.flushTimers();
+  env.wheel({ deltaX: 46 });
+  assert.deepEqual(env.switched, ["three"], "in-window focus transfer must not interrupt the gesture");
+  env.wheel({ deltaX: -10 }, 300);
+  env.focus.activeWindow = {};
+  env.window.emit("blur");
+  env.flushTimers();
+  env.focus.activeWindow = env.window;
+  env.wheel({ deltaX: -60 });
+  assert.deepEqual(env.switched, ["three"], "reactivating a window must not revive stale momentum");
   env.wheel({ deltaX: -60 }, 300);
   assert.deepEqual(env.switched, ["three", "two"]);
 });

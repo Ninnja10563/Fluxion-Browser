@@ -7,7 +7,7 @@
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
   const { document, gBrowser } = window;
   const driver = Services.env.get("FLUXION_WORKSPACE_GESTURE_DRIVER_DIR");
-  const report = { input: "Gecko nsIDOMWindowUtils.sendWheelEvent with pixel and momentum flags; physical trackpad not claimed", checks: [], events: [] };
+  const report = { input: "Gecko nsIDOMWindowUtils.sendWheelEvent with pixel and momentum flags; physical trackpad not claimed", checks: [], events: [], guards: [] };
   const cleanups = [];
   const assert = (value, message) => { if (!value) throw new Error(message); };
   const delay = ms => new Promise(resolve => window.setTimeout(resolve, ms));
@@ -81,13 +81,20 @@
       `Gesture fixtures lack observable native session history: ${JSON.stringify(historyBaseline)}`);
     const originalHistory = JSON.stringify(historyBaseline);
     const observe = event => {
-      const entry = { trusted: event.isTrusted, dx: event.deltaX, dy: event.deltaY,
+      const entry = { trusted: event.isTrusted, dx: event.deltaX, dy: event.deltaY, cancelable: event.cancelable,
+        activeWindow: Services.focus.activeWindow === window, state: flow.dataset.state,
         target: event.target?.className || event.target?.id || event.target?.localName, at: window.performance.now() };
       report.events.push(entry);
       Promise.resolve().then(() => { entry.cancelled = event.defaultPrevented; });
     };
     surface.addEventListener("wheel", observe, true);
     cleanups.push(() => surface.removeEventListener("wheel", observe, true));
+    for (const [target, type] of [[window, "blur"], [surface, "pointerleave"], [document, "popupshowing"], [document, "popuphidden"]]) {
+      const guard = event => report.guards.push({ type, target: event.target?.className || event.target?.id || event.target?.localName || "window",
+        activeWindow: Services.focus.activeWindow === window, at: window.performance.now() });
+      target.addEventListener(type, guard);
+      cleanups.push(() => target.removeEventListener(type, guard));
+    }
     const sidebarPoint = () => {
       const point = center(scroll);
       assert(surface.contains(document.elementFromPoint(point.x, point.y)), "Sidebar wheel target is obscured");

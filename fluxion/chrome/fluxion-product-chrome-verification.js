@@ -1,4 +1,4 @@
-/* global Services, SessionStore, PathUtils, IOUtils, Ci, Cu, ChromeUtils */
+/* global Services, SessionStore, PathUtils, IOUtils, Cc, Ci, Cu, ChromeUtils */
 (function verifyFluxionProductChrome(window) {
   "use strict";
   if (Services.env.get("FLUXION_PRODUCT_CHROME_TEST") !== "1") return;
@@ -117,9 +117,11 @@
     // Places defers bookmark frecency updates; the real address-bar provider
     // excludes zero-frecency pages. Await Gecko's native fixture-readiness API
     // instead of depending on an idle task firing during this short check.
-    const { PlacesFrecencyRecalculator } = ChromeUtils.importESModule(
-      "resource://gre/modules/PlacesFrecencyRecalculator.sys.mjs");
-    await PlacesFrecencyRecalculator.recalculateAnyOutdatedFrecencies();
+    // The exported symbol is the component class, not its running singleton.
+    // Use the same existing-service access as Gecko's PlacesTestUtils.
+    const frecency = Cc["@mozilla.org/places/frecency-recalculator;1"]
+      .getService(Ci.nsIObserver).wrappedJSObject;
+    await frecency.recalculateAnyOutdatedFrecencies();
     window.FluxionUI.setSidebarState("expanded");
     window.FluxionSidebarWidth?.setWidth(232);
     await window.FluxionTheme.set("dark");
