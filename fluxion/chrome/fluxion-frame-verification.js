@@ -225,7 +225,7 @@
     const [leftPane, rightPane] = Array.from(split.panels, rect);
     assert(rightPane.left >= leftPane.right && near(leftPane.top, rightPane.top), "Native side-by-side page panels overlap or are misaligned");
     report.geometry.push({ mode: "real-page-split", leftPane, rightPane,
-      urls: split.tabs.map(tab => tab.linkedBrowser.currentURI.spec) });
+      urls: Array.from(split.tabs, tab => tab.linkedBrowser.currentURI.spec) });
     await capture("capture-page-split", "dark");
     report.checks.push("two-real-https-pages-share-visible-nonoverlapping-native-split-panels");
     const settingsTab = add("about:preferences?fluxion=appearance");
