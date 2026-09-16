@@ -60,6 +60,17 @@ focused-input collapse on click/keydown, not scripted blur. See the
 [release provenance](../release/provenance/v0.70.1-preview.1.md) for the complete
 passing native release run and exact promoted assets.
 
+The 0.70.2 correction extends native fullscreen retraction to Fluxion-owned
+Settings/Library/sidebar surfaces, not just Gecko's tabpanels mouse rectangle.
+The per-window Focus controller schedules native hide after toolbox departure;
+Gecko retains popup and navigation-input vetoes. A hash-locked
+`install-macos-focus-policy.py` patch permits explicit Focus with a saved
+autohide=false preference (never a managed lock), and limits its input veto to
+actual toolbox inputs. It neither writes the preference nor changes DOM/video
+fullscreen or kiosk handling. A viewport-fixed sidebar removes the toolbar's
+reserved space; a scoped native-toolbox stacking level keeps navigation above
+it. See [the 0.70.2 milestone](milestone-0.70.2.md) for validation status.
+
 General's default-browser action delegates to Gecko's native ShellService.
 Status comes from the operating system, not a Fluxion preference, and the UI
 does not assume that a completed request means the user accepted confirmation.

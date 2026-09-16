@@ -1,5 +1,16 @@
 # Milestone release process
 
+## 0.70.2-preview.1 Focus correction
+
+All 1,136 tests and mandatory native gates passed in
+[run 35080151549](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35080151549)
+on source `eca27212472017d3b174dc4d158a7709b0ed5e0a`. The 21-check frame gate
+adds actual fullscreen retraction over Settings and the sidebar with both
+default and saved-disabled autohide settings, zero product preference writes,
+viewport-anchored heading spacing and unobscured native toolbar hit targets.
+See [the milestone](milestone-0.70.2.md) and
+[release provenance](../release/provenance/v0.70.2-preview.1.md).
+
 ## 0.70.1-preview.1 updater release
 
 All 1,126 tests and mandatory native gates passed in

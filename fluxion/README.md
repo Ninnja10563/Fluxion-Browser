@@ -8,8 +8,15 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-**[0.70.1-preview.1 is published](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1).**
-All 1,126 tests and every mandatory native macOS gate passed. It adds
+**[0.70.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.2-preview.1)**
+fixes fullscreen Focus retraction over Settings and the floating sidebar,
+including older saved autohide preferences. The floating heading is anchored
+near the window's top edge without a navigation-sized gap; native toolbar
+controls remain accessible above it. All 1,136 tests and mandatory native
+gates passed. See the [milestone](docs/milestone-0.70.2.md) and
+[provenance](release/provenance/v0.70.2-preview.1.md).
+
+0.70.1 introduced
 Sparkle-backed update-and-restart, a quiet update indicator, shared automatic
 metadata checks with an About opt-out, and a sidebar-aware fullscreen toolbar
 policy. Normal windows remain open when their final tab closes; explicit window

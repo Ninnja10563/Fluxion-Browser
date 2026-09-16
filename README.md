@@ -23,11 +23,16 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
-**[0.70.1-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1)**
-adds optional automatic update checks and an explicit Update and restart action
-through Sparkle. All 1,126 tests and mandatory native macOS gates passed,
-including signed replacement, canceled quit/retry and same-profile restoration
-in an isolated fixture. Users of 0.70 and earlier
+**[0.70.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.2-preview.1)**
+fixes hidden-sidebar navigation retraction over Settings and the floating
+sidebar in macOS fullscreen, and moves the floating heading to the top inset.
+All 1,136 tests and mandatory native gates passed. See the
+[milestone](fluxion/docs/milestone-0.70.2.md) and
+[provenance](fluxion/release/provenance/v0.70.2-preview.1.md).
+
+Since 0.70.1, optional automatic update checks offer an explicit Update and restart action
+through Sparkle. Native verification covers signed replacement, canceled
+quit/retry and same-profile restoration in an isolated fixture. Users of 0.70 and earlier
 must install the first updater-enabled DMG manually. The initial integration
 requires macOS 12 or later and Fluxion's default profile. See the
 [0.70.1 milestone](fluxion/docs/milestone-0.70.1.md) and
