@@ -206,3 +206,44 @@ test("recovery gate rejects lost workspace metadata and unexpected private data"
   const privateData = verifierFixture(); privateData.state.tabs.push({ entries: [{ url: "data:private" }] });
   assert.throws(privateData.run, /private tab escaped/);
 });
+
+function selectionReadinessFixture({ settle = true, wrongPersisted = false, duplicate = false } = {}) {
+  const urls = ["data:pinned", "data:first", "data:second"], lifecycle = [], polls = [];
+  const state = { tabs: [...urls], selected: wrongPersisted ? 2 : 3 };
+  if (duplicate) state.tabs.push(urls[0]);
+  const selectedBrowser = { currentURI: { spec: "about:blank" } };
+  const win = { gBrowser: { selectedBrowser } };
+  const context = vm.createContext({ urls, stateOf: () => state, stateURLs: value => value.tabs,
+    recordLifecycle: (stage, target) => { assert.equal(target, win); lifecycle.push({ stage, live: selectedBrowser.currentURI.spec, saved: state.tabs[state.selected - 1] }); },
+    until: async (predicate, message) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const ready = predicate(); polls.push(ready);
+        if (ready) return;
+        if (settle) selectedBrowser.currentURI.spec = urls[2];
+      }
+      throw Error(message);
+    } });
+  const start = source.indexOf("  async function restoredSelectionReady("), end = source.indexOf("  async function ready(", start);
+  assert.ok(start >= 0 && end > start);
+  vm.runInContext(source.slice(start, end), context);
+  return { lifecycle, polls, run: () => context.restoredSelectionReady(win, "relaunch") };
+}
+
+test("relaunch waits passively for actual selected document after restored history arrives", async () => {
+  const f = selectionReadinessFixture(); await f.run();
+  assert.deepEqual(f.polls, [false, true]);
+  assert.deepEqual(f.lifecycle, [
+    { stage: "relaunch-selection-initial", live: "about:blank", saved: "data:second" },
+    { stage: "relaunch-selection-ready", live: "data:second", saved: "data:second" },
+  ]);
+});
+
+test("relaunch readiness still fails stalled live pages, wrong saved selection and duplicated tabs with final evidence", async () => {
+  for (const options of [{ settle: false }, { wrongPersisted: true }, { duplicate: true }]) {
+    const f = selectionReadinessFixture(options);
+    await assert.rejects(f.run(), /native selected page did not finish restoring/);
+    assert.deepEqual(f.polls, [false, false, false]);
+    assert.equal(f.lifecycle[0].stage, "relaunch-selection-initial");
+    assert.equal(f.lifecycle[1].stage, "relaunch-selection-timeout");
+  }
+});

@@ -86,6 +86,24 @@
     if (external) ensure(actual.includes(externalURL), `${label}: external request was overwritten`);
     evidence.checks.push({ label, urls: actual, nativeSelectedURL, pinned: true, metadata: true });
   }
+  async function restoredSelectionReady(win, label) {
+    recordLifecycle(`${label}-selection-initial`, win);
+    try {
+      // SessionStore publishes restored history before the selected content
+      // process finishes restoring its document. Observe both without loading,
+      // selecting, flushing, or saving anything on behalf of the browser.
+      await until(() => {
+        const state = stateOf(win), actual = stateURLs(state);
+        const selected = actual[(state.selected || 1) - 1];
+        return actual.length === urls.length && urls.every(url => actual.filter(value => value === url).length === 1) &&
+          selected === urls[2] && win.gBrowser.selectedBrowser.currentURI.spec === selected;
+      }, `${label}: native selected page did not finish restoring its saved selection`);
+      recordLifecycle(`${label}-selection-ready`, win);
+    } catch (error) {
+      recordLifecycle(`${label}-selection-timeout`, win);
+      throw error;
+    }
+  }
   async function ready(win) {
     await until(() => win.gBrowser && win.FluxionUI && win.gBrowserInit?.delayedStartupFinished, "new native window failed startup");
     await wait(350);
@@ -258,8 +276,9 @@
     await ready(first);
     await SessionStore.promiseAllWindowsRestored;
     if (mode === "restore" || mode === "existing-restore" || mode === "existing-quit-restore") {
-      await until(() => urls.every(url => stateURLs(stateOf(first)).includes(url)), "closed-last-window session did not restore on relaunch");
-      verifyTabs(first, mode === "existing-quit-restore" ? "after-full-quit-with-window-open" : "actual-relaunch");
+      const label = mode === "existing-quit-restore" ? "after-full-quit-with-window-open" : "actual-relaunch";
+      await restoredSelectionReady(first, label);
+      verifyTabs(first, label);
       verifyStartupChoice("relaunch-startup-choice");
     } else {
       if (mode.startsWith("choice")) Services.prefs.setIntPref("browser.startup.page", Number(mode.slice(-1)));
