@@ -60,3 +60,36 @@ test("security evidence rejects detached or zero-size popup anchors while allowi
   assert.throws(() => h.validateSecurityAnchor({ ...anchor, width: 0 }, panel), /painted bounds/);
   assert.throws(() => h.validateSecurityAnchor(anchor, { ...panel, height: 0 }), /painted bounds/);
 });
+test("branding location preparation requires trusted Command-L and two separately delivered native Escapes", async () => {
+  for (const untrustedSecond of [false, true]) {
+    const report = { securityNavigation: { keys: [] } }, actions = [], listeners = new Map();
+    const input = {}, document = { activeElement: null };
+    let proxy = "invalid", typed = "https://example.org/", directMutation = false;
+    const gURLBar = { inputField: input, view: { isOpen: true } };
+    for (const name of ["setURI", "handleRevert", "setAttribute"]) gURLBar[name] = () => { directMutation = true; throw Error("Native state forced"); };
+    const window = { gURLBar, addEventListener: (name, callback) => listeners.set(name, callback),
+      removeEventListener: name => listeners.delete(name) };
+    const h = helper("  async function nativeLocationRevert(", "  async function securityPanel(", {
+      window, document, report,
+      async wait(condition, message) { if (!condition()) throw Error(message); },
+      async nativeKey(action) {
+        actions.push(action);
+        if (action === "branding-location") document.activeElement = input;
+        else if (action === "branding-location-escape") gURLBar.view.isOpen = false;
+        else if (!untrustedSecond) { proxy = "valid"; typed = null; }
+        listeners.get("keydown")({ key: action === "branding-location" ? "l" : "Escape",
+          metaKey: action === "branding-location", isTrusted: action !== "branding-location-revert" || !untrustedSecond });
+      },
+    });
+    const run = h.nativeLocationRevert(() => ({ proxy, userTypedValue: typed }));
+    if (untrustedSecond) await assert.rejects(run, /Second native Escape/);
+    else {
+      await run;
+      assert.equal(report.securityNavigation.afterDismiss.proxy, "invalid");
+      assert.equal(report.securityNavigation.afterRevert.proxy, "valid");
+    }
+    assert.deepEqual(actions, ["branding-location", "branding-location-escape", "branding-location-revert"]);
+    assert.equal(directMutation, false);
+    assert.equal(listeners.size, 0);
+  }
+});

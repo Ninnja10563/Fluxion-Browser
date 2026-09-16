@@ -61,7 +61,7 @@ on run arguments
       tell ownedProcess
         if actionName is "branding-location" then
           keystroke "l" using command down
-        else if actionName is "branding-location-escape" then
+        else if actionName is "branding-location-escape" or actionName is "branding-location-revert" then
           key code 53
         else
           error "Unknown branding keyboard action"
@@ -82,7 +82,7 @@ for ((attempt=0; attempt<600; attempt++)); do
     foreground
     touch "$check_root/branding-foreground.sent"
   fi
-  for action in branding-location branding-location-escape; do
+  for action in branding-location branding-location-escape branding-location-revert; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_key "$action"
       touch "$check_root/$action.sent"

@@ -33,7 +33,7 @@
     report.captures.push(name);
   }
   async function nativeKey(name) {
-    assert(["branding-location", "branding-location-escape"].includes(name), "Invalid branding keyboard action");
+    assert(["branding-location", "branding-location-escape", "branding-location-revert"].includes(name), "Invalid branding keyboard action");
     assert(Services.focus.activeWindow === window, "Branding keyboard input lost its owned window");
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Branding key not acknowledged: ${name}`, 20000);
@@ -140,12 +140,62 @@
     return { anchor: { left: anchor.left, top: anchor.top, bottom: anchor.bottom, width: anchor.width, height: anchor.height },
       panel: { left: panel.left, top: panel.top, width: panel.width, height: panel.height } };
   }
+  async function nativeLocationRevert(locationState) {
+    const observeKey = event => {
+      report.securityNavigation.keys.push({ key: event.key, meta: event.metaKey, trusted: event.isTrusted });
+    };
+    const escapes = () => report.securityNavigation.keys.filter(key => key.trusted && key.key === "Escape").length;
+    window.addEventListener("keydown", observeKey, true);
+    try {
+      await nativeKey("branding-location");
+      await wait(() => document.activeElement === window.gURLBar.inputField &&
+        report.securityNavigation.keys.some(key => key.trusted && key.meta && key.key.toLowerCase() === "l"),
+      "Native Command-L did not focus the branding fixture location");
+      await nativeKey("branding-location-escape");
+      await wait(() => !window.gURLBar.view.isOpen && escapes() === 1,
+        "First native Escape did not dismiss the branding location suggestions");
+      report.securityNavigation.afterDismiss = locationState();
+      // Gecko's first Escape can only dismiss suggestions. The second takes
+      // its real revert path; no proxy flags or native URI setters are forced.
+      await nativeKey("branding-location-revert");
+      await wait(() => escapes() === 2, "Second native Escape was not delivered to the branding location");
+    } finally {
+      window.removeEventListener("keydown", observeKey, true);
+      report.securityNavigation.afterRevert = locationState();
+    }
+  }
   async function securityPanel() {
-    const tab = gBrowser.addTrustedTab("https://example.org/", { skipAnimation: true });
-    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
-    window.FluxionUI.selectTab(tab);
-    await wait(() => tab.linkedBrowser.currentURI.spec === "https://example.org/" &&
-      tab.label === "Example Domain" && !tab.hasAttribute("busy"), "Real HTTPS branding fixture did not load", 35000);
+    const progress = [];
+    report.securityLoad = { initialURI: gBrowser.selectedBrowser.currentURI.spec,
+      deckHidden: document.getElementById("tabbrowser-tabbox").hidden, progress };
+    let tab;
+    const record = (browser, kind, extra = {}) => {
+      if (progress.length >= 40 || (tab && browser !== tab.linkedBrowser)) return;
+      progress.push({ kind, uri: browser.currentURI.spec, userTypedValue: browser.userTypedValue,
+        selected: browser === gBrowser.selectedBrowser, navigating: browser.isNavigating,
+        startedLoad: browser.urlbarChangeTracker?._startedLoadSinceLastUserTyping,
+        deckHidden: document.getElementById("tabbrowser-tabbox").hidden, ...extra });
+    };
+    const listener = {
+      onStateChange(browser, webProgress, request, flags, status) {
+        if (!webProgress?.isTopLevel) return;
+        if (flags & Ci.nsIWebProgressListener.STATE_START) record(browser, "START", { flags, status });
+        if (flags & Ci.nsIWebProgressListener.STATE_STOP) record(browser, "STOP", { flags, status });
+      },
+      onLocationChange(browser, webProgress, request, uri, flags) {
+        if (webProgress?.isTopLevel) record(browser, "LOCATION", { location: uri.spec, flags });
+      },
+    };
+    gBrowser.addTabsProgressListener(listener);
+    try {
+      tab = gBrowser.addTrustedTab("https://example.org/", { skipAnimation: true });
+      record(tab.linkedBrowser, "ADDED");
+      window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
+      window.FluxionUI.selectTab(tab);
+      await wait(() => tab.linkedBrowser.currentURI.spec === "https://example.org/" &&
+        tab.label === "Example Domain" && !tab.hasAttribute("busy"), "Real HTTPS branding fixture did not load", 35000);
+      record(tab.linkedBrowser, "LOADED");
+    } finally { gBrowser.removeTabsProgressListener(listener); }
     const locationState = () => ({ uri: gBrowser.selectedBrowser.currentURI.spec,
       selectedFixture: gBrowser.selectedTab === tab, userTypedValue: gBrowser.selectedBrowser.userTypedValue,
       value: window.gURLBar.value, proxy: document.getElementById("urlbar").getAttribute("pageproxystate"),
@@ -161,24 +211,7 @@
           hitInside: node.contains(hit) };
       }) });
     report.securityNavigation = { before: locationState(), keys: [] };
-    const observeKey = event => {
-      report.securityNavigation.keys.push({ key: event.key, meta: event.metaKey, trusted: event.isTrusted });
-    };
-    window.addEventListener("keydown", observeKey, true);
-    try {
-      // Exercise the actual location/revert keyboard path, without forcing
-      // page-proxy flags or manufacturing native security state.
-      await nativeKey("branding-location");
-      await wait(() => document.activeElement === window.gURLBar.inputField &&
-        report.securityNavigation.keys.some(key => key.trusted && key.meta && key.key.toLowerCase() === "l"),
-      "Native Command-L did not focus the branding fixture location");
-      await nativeKey("branding-location-escape");
-      await wait(() => !window.gURLBar.view.isOpen && report.securityNavigation.keys.some(key => key.trusted && key.key === "Escape"),
-        "Native Escape did not finish reverting the branding fixture location");
-    } finally {
-      window.removeEventListener("keydown", observeKey, true);
-      report.securityNavigation.afterRevert = locationState();
-    }
+    await nativeLocationRevert(locationState);
     tab.linkedBrowser.focus();
     let identity;
     await wait(() => {
