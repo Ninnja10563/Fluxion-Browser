@@ -7,6 +7,11 @@ const os = require("node:os");
 const { spawnSync } = require("node:child_process");
 const script = path.resolve(__dirname, "../scripts/package-macos-dmg.sh");
 
+test("packaging parses with the platform system bash, including macOS bash 3", () => {
+  const result = spawnSync("/bin/bash", ["-n", script], { encoding: "utf8" });
+  assert.equal(result.status, 0, result.stderr);
+});
+
 function fixture(t, release = "0.12.0-preview.2") {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-dmg-version-"));
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));

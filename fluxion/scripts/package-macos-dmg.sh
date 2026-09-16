@@ -76,7 +76,7 @@ try:
         info = plistlib.load(handle)
     if not isinstance(info, dict):
         raise ValueError('application Info.plist is not a dictionary')
-    # Sparkle compares Apple's native bundle version, not the display release.
+    # Sparkle compares the native Apple bundle version, not the display release.
     # Keep packaging older, pre-updater apps from their own metadata, but never
     # allow a new signed-update app to fall back by omitting its release marker.
     signed_update_app = 'FluxionReleaseVersion' in info or tuple(map(int, base.split('.'))) > (0, 70, 0)
