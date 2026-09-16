@@ -155,10 +155,19 @@
       await wait(() => !window.gURLBar.view.isOpen && escapes() === 1,
         "First native Escape did not dismiss the branding location suggestions");
       report.securityNavigation.afterDismiss = locationState();
-      // Gecko's first Escape can only dismiss suggestions. The second takes
-      // its real revert path; no proxy flags or native URI setters are forced.
-      await nativeKey("branding-location-revert");
-      await wait(() => escapes() === 2, "Second native Escape was not delivered to the branding location");
+      // Escape is state-sensitive: it may already have reverted the location,
+      // or only dismissed suggestions. Do not send another editing key after
+      // the native security proxy is already valid. Never force proxy/URI state.
+      const dismissed = report.securityNavigation.afterDismiss;
+      report.securityNavigation.revertNeeded = dismissed.proxy !== "valid" || dismissed.userTypedValue !== null;
+      if (report.securityNavigation.revertNeeded) {
+        await nativeKey("branding-location-revert");
+        await wait(() => escapes() === 2, "Second native Escape was not delivered to the branding location");
+      }
+      await wait(() => {
+        const state = locationState();
+        return state.proxy === "valid" && state.userTypedValue === null && !window.gURLBar.view.isOpen;
+      }, "Native Escape did not restore the valid unedited HTTPS security proxy");
     } finally {
       window.removeEventListener("keydown", observeKey, true);
       report.securityNavigation.afterRevert = locationState();
@@ -216,6 +225,8 @@
     let identity;
     await wait(() => {
       report.securityNavigation.beforeIdentity = locationState();
+      if (report.securityNavigation.beforeIdentity.proxy !== "valid" ||
+          report.securityNavigation.beforeIdentity.userTypedValue !== null) return false;
       identity = ["trust-icon-container", "identity-icon-box"].map(id => document.getElementById(id)).find(painted);
       if (!identity || document.activeElement === window.gURLBar.inputField) return false;
       const box = identity.getBoundingClientRect();

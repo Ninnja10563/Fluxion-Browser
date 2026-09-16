@@ -60,8 +60,8 @@ test("security evidence rejects detached or zero-size popup anchors while allowi
   assert.throws(() => h.validateSecurityAnchor({ ...anchor, width: 0 }, panel), /painted bounds/);
   assert.throws(() => h.validateSecurityAnchor(anchor, { ...panel, height: 0 }), /painted bounds/);
 });
-test("branding location preparation requires trusted Command-L and two separately delivered native Escapes", async () => {
-  for (const untrustedSecond of [false, true]) {
+test("branding location preparation uses only the native Escapes needed to restore the real security proxy", async () => {
+  for (const scenario of ["first-ready", "second-needed", "untrusted-second", "still-invalid"]) {
     const report = { securityNavigation: { keys: [] } }, actions = [], listeners = new Map();
     const input = {}, document = { activeElement: null };
     let proxy = "invalid", typed = "https://example.org/", directMutation = false;
@@ -75,20 +75,29 @@ test("branding location preparation requires trusted Command-L and two separatel
       async nativeKey(action) {
         actions.push(action);
         if (action === "branding-location") document.activeElement = input;
-        else if (action === "branding-location-escape") gURLBar.view.isOpen = false;
-        else if (!untrustedSecond) { proxy = "valid"; typed = null; }
+        else if (action === "branding-location-escape") {
+          gURLBar.view.isOpen = false;
+          if (scenario === "first-ready") { proxy = "valid"; typed = null; }
+        } else if (scenario === "first-ready") {
+          // Reproduce the actual native artifact: an unnecessary second
+          // Escape makes a previously valid location proxy invalid again.
+          proxy = "invalid";
+        } else if (scenario === "second-needed") { proxy = "valid"; typed = null; }
         listeners.get("keydown")({ key: action === "branding-location" ? "l" : "Escape",
-          metaKey: action === "branding-location", isTrusted: action !== "branding-location-revert" || !untrustedSecond });
+          metaKey: action === "branding-location", isTrusted: action !== "branding-location-revert" || scenario !== "untrusted-second" });
       },
     });
     const run = h.nativeLocationRevert(() => ({ proxy, userTypedValue: typed }));
-    if (untrustedSecond) await assert.rejects(run, /Second native Escape/);
+    if (scenario === "untrusted-second") await assert.rejects(run, /Second native Escape/);
+    else if (scenario === "still-invalid") await assert.rejects(run, /valid unedited HTTPS security proxy/);
     else {
       await run;
-      assert.equal(report.securityNavigation.afterDismiss.proxy, "invalid");
+      assert.equal(report.securityNavigation.afterDismiss.proxy, scenario === "first-ready" ? "valid" : "invalid");
       assert.equal(report.securityNavigation.afterRevert.proxy, "valid");
     }
-    assert.deepEqual(actions, ["branding-location", "branding-location-escape", "branding-location-revert"]);
+    assert.equal(report.securityNavigation.revertNeeded, scenario !== "first-ready");
+    assert.deepEqual(actions, scenario === "first-ready" ? ["branding-location", "branding-location-escape"] :
+      ["branding-location", "branding-location-escape", "branding-location-revert"]);
     assert.equal(directMutation, false);
     assert.equal(listeners.size, 0);
   }
