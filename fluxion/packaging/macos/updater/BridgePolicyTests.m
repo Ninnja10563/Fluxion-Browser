@@ -55,8 +55,11 @@ int main(void) {
     item.channel = @"preview"; item.installationType = @"application";
     item.signingValidationStatus = SPUAppcastSigningValidationStatusSucceeded;
     item.fileURL = [NSURL URLWithString:@"https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.70.1-preview.2/Fluxion.zip"];
+    // The pure policy callback never messages its updater parameter. Supply a
+    // nonnull inert token without constructing an actual updater/network cycle.
+    SPUUpdater *updaterToken = (SPUUpdater *)[[NSObject alloc] init];
     BOOL (^accepts)(void) = ^{
-      return [subject updater:nil shouldProceedWithUpdate:(SUAppcastItem *)item updateCheck:SPUUpdateCheckUpdates error:NULL];
+      return [subject updater:updaterToken shouldProceedWithUpdate:(SUAppcastItem *)item updateCheck:SPUUpdateCheckUpdates error:NULL];
     };
     assert(accepts());
     item.signingValidationStatus = SPUAppcastSigningValidationStatusFailed; assert(!accepts());
