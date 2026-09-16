@@ -12,7 +12,7 @@ function block(start, end) {
 }
 
 function fixture() {
-  const frames = [], timers = [], projections = [];
+  const frames = [], timers = [], projections = [], timerDelays = [];
   const tabs = Array.from({ length: 4 }, (_, id) => ({ id, label: `Page ${id}`, parentNode: {}, closing: false, workspace: "focus" }));
   const tabElements = new Map();
   function row(tab) {
@@ -32,16 +32,16 @@ function fixture() {
   };
   const context = vm.createContext({ gBrowser, tabElements, groupElements: new Map(), workspaceElements: new Map(),
     Services: { focus: { activeWindow: null } },
-    window: { requestAnimationFrame: fn => frames.push(fn), setTimeout: fn => timers.push(fn),
+    window: { requestAnimationFrame: fn => frames.push(fn), setTimeout: (fn, delay) => { timerDelays.push(delay); return timers.push(fn); },
       matchMedia: () => ({ matches: false }) },
     document: { activeElement: null, documentElement: { hasAttribute: () => false } },
-    pointerCloseHold: null, renderDeferredForClose: false, closingTabs: new Set(), dirtyTabs: new Set(),
+    closingTabs: new Set(), dirtyTabs: new Set(),
     structureDirty: false, renderQueued: false, selectionDirty: false, flowMenuSession: null,
     currentWorkspace: "focus", renderedWorkspace: "focus", renderedSelectedTab: tabs[0], renderedMultiSelected: new Set(),
     rovingElements: new Map(), focusTabAfterRender: null, focusGroupAfterRender: null, focusWorkspaceAfterRender: null,
     pinnedTabs: { childElementCount: 0 }, pinnedLabel: {}, count: {},
     tabWorkspace: tab => tab.workspace, contextTabs: tab => [tab], renderWorkspaces() {},
-    updateWindowTitle() {}, syncHeldTabSelection() {}, refreshFlowSelection: () => true, refreshTabElement() {},
+    updateWindowTitle() {}, refreshFlowSelection: () => true, refreshTabElement() {},
     renderedPinnedTabElements: () => [], renderedTreeItems: () => [...tabElements.values()],
     renderedTabElements: () => [...tabElements.values()],
     reconcileFlowTabs(visible) {
@@ -56,7 +56,6 @@ function fixture() {
   // lifecycle is modeled from Firefox155.0.1: committed TabClose precedes DOM
   // teardown; canceled permitUnload emits no event. Physical macOS keyboard
   // dispatch and Gecko's actual dialog are separate packaged-browser checks.
-  vm.runInContext(fs.readFileSync(path.join(__dirname, "../chrome/core/tab-close-stability.js"), "utf8"), context);
   vm.runInContext(block("  function closeMotionDuration()", "  function vectorGlyph(") +
     block("  function render()", "  function updateWindowTitle()") +
     block("  function scheduleRender(", "  const popupSet ="), context);
@@ -68,15 +67,9 @@ function fixture() {
     }
     context.scheduleRender({ type: "TabClose", target: tab });
   }
-  return { context, tabs, tabElements, projections, frames, timers, commitClose,
+  return { context, tabs, tabElements, projections, frames, timers, timerDelays, commitClose,
     flush() { while (frames.length) frames.shift()(); },
     async finishTimers() { while (timers.length) await timers.shift()(); },
-    hold(tab = tabs[0], detail = 1) {
-      context.beginPointerCloseHold([tab], [tabElements.get(tab)],
-        { getBoundingClientRect: () => ({ left: 10, top: 10, right: 30, bottom: 30 }) },
-        { detail, clientX: 20, clientY: 20 });
-      return context.pointerCloseHold;
-    },
   };
 }
 
@@ -101,47 +94,42 @@ test("coalesced native closes and detached tabs never survive the workspace proj
   assert.equal(f.context.count.textContent, "1");
 });
 
-for (const releasing of [false, true]) {
-  test(`Command-W on another tab ends a ${releasing ? "releasing" : "stationary"} pointer hold without waiting for mouse movement`, () => {
-    const f = fixture(), hold = f.hold();
-    f.commitClose(f.tabs[0]); f.flush();
-    assert.equal(f.context.pointerCloseHold, hold);
-    assert.ok(f.tabElements.has(f.tabs[0]), "pointer close retains its gap until released");
-    hold.releasing = releasing;
-    f.commitClose(f.tabs[1]); f.flush();
-    assert.equal(f.context.pointerCloseHold, null);
-    assert.equal(f.tabElements.has(f.tabs[0]), false);
-    assert.equal(f.tabElements.has(f.tabs[1]), false);
-    assert.equal(f.context.count.textContent, "2");
+for (const index of [0, 1, 3]) {
+  test(`pointer close at row ${index} compresses after 120ms without pointer, blur or scroll events`, async () => {
+    const f = fixture(), tab = f.tabs[index], row = f.tabElements.get(tab);
+    const survivors = f.tabs.filter(candidate => candidate !== tab).map(candidate => f.tabElements.get(candidate));
+    f.context.closeWithStability(tab, row);
+    assert.equal(row.classList.contains("is-close-releasing"), true);
+    assert.deepEqual(f.timerDelays, [120]);
+    f.context.closeWithStability(tab, row);
+    assert.equal(f.timers.length, 1, "an in-flight close is not duplicated");
+    await f.finishTimers(); f.flush();
+    assert.equal(f.tabElements.has(tab), false);
+    assert.equal(f.context.count.textContent, "3");
+    assert.deepEqual(f.tabs.filter(candidate => candidate !== tab).map(candidate => f.tabElements.get(candidate)), survivors);
   });
 }
 
-test("a close from the held pointer set retains anti-repeat protection until explicit release", () => {
-  const f = fixture(), hold = f.hold(), neighbor = f.tabElements.get(f.tabs[1]);
-  f.commitClose(f.tabs[0]); f.flush();
-  assert.equal(f.context.pointerCloseHold, hold);
-  assert.equal(f.projections.length, 0);
-  assert.equal(f.tabElements.get(f.tabs[1]), neighbor);
-  f.context.releasePointerCloseHold({ animate: false }); f.flush();
-  assert.equal(f.tabElements.has(f.tabs[0]), false);
-  assert.equal(f.tabElements.get(f.tabs[1]), neighbor);
+test("reduced motion and disabled animation close without a timed visual wait", async () => {
+  for (const preference of ["system", "browser"]) {
+    const f = fixture(), tab = f.tabs[0];
+    f.context.window.matchMedia = () => ({ matches: preference === "system" });
+    f.context.document.documentElement.hasAttribute = () => preference === "browser";
+    f.context.closeWithStability(tab, f.tabElements.get(tab));
+    assert.deepEqual(f.timerDelays, [0]);
+    await f.finishTimers(); f.flush();
+    assert.equal(f.tabElements.has(tab), false);
+  }
 });
 
-test("closing the trailing row does not hold New tab in an obsolete position", async () => {
-  const f = fixture(), last = f.tabs.at(-1), row = f.tabElements.get(last);
-  assert.equal(f.hold(last), null);
-  f.context.closeWithStability(last, row, { closeButton: { getBoundingClientRect: () => ({ left: 10, top: 10, width: 20, height: 20 }) },
-    event: { detail: 1, clientX: 20, clientY: 20 } });
-  await f.finishTimers(); f.flush();
-  assert.equal(f.context.pointerCloseHold, null);
-  assert.equal(f.tabElements.has(last), false);
-  assert.equal(f.tabElements.size, 3);
-});
-
-test("keyboard activation of a close button does not start a pointer guard at synthetic coordinates", () => {
+test("keyboard close during another row's compression removes both without pointer input", async () => {
   const f = fixture();
-  assert.equal(f.hold(f.tabs[0], 0), null);
-  assert.ok(f.hold(f.tabs[0], 1));
+  f.context.closeWithStability(f.tabs[0], f.tabElements.get(f.tabs[0]));
+  f.commitClose(f.tabs[1]); f.flush();
+  await f.finishTimers(); f.flush();
+  assert.equal(f.context.count.textContent, "2");
+  assert.equal(f.tabElements.has(f.tabs[0]), false);
+  assert.equal(f.tabElements.has(f.tabs[1]), false);
 });
 
 test("a rejected native keyboard close leaves the row and count intact", () => {
@@ -165,7 +153,6 @@ test("canceled pointer beforeunload restores the row's visibility and interactio
   assert.equal(f.context.closingTabs.has(tab), false);
   assert.equal(original.classList.contains("is-closing"), false);
   assert.equal(original.classList.contains("is-close-releasing"), false);
-  assert.equal(f.context.pointerCloseHold, null);
   assert.equal(f.tabElements.get(tab), original);
 });
 
@@ -182,72 +169,5 @@ test("partial multi-tab beforeunload cancellation keeps survivors interactive an
   assert.equal(f.tabElements.get(survivor), original);
   assert.equal(original.classList.contains("is-closing"), false);
   assert.equal(f.context.closingTabs.has(survivor), false);
-  assert.equal(f.context.pointerCloseHold, null);
   assert.equal(f.context.count.textContent, "3");
-});
-
-test("completion of an old pointer release never clears a newer close guard", async () => {
-  const f = fixture(), old = f.hold();
-  f.commitClose(f.tabs[0]);
-  f.context.releasePointerCloseHold();
-  assert.ok(old.releasing);
-  f.commitClose(f.tabs[1]); f.flush();
-  const current = f.hold(f.tabs[2]);
-  assert.notEqual(current, old);
-  await f.finishTimers();
-  assert.equal(f.context.pointerCloseHold, current);
-});
-
-test("a canceled keyboard close does not take ownership of another tab's pointer guard", async () => {
-  const f = fixture(), hold = f.hold();
-  f.commitClose(f.tabs[0]);
-  const survivor = f.tabs[1], original = f.tabElements.get(survivor);
-  survivor.cancelClose = true;
-  f.context.closeWithStability(survivor, original);
-  await f.finishTimers(); f.flush();
-  assert.equal(f.context.pointerCloseHold, hold);
-  assert.ok(f.tabElements.has(f.tabs[0]), "existing stationary pointer gap is retained");
-  assert.equal(original.classList.contains("is-closing"), false);
-  f.context.releasePointerCloseHold({ animate: false }); f.flush();
-  assert.equal(f.tabElements.has(f.tabs[0]), false);
-  assert.equal(f.tabElements.get(survivor), original);
-});
-
-test("chrome-to-content blur in the same native window retains the pointer close gap", async () => {
-  const f = fixture(), hold = f.hold();
-  f.commitClose(f.tabs[0]);
-  f.context.document.activeElement = { localName: "body" };
-  f.context.handlePointerCloseBlur();
-  assert.equal(f.timers.length, 1);
-  assert.equal(f.context.pointerCloseHold, hold);
-  await f.finishTimers(); f.flush();
-  assert.equal(f.context.pointerCloseHold, hold);
-  assert.ok(f.tabElements.has(f.tabs[0]));
-  assert.equal(f.projections.length, 0);
-});
-
-test("native window deactivation releases the close gap after focus bookkeeping settles", async () => {
-  for (const nextWindow of [null, {}]) {
-    const f = fixture(), hold = f.hold();
-    f.commitClose(f.tabs[0]);
-    f.context.handlePointerCloseBlur();
-    assert.equal(f.context.pointerCloseHold, hold, "blur alone must not synchronously release");
-    f.context.Services.focus.activeWindow = nextWindow;
-    await f.finishTimers(); f.flush();
-    assert.equal(f.context.pointerCloseHold, null);
-    assert.equal(f.tabElements.has(f.tabs[0]), false);
-    assert.equal(f.context.count.textContent, "3");
-  }
-});
-
-test("an obsolete blur callback cannot release a newer pointer close guard", async () => {
-  const f = fixture(), old = f.hold();
-  f.commitClose(f.tabs[0]);
-  f.context.handlePointerCloseBlur();
-  f.context.releasePointerCloseHold({ animate: false }); f.flush();
-  const current = f.hold(f.tabs[1]);
-  assert.notEqual(current, old);
-  f.context.Services.focus.activeWindow = null;
-  await f.finishTimers();
-  assert.equal(f.context.pointerCloseHold, current);
 });

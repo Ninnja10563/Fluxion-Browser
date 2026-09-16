@@ -38,6 +38,34 @@ jobs:
           FLUXION_SKIP_LAUNCH_CHECK: "1"
         run: ./fluxion/scripts/build-macos.sh --clean
 
+      - name: Verify native migration wizard and HTML bookmark import
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_MIGRATION_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-migration-evidence
+        run: bash ./fluxion/scripts/verify-macos-migration.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native migration evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-migration-diagnostic
+          path: ${{ runner.temp }}/fluxion-migration-evidence
+          if-no-files-found: warn
+
+      - name: Verify native Fluxion branding and preserved security status
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_BRANDING_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-branding-evidence
+        run: bash ./fluxion/scripts/verify-macos-branding.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native branding evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-branding-diagnostic
+          path: ${{ runner.temp }}/fluxion-branding-evidence
+          if-no-files-found: warn
+
       - name: Verify product service policy and address bar geometry
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         env:

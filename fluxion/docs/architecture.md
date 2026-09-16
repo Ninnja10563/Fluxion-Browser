@@ -43,6 +43,13 @@ lifecycle as tab menus, retaining the actual opener for cancellation focus.
 Firefox-only cloud VPN enrollment is gated at startup rather than relabeled;
 see [product service policy](product-service-policy.md).
 
+General's default-browser action delegates to Gecko's native ShellService.
+Status comes from the operating system, not a Fluxion preference, and the UI
+does not assume that a completed request means the user accepted confirmation.
+There is no unsolicited startup prompt or automatic association change. Native
+CI reads the actual status but intercepts the mutation before testing the
+button, so the runner's default application remains unchanged.
+
 `core/colors.js` validates local base/accent preferences and derives readable
 light/dark chrome tokens. `fluxion-colors.js` projects those tokens into each
 privileged browser document and observes one atomic preference across windows.
@@ -55,9 +62,12 @@ Workspace appearance may now select its own system/light/dark scheme and
 palette accents. The projector resolves concrete tokens and sets a chrome-only
 attribute, never the root `color-scheme` used by Gecko's embedded webpage media
 queries. Scoped rules apply to navigation, Flow, Settings and Library only.
-The two-page appearance panel owns a window-local preview token, validates
+The paged appearance panel owns a window-local preview token, validates
 hex values and checks the saved workspace revision before an atomic commit.
-Dismissal, cancellation, deletion and workspace changes invalidate the preview.
+Its integrated colour page provides a two-dimensional saturation/lightness
+field, equivalent keyboard-adjustable ranges and a hex field; it does not open
+an OS colour dialog that can outlive the parent popup. Dismissal, cancellation,
+deletion and workspace changes invalidate the preview.
 
 `fluxion-focus-mode.js` separately owns the top-edge navigation overlay. It
 does not reparent native controls or remove them from keyboard navigation:
@@ -66,6 +76,16 @@ resolves its final geometry before positioning. Canceled popup openings release
 their provisional owner even when Gecko emits no `popuphidden`. The sidebar
 uses an inset floating surface with a transparent pointer bridge; neither
 overlay resizes the webpage. Fullscreen/customization defer to native chrome.
+
+Ordinary browser fullscreen defaults to Gecko's native toolbar autohide, also
+with an expanded sidebar: moving to the top edge or focusing the address field
+reveals navigation. Fluxion sets only the unlocked default branch of
+`browser.fullscreen.autohide`; saved user choices and administrator-managed
+opt-outs remain intact. Explicit sidebar collapse releases New Tab's automatic
+address focus so it cannot unintentionally hold navigation open, while later
+Command-L and native security popups retain normal reveal behavior. Browser
+fullscreen keeps the subtle page corners; webpage-requested DOM fullscreen
+retains native behavior and square, edge-to-edge content.
 
 `core/browser-preferences.js` is a bounded, typed adapter for six everyday
 Gecko settings presented in Fluxion's custom General and Privacy sections.
@@ -136,13 +156,33 @@ alone as liveness produces a ghost row after Command-W. The native
 canceled `beforeunload` returns without `TabClose`. Fluxion restores surviving
 rows after that call, and does not replace Gecko's permission handling.
 
-The pointer-close guard is owned by its exact set of closing tabs. A native
-close outside that set ends the guard even while a release animation is in
-progress. A cancellation only cleans up its own guard, since Gecko permission
-handling may spin a nested event loop. Re-audit these lifecycle assumptions
-against `browser/components/tabbrowser/content/tabbrowser.js` when upgrading
-Gecko; keep the isolated native macOS keyboard gate alongside the extracted
-renderer/state regression tests.
+Closing rows compress briefly, then reconcile without waiting for pointer
+movement. There is no stationary-pointer layout hold: remaining rows and the
+New Tab action must settle even while the cursor stays still. Cancellation
+restores only the surviving native tabs; permission handling may spin a nested
+event loop. Re-audit these lifecycle assumptions against
+`browser/components/tabbrowser/content/tabbrowser.js` when upgrading Gecko;
+keep the isolated native macOS keyboard and stationary-pointer gates alongside
+the extracted renderer/state regression tests.
+
+Gecko's last-tab decision normally excludes hidden tabs. The pinned packaging
+patch vetoes only its window-close branch when a live hidden tab belongs to
+another valid Fluxion workspace; Gecko then creates its ordinary empty-tab
+replacement. Explicit window closure, native page-leave prompts and actual
+final-tab behavior remain native. The exact upstream tabbrowser hash is part of
+the session-policy guard and must be re-audited on an engine upgrade.
+
+### Account containers
+
+`fluxion-containers.js` exposes Gecko's public contextual identities in the
+existing native tab menu. Container identity remains separate from workspace
+membership: opening in a different container creates a new tab in the source
+workspace and leaves the original alone. The native principal-origin-attribute
+policy is retained; no cookies, POST data, forms or history are copied across
+containers. Snapshot targets, URLs, workspace membership and identities are
+revalidated before opening. Private windows and managed container opt-outs do
+not expose the action. Enabling containers on the default preference branch
+does not override a user's saved opt-out.
 
 ### Cross-window tab adoption
 
@@ -322,15 +362,16 @@ homepage. It overrides future new-tab destinations without navigating the
 selected browser: a SessionStore tab can still report `about:blank` while its
 saved page is being restored.
 
-### macOS last-window policy (0.69 candidate)
+### macOS last-window policy (0.69; expanded verification in 0.70)
 
 Firefox 155.0.1 normally restores only pinned tabs after closing its final macOS
 window, even with restore-session startup selected. Fluxion's build-time
 `scripts/install-macos-session-policy.py` makes that specific path follow the
 user's startup choice. It checks the exact 155.0.1 application version and full
 SHA-256 digests of `modules/sessionstore/SessionStore.sys.mjs`,
-`SessionSaver.sys.mjs`, and the unchanged `browser-init.js` startup interface
-before changing either session module. Unknown upstream sources
+`SessionSaver.sys.mjs`, `tabbrowser.js`, and the unchanged `browser-init.js`
+startup interface before changing the session modules or last-visible-tab close
+decision. Unknown upstream sources
 fail the build; a Gecko update requires explicit review and new native evidence.
 The archive is replaced atomically after CRC validation, preserving all other
 member contents/metadata, order, and Mozilla's optimized directory/preload layout.
@@ -350,7 +391,11 @@ runtime replacement of SessionStore methods.
 
 `verify-macos-last-window.sh` exercises actual close/reopen, pinned and normal
 tabs, custom session metadata, private exclusion, external-URL preservation,
-repeated disk checkpoints, a separate process relaunch, and both startup opt-outs.
+repeated disk checkpoints in the fresh-profile scenario, a separate process
+relaunch, and both startup opt-outs. Another isolated profile explicitly stores
+startup choice 3 and exercises normal quit/relaunch without test-forced session
+saving or pre-close diagnostic state collection; post-close waits allow native
+closed records to settle. This is not an imported existing user profile.
 Its isolated-profile JSON reports are retained as release artifacts. Candidate
 code and unit tests alone are not evidence that this native gate has passed.
 

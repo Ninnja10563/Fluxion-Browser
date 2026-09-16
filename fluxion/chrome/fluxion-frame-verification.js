@@ -45,6 +45,39 @@
     const r = node.getBoundingClientRect();
     return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width, height: r.height };
   };
+  function pageCornerEvidence(browser, label) {
+    const stack = browser.closest(".browserStack"), container = browser.closest(".browserContainer");
+    assert(stack && container, "Native webpage stack is missing");
+    const style = window.getComputedStyle(stack), radii = [style.borderTopLeftRadius, style.borderTopRightRadius,
+      style.borderBottomRightRadius, style.borderBottomLeftRadius];
+    assert(radii.every(radius => radius === "8px") && style.overflowX === "clip" && style.overflowY === "clip",
+      `Native webpage has square or unclipped corners: ${label}`);
+    const box = rect(browser), center = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    assert(browser === center || browser.contains(center), `Page center is obscured: ${label}`);
+    const corner = document.elementFromPoint(box.left + .5, box.top + .5);
+    assert(corner !== browser && !browser.contains(corner), `Remote content escapes the rounded top-left clip: ${label}`);
+    return { label, radii, overflow: [style.overflowX, style.overflowY], page: box,
+      cornerHit: corner?.id || corner?.localName, backdrop: window.getComputedStyle(container).backgroundColor };
+  }
+  function sidebarMotionEvidence(surface, revealed) {
+    const style = window.getComputedStyle(surface);
+    const properties = style.transitionProperty.split(",").map(value => value.trim());
+    const durations = style.transitionDuration.split(",").map(value => parseFloat(value));
+    const delays = style.transitionDelay.split(",").map(value => parseFloat(value));
+    const reduced = document.documentElement.hasAttribute("data-fluxion-no-motion") || window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduced) {
+      assert(durations.every(value => value <= .00001) && delays.every(value => value === 0),
+        "Reduced motion retained a delayed or animated sidebar retract");
+    } else {
+      const index = properties.indexOf("visibility");
+      assert(index >= 0 && durations[index % durations.length] === 0 &&
+        delays[index % delays.length] === (revealed ? 0 : .14),
+      "Sidebar visibility must reveal immediately and hide only after its 140ms retract");
+      assert(properties.includes("transform") && properties.includes("opacity"), "Sidebar retract has no painted transform/opacity transition");
+    }
+    if (!revealed) assert(style.pointerEvents === "none", "Retracting sidebar still intercepts webpage input");
+    return { revealed, reduced, properties, durations, delays };
+  }
   const routePointer = (x, y, type = "mousemove", buttons = 0) => {
     assert(typeof window.synthesizeMouseEvent === "function", "Gecko native widget input router is unavailable");
     window.synthesizeMouseEvent(type, x, y, {
@@ -265,7 +298,7 @@
       "Cmd-Shift-T did not restore the closed native tab and Flow row");
     report.checks.push("stationary-native-cmd-w-removes-row-and-cmd-shift-t-restores");
 
-    stage("native-keyboard-close-after-pointer-hold");
+    stage("native-pointer-close-without-movement");
     const pointerTab = add("about:blank?fluxion-frame=pointer-close");
     const following = add("about:blank?fluxion-frame=following");
     await select(pointerTab);
@@ -299,14 +332,17 @@
     report.pointerHoldStart = { closeRect, nextTop, flow: rect(flow), x, y };
     const mouse = (type, buttons) => routePointer(x, y, type, buttons);
     mouse("mousemove", 0); mouse("mousedown", 1); mouse("mouseup", 0);
+    const closeStarted = window.performance.now(), stationaryMoves = pointerMoves;
     report.pointerHoldAfterClick = { connected: pointerRow.isConnected, className: pointerRow.className,
       nextTop: rect(nextRow).top, nativeConnected: Boolean(pointerTab.parentNode) };
     await wait(() => !pointerTab.parentNode, "Routed pointer close did not close its native tab");
     report.pointerHoldAfterNativeClose = { connected: pointerRow.isConnected, className: pointerRow.className,
       nextConnected: nextRow.isConnected, nextTop: rect(nextRow).top, initialNextTop: nextTop, pointerMoves };
-    assert(pointerRow.isConnected && pointerRow.classList.contains("is-closing") && near(rect(nextRow).top, nextTop),
-      `Pointer close did not retain its stationary safety space: ${JSON.stringify(report.pointerHoldAfterNativeClose)}`);
-    await delay(100);
+    await wait(() => !pointerRow.isConnected && nextRow.isConnected && rect(nextRow).top < nextTop - 10,
+      "Pointer close left a gap above the following tab without mouse movement", 500);
+    assert(pointerMoves === stationaryMoves, "Pointer moved before the following row settled");
+    report.pointerCloseSettled = { elapsed: window.performance.now() - closeStarted,
+      previousTop: nextTop, nextTop: rect(nextRow).top, pointerMoves };
     const heldMoves = pointerMoves;
     const keyboardTab = gBrowser.selectedTab;
     assert(keyboardTab !== pointerTab && keyboardTab.parentNode, "Pointer closure did not select a surviving tab");
@@ -315,9 +351,9 @@
     keyboardRow.focus();
     await action("close-after-pointer");
     await wait(() => !keyboardTab.parentNode && !keyboardRow.isConnected && !pointerRow.isConnected,
-      "Cmd-W after pointer close left deferred closed rows visible");
-    assert(pointerMoves === heldMoves, "Pointer moved during the pointer-hold keyboard fixture");
-    assert(liveTabs().length === heldBefore.length - 1 && heldBefore.filter(tab => tab !== keyboardTab).every(tab => tab.parentNode && !tab.closing), "Keyboard close after pointer hold closed an extra tab");
+      "Cmd-W after pointer close left closed rows visible");
+    assert(pointerMoves === heldMoves, "Pointer moved during the subsequent keyboard close fixture");
+    assert(liveTabs().length === heldBefore.length - 1 && heldBefore.filter(tab => tab !== keyboardTab).every(tab => tab.parentNode && !tab.closing), "Keyboard close after pointer close closed an extra tab");
     assert(survivor.parentNode, "The protected survivor was unexpectedly closed");
     const trustedCommand = key => key.trusted && key.meta && !key.alt && !key.control && !key.repeat;
     const closes = report.keys.filter(key => key.key.toLowerCase() === "w" && !key.shift && trustedCommand(key));
@@ -325,7 +361,7 @@
     assert(report.keys.length === 3 && closes.length === 2 && restores.length === 1,
       `Native keyboard event evidence is incomplete or contains extra commands: ${JSON.stringify(report.keys)}`);
     report.nativeKeyCounts = { close: closes.length, restore: restores.length, total: report.keys.length };
-    report.checks.push("pointer-close-hold-preserved-until-native-keyboard-close-with-no-pointer-motion");
+    report.checks.push("pointer-close-compresses-following-row-without-motion-and-subsequent-native-keyboard-close-remains-correct");
 
     stage("real-page-and-frame-geometry");
     const webpage = add("https://example.org/");
@@ -397,6 +433,7 @@
       await delay(200);
       workspaceControls("focus", true);
       const appearance = sidebarSurfaceEvidence(surface, "revealed");
+      report.geometry.push(sidebarMotionEvidence(surface, true));
       const floating = floatingSidebarEvidence(flow, surface, true);
       const pageAfter = rect(gBrowser.tabpanels);
       assert(["left", "top", "width", "height"].every(key => near(pageBefore[key], pageAfter[key])), "Routed edge reveal reflowed page content");
@@ -416,6 +453,7 @@
       }
       routePointer(outside.x, outside.y);
       await wait(() => flow.dataset.revealed === "false" && surface.inert, `Leaving the overlay did not hide sidebar on cycle ${cycle}`);
+      report.geometry.push(sidebarMotionEvidence(surface, false));
       await delay(200);
       report.geometry.push(floatingSidebarEvidence(flow, surface, false));
     }
@@ -621,6 +659,82 @@
     report.geometry.push({ mode: "library", page: libraryRect });
     report.checks.push("settings-and-library-share-the-native-page-frame-boundary");
     report.checks.push("actual-light-dark-webpage-and-settings-captures");
+    await nativeFullscreen();
+  }
+  async function nativeFullscreen() {
+    stage("native-browser-fullscreen-focus-and-corners");
+    assert(Services.prefs.getBoolPref("browser.fullscreen.autohide", false) &&
+      !Services.prefs.prefHasUserValue("browser.fullscreen.autohide") && !Services.prefs.prefIsLocked("browser.fullscreen.autohide"),
+    "Fresh-profile native fullscreen autohide must come from the unlocked product default, not a fixture/user override");
+    const ui = window.FluxionUI, root = document.documentElement;
+    const originalSize = { width: window.outerWidth, height: window.outerHeight };
+    const evidence = report.fullscreen = { input: "Real window.fullScreen transition, Gecko widget-routed hover, native macOS Cmd-L/Escape", keys: [], geometry: [] };
+    const tab = gBrowser.addTrustedTab("https://example.org/", { skipAnimation: true });
+    ui.setTabWorkspace(tab, ui.currentWorkspace()); ui.selectTab(tab);
+    await wait(() => tab.label === "Example Domain" && !tab.hasAttribute("busy") &&
+      tab.linkedBrowser.currentURI.spec === "https://example.org/", "Fullscreen HTTPS fixture did not finish loading", 35000);
+    const toolbox = document.getElementById("navigator-toolbox"), browser = tab.linkedBrowser;
+    const moveToPage = () => { const box = rect(browser); routePointer(box.right - 60, box.top + Math.min(160, box.height / 2)); };
+    const key = event => {
+      if ((event.metaKey && event.key.toLowerCase() === "l") || event.key === "Escape")
+        evidence.keys.push({ key: event.key, trusted: event.isTrusted, meta: event.metaKey });
+    };
+    window.addEventListener("keydown", key, true);
+    try {
+      ui.setSidebarState("expanded");
+      await wait(() => !window.FluxionFocusMode.state().enabled, "Expanded mode did not release Focus navigation");
+      window.gURLBar.focus();
+      await wait(() => document.activeElement === window.gURLBar.inputField, "Implicit location-focus fixture did not focus");
+      ui.setSidebarState("focus");
+      await wait(() => window.FluxionFocusMode.state().enabled && !window.FluxionFocusMode.state().revealed &&
+        document.activeElement !== window.gURLBar.inputField && rect(toolbox).bottom <= 1,
+      "Collapsing with inherited New Tab focus kept navigation pinned");
+      report.checks.push("collapse-releases-inherited-address-focus-without-blocking-later-native-cmd-l");
+      ui.setSidebarState("expanded");
+      await wait(() => !window.FluxionFocusMode.state().enabled, "Expanded frame did not recover before fullscreen");
+      window.gURLBar.focus();
+      window.fullScreen = true;
+      await wait(() => window.fullScreen && root.hasAttribute("inFullscreen") && root.hasAttribute("macOSNativeFullscreen"),
+        "Actual macOS browser fullscreen did not enter", 25000);
+      ui.setSidebarState("focus");
+      await wait(() => !window.FluxionFocusMode.state().enabled && document.activeElement !== window.gURLBar.inputField &&
+        window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
+      "Native fullscreen navigation did not hide after explicit collapse", 15000);
+      moveToPage();
+      evidence.geometry.push(pageCornerEvidence(browser, "browser-fullscreen-hidden"));
+      await action("capture-fullscreen-focus-hidden");
+      const toggler = document.getElementById("fullscr-toggler"), edge = rect(toggler);
+      assert(!toggler.hidden && edge.height >= 1, "Native fullscreen hover target is unavailable");
+      routePointer(edge.left + edge.width / 2, edge.top + edge.height / 2);
+      await wait(() => !window.FullScreen.navToolboxHidden && rect(toolbox).top >= -1,
+        "Native fullscreen top-edge hover did not reveal navigation");
+      await action("capture-fullscreen-focus-revealed");
+      moveToPage(); window.FullScreen.hideNavToolbox(false);
+      await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
+      await action("fullscreen-location");
+      await wait(() => evidence.keys.some(item => item.trusted && item.meta && item.key.toLowerCase() === "l") &&
+        document.activeElement === window.gURLBar.inputField && !window.FullScreen.navToolboxHidden,
+      "Native Cmd-L failed after fullscreen Focus collapse");
+      assert(rect(window.gURLBar.inputField).height > 0, "Native fullscreen location input is not painted");
+      await action("fullscreen-location-escape");
+      await wait(() => evidence.keys.some(item => item.trusted && item.key === "Escape") && !window.gURLBar.view.isOpen,
+        "Native fullscreen Escape did not dismiss location suggestions");
+      browser.focus(); moveToPage(); window.FullScreen.hideNavToolbox(false);
+      await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen did not hide after page refocus");
+      report.fullscreenTested = true;
+      report.checks.push("real-macos-browser-fullscreen-delegates-hover-and-cmd-l-with-eight-pixel-page-corners");
+    } finally {
+      window.removeEventListener("keydown", key, true);
+      window.fullScreen = false;
+      await wait(() => !window.fullScreen && !root.hasAttribute("inFullscreen") &&
+        near(window.outerWidth, originalSize.width) && near(window.outerHeight, originalSize.height),
+      "Native fullscreen did not exit and restore its original window geometry", 25000);
+      ui.setSidebarState("expanded"); browser.focus();
+      await wait(() => !window.FluxionFocusMode.state().enabled && rect(toolbox).top >= -1,
+        "Normal expanded navigation did not recover after fullscreen");
+    }
+    evidence.geometry.push(pageCornerEvidence(browser, "normal-expanded-after-fullscreen"));
+    await action("capture-fullscreen-restored");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-frame-keyboard-close-and-captures-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack}`); Cu.reportError(error); })

@@ -30,7 +30,8 @@ function fixture() {
   document.getElementById = id => ({ "navigator-toolbox": toolbox, "fluxion-flow": flow })[id];
   document.createElementNS = (_, name) => node("", null, name);
   document.addEventListener = toolbox.addEventListener; document.removeEventListener = toolbox.removeEventListener;
-  const window = { document, gURLBar: { view: { isOpen: false } }, FluxionChromeLayout: { refresh() {} },
+  const window = { document, gURLBar: { inputField: input, value: "", view: { isOpen: false, close() { this.isOpen = false; } } },
+    gBrowser: { selectedBrowser: { focus() { document.activeElement = page; } } }, FluxionChromeLayout: { refresh() {} },
     setTimeout(fn) { const id = ++sequence; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
     addEventListener: toolbox.addEventListener, removeEventListener: toolbox.removeEventListener,
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} disconnect() { this.disconnected = true; } },
@@ -67,6 +68,47 @@ test("native address focus reveals immediately, suggestions and focus retain it 
   f.emit(f.toolbox, "focusout", f.input); f.flush(); assert.equal(f.window.FluxionFocusMode.state().revealed, true);
   f.window.gURLBar.view.isOpen = false; f.emit(f.toolbox, "focusout", f.input); f.flush();
   assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});
+test("entering Focus releases inherited New Tab address focus once without losing typed value or later Cmd-L focus", () => {
+  const f = fixture(); f.document.activeElement = f.input;
+  f.window.gURLBar.view.isOpen = true; f.window.gURLBar.value = "unfinished.example";
+  f.enterFocus();
+  assert.equal(f.document.activeElement, f.page);
+  assert.equal(f.window.gURLBar.view.isOpen, false);
+  assert.equal(f.window.gURLBar.value, "unfinished.example");
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  f.document.activeElement = f.input; f.emit(f.toolbox, "focusin", f.input);
+  f.window.FluxionFocusMode.refresh();
+  assert.equal(f.document.activeElement, f.input, "Repeated refresh must not steal an explicit native focus request");
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+});
+test("entering Focus cannot steal keyboard focus from a live native security popup", () => {
+  const f = fixture(); f.document.activeElement = f.input;
+  f.emit(f.document, "popupshowing", f.node("identity-popup", null, "panel"));
+  f.enterFocus();
+  assert.equal(f.document.activeElement, f.input);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+});
+test("ordinary browser fullscreen delegates collapse to Gecko after releasing implicit input, but DOM fullscreen is untouched", () => {
+  for (const domFullscreen of [false, true]) {
+    const f = fixture(), calls = [];
+    f.window.fullScreen = true;
+    f.window.FullScreen = { hideNavToolbox(animate) { calls.push({ animate, focus: f.document.activeElement }); } };
+    f.root.setAttribute("inFullscreen", "true");
+    if (domFullscreen) f.root.setAttribute("inDOMFullscreen", "true");
+    f.document.activeElement = f.input;
+    f.enterFocus();
+    assert.equal(f.window.FluxionFocusMode.state().enabled, false);
+    assert.equal(calls.length, domFullscreen ? 0 : 1);
+    assert.equal(f.document.activeElement, domFullscreen ? f.input : f.page);
+    if (!domFullscreen) {
+      assert.equal(calls[0].animate, false);
+      assert.equal(calls[0].focus, f.page);
+      f.document.activeElement = f.input; f.window.FluxionFocusMode.refresh();
+      assert.equal(f.document.activeElement, f.input, "Later native fullscreen Cmd-L is not stolen");
+      assert.equal(calls.length, 1);
+    }
+  }
 });
 test("native security panels retain an unanimated toolbar; content and workspace popups cannot trigger it", () => {
   const f = fixture(); f.enterFocus();

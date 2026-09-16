@@ -8,8 +8,8 @@ const vm = require("node:vm");
 
 function startupFixture(selectedURL, saved = [], options = {}) {
   const preferences = new Map(saved);
-  const defaults = new Map();
-  const locked = new Set();
+  const defaults = new Map(options.defaults || []);
+  const locked = new Set(options.locked || []);
   const effectivePref = key => locked.has(key) ? defaults.get(key) : preferences.get(key) ?? defaults.get(key);
   const loadedScripts = [];
   const navigations = [];
@@ -104,6 +104,21 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
     get managerCalls() { return managerCalls; }, boundaryEvents };
 }
+
+test("native fullscreen autohide is a product default without overriding saved or managed choices", () => {
+  const name = "browser.fullscreen.autohide";
+  const fresh = startupFixture("about:blank");
+  assert.equal(fresh.prefs.getBoolPref(name), true);
+  assert.equal(fresh.preferences.has(name), false);
+  assert.equal(fresh.prefs.prefIsLocked(name), false);
+  const saved = startupFixture("about:blank", [[name, false]]);
+  assert.equal(saved.prefs.getBoolPref(name), false);
+  assert.equal(saved.defaults.get(name), true);
+  const managed = startupFixture("about:blank", [], { defaults: [[name, false]], locked: [name] });
+  assert.equal(managed.prefs.getBoolPref(name), false);
+  assert.equal(managed.defaults.get(name), false);
+  assert.equal(managed.prefs.prefIsLocked(name), true);
+});
 
 test("fresh profiles restore normal sessions and show bookmarks using defaults, not user overrides", () => {
   const h = startupFixture("about:blank");

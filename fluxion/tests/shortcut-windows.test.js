@@ -136,6 +136,19 @@ test("registered Settings capture receives existing global shortcuts before thei
   dispatch("KeyK", { altKey: true, shiftKey: true });
   assert.deepEqual(calls, ["sidebar"], "edited chord must activate the actual registered command handler");
   calls.length = 0;
+  targetListeners.get("click")();
+  dispatch("KeyP", { metaKey: false, ctrlKey: true });
+  assert.equal(api.get("sidebar"), "Ctrl+KeyP");
+  assert.equal(api.format("sidebar"), "⌃ P");
+  assert.equal(key.dataset.capturing, "false");
+  assert.deepEqual(calls, [], "recording Control-P cannot activate the previous/global binding");
+  assert.equal(h.openWindow().api.get("sidebar"), "Ctrl+KeyP", "new windows reload the physical Control token");
+  dispatch("KeyP", { metaKey: false, ctrlKey: true });
+  assert.deepEqual(calls, ["sidebar"], "physical Control-P activates the actual registered handler");
+  dispatch("KeyP"); dispatch("KeyP", { ctrlKey: true });
+  assert.deepEqual(calls, ["sidebar"], "Command-P and Command-Control-P must not alias Control-P");
+  assert.equal(api.set("sidebar", "Accel+Alt+Shift+KeyK").ok, true);
+  calls.length = 0;
   dispatch("Backslash", { shiftKey: true });
   assert.deepEqual(calls, [], "old chord must stop activating the edited action");
   const reopened = h.openWindow();
@@ -215,7 +228,7 @@ test("pointer switching recording controls releases the previous label and captu
   const sections = new Map([["keyboard", { panel: {}, button: { setAttribute() {} } }], ["general", { panel: {}, button: { setAttribute() {} } }]]);
   const routeStart = source.indexOf("  function showSection("), routeEnd = source.indexOf("\n  function section(", routeStart);
   const routeContext = vm.createContext({ sections, activeSection: "keyboard", cancelShortcutCapture: () => shortcutCaptureStops.forEach(stop => stop()),
-    gBrowser: { selectedBrowser: { currentURI: { spec: "about:preferences" } } }, tabSections: new Map(), renderPermissions() {}, renderWorkspaces() {} });
+    gBrowser: { selectedBrowser: { currentURI: { spec: "about:preferences" } } }, tabSections: new Map(), renderPermissions() {}, renderWorkspaces() {}, refreshDefaultBrowser() {} });
   vm.runInContext(`${source.slice(routeStart, routeEnd)}\nshowSection("general");`, routeContext);
   assert.equal(second.dataset.capturing, "false", "section dismissal ends capture even without a blur event");
   assert.equal(second.textContent, api.format("sidebar"));

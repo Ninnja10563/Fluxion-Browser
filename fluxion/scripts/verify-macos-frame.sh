@@ -51,8 +51,8 @@ on run arguments
     tell ownedProcess
       if actionName is "close-ordinary" or actionName is "close-after-pointer" then keystroke "w" using command down
       if actionName is "restore-ordinary" then keystroke "t" using {command down, shift down}
-      if actionName is "focus-location" then keystroke "l" using command down
-      if actionName is "focus-location-escape" or actionName is "focus-identity-escape" then key code 53
+      if actionName is "focus-location" or actionName is "fullscreen-location" then keystroke "l" using command down
+      if actionName is "focus-location-escape" or actionName is "focus-identity-escape" or actionName is "fullscreen-location-escape" then key code 53
     end tell
   end tell
   end timeout
@@ -63,11 +63,12 @@ mkdir -p "$artifact_dir"
 FLUXION_PROFILE="$profile" FLUXION_FRAME_TEST=1 FLUXION_FRAME_DRIVER_DIR="$check_root" \
   "$launcher" about:blank >"$check_root/browser.log" 2>&1 &
 process_id=$!
-for ((attempt=0; attempt<720; attempt++)); do
+for ((attempt=0; attempt<960; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
   for action in foreground close-ordinary restore-ordinary close-after-pointer capture-sidebar-revealed \
     capture-focus-navigation-hidden capture-focus-navigation-revealed focus-location focus-location-escape \
-    capture-focus-navigation-security focus-identity-escape capture-page-light capture-page-dark capture-page-split capture-settings; do
+    capture-focus-navigation-security focus-identity-escape capture-page-light capture-page-dark capture-page-split capture-settings \
+    capture-fullscreen-focus-hidden capture-fullscreen-focus-revealed fullscreen-location fullscreen-location-escape capture-fullscreen-restored; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       if [[ "$action" == capture-* ]]; then
@@ -88,4 +89,4 @@ if [[ "$result" != 0 ]] || ! grep -Fq 'user_pref("fluxion.frame.verification.hea
   exit 1
 fi
 grep 'fluxion.frame.verification' "$profile/prefs.js"
-printf 'Verified native macOS close/reopen and Focus Cmd-L/Escape, top-edge navigation with retained identity popup, fully hidden/six-pixel floating sidebar, normal-size New tab hover in all densities, scroll-stable dock, frame geometry, and actual browser captures. OS mouse movement and fullscreen are not claimed.\n'
+printf 'Verified native macOS close/reopen, Focus Cmd-L/Escape, retained identity popup, floating sidebar, normal-size New tab hover, and real browser fullscreen hover/Cmd-L/exit with clipped eight-pixel page corners. OS mouse movement and DOM fullscreen video are not claimed.\n'

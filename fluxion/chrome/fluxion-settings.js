@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.69.0";
-  const PRODUCT_RELEASE = "0.69.0-preview.1";
+  const PRODUCT_VERSION = "0.70.0";
+  const PRODUCT_RELEASE = "0.70.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -269,6 +269,7 @@
   let renderPermissions = () => {};
   let renderWorkspaces = () => {};
   let cancelShortcutCapture = () => {};
+  let refreshDefaultBrowser = () => {};
 
   function sectionFromLocation(spec) {
     const queryRoute = spec.match(/[?&]fluxion=([^&#]+)/)?.[1];
@@ -297,6 +298,7 @@
     }
     if (id === "permissions") renderPermissions();
     if (id === "workspaces") renderWorkspaces();
+    if (id === "general") refreshDefaultBrowser();
   }
 
   function section(id, title, description) {
@@ -410,6 +412,84 @@
   }
 
   const general = section("general", "General", "Startup, home, and everyday browsing behaviour.");
+  const makeDefault = create("button", "fluxion-settings-button", "Make Fluxion Default");
+  makeDefault.id = "fluxion-make-default-browser";
+  makeDefault.type = "button";
+  row(general, "Default browser", "Checking your default browser…", makeDefault);
+  const defaultStatus = document.getElementById(makeDefault.getAttribute("aria-describedby"));
+  defaultStatus.id = "fluxion-default-browser-status";
+  defaultStatus.setAttribute("role", "status");
+  defaultStatus.setAttribute("aria-live", "polite");
+  makeDefault.setAttribute("aria-describedby", defaultStatus.id);
+  let defaultShell = null, defaultRequestPending = false, defaultBrowserDisposed = false, defaultStatusTimer = 0;
+  const stopDefaultBrowserPolling = () => {
+    if (defaultStatusTimer) window.clearTimeout(defaultStatusTimer);
+    defaultStatusTimer = 0;
+  };
+  const defaultBrowserAllowed = () => Services.policies?.isAllowed("setDefaultBrowser") !== false &&
+    !Services.prefs.prefIsLocked?.("pref.general.disable_button.default_browser");
+  const shellForDefaultBrowser = () => {
+    if (!defaultShell) defaultShell = ChromeUtils.importESModule(
+      "moz-src:///browser/components/shell/ShellService.sys.mjs",
+    ).ShellService;
+    if (!defaultShell || typeof defaultShell.isDefaultBrowser !== "function" || typeof defaultShell.setDefaultBrowser !== "function")
+      throw new Error("Native default-browser service is unavailable");
+    return defaultShell;
+  };
+  refreshDefaultBrowser = ({ requested = false } = {}) => {
+    if (defaultBrowserDisposed) return;
+    try {
+      if (!defaultBrowserAllowed()) {
+        makeDefault.disabled = true;
+        defaultStatus.textContent = "Your administrator manages the default browser.";
+        return;
+      }
+      const isDefault = shellForDefaultBrowser().isDefaultBrowser(false, true);
+      makeDefault.disabled = defaultRequestPending || isDefault;
+      defaultStatus.textContent = isDefault ? "Fluxion is your default browser."
+        : defaultRequestPending || requested ? "If prompted, confirm Fluxion in your system’s default-browser dialog."
+          : "Fluxion is not your default browser. Open links from other apps in Fluxion.";
+    } catch (_) {
+      makeDefault.disabled = true;
+      defaultStatus.textContent = "Default-browser status is unavailable. You can choose Fluxion in your system settings.";
+    }
+  };
+  const awaitDefaultBrowserConfirmation = () => {
+    stopDefaultBrowserPolling();
+    let remaining = 30;
+    const check = () => {
+      defaultStatusTimer = 0;
+      if (defaultBrowserDisposed || root.hidden || activeSection !== "general") return;
+      refreshDefaultBrowser();
+      if (!makeDefault.disabled && --remaining > 0) defaultStatusTimer = window.setTimeout(check, 1000);
+    };
+    if (!defaultBrowserDisposed && !makeDefault.disabled) defaultStatusTimer = window.setTimeout(check, 1000);
+  };
+  makeDefault.addEventListener("click", async () => {
+    if (defaultBrowserDisposed || defaultRequestPending || makeDefault.disabled) return;
+    refreshDefaultBrowser();
+    if (makeDefault.disabled) return;
+    stopDefaultBrowserPolling();
+    defaultRequestPending = true;
+    refreshDefaultBrowser();
+    try {
+      // Gecko delegates to the installed app's native shell service and OS
+      // confirmation. Completion alone does not mean the user accepted it.
+      await shellForDefaultBrowser().setDefaultBrowser(false);
+      defaultRequestPending = false;
+      refreshDefaultBrowser({ requested: true });
+      awaitDefaultBrowserConfirmation();
+    } catch (_) {
+      defaultRequestPending = false;
+      refreshDefaultBrowser();
+      if (!defaultBrowserDisposed) defaultStatus.textContent = "Could not request the default-browser change. Try again, or choose Fluxion in your system settings.";
+    }
+  });
+  const defaultBrowserActivated = event => {
+    if ((event.type === "activate" || event.target === window) && !root.hidden && activeSection === "general") refreshDefaultBrowser();
+  };
+  window.addEventListener("activate", defaultBrowserActivated);
+  window.addEventListener("focus", defaultBrowserActivated);
   const startupChoice = row(general, "When Fluxion starts", "Choose whether to begin fresh or restore your previous windows and tabs.", select([
     ["1", "Open home page"], ["3", "Restore previous session"], ["0", "Open a blank page"],
   ], FluxionSettings.startupPage(pref.int("browser.startup.page", 1)), value => {
@@ -1368,7 +1448,7 @@
     if (!root.hidden && activeSection === "permissions") renderPermissions(records);
   });
 
-  const keyboard = section("keyboard", "Keyboard", "Change Fluxion commands without overriding protected browser or macOS shortcuts.");
+  const keyboard = section("keyboard", "Keyboard", "Change Fluxion commands without overriding protected browser or macOS shortcuts. On Mac, Control (⌃) and Command (⌘) are separate modifiers.");
   const shortcutButtons = new Map();
   const shortcutCaptureStops = [];
   cancelShortcutCapture = () => shortcutCaptureStops.forEach(stop => stop());
@@ -1440,7 +1520,7 @@
   );
   const aboutMark = create("div", "fluxion-about-mark");
   const aboutLogo = create("img");
-  aboutLogo.src = "resource://fluxion/assets/app-icons/app-icon-512.png";
+  aboutLogo.src = "resource://fluxion/assets/app-icons/fluxion-mark.png";
   aboutLogo.alt = "";
   const aboutCopy = create("div");
   aboutCopy.append(
@@ -1604,6 +1684,10 @@
   gBrowser.addTabsProgressListener(progressListener);
   gBrowser.tabContainer.addEventListener("TabSelect", syncVisibility);
   window.addEventListener("unload", () => {
+    defaultBrowserDisposed = true;
+    stopDefaultBrowserPolling();
+    window.removeEventListener("activate", defaultBrowserActivated);
+    window.removeEventListener("focus", defaultBrowserActivated);
     stopBrowserPreferenceSync();
     livePreferencesDisposed = true;
     for (const name of livePreferenceNames) Services.prefs.removeObserver(name, livePreferenceObserver);

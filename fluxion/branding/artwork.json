@@ -1,0 +1,310 @@
+{
+  "version": "155.0.1",
+  "markSHA256": "96cfad875b26d5f00aec3fbb0d1f14c53bd39533ffefbb25f871e3008b7a98b1",
+  "archives": {
+    "omni.ja": {
+      "chrome/toolkit/content/global/megalist/icons/cpm-fox-illustration.svg": {
+        "sha256": "b21ba63deabb9518b439985c4b0a86882ef9b80f01faf811aad21d98dbaf04ef",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/global/illustrations/kit-concerned.svg": {
+        "sha256": "f097cb40d191b48cc0357004fa8e256b3a750d3ef49f234def031fa567ddeb9d",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/global/illustrations/kit-confetti.svg": {
+        "sha256": "860165a987f86b979f53dc04a583e5120436d75d801321e180ad6554e07b96e4",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/global/illustrations/kit-happy.svg": {
+        "sha256": "9be0fcb462bf7532bff870e928926f252ea14ea87a0eb751e3ee86023f828f06",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/global/illustrations/kit-holding-lock.svg": {
+        "sha256": "7a8d06fadd0379c66e620320f1cb2dedfa319d15c6c19d570bb3776b735568fb",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/global/illustrations/kit-in-circle.svg": {
+        "sha256": "44719c4d1a387d70288fb1e9a0809b46ea75dd784e0325d31d9b3d8626aac7cb",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/mozapps/extensions/kit-addons.svg": {
+        "sha256": "059bd8fd982513c56e8c4a9671f72146e83b16b644f89ee2b763867eb4648031",
+        "kind": "normal"
+      },
+      "chrome/toolkit/skin/classic/mozapps/extensions/kit-themes.svg": {
+        "sha256": "7c9559fb28c8d877050609bdbc9e24eceb099116a5807f5d1a64ff10c4785d17",
+        "kind": "normal"
+      }
+    },
+    "browser/omni.ja": {
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-dark-narrow.svg": {
+        "sha256": "5b82a09d32977d59f0ad8eb8f05f8524b68c701639d9470a0923f82916c46c2d",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-dark-responsive.svg": {
+        "sha256": "3869ea4d3eb090252de9c74289257299f54ab66a6b212cea2cb8cab9cb9a2760",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-dark.svg": {
+        "sha256": "8edc59d104fe365b5fe9f1dc603d444f10050149c6ba80002f007387270c8b7a",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-light-narrow.svg": {
+        "sha256": "804107a43f17a7e6ea13bc0f7ba9f53b5b4753e8965c94b6aa411ba492655e0c",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-light-responsive.svg": {
+        "sha256": "1f824cae7cec505ed17dd256636b3098d6fa11d932191f2a15b03237e7ebfed5",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-light.svg": {
+        "sha256": "7a4bb0804b7ddc2898b2e8b7b7ae03c53412112de055b97dc29505f9f265ee7b",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-paintbucket-rgb.svg": {
+        "sha256": "fe375718daae7f7da0a72e52a09cd3b75c8006caca12b473d15ee6f719ca42b9",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-motion-head-pop-up-no-bg.svg": {
+        "sha256": "b39fc55824cb7e6f6e293c6008ee5d7d3d424378c8c7f27cf64afce7dd9c7a0b",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox.svg": {
+        "sha256": "e477e1f25b0bd9ccc2055c341bde968490084ca276677188288e3b051ec9b9c7",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/highlights/firefox-mascot-prop-paintbucket-rgb.svg": {
+        "sha256": "6c153eb821c24f413520b2b056cde29f5ea9b0bfbf221af96a2711a6920067af",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/kit-champion.png": {
+        "sha256": "c927cb44b7f08588bf6a31e804d48427d10eb1d5a9b6a467f17c3010302f2f74",
+        "kind": "png"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/kit-circle-animated.svg": {
+        "sha256": "793454611a2f1147d7db482e2419771841f8bb6a132ba21fc3272b6129b363d8",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/kit-default.png": {
+        "sha256": "48c0661dc1e157810911e6452c8ed34338b59346b79c6ed3515300b78f79755d",
+        "kind": "png"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/kit-in-circle.svg": {
+        "sha256": "44719c4d1a387d70288fb1e9a0809b46ea75dd784e0325d31d9b3d8626aac7cb",
+        "kind": "normal"
+      },
+      "chrome/browser/builtin-addons/newtab/data/data/content/assets/puzzle-fox.svg": {
+        "sha256": "5faefdb9108ce4e33e9fc2ad50b2dc18b8201d8db232db3f1d27f68d5c95daad",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-amo-fox-paint.svg": {
+        "sha256": "a3fb635dd883c974a780a55b860b050fbd452c3b109f0c6fef49f52c10953745",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-backup-fox-in-box.svg": {
+        "sha256": "3597de522ef9f26e776ef862d920ac4232138467cb37786540dd68aef91b37aa",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-backup-fox-outside-box.svg": {
+        "sha256": "adcb16bbf5ba603a862bea2ec21424bc0636334e287940e7c28bb0e966116ad9",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-fxa-fox-mirror.svg": {
+        "sha256": "ad7eba72e1587643d27c4ddcbb8f8164e295309467987ada8c98a1cfcec9a84f",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-gratitude-fox-rock.svg": {
+        "sha256": "2f0015679180282e1a3cf2dc6440a1188faebbd3079f154a8a9f8c3bdcd7a532",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-import-fox-house.svg": {
+        "sha256": "b3304772efa77ea2eed852b0eef6363135de5db011e246f441e6f353e589ba14",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-migration-fox-juggle.svg": {
+        "sha256": "5eafcb49d3002e49bb43584d7bf04c2e47ec9125f7158d323376c3389305772a",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/br-set-default-fox-heart.svg": {
+        "sha256": "ab42afbc05727a4faddd914c05e30b1c186f1a61dbf2058441b5929cff72a886",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/fox-doodle-backup-restore.svg": {
+        "sha256": "b69f31c9cedb3e47537c12ddfe8a9f836f037c4602f524fac7646e1194dabe6d",
+        "kind": "normal"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/fox-doodle-tail.png": {
+        "sha256": "28c5322d74328dd1305c922550746607d0491af5db3ad4cbcb2f1ea899f4e7aa",
+        "kind": "png"
+      },
+      "chrome/browser/content/activity-stream/data/content/assets/fox-doodle-waving-static.png": {
+        "sha256": "e44462d4190a6f76084da95ef60e04043f3229d8b6383908b168e2038f8d551e",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/about-logo-private.png": {
+        "sha256": "7d4d3f1ab2f3e4bacd694c1f112050e78572a1c5322b78d42f5b16cee703ca03",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/about-logo-private@2x.png": {
+        "sha256": "d9a21c0ff4bf76516cb49db99e06e17890c4f322ff43925312b840520ae13bd0",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/about-logo.png": {
+        "sha256": "30a20609a2ecd370a4623c4e95467d074f467688bf6756f46bb21876bf32c5da",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/about-logo.svg": {
+        "sha256": "f31b10673f2e62510a18cb79c32555d88aa806ede13b128e3e7e3072bfc05cbc",
+        "kind": "normal"
+      },
+      "chrome/browser/content/branding/about-logo@2x.png": {
+        "sha256": "310bc31d4b036d47c84fc020005b08e7b1a2a5582bd9ff54781b647cc0ff3ba3",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/about-wordmark.svg": {
+        "sha256": "d1cebf899997e2aacb3cef4903e540e17839167b8fb5adbe960552b2c0e0b9ca",
+        "kind": "wordmark"
+      },
+      "chrome/browser/content/branding/about.png": {
+        "sha256": "485d5f7bdd2e35649cbdd11fd305a078f2f24fb57f237a227a4e7a98762ae8ac",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/firefox-wordmark.svg": {
+        "sha256": "0433d540a5ec46ee2b69dec9a3ee1d31e1e210ecc53c7807ebb873068333e0eb",
+        "kind": "wordmark"
+      },
+      "chrome/browser/content/branding/icon128.png": {
+        "sha256": "9926bbb47e152c9747c8e7fbe9d7679fbcf221a4aa13400cbf1d2da3210d1b20",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/icon16.png": {
+        "sha256": "742a5ed5a88075540a018629b6c4ee7f39a6fc89f4d75c2c136e002204ac024b",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/icon32.png": {
+        "sha256": "e4e889d71d93c2a171cbd92ca2fba2fca3a04ab61e6fc8a703683cf4e3d83ba1",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/icon48.png": {
+        "sha256": "d9df64a49f932e5f7c8e1f5fccc0b998dafb57f9a7ed2ac9a8e4a43bed45eb1a",
+        "kind": "png"
+      },
+      "chrome/browser/content/branding/icon64.png": {
+        "sha256": "12130ce8511f4a348c25380ba9b70b80b2ff0680e4ee801367bf0dbb5e94c00a",
+        "kind": "png"
+      },
+      "chrome/browser/content/browser/aiwindow/assets/kit-meditating.svg": {
+        "sha256": "4edb626c70c1aaef8221645e75a014cedccd3832e324bf6b3e0515cf668616c5",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/fox-with-box-on-cloud.svg": {
+        "sha256": "e65f85e4fee2d03f9cbf93a57d674627cf912dda2985246fda7a90da5c6f9236",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/fox-with-checkmark.svg": {
+        "sha256": "18a0fa3ffba3e47807924491682b3bdf07600dfc0ee19c556863d598c581426a",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/fox-with-devices.svg": {
+        "sha256": "7185283275a763afe7b0ddc629815c8bb5cceacfa4bc6660ff7137b21eb19f0e",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/fox-with-locked-box.svg": {
+        "sha256": "ff47c159823b23272577f06b37aff95cd0fd05f32473d7411f6245548ae7fc67",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/fox-with-mobile.svg": {
+        "sha256": "ecda95f4e0464d66681c5a29b0fce612b9d7405d4c8ddc2488ddb31d8293cd96",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/fox-with-profiles.svg": {
+        "sha256": "e2cfe2eb8464743ae86058cb6a6d2150c9aa2666e63033c75a9dd2811bf99091",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/kit-checkmark-flipped.svg": {
+        "sha256": "2f38e2ada50bf9e579728b0a529911c089551893d451d78de522193fadf3f4a5",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/kit-checkmark.svg": {
+        "sha256": "03d83bea97b6e5c65bd2185ff8fee61cbd8b6ac959892a37d5f95826ee085830",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/kit-peek-bottom.svg": {
+        "sha256": "30e1c8e011ff08eed4bf4d40af31842d682916f66334205fe85fbcff3e2721f4",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/kit-peek.svg": {
+        "sha256": "ed015079a5f92ce2383f555874783fab2d65933313b696e1902e4a6213bcc3c1",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/asrouter/assets/smiling-fox-icon.svg": {
+        "sha256": "9aaa79080644288603b9ef1a041773ef202e60b7c226ead5e5c51579b00bd7dd",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/controlcenter/assets/fox-concern.svg": {
+        "sha256": "9d02680db687778e78acfb964170c3d9bf9a106312eac204f138b173741830a8",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/kit-signed-out.svg": {
+        "sha256": "143ef6844810ca97fd79652d1fa68ccf19db83e2dfa7d122dac3d29bea3f963c",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/profiles/assets/kit-profiles-dark.svg": {
+        "sha256": "cae7f2dc191cffe8f42bef47ae75cdc49825be5f10479052256d12b4be6ee4ea",
+        "kind": "normal"
+      },
+      "chrome/browser/content/browser/profiles/assets/kit-profiles-light.svg": {
+        "sha256": "4bbe124f95947253cce482a8955a0bb86db62455da46cbcb29c5ae3bd00bc623",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/firefox-view.svg": {
+        "sha256": "5b09a1c57de3dfab553f642de69e158a39a3279e166eb5221ca9ca19cc5d059a",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/preferences/fox-ai.svg": {
+        "sha256": "ea53e0387d0eceac7716f7ccf300b1a613776050b3a43432ce65ae0ee24700ed",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/privatebrowsing/fox-tail.svg": {
+        "sha256": "19fad75502e9f8eb49bbc81f702a35fbe9886420f6a56600e3321868f50d7497",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/sidebar/firefox.svg": {
+        "sha256": "b73e7751a6e6c1f4ed1f5651d1e2f10006d3229c61d5b47c8a78529086fb1466",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/sidebar/foxy.svg": {
+        "sha256": "5e4138aa15ebbc9e507edba6dff947f1adab4308ae01c823a08967f97185d1d1",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/sidebar/kit-page-history.svg": {
+        "sha256": "bda49852fbbf3f17d2c7086215f336cda912c7203f22b4211972db19e39bd282",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/sidebar/kit-tabs-devices-error.svg": {
+        "sha256": "7dd67d7cf2b59c2b6cf722d310ac6ccc2f84923339b83229f739b5403b6fc1ce",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/sidebar/kit-tabs-devices.svg": {
+        "sha256": "84e9d30bdb4cad87ef72a56f37535024cc0fbfe1b9922968d978980e71beff07",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/trustpanel-graphic-disabled.svg": {
+        "sha256": "d0b79046d5767021fe081fde64c5f92844328f86458f0ff5c32a8f7c6c9db4f3",
+        "kind": "disabled"
+      },
+      "chrome/browser/skin/classic/browser/trustpanel-graphic-enabled.svg": {
+        "sha256": "422848878f47b5cb6c83ba5d8d4266d009c9a3958d3be0f6fdd42f988e38a896",
+        "kind": "normal"
+      },
+      "chrome/browser/skin/classic/browser/trustpanel-graphic-warning.svg": {
+        "sha256": "de8ff976f59877c4d36d4d2e8c4c22663e2fb1713511a213a9410ff87a2e1c35",
+        "kind": "warning"
+      },
+      "chrome/browser/skin/classic/browser/window-firefox.svg": {
+        "sha256": "19160f12806f24c435c25adf5730b0568adc2c5f2748903d6328cb77d2a32485",
+        "kind": "normal"
+      }
+    }
+  }
+}

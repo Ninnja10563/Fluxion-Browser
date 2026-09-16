@@ -69,7 +69,7 @@ flow_verified=false
 while (( flow_attempt < 160 )); do
   if [[ -f "$flow_profile/prefs.js" ]] && \
       grep -q 'user_pref("fluxion.groups.collapsed.health", "active-page-visible-and-group-heading-roving")' "$flow_profile/prefs.js" && \
-      grep -q 'user_pref("fluxion.closeStability.health", "pointer-close-held-one-row-until-movement")' "$flow_profile/prefs.js"; then
+      grep -q 'user_pref("fluxion.closeStability.health", "pointer-close-compresses-without-movement")' "$flow_profile/prefs.js"; then
     flow_verified=true
     break
   fi

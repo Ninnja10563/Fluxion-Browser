@@ -36,7 +36,7 @@ test("Cocoa Command+Option dual Alt/AltGraph flags preserve shortcuts without ca
   for (const [code, action] of [["BracketLeft", "workspacePrevious"], ["BracketRight", "workspaceNext"]]) {
     assert.equal(policy.eventChord({ ...cocoa, code, shiftKey: false }, true), policy.ACTIONS[action].defaultChord);
   }
-  for (const fields of [{ metaKey: false }, { altKey: false }, { ctrlKey: true }, { isComposing: true }]) {
+  for (const fields of [{ metaKey: false }, { altKey: false }, { isComposing: true }]) {
     assert.equal(policy.eventChord({ ...cocoa, ...fields }, true), "");
   }
   assert.equal(policy.eventChord(cocoa, false), "", "non-macOS Meta is never the accelerator");
@@ -49,10 +49,41 @@ test("Cocoa Command+Option dual Alt/AltGraph flags preserve shortcuts without ca
 
 test("shortcut matching preserves extra modifiers and composed text", () => {
   const chord = { code: "KeyK", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
-  assert.equal(policy.eventChord({ ...chord, ctrlKey: true }, true), "");
+  assert.equal(policy.eventChord({ ...chord, ctrlKey: true }, true), "Accel+Ctrl+KeyK");
   assert.equal(policy.eventChord({ ...chord, ctrlKey: true }, false), "");
   assert.equal(policy.eventChord({ ...chord, isComposing: true }, true), "");
   assert.equal(policy.eventChord({ ...chord, getModifierState: key => key === "AltGraph" }, true), "");
+});
+
+test("macOS Control-P is distinct from protected Command-P through parsing, capture, persistence and display", () => {
+  const control = { code: "KeyP", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+  assert.equal(policy.eventChord(control, true), "Ctrl+KeyP");
+  assert.equal(policy.format("Ctrl+KeyP", true), "⌃ P");
+  assert.equal(policy.format("Accel+KeyP", true), "⌘ P");
+  const current = policy.normaliseMap({}, true);
+  assert.equal(policy.validate("sidebar", "Ctrl+KeyP", current, true).ok, true);
+  assert.equal(policy.normaliseMap({ sidebar: "Ctrl+KeyP" }, true).sidebar, "Ctrl+KeyP");
+  assert.equal(policy.validate("sidebar", "Accel+KeyP", current, true).ok, false);
+  assert.equal(policy.eventChord({ ...control, metaKey: true, ctrlKey: false }, true), "Accel+KeyP");
+  assert.equal(policy.eventChord({ ...control, metaKey: true }, true), "Accel+Ctrl+KeyP");
+  assert.equal(policy.validate("palette", "Ctrl+KeyP", { ...current, sidebar: "Ctrl+KeyP" }, true).ok, false);
+  for (const chord of ["Ctrl+F2", "Accel+Ctrl+KeyQ", "Accel+Ctrl+KeyF"]) {
+    assert.equal(policy.validate("sidebar", chord, current, true).ok, false, chord);
+    assert.equal(policy.normaliseMap({ sidebar: chord }, true).sidebar, current.sidebar);
+  }
+});
+
+test("physical Control does not alias the non-macOS accelerator or weaken AltGr/IME protection", () => {
+  const control = { code: "KeyP", ctrlKey: true, metaKey: false, altKey: false, shiftKey: false };
+  assert.equal(policy.eventChord(control, false), "Accel+KeyP");
+  assert.equal(policy.validate("sidebar", "Ctrl+KeyP", policy.normaliseMap({}), false).ok, false);
+  assert.equal(policy.normaliseMap({ sidebar: "Ctrl+KeyP" }, false).sidebar, policy.ACTIONS.sidebar.defaultChord);
+  assert.equal(policy.eventChord({ ...control, isComposing: true }, true), "");
+  assert.equal(policy.eventChord({ ...control, getModifierState: () => true }, true), "");
+  const option = { ...control, altKey: true, getModifierState: key => key === "AltGraph" };
+  assert.equal(policy.eventChord(option, false), "");
+  assert.equal(policy.eventChord(option, true), "Ctrl+Alt+KeyP");
+  assert.equal(policy.eventChord({ ...option, ctrlKey: false }, true), "");
 });
 
 test("custom shortcuts cannot displace native browsing, editing or Option text entry", () => {

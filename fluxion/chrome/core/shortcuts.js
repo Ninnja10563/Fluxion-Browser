@@ -32,7 +32,9 @@
     "Accel+Alt+KeyH", "Accel+F4", "Accel+F5",
     ...Array.from({ length: 9 }, (_, index) => `Accel+Digit${index + 1}`),
   ]);
-  const MODIFIERS = new Set(["Accel", "Alt", "Shift"]);
+  const MAC_RESERVED = new Set(["Accel+Ctrl+KeyQ", "Accel+Ctrl+KeyF", "Accel+Ctrl+KeyD",
+    ...Array.from({ length: 7 }, (_, index) => `Ctrl+F${index + 2}`)]);
+  const MODIFIERS = new Set(["Accel", "Ctrl", "Alt", "Shift"]);
 
   function parse(chord) {
     const parts = String(chord || "").split("+").filter(Boolean);
@@ -40,37 +42,40 @@
     const modifiers = new Set(parts.slice(0, -1));
     if (!code || !/^(?:Key[A-Z]|Digit[0-9]|F(?:[1-9]|1[0-2])|Bracket(?:Left|Right)|Backslash|Comma|Period|Slash|Semicolon|Quote|Minus|Equal|Backquote)$/.test(code)) return null;
     if ([...modifiers].some(value => !MODIFIERS.has(value))) return null;
-    if (!modifiers.has("Accel")) return null;
-    return { accel: modifiers.has("Accel"), alt: modifiers.has("Alt"), shift: modifiers.has("Shift"), code };
+    if (!modifiers.has("Accel") && !modifiers.has("Ctrl")) return null;
+    return { accel: modifiers.has("Accel"), ctrl: modifiers.has("Ctrl"), alt: modifiers.has("Alt"), shift: modifiers.has("Shift"), code };
   }
 
   function serialise(value) {
     if (!value?.code) return "";
-    return [value.accel && "Accel", value.alt && "Alt", value.shift && "Shift", value.code]
+    return [value.accel && "Accel", value.ctrl && "Ctrl", value.alt && "Alt", value.shift && "Shift", value.code]
       .filter(Boolean).join("+");
   }
 
   function eventChord(event, isMac) {
     if (!event?.code || /^(?:Meta|Control|Alt|Shift)/.test(event.code)) return "";
     // Cocoa marks Option as both Alt and AltGraph (nsCocoaUtils::ModifiersForEvent).
-    // Only Command+Option is a shortcut exception; text-entry AltGr stays excluded.
-    const macCommandOption = isMac && event.metaKey && event.altKey && !event.ctrlKey;
-    if (event.isComposing || (event.getModifierState?.("AltGraph") && !macCommandOption) ||
-        (isMac ? event.ctrlKey : event.metaKey)) return "";
+    // An explicit Command or Control chord is a shortcut exception; bare
+    // Option text and Windows/Linux AltGr remain excluded.
+    const macShortcutOption = isMac && (event.metaKey || event.ctrlKey) && event.altKey;
+    if (event.isComposing || (event.getModifierState?.("AltGraph") && !macShortcutOption) ||
+        (!isMac && event.metaKey)) return "";
     return serialise({
       accel: isMac ? event.metaKey : event.ctrlKey,
+      ctrl: isMac && event.ctrlKey,
       alt: event.altKey,
       shift: event.shiftKey,
       code: event.code,
     });
   }
 
-  function normaliseMap(value) {
+  function normaliseMap(value, isMac = false) {
     const source = value && typeof value === "object" ? value : {};
     const result = {};
     for (const [id, action] of Object.entries(ACTIONS)) {
       const candidate = parse(source[id]) ? serialise(parse(source[id])) : "";
-      result[id] = candidate && !RESERVED.has(candidate) ? candidate : action.defaultChord;
+      const platformValid = candidate && (isMac || !parse(candidate).ctrl);
+      result[id] = platformValid && !RESERVED.has(candidate) && !(isMac && MAC_RESERVED.has(candidate)) ? candidate : action.defaultChord;
     }
     // Validate the complete mapping: distinct user-defined cycles are valid.
     // Repair conflicting components together; a default displaced by a repaired
@@ -85,10 +90,10 @@
     return result;
   }
 
-  function validate(id, chord, shortcuts) {
-    if (!ACTIONS[id] || !parse(chord)) return { ok: false, reason: "Use Command on Mac or Control on Windows/Linux with another key." };
+  function validate(id, chord, shortcuts, isMac = false) {
+    if (!ACTIONS[id] || !parse(chord) || (!isMac && parse(chord).ctrl)) return { ok: false, reason: "Use Command or Control on Mac, or Control on Windows/Linux, with another key." };
     const normalised = serialise(parse(chord));
-    if (RESERVED.has(normalised)) return { ok: false, reason: "That shortcut is reserved by the browser or macOS." };
+    if (RESERVED.has(normalised) || (isMac && MAC_RESERVED.has(normalised))) return { ok: false, reason: "That shortcut is reserved by the browser or macOS." };
     const conflict = Object.entries(shortcuts).find(([otherId, value]) => otherId !== id && value === normalised);
     if (conflict) return { ok: false, reason: `Already used by ${ACTIONS[conflict[0]].label}.` };
     return { ok: true, chord: normalised };
@@ -102,8 +107,8 @@
       .replace("Backslash", "\\").replace("Comma", ",").replace("Period", ".")
       .replace("Slash", "/").replace("Semicolon", ";").replace("Quote", "'")
       .replace("Minus", "-").replace("Equal", "=").replace("Backquote", "`");
-    if (isMac) return `${value.accel ? "⌘ " : ""}${value.alt ? "⌥ " : ""}${value.shift ? "⇧ " : ""}${key}`.trim();
-    return [value.accel && "Ctrl", value.alt && "Alt", value.shift && "Shift", key].filter(Boolean).join("+");
+    if (isMac) return `${value.ctrl ? "⌃ " : ""}${value.accel ? "⌘ " : ""}${value.alt ? "⌥ " : ""}${value.shift ? "⇧ " : ""}${key}`.trim();
+    return [(value.accel || value.ctrl) && "Ctrl", value.alt && "Alt", value.shift && "Shift", key].filter(Boolean).join("+");
   }
 
   scope.FluxionShortcutPolicy = Object.freeze({ ACTIONS, RESERVED, eventChord, format, normaliseMap, parse, serialise, validate });

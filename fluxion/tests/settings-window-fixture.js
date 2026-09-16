@@ -6,8 +6,9 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth, colors, permissions, prompt } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth, colors, permissions, prompt, shellService, policies } = {}) {
   const preferences = new Map(saved);
+  const timers = new Map(); let timerId = 0;
   const elements = [];
   class Element {
     constructor() {
@@ -63,6 +64,8 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     addTrustedTab(url) { opened.push(url); return { linkedBrowser: { currentURI: { spec: url } } }; },
   };
   const window = Object.assign(new Element(), {
+    setTimeout(callback) { const id = ++timerId; timers.set(id, callback); return id; },
+    clearTimeout(id) { timers.delete(id); },
     document, FluxionMemory: memory, FluxionPermissions: permissions, Event: class { constructor(type) { this.type = type; } },
     FluxionUI: { workspaces: () => [], currentWorkspace: () => "work", setTabWorkspace() {} },
     FluxionTheme: { current: () => "system" },
@@ -87,8 +90,9 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,
     ChromeUtils: { importESModule: name => name.includes("FluxionUpdates") ? { FluxionUpdates: updates }
+      : name.includes("ShellService.sys.mjs") ? { ShellService: shellService }
       : { SearchService: { init: async () => {}, getVisibleEngines: async () => [] } } },
-    Services: { prefs, prompt, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
+    Services: { prefs, prompt, policies, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
     FluxionSettings: globalThis.FluxionSettings,
     FluxionBrowserPreferences: require("../chrome/core/browser-preferences.js"),
@@ -99,7 +103,8 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
   });
   const root = document.getElementById("fluxion-settings");
   return {
-    gBrowser, firstBrowser, root, deck, errors, preferences, window, document, opened,
+    gBrowser, firstBrowser, root, deck, errors, preferences, window, document, opened, timers,
+    flushTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(callback => callback()); },
     unload() { window.dispatchEvent({ type: "unload" }); },
     homepage: elements.find(element => element.type === "text" && element.spellcheck === false),
     section: () => elements.find(element => element.dataset.section && !element.hidden)?.dataset.section,

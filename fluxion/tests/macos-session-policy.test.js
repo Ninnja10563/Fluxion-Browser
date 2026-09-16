@@ -152,7 +152,7 @@ with tempfile.TemporaryDirectory() as temp:
  # Synthetic exact anchor fixtures: production digests remain immutable outside this test process.
  originals={}
  for name in m.HASHES:
-  changes=m.STORE_REPLACEMENTS if name.endswith('SessionStore.sys.mjs') else m.SAVER_REPLACEMENTS
+  changes=m.REPLACEMENTS[name]
   originals[name]='\\n'.join(before for before,after in changes).encode()
   m.HASHES[name]=hashlib.sha256(originals[name]).hexdigest()
  with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:

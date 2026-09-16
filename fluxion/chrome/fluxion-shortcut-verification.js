@@ -163,7 +163,7 @@
     const nativeKey = async action => {
       const location = `${foregroundAck.slice(0, foregroundAck.lastIndexOf("/"))}/${action}`;
       const observed = [], listener = event => {
-        if (event.metaKey && ["KeyW", "KeyK"].includes(event.code)) {
+        if ((event.metaKey || event.ctrlKey) && ["KeyW", "KeyK", "KeyP"].includes(event.code)) {
           const record = { code: event.code, meta: event.metaKey, alt: event.altKey, shift: event.shiftKey,
             ctrl: event.ctrlKey, altGraph: event.getModifierState("AltGraph"), composing: event.isComposing,
             key: event.key, capturedChord: window.FluxionShortcuts.capture(event),
@@ -211,6 +211,28 @@
     await waitFor(() => document.getElementById("fluxion-flow").dataset.state !== beforeActivation,
       "Saved native keyboard shortcut did not activate the actual sidebar command");
     window.FluxionUI.setSidebarState(flowState);
+    stage("native-control-p-record-and-activate");
+    pointerClick(capture);
+    await waitFor(() => document.activeElement === capture && capture.dataset.capturing === "true",
+      "Control-P recording did not acquire focus");
+    await nativeKey("shortcut-command-p-reserved");
+    assert(capture.dataset.capturing === "true" && /reserved/.test(panel.querySelector(".fluxion-settings-note")?.textContent || ""),
+      "Command-P lost its native print reservation");
+    await nativeKey("shortcut-control-p-save");
+    assert(capture.dataset.capturing === "false" && capture.textContent === "⌃ P" &&
+      window.FluxionShortcuts.get("sidebar") === "Ctrl+KeyP" && companion.FluxionShortcuts.get("sidebar") === "Ctrl+KeyP" &&
+      JSON.parse(Services.prefs.getStringPref("fluxion.shortcuts")).sidebar === "Ctrl+KeyP",
+    "Native Control-P did not record, display, persist and propagate as physical Control");
+    const beforeControl = document.getElementById("fluxion-flow").dataset.state;
+    await nativeKey("shortcut-control-p-activate");
+    await waitFor(() => document.getElementById("fluxion-flow").dataset.state !== beforeControl,
+      "Saved physical Control-P did not activate the actual sidebar command");
+    for (const action of ["shortcut-control-p-save", "shortcut-control-p-activate"]) {
+      assert(report.nativeKeys.some(event => event.action === action && event.trusted && event.ctrl && !event.meta &&
+        event.code === "KeyP" && event.capturedChord === "Ctrl+KeyP"), "Control-P was not delivered as a native physical Control event");
+    }
+    window.FluxionUI.setSidebarState(flowState);
+    report.checks.push("native-physical-control-p-record-display-persist-cross-window-and-activate-with-command-p-reserved");
     report.nativeOSKeyboardTest = true;
     report.eventSource = "mixed DOM fixture events and native macOS System Events shortcut recording/activation";
     report.pointerSource = "Gecko widget-routed pointer click, not OS mouse movement";

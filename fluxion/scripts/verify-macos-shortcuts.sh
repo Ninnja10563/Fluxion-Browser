@@ -32,6 +32,10 @@ on run arguments
           keystroke "w" using command down
         else if actionName is "shortcut-save" or actionName is "shortcut-activate" then
           keystroke "k" using {command down, option down, shift down}
+        else if actionName is "shortcut-command-p-reserved" then
+          keystroke "p" using command down
+        else if actionName is "shortcut-control-p-save" or actionName is "shortcut-control-p-activate" then
+          keystroke "p" using control down
         else
           error "Unknown shortcut fixture action"
         end if
@@ -78,7 +82,7 @@ for ((attempt=0; attempt<480; attempt++)); do
       touch "$check_root/foreground-ready"
       foreground_requested=true
     fi
-    for action in shortcut-reserved shortcut-save shortcut-activate; do
+    for action in shortcut-reserved shortcut-save shortcut-activate shortcut-command-p-reserved shortcut-control-p-save shortcut-control-p-activate; do
       if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
         native_shortcut "$action"
         touch "$check_root/$action.sent"

@@ -13,7 +13,8 @@ function runtime({ appearance = "system", dark = false } = {}) {
   let id = 0, current = "focus", items = [{ id: "focus", name: "Focus", icon: "circle", accent: "slate" }, { id: "other", name: "Other" }];
   const document = { activeElement: null, hasFocus: () => true };
   class Element {
-    constructor(tag) { this.localName = tag; this.ownerDocument = document; this.attrs = {}; this.children = []; this.events = new Map(); this.value = ""; this.textContent = ""; nodes.push(this); }
+    constructor(tag) { this.localName = tag; this.ownerDocument = document; this.attrs = {}; this.children = []; this.events = new Map(); this.value = ""; this.textContent = "";
+      const properties = new Map(); this.style = { setProperty: (name, value) => properties.set(name, value), getPropertyValue: name => properties.get(name) || "" }; nodes.push(this); }
     get isConnected() { return this === document.documentElement || Boolean(this.parentNode?.isConnected); }
     setAttribute(name, value) { this.attrs[name] = value; if (name === "id") this.id = value; }
     getAttribute(name) { return this.attrs[name] ?? null; }
@@ -22,9 +23,11 @@ function runtime({ appearance = "system", dark = false } = {}) {
     remove() { this.parentNode.children = this.parentNode.children.filter(child => child !== this); this.parentNode = null; }
     addEventListener(type, listener) { if (!this.events.has(type)) this.events.set(type, []); this.events.get(type).push(listener); }
     removeEventListener(type, listener) { this.events.set(type, (this.events.get(type) || []).filter(value => value !== listener)); }
-    emit(type, event = {}) { const e = { target: this, preventDefault() {}, stopPropagation() {}, ...event }; for (const listener of this.events.get(type) || []) listener(e); }
+    emit(type, event = {}) { const e = { type, target: this, preventDefault() {}, stopPropagation() {}, ...event }; for (const listener of this.events.get(type) || []) listener(e); }
     focus() { document.activeElement = this; }
     select() { this.selected = true; }
+    setPointerCapture(id) { this.pointerCapture = id; }
+    releasePointerCapture() { this.pointerCapture = null; }
     closest() { return null; }
     getBoundingClientRect() { return { width: this.isConnected ? 30 : 0 }; }
     openPopup(anchor) { this.anchor = anchor; this.state = "open"; this.emit("popupshown"); }
@@ -93,7 +96,7 @@ test("native theme panel keeps local per-mode drafts, validates both colors, and
   env.input("hex", "#ABCDEF");
   assert.equal(env.get("color").value, "#abcdef");
   env.input("mode", "dark");
-  env.input("color", "#102030");
+  env.get("color").emit("click"); env.input("picker-hex", "#102030");
   assert.equal(env.get("hex").value, "#102030");
   assert.equal(env.writes.length, 0, "editing pixels never writes workspace state");
   env.submit();
@@ -101,6 +104,68 @@ test("native theme panel keeps local per-mode drafts, validates both colors, and
     lightAccent: colors.DEFAULTS.light.accent, darkAccent: colors.DEFAULTS.dark.accent } } }]);
   assert.equal(env.get().state, "closed");
   assert.equal(env.document.activeElement, env.anchor);
+});
+
+test("integrated picker keeps its popup alive while ranges, hex and the color plane update one unsaved draft", () => {
+  const env = runtime(); env.open(); env.colorsPage();
+  assert.equal(env.get("color").localName, "button");
+  env.get("color").emit("click");
+  assert.equal(env.get("picker").hidden, false);
+  assert.equal(env.get("colors-page").hidden, true);
+  assert.equal(env.document.activeElement, env.get("hue"));
+  env.input("hue", "0"); env.input("saturation", "100"); env.input("lightness", "50");
+  assert.equal(env.get("picker-hex").value, "#ff0000");
+  assert.equal(env.variables.get("--fluxion-bg"), "#ff0000");
+  assert.equal(env.get("color").style.getPropertyValue("--swatch"), "#ff0000");
+  assert.equal(env.writes.length, 0);
+  env.input("picker-hex", "#00ff00");
+  assert.equal(env.get("hue").value, "120");
+  assert.equal(env.get("saturation").value, "100");
+  assert.equal(env.get("lightness").value, "50");
+  const plane = env.get("plane");
+  plane.getBoundingClientRect = () => ({ left: 10, top: 20, width: 200, height: 100 });
+  plane.emit("pointerdown", { button: 0, pointerId: 3, clientX: 110, clientY: 70 });
+  assert.equal(plane.pointerCapture, 3);
+  assert.equal(env.get("saturation").value, "50");
+  assert.equal(env.get("lightness").value, "50");
+  plane.emit("pointermove", { pointerId: 3, clientX: 800, clientY: -90 });
+  assert.equal(env.get("saturation").value, "100");
+  assert.equal(env.get("lightness").value, "100");
+  assert.equal(env.get("picker-hex").value, "#ffffff");
+  plane.emit("pointermove", { pointerId: 99, clientX: -100, clientY: 500 });
+  assert.equal(env.get("lightness").value, "100", "another pointer cannot hijack an active drag");
+  plane.emit("pointerup", { pointerId: 3, clientX: -100, clientY: 500 });
+  assert.equal(plane.pointerCapture, null);
+  assert.equal(env.get("picker-hex").value, "#000000");
+  plane.emit("keydown", { key: "ArrowUp", shiftKey: true });
+  assert.equal(env.get("lightness").value, "10");
+  assert.equal(env.get("picker-hex").value, "#1a1a1a");
+  env.get("back").emit("click");
+  assert.equal(env.document.activeElement, env.get("color"));
+  assert.equal(env.get().state, "open");
+  env.submit();
+  assert.equal(env.items()[0].theme.light, "#1a1a1a");
+  assert.equal(env.writes.length, 1);
+});
+
+test("picker invalid hex, cancellation and stale revisions never commit or resurrect a closed draft", () => {
+  const env = runtime(); env.open(); env.colorsPage(); env.get("accent-color").emit("click");
+  env.input("picker-hex", "#123");
+  assert.equal(env.get("picker-hex").getAttribute("aria-invalid"), "true");
+  env.submit();
+  assert.equal(env.writes.length, 0);
+  assert.equal(env.get("accent-hex").getAttribute("aria-invalid"), "true");
+  env.get("accent-color").emit("click"); env.input("picker-hex", "#abcdef");
+  env.get("cancel").emit("click");
+  assert.equal(env.variables.has("--fluxion-bg"), false);
+  assert.equal(env.writes.length, 0);
+  env.input("hue", "10");
+  assert.equal(env.writes.length, 0);
+  env.open(); env.colorsPage(); env.get("color").emit("click");
+  env.items()[0].theme = { light: "#ddeeff", dark: "#112233" };
+  env.window.emit("FluxionWorkspacesChanged"); env.input("hue", "240"); env.submit();
+  assert.equal(env.writes.length, 0);
+  assert.match(env.get("error").textContent, /changed elsewhere/);
 });
 
 test("theme panel styles bind Gecko's actual content surface tokens and preserve the native select disclosure", () => {
@@ -233,7 +298,8 @@ test("one panel previews edited palette and accent, Back restores chosen appeara
   assert.equal(env.scheme(), "light");
   env.input("hex", "#eeddcc"); env.input("accent-hex", "#225588");
   assert.equal(env.get("accent-color").value, "#225588");
-  env.input("mode", "dark"); env.input("hex", "#112233"); env.input("accent-color", "#aaddff");
+  env.input("mode", "dark"); env.input("hex", "#112233");
+  env.get("accent-color").emit("click"); env.input("picker-hex", "#aaddff"); env.get("back").emit("click");
   env.input("mode", "light");
   assert.equal(env.get("hex").value, "#eeddcc");
   assert.equal(env.get("accent-hex").value, "#225588");

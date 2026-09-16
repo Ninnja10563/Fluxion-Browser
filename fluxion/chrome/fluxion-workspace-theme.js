@@ -30,8 +30,16 @@
       -moz-context-properties: fill; fill: currentColor; }
     .fluxion-workspace-theme-form select:dir(rtl) { background-position: left 8px center; }
     .fluxion-workspace-theme-fields { display: flex; align-items: center; gap: 8px; }
-    .fluxion-workspace-theme-fields input[type=color] { box-sizing: border-box; width: 36px; flex: 0 0 36px; height: 30px; padding: 2px; border: 1px solid var(--fluxion-line); border-radius: 3px; background: var(--fluxion-bg); }
+    .fluxion-workspace-theme-swatch { box-sizing: border-box; width: 36px; flex: 0 0 36px; height: 30px; padding: 2px; border: 1px solid var(--fluxion-line); border-radius: 3px; background: var(--swatch); background-clip: content-box; }
     .fluxion-workspace-theme-fields input[type=text] { width: 100%; min-width: 0; }
+    #fluxion-workspace-theme-picker input[type=range] { display: block; width: 100%; height: 26px; margin: 0; padding: 0; background: transparent; }
+    #fluxion-workspace-theme-picker input[type=range]::-moz-range-track { height: 8px; border-radius: 2px; background: var(--range-colors); }
+    #fluxion-workspace-theme-picker input[type=range]::-moz-range-thumb { width: 12px; height: 18px; border-radius: 3px; border: 1px solid var(--fluxion-line); background: var(--fluxion-ink); }
+    #fluxion-workspace-theme-picker-hex { width: 100%; }
+    .fluxion-workspace-theme-plane { position: relative; margin-block: 8px 12px; }
+    #fluxion-workspace-theme-plane { display: block; width: 100%; height: 132px; touch-action: none; cursor: crosshair; border-radius: 2px; }
+    #fluxion-workspace-theme-plane:focus-visible { outline: 2px solid var(--fluxion-accent); outline-offset: 2px; }
+    #fluxion-workspace-theme-point { position: absolute; width: 8px; height: 8px; border: 2px solid white; border-radius: 50%; box-shadow: 0 0 0 1px black; transform: translate(-50%, -50%); pointer-events: none; }
     .fluxion-workspace-theme-note { color: var(--fluxion-muted); font-size: 12px; line-height: 1.4; margin: 10px 0; }
     #fluxion-workspace-theme-error { font-size: 12px; line-height: 1.4; margin: 8px 0; }
     #fluxion-workspace-theme-error:empty { display: none; }
@@ -65,13 +73,29 @@
   colorsPage.append(make("label", { for: mode.id }, "Editing palette"), mode);
   const fields = new Map();
   for (const [part, label, inputId, colorId] of [["base", "Browser color", "hex", "color"], ["accent", "Focus and selection accent", "accent-hex", "accent-color"]]) {
-    const color = make("input", { type: "color", id: `fluxion-workspace-theme-${colorId}`, "aria-label": `Choose ${label.toLowerCase()}` });
+    const color = make("button", { type: "button", class: "fluxion-workspace-theme-swatch", id: `fluxion-workspace-theme-${colorId}`, "aria-label": `Choose ${label.toLowerCase()}` });
     const hex = make("input", { type: "text", id: `fluxion-workspace-theme-${inputId}`, spellcheck: "false", maxlength: "7",
       "aria-describedby": "fluxion-workspace-theme-error", placeholder: "#1c1e20" });
     const row = make("div", { class: "fluxion-workspace-theme-fields" }); row.append(color, hex);
     colorsPage.append(make("label", { for: hex.id }, label), row);
     fields.set(part, { color, hex });
   }
+  const pickerPage = make("div", { id: "fluxion-workspace-theme-picker" });
+  const planeWrap = make("div", { class: "fluxion-workspace-theme-plane" });
+  const plane = make("canvas", { id: "fluxion-workspace-theme-plane", width: "264", height: "132", tabindex: "0", role: "group",
+    "aria-label": "Saturation and lightness. Drag to choose, or use arrow keys. The ranges below adjust the same color." });
+  const point = make("span", { id: "fluxion-workspace-theme-point", "aria-hidden": "true" });
+  planeWrap.append(plane, point); pickerPage.append(planeWrap);
+  const ranges = new Map();
+  for (const [name, maximum] of [["Hue", 360], ["Saturation", 100], ["Lightness", 100]]) {
+    const key = name.toLowerCase();
+    const range = make("input", { type: "range", id: `fluxion-workspace-theme-${key}`, min: "0", max: String(maximum), step: "1" });
+    pickerPage.append(make("label", { for: range.id }, name), range);
+    ranges.set(key, range);
+  }
+  const pickerHex = make("input", { type: "text", id: "fluxion-workspace-theme-picker-hex", spellcheck: "false", maxlength: "7",
+    "aria-describedby": "fluxion-workspace-theme-error" });
+  pickerPage.append(make("label", { for: pickerHex.id }, "Hexadecimal color"), pickerHex);
   const note = make("p", { id: "fluxion-workspace-theme-note", class: "fluxion-workspace-theme-note", role: "status" });
   const error = make("p", { id: "fluxion-workspace-theme-error", role: "alert" });
   const actions = make("div", { class: "fluxion-workspace-theme-actions" });
@@ -79,10 +103,11 @@
   const cancel = make("button", { type: "button", id: "fluxion-workspace-theme-cancel" }, "Cancel");
   const save = make("button", { type: "submit", id: "fluxion-workspace-theme-save" }, "Save");
   actions.append(reset, cancel, save);
-  form.append(header, overview, colorsPage, note, error, actions);
+  form.append(header, overview, colorsPage, pickerPage, note, error, actions);
   panel.append(style, form);
   (document.getElementById("mainPopupSet") || document.documentElement).append(panel);
   let session = null, frame = 0, disposed = false, returnAnchor = null, pendingId = null;
+  let planeHue = null, pointerId = null;
   const workspace = id => window.FluxionUI.workspaces().find(item => item.id === id);
   const revision = value => JSON.stringify(value.theme || null);
   function inheritedPalette() {
@@ -108,7 +133,7 @@
     const targetActive = window.FluxionUI.currentWorkspace() === session.id;
     if (session.reset) note.textContent = "Browser defaults previewed. Save to remove this workspace’s appearance override.";
     else if (!targetActive) note.textContent = "Colors will appear when this workspace is active. Nothing is saved until Save.";
-    else if (session.page === "colors") {
+    else if (session.page !== "appearance") {
       const choice = { inherit: "the browser setting", system: "the system appearance", light: "Light appearance", dark: "Dark appearance" }[appearance.value];
       note.textContent = `Previewing ${mode.value} colors. On Save, this workspace uses ${choice}.`;
     }
@@ -123,7 +148,7 @@
       draft[key] = value;
     }
     const theme = session.reset ? null : !session.dirty && session.page === "appearance" ? session.initialTheme : draft;
-    session.preview.update(theme, session.page === "colors" ? mode.value : null);
+    session.preview.update(theme, session.page !== "appearance" ? mode.value : null);
     updateNote();
   }
   function showMode() {
@@ -131,7 +156,7 @@
     for (const [part, pair] of fields) {
       pair.hex.value = session.draft[part === "base" ? mode.value : `${mode.value}Accent`];
       const valid = FluxionColorsCore.hex(pair.hex.value);
-      if (valid) pair.color.value = valid;
+      if (valid) setSwatch(pair.color, valid);
       pair.hex.removeAttribute("aria-invalid");
     }
     error.textContent = "";
@@ -140,12 +165,18 @@
   function showPage(page, moveFocus = true) {
     if (!session) return;
     session.page = page;
-    overview.hidden = page !== "appearance"; colorsPage.hidden = page !== "colors"; back.hidden = page !== "colors";
-    title.textContent = page === "colors" ? "Workspace colors" : `${workspace(session.id)?.name || "Workspace"} appearance`;
+    overview.hidden = page !== "appearance"; colorsPage.hidden = page !== "colors"; pickerPage.hidden = page !== "picker"; back.hidden = page === "appearance";
+    back.setAttribute("aria-label", page === "picker" ? "Back to workspace colors" : "Back to workspace appearance");
+    title.textContent = page === "picker" ? (session.pickerPart === "accent" ? "Selection accent" : "Browser color") :
+      page === "colors" ? "Workspace colors" : `${workspace(session.id)?.name || "Workspace"} appearance`;
     if (page === "colors") showMode(); else preview();
-    if (moveFocus) (page === "colors" ? fields.get("base").hex : colorsButton).focus();
+    if (moveFocus) (page === "picker" ? ranges.get("hue") : page === "colors" ? fields.get("base").hex : colorsButton).focus();
   }
   function releasePreview() {
+    if (pointerId !== null) {
+      try { plane.releasePointerCapture(pointerId); } catch (_) { /* Capture can already be released by popup teardown. */ }
+      pointerId = null;
+    }
     const old = session; session = null;
     old?.preview.clear();
   }
@@ -188,19 +219,116 @@
     }
     close(true);
   }
-  for (const [part, pair] of fields) {
-    const update = (value, fromPicker) => {
-      if (!session) return;
+  function setSwatch(button, value) {
+    button.value = value;
+    button.style.setProperty("--swatch", value);
+    button.setAttribute("aria-description", value);
+  }
+  function updateField(part, value) {
+      if (!session || session.invalidated) return;
+      const pair = fields.get(part);
       session.reset = false; session.dirty = true;
       session.draft[part === "base" ? mode.value : `${mode.value}Accent`] = value;
-      if (fromPicker) pair.hex.value = value;
+      pair.hex.value = value;
       const valid = FluxionColorsCore.hex(value);
-      if (valid) { pair.color.value = valid; pair.hex.removeAttribute("aria-invalid"); error.textContent = ""; }
+      if (valid) { setSwatch(pair.color, valid); pair.hex.removeAttribute("aria-invalid"); error.textContent = ""; }
       preview();
-    };
-    pair.color.addEventListener("input", () => update(pair.color.value, true));
-    pair.hex.addEventListener("input", () => update(pair.hex.value, false));
   }
+  function hsl(value) {
+    const [r, g, b] = [1, 3, 5].map(offset => parseInt(value.slice(offset, offset + 2), 16) / 255);
+    const high = Math.max(r, g, b), low = Math.min(r, g, b), delta = high - low, light = (high + low) / 2;
+    const hue = !delta ? 0 : high === r ? ((g - b) / delta + 6) % 6 : high === g ? (b - r) / delta + 2 : (r - g) / delta + 4;
+    return [hue * 60, !delta ? 0 : delta / (1 - Math.abs(2 * light - 1)) * 100, light * 100];
+  }
+  function hexFromHsl(hue, saturation, lightness) {
+    const saturationUnit = saturation / 100, light = lightness / 100;
+    const amplitude = saturationUnit * Math.min(light, 1 - light);
+    return "#" + [0, 8, 4].map(offset => {
+      const segment = (offset + hue / 30) % 12;
+      const channel = light - amplitude * Math.max(-1, Math.min(segment - 3, 9 - segment, 1));
+      return Math.round(255 * channel).toString(16).padStart(2, "0");
+    }).join("");
+  }
+  function paintRanges() {
+    const [hue, saturation, lightness] = [...ranges.values()].map(range => Number(range.value));
+    ranges.get("hue").style.setProperty("--range-colors", "linear-gradient(to right, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00)");
+    ranges.get("saturation").style.setProperty("--range-colors", `linear-gradient(to right, hsl(${hue} 0% ${lightness}%), hsl(${hue} 100% ${lightness}%))`);
+    ranges.get("lightness").style.setProperty("--range-colors", `linear-gradient(to right, #000, hsl(${hue} ${saturation}% 50%), #fff)`);
+    for (const [name, range] of ranges) range.setAttribute("aria-valuetext", `${range.value}${name === "hue" ? " degrees" : " percent"}`);
+    point.style.setProperty("left", `${saturation}%`); point.style.setProperty("top", `${100 - lightness}%`);
+    plane.setAttribute("aria-description", `${saturation} percent saturation, ${lightness} percent lightness`);
+    // The color plane itself explains the chosen color, not decoration. Its
+    // bitmap changes only with hue; pointer motion merely moves the marker.
+    if (planeHue !== hue) {
+      const context = plane.getContext?.("2d");
+      if (context) for (let x = 0; x < plane.width; x++) {
+        const gradient = context.createLinearGradient(0, 0, 0, plane.height);
+        gradient.addColorStop(0, "white"); gradient.addColorStop(.5, `hsl(${hue} ${x / (plane.width - 1) * 100}% 50%)`);
+        gradient.addColorStop(1, "black"); context.fillStyle = gradient; context.fillRect(x, 0, 1, plane.height);
+      }
+      planeHue = hue;
+    }
+  }
+  function syncPicker(value) {
+    pickerHex.value = value;
+    pickerHex.removeAttribute("aria-invalid");
+    const values = hsl(value);
+    [...ranges.values()].forEach((range, index) => { range.value = String(Math.round(values[index])); });
+    paintRanges();
+  }
+  for (const [part, pair] of fields) {
+    pair.color.addEventListener("click", () => {
+      if (!session || session.invalidated) return;
+      session.pickerPart = part;
+      syncPicker(FluxionColorsCore.hex(pair.hex.value) || pair.color.value);
+      showPage("picker");
+    });
+    pair.hex.addEventListener("input", () => updateField(part, pair.hex.value));
+  }
+  function updateFromRanges() {
+    if (!session || session.page !== "picker" || session.invalidated) return;
+    const value = hexFromHsl(...[...ranges.values()].map(control => Number(control.value)));
+    pickerHex.value = value; pickerHex.removeAttribute("aria-invalid");
+    paintRanges(); updateField(session.pickerPart, value);
+  }
+  for (const range of ranges.values()) range.addEventListener("input", updateFromRanges);
+  function positionFromPointer(event) {
+    const box = plane.getBoundingClientRect();
+    if (!(box.width > 0 && box.height > 0)) return;
+    const clamp = value => Math.max(0, Math.min(100, Math.round(value)));
+    ranges.get("saturation").value = String(clamp((event.clientX - box.left) / box.width * 100));
+    ranges.get("lightness").value = String(clamp(100 - (event.clientY - box.top) / box.height * 100));
+    updateFromRanges();
+  }
+  plane.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || !session || session.page !== "picker" || session.invalidated) return;
+    event.preventDefault(); plane.focus();
+    pointerId = event.pointerId; plane.setPointerCapture(pointerId); positionFromPointer(event);
+  });
+  plane.addEventListener("pointermove", event => { if (event.pointerId === pointerId) positionFromPointer(event); });
+  const endPointer = event => {
+    if (event.pointerId !== pointerId) return;
+    if (event.type === "pointerup") positionFromPointer(event);
+    try { plane.releasePointerCapture(pointerId); } catch (_) { /* Native cancellation already released it. */ }
+    pointerId = null;
+  };
+  plane.addEventListener("pointerup", endPointer); plane.addEventListener("pointercancel", endPointer);
+  plane.addEventListener("lostpointercapture", () => { pointerId = null; });
+  plane.addEventListener("keydown", event => {
+    if (!session || session.page !== "picker" || session.invalidated || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return;
+    event.preventDefault(); event.stopPropagation();
+    const range = ranges.get(["ArrowLeft", "ArrowRight"].includes(event.key) ? "saturation" : "lightness");
+    const delta = ["ArrowRight", "ArrowUp"].includes(event.key) ? 1 : -1;
+    range.value = String(Math.max(0, Math.min(100, Number(range.value) + delta * (event.shiftKey ? 10 : 1))));
+    updateFromRanges();
+  });
+  pickerHex.addEventListener("input", () => {
+    if (!session || session.page !== "picker" || session.invalidated) return;
+    const valid = FluxionColorsCore.hex(pickerHex.value);
+    updateField(session.pickerPart, pickerHex.value);
+    if (valid) syncPicker(valid);
+    else { pickerHex.setAttribute("aria-invalid", "true"); error.textContent = "Enter a six-digit hexadecimal color, such as #304050."; }
+  });
   mode.addEventListener("change", showMode);
   appearance.addEventListener("change", () => {
     if (!session || !["inherit", "system", "light", "dark"].includes(appearance.value)) return;
@@ -209,7 +337,11 @@
     mode.value = activeMode(); preview();
   });
   colorsButton.addEventListener("click", () => showPage("colors"));
-  back.addEventListener("click", () => showPage("appearance"));
+  back.addEventListener("click", () => {
+    const part = session?.pickerPart, destination = session?.page === "picker" ? "colors" : "appearance";
+    showPage(destination);
+    if (destination === "colors") fields.get(part)?.color.focus();
+  });
   form.addEventListener("submit", event => { event.preventDefault(); commit(); });
   cancel.addEventListener("click", () => close(true));
   reset.addEventListener("click", () => {

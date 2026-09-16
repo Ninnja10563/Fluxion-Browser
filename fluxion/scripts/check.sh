@@ -32,6 +32,8 @@ bash -n \
   scripts/verify-macos-structure.sh \
   scripts/verify-macos-frame.sh \
   scripts/verify-macos-product-chrome.sh \
+  scripts/verify-macos-branding.sh \
+  scripts/verify-macos-migration.sh \
   scripts/verify-macos-workspace-gestures.sh \
   scripts/verify-macos-colors.sh \
   scripts/verify-macos-library.sh \
@@ -96,6 +98,8 @@ node --check chrome/fluxion-selection-verification.js
 node --check chrome/fluxion-structure-verification.js
 node --check chrome/fluxion-frame-verification.js
 node --check chrome/fluxion-product-chrome-verification.js
+node --check chrome/fluxion-branding-verification.js
+node --check chrome/fluxion-migration-verification.js
 node --check chrome/fluxion-workspace-gesture-verification.js
 node --check chrome/fluxion-last-window-verification.js
 node --check chrome/fluxion-colors-verification.js
@@ -125,6 +129,7 @@ node --check chrome/fluxion-theme.js
 node --check chrome/fluxion-colors.js
 node --check chrome/fluxion-workspace-theme.js
 node --check chrome/fluxion-shortcuts.js
+node --check chrome/fluxion-containers.js
 node --check chrome/fluxion-memory.js
 node --check chrome/fluxion-ai.js
 node --check chrome/fluxion-library.js

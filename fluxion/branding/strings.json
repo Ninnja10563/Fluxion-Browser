@@ -1,0 +1,191 @@
+{
+  "version": "155.0.1",
+  "archives": {
+    "omni.ja": {
+      "localization/en-US/toolkit/branding/brandings.ftl": {
+        "sha256": "54b4c4ee69ed426e17820625ffa67e1689870dab341c57309abbe5268b103295",
+        "replacements": [
+          {
+            "before": "-screenshots-brand-name = Firefox Screenshots",
+            "after": "-screenshots-brand-name = Fluxion Screenshots"
+          },
+          {
+            "before": "-translations-brand-name = Firefox Translations",
+            "after": "-translations-brand-name = Fluxion Translations"
+          },
+          {
+            "before": "-firefox-suggest-brand-name = Firefox Suggest",
+            "after": "-firefox-suggest-brand-name = Address Suggestions"
+          },
+          {
+            "before": "-firefox-home-brand-name = Firefox Home",
+            "after": "-firefox-home-brand-name = Fluxion Home"
+          },
+          {
+            "before": "-firefoxview-brand-name = Firefox View",
+            "after": "-firefoxview-brand-name = Browsing Overview"
+          },
+          {
+            "before": "-firefoxlabs-brand-name = Firefox Labs",
+            "after": "-firefoxlabs-brand-name = Experimental Features"
+          }
+        ]
+      },
+      "chrome/en-US/locale/en-US/global/appstrings.properties": {
+        "sha256": "0e1fd563baf41acf6df4d2b81dc991bc7c0bcd6f4b9fb538cbd2c2d301f12997",
+        "replacements": [
+          {
+            "before": "networkProtocolError=Firefox has experienced a network protocol violation that cannot be repaired.",
+            "after": "networkProtocolError=Fluxion has experienced a network protocol violation that cannot be repaired."
+          }
+        ]
+      }
+    },
+    "browser/omni.ja": {
+      "chrome/en-US/locale/branding/brand.properties": {
+        "sha256": "4b23b3be96bda0b3d20aa5b87b442fe466ce1a5c4606bd898c47fb277bb0180e",
+        "replacements": [
+          {
+            "before": "brandShorterName=Firefox",
+            "after": "brandShorterName=Fluxion"
+          },
+          {
+            "before": "brandShortName=Firefox",
+            "after": "brandShortName=Fluxion"
+          },
+          {
+            "before": "brandFullName=Mozilla Firefox",
+            "after": "brandFullName=Fluxion"
+          }
+        ]
+      },
+      "localization/en-US/branding/brand.ftl": {
+        "sha256": "a2755954770fa5d90ecc85160887bbc568a077fd1a5bb390b0c9303d732d72de",
+        "replacements": [
+          {
+            "before": "-brand-shorter-name = Firefox",
+            "after": "-brand-shorter-name = Fluxion"
+          },
+          {
+            "before": "-brand-short-name = Firefox",
+            "after": "-brand-short-name = Fluxion"
+          },
+          {
+            "before": "-brand-shortcut-name = Firefox",
+            "after": "-brand-shortcut-name = Fluxion"
+          },
+          {
+            "before": "-brand-full-name = Mozilla Firefox",
+            "after": "-brand-full-name = Fluxion"
+          },
+          {
+            "before": "-brand-product-name = Firefox",
+            "after": "-brand-product-name = Fluxion"
+          }
+        ]
+      },
+      "chrome/en-US/locale/browser/appstrings.properties": {
+        "sha256": "9bf49f3ddf06275a918447b1b21af2169eafe6c49b3a4d29bd422ac1e395ad01",
+        "replacements": [
+          {
+            "before": "fileNotFound=Firefox can’t find the file at %S.",
+            "after": "fileNotFound=Fluxion can’t find the file at %S."
+          },
+          {
+            "before": "unknownProtocolFound=Firefox doesn’t know how to open this address, because one of the following protocols (%S) isn’t associated with any program or is not allowed in this context.",
+            "after": "unknownProtocolFound=Fluxion doesn’t know how to open this address, because one of the following protocols (%S) isn’t associated with any program or is not allowed in this context."
+          },
+          {
+            "before": "connectionFailure=Firefox can’t establish a connection to the server at %S.",
+            "after": "connectionFailure=Fluxion can’t establish a connection to the server at %S."
+          },
+          {
+            "before": "redirectLoop=Firefox has detected that the server is redirecting the request for this address in a way that will never complete.",
+            "after": "redirectLoop=Fluxion has detected that the server is redirecting the request for this address in a way that will never complete."
+          },
+          {
+            "before": "clientSocketMisconfiguration=Firefox doesn’t know how to communicate with the server.",
+            "after": "clientSocketMisconfiguration=Fluxion doesn’t know how to communicate with the server."
+          },
+          {
+            "before": "netOffline=Firefox is currently in offline mode and can’t browse the Web.",
+            "after": "netOffline=Fluxion is currently in offline mode and can’t browse the Web."
+          },
+          {
+            "before": "deniedPortAccess=This address uses a network port which is normally used for purposes other than Web browsing. Firefox has canceled the request for your protection.",
+            "after": "deniedPortAccess=This address uses a network port which is normally used for purposes other than Web browsing. Fluxion has canceled the request for your protection."
+          },
+          {
+            "before": "proxyResolveFailure=Firefox is configured to use a proxy server that can’t be found.",
+            "after": "proxyResolveFailure=Fluxion is configured to use a proxy server that can’t be found."
+          },
+          {
+            "before": "proxyConnectFailure=Firefox is configured to use a proxy server that is refusing connections.",
+            "after": "proxyConnectFailure=Fluxion is configured to use a proxy server that is refusing connections."
+          },
+          {
+            "before": "sslv3Used=Firefox cannot guarantee the safety of your data on %S because it uses SSLv3, a broken security protocol.",
+            "after": "sslv3Used=Fluxion cannot guarantee the safety of your data on %S because it uses SSLv3, a broken security protocol."
+          },
+          {
+            "before": "blockedByCORP=Firefox didn’t load this page because it looks like the security configuration doesn’t match the previous page.",
+            "after": "blockedByCORP=Fluxion didn’t load this page because it looks like the security configuration doesn’t match the previous page."
+          },
+          {
+            "before": "networkProtocolError=Firefox has experienced a network protocol violation that cannot be repaired.",
+            "after": "networkProtocolError=Fluxion has experienced a network protocol violation that cannot be repaired."
+          }
+        ]
+      },
+      "localization/en-US/browser/policies/policies-descriptions.ftl": {
+        "sha256": "652627ba622f50e1a10cab2d77c1603818f5d8e5abb35d6126a5042b1db1d7ea",
+        "replacements": [
+          {
+            "before": "policy-DisableFirefoxScreenshots = Disable the Firefox Screenshots feature.",
+            "after": "policy-DisableFirefoxScreenshots = Disable the Fluxion Screenshots feature."
+          }
+        ]
+      },
+      "localization/en-US/devtools/client/aboutdebugging.ftl": {
+        "sha256": "1a0d4e4e768e0f2032d299310ea5ef837fbb3c51c8a703dd3f269a19fa3ea592",
+        "replacements": [
+          {
+            "before": "about-debugging-browser-version-too-old-fennec = This version of Firefox cannot debug Firefox for Android (68). We recommend installing Firefox for Android Nightly on your phone for testing. <a>More details</a>",
+            "after": "about-debugging-browser-version-too-old-fennec = This version of Fluxion cannot debug Firefox for Android (68). We recommend installing Firefox for Android Nightly on your phone for testing. <a>More details</a>"
+          },
+          {
+            "before": "about-debugging-browser-version-too-recent = The connected browser is more recent ({ $runtimeVersion }, buildID { $runtimeID }) than your { -brand-shorter-name } ({ $localVersion }, buildID { $localID }). This is an unsupported setup and may cause DevTools to fail. Please update Firefox. <a>Troubleshooting</a>",
+            "after": "about-debugging-browser-version-too-recent = The connected browser is more recent ({ $runtimeVersion }, buildID { $runtimeID }) than your { -brand-shorter-name } ({ $localVersion }, buildID { $localID }). This is an unsupported setup and may cause DevTools to fail. Please update Fluxion. <a>Troubleshooting</a>"
+          }
+        ]
+      },
+      "localization/en-US/devtools/client/application.ftl": {
+        "sha256": "469ddec0c27002ef36182196ebfd709f881136eb7110c8f3a10b317fec8a7a56",
+        "replacements": [
+          {
+            "before": "manifest-loaded-devtools-error = Firefox DevTools error",
+            "after": "manifest-loaded-devtools-error = Fluxion DevTools error"
+          }
+        ]
+      },
+      "chrome/en-US/locale/en-US/devtools/client/memory.properties": {
+        "sha256": "8736e9128c5c736269d119ef966ab9c77f9f4b4acf45f266767bdfcc7af37860",
+        "replacements": [
+          {
+            "before": "snapshot.io.filter=Firefox Snapshots",
+            "after": "snapshot.io.filter=Fluxion Snapshots"
+          }
+        ]
+      },
+      "chrome/en-US/locale/en-US/devtools/client/responsive.properties": {
+        "sha256": "001669b05f37b555e46eeb8974a2da53ac756f7e871e64c4bb32d8c4e1b99786",
+        "replacements": [
+          {
+            "before": "responsive.remoteOnly=Responsive Design Mode is only available for remote browser tabs, such as those used for web content in multi-process Firefox.",
+            "after": "responsive.remoteOnly=Responsive Design Mode is only available for remote browser tabs, such as those used for web content in multi-process Fluxion."
+          }
+        ]
+      }
+    }
+  }
+}

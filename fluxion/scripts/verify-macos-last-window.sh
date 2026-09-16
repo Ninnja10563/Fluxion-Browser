@@ -25,12 +25,12 @@ cleanup() {
     wait "$process_id" 2>/dev/null || true
   fi
   mkdir -p "$artifact_dir"
-  for mode in seed restore choice0 choice1; do
+  for mode in seed restore existing existing-restore choice0 choice1; do
     for extension in log json; do
       [[ ! -f "$check_root/$mode.$extension" ]] || cp "$check_root/$mode.$extension" "$artifact_dir/$mode.$extension"
     done
   done
-  for fixture_profile in profile choice0 choice1; do
+  for fixture_profile in profile existing choice0 choice1; do
     if [[ -f "$check_root/$fixture_profile/prefs.js" ]]; then
       grep 'fluxion.lastWindow' "$check_root/$fixture_profile/prefs.js" > "$artifact_dir/$fixture_profile-report.txt" || true
     fi
@@ -38,7 +38,8 @@ cleanup() {
   printf 'Last-window fixture retained at %s\n' "$check_root" >&2
 }
 trap cleanup EXIT
-for mode in seed restore choice0 choice1; do
+for mode in seed restore existing existing-restore choice0 choice1; do
+  if [[ "$mode" == existing* ]]; then profile="$check_root/existing"; fi
   if [[ "$mode" == choice* ]]; then profile="$check_root/$mode"; fi
   printf 'Verifying native last-window stage %s...\n' "$mode" >&2
   FLUXION_PROFILE="$profile" FLUXION_LAST_WINDOW_TEST="$mode" FLUXION_LAST_WINDOW_DRIVER_DIR="$check_root" \

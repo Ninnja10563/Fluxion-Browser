@@ -9,9 +9,9 @@
   let captureControl = null;
   function reload() {
     try {
-      shortcuts = FluxionShortcutPolicy.normaliseMap(JSON.parse(Services.prefs.getStringPref(PREF, "{}")));
+      shortcuts = FluxionShortcutPolicy.normaliseMap(JSON.parse(Services.prefs.getStringPref(PREF, "{}")), isMac);
     } catch (_) {
-      shortcuts = FluxionShortcutPolicy.normaliseMap({});
+      shortcuts = FluxionShortcutPolicy.normaliseMap({}, isMac);
     }
     window.dispatchEvent(new window.CustomEvent("FluxionShortcutsChanged"));
   }
@@ -31,7 +31,7 @@
   }
 
   function set(id, chord) {
-    const result = FluxionShortcutPolicy.validate(id, chord, shortcuts);
+    const result = FluxionShortcutPolicy.validate(id, chord, shortcuts, isMac);
     if (!result.ok) return result;
     shortcuts = { ...shortcuts, [id]: result.chord };
     save();
@@ -43,9 +43,9 @@
       const next = { ...shortcuts, [id]: FluxionShortcutPolicy.ACTIONS[id].defaultChord };
       const conflict = Object.entries(next).find(([other, value]) => other !== id && value === next[id]);
       if (conflict) next[conflict[0]] = FluxionShortcutPolicy.ACTIONS[conflict[0]].defaultChord;
-      shortcuts = FluxionShortcutPolicy.normaliseMap(next);
+      shortcuts = FluxionShortcutPolicy.normaliseMap(next, isMac);
     } else {
-      shortcuts = FluxionShortcutPolicy.normaliseMap({});
+      shortcuts = FluxionShortcutPolicy.normaliseMap({}, isMac);
     }
     save();
   }

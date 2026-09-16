@@ -14,9 +14,23 @@ test("application artwork is the owner's exact supplied PNG data at each declare
     assert.equal(bytes.readUInt32BE(16), size); assert.equal(bytes.readUInt32BE(20), size);
   }
 });
-test("About and blank new-tab branding point to imported artwork, not the old generated mark", () => {
+test("About and blank new-tab branding point to the transparent derivative", () => {
   const settings = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8");
   const newtab = fs.readFileSync(path.join(__dirname, "../newtab/index.html"), "utf8");
-  assert.match(settings, /aboutLogo\.src = "resource:\/\/fluxion\/assets\/app-icons\/app-icon-512\.png"/);
-  assert.match(newtab, /rel="icon" type="image\/png" href="\.\.\/assets\/app-icons\/favicon\.png"/);
+  assert.match(settings, /aboutLogo\.src = "resource:\/\/fluxion\/assets\/app-icons\/fluxion-mark\.png"/);
+  assert.match(newtab, /rel="icon" type="image\/png" href="\.\.\/assets\/app-icons\/fluxion-mark\.png"/);
+});
+test("New Tab uses the transparent mark even with a restored tile favicon; websites retain their own icon", () => {
+  const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-chrome.js"), "utf8");
+  const start = source.indexOf("  function iconFor(tab) {"), end = source.indexOf("  function askGroupName", start);
+  assert.ok(start > 0 && end > start);
+  const newTabURL = "file:///Applications/Fluxion.app/Contents/Resources/fluxion/newtab/index.html";
+  const iconFor = require("node:vm").runInNewContext(`${source.slice(start, end)}; iconFor`, { NEW_TAB_URL: newTabURL });
+  const tab = url => ({ linkedBrowser: { currentURI: { spec: url } }, getAttribute: () => "cached-site-icon.png", image: "native-icon.png" });
+  for (const url of [newTabURL, "about:newtab"]) {
+    assert.equal(iconFor(tab(url)), "resource://fluxion/assets/app-icons/fluxion-mark.png");
+  }
+  for (const url of ["https://example.org/", "about:blank", `${newTabURL}.other`]) {
+    assert.equal(iconFor(tab(url)), "cached-site-icon.png");
+  }
 });

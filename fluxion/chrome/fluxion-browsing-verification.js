@@ -242,6 +242,33 @@
     assert(!account.cookie.includes("fluxion_fixture_session"), "HttpOnly session leaked through document.cookie");
     await navigate("/account", "/account", "Fluxion fixture account");
     report.checks.contentLoginAndSessionCookie = true;
+    const source = tab, containers = window.FluxionContainers;
+    assert(containers && document.getElementById("fluxion-container-menu"), "Flow container menu/controller is not installed");
+    const snapshot = containers.capture([source]);
+    const identity = snapshot?.identities.find(value => value.id !== Number(source.getAttribute("usercontextid") || 0));
+    assert(identity, "Public Gecko containers are not enabled in the normal browsing profile");
+    const copies = containers.open(snapshot, identity.id);
+    assert(copies.length === 1, "Container command did not open exactly one fresh tab");
+    try {
+      tab = copies[0];
+      const isolated = await pageAt(`${origin}/account`);
+      assert(/unauthorized|not signed in|sign in|authentication required/i.test(isolated.text),
+        "New container received the original tab's authenticated cookie");
+      assert(tab.linkedBrowser.contentPrincipal.originAttributes.userContextId === identity.id &&
+        window.FluxionUI.tabWorkspace(tab) === window.FluxionUI.tabWorkspace(source),
+      "New container tab lost its Gecko identity or source workspace");
+      assert(source.parentNode && !source.closing && source.linkedBrowser.currentURI.spec === `${origin}/account`,
+        "Opening a container changed or closed the original authenticated tab");
+      tab = source; gBrowser.selectedTab = source;
+      const stillSignedIn = await navigate("/account", "/account", "Fluxion fixture account");
+      assert(/Signed in as fluxion/.test(stillSignedIn.text), "Original session was not retained after opening a container");
+      report.containers = { userContextId: identity.id, sourceRetained: true, destinationUnauthenticated: true,
+        sourceStillAuthenticated: true, sameWorkspace: true, input: "shipped container controller with real Gecko origins and loopback HTTP authentication" };
+      report.checks.containerCookieIsolation = true;
+    } finally {
+      tab = source; gBrowser.selectedTab = source;
+      for (const copy of copies) if (copy.parentNode) gBrowser.removeTab(copy, { animate: false });
+    }
     await command("Logout");
     await pageAt(`${origin}/`, "Fluxion browsing fixture");
     const signedOut = await navigate("/account");

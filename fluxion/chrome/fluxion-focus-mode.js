@@ -7,6 +7,7 @@
   if (!toolbox || !flow || window.FluxionFocusMode) return;
   const cleanups = [], popups = new Set();
   let enabled = false, revealed = false, pointerInside = false, timer = 0, disposed = false;
+  let sidebarState = null;
   const edge = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
   edge.id = "fluxion-navigation-edge";
   edge.setAttribute("aria-hidden", "true");
@@ -81,6 +82,21 @@
   }
   function refresh() {
     if (disposed) return;
+    const enteringFocus = flow.dataset.state === "focus" && sidebarState !== "focus";
+    sidebarState = flow.dataset.state;
+    // New Tab automatically focuses the location field. An explicit collapse
+    // must not inherit that focus as a request to pin the navigation open.
+    // Keep its typed value; a later native Cmd-L still follows normal focusin.
+    if (enteringFocus && !root.hasAttribute("inDOMFullscreen") &&
+        document.activeElement === window.gURLBar?.inputField && popups.size === 0) {
+      window.gURLBar.view?.close();
+      window.gBrowser.selectedBrowser.focus();
+    }
+    if (enteringFocus && window.fullScreen && !root.hasAttribute("inDOMFullscreen") && popups.size === 0) {
+      // Browser fullscreen owns its native negative-margin/menu-bar reveal.
+      // Releasing implicit address focus lets that controller hide normally.
+      window.FullScreen.hideNavToolbox(false);
+    }
     const next = flow.dataset.state === "focus" && !root.hasAttribute("inFullscreen") &&
       !root.hasAttribute("inDOMFullscreen") && !root.hasAttribute("customizing");
     if (next !== enabled) {

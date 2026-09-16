@@ -19,5 +19,21 @@ with a corrected filename and PNG MIME type in the new-tab document.
 
 The macOS builder derives its native ICNS representations from the 1024px PNG;
 Dock/Finder application identity and existing file associations use that ICNS.
-About Fluxion uses the supplied 512px PNG, and the blank new-tab document uses
-the supplied favicon. Normal website favicons are left untouched.
+In 0.69, About Fluxion used the supplied 512px PNG and the blank new-tab document
+used the supplied favicon. From 0.70 both use the transparent derivative below.
+Normal website favicons are left untouched.
+
+## Transparent in-browser mark (0.70)
+
+`fluxion-mark.png` is a background-extracted derivative for browser chrome,
+About and New Tab. The original supplied artwork remains unchanged and still
+provides the Dock/Finder tile. The derivative has an RGBA alpha channel;
+packaged native verification checks transparent corners and nonempty content.
+SHA-256: `96cfad875b26d5f00aec3fbb0d1f14c53bd39533ffefbb25f871e3008b7a98b1`.
+
+Created using the built-in image editing tool, with the supplied 1024px app
+icon as the edit target. Prompt: remove only the dark rounded-square background;
+retain the exact silver folded-ribbon F silhouette, proportions and shading;
+output genuine transparency without a tile, glow or added text. A follow-up
+requested removal of stray edge pixels without changing the F. The selected
+output is checked in here, not referenced from a machine-local generation path.

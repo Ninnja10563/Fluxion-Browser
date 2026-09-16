@@ -2,7 +2,7 @@
 (function verifyLastWindow(window) {
   "use strict";
   const mode = Services.env.get("FLUXION_LAST_WINDOW_TEST");
-  if (!["seed", "restore", "choice0", "choice1"].includes(mode)) return;
+  if (!["seed", "restore", "existing", "existing-restore", "choice0", "choice1"].includes(mode)) return;
   const hidden = Services.appShell.hiddenDOMWindow;
   if (window !== hidden) {
     if (!hidden.__fluxionLastWindowVerification) {
@@ -75,6 +75,14 @@
     ensure(state.tabs.find(tab => tab.entries?.some(entry => entry.url === urls[0]))?.pinned, `${label}: pinned state lost`);
     ensure(state.extData?.["fluxion-last-window-fixture"] === "retained", `${label}: window metadata lost`);
     ensure(state.tabs.find(tab => tab.entries?.some(entry => entry.url === urls[1]))?.extData?.["fluxion-last-window-tab"] === "retained", `${label}: tab metadata lost`);
+    const workspaceState = JSON.parse(state.extData?.["fluxion-last-window-workspaces"] || "null");
+    ensure(workspaceState?.first && workspaceState?.second && workspaceState.first !== workspaceState.second,
+      `${label}: workspace fixture metadata lost`);
+    for (const [index, expected] of [[1, workspaceState.first], [2, workspaceState.second]]) {
+      const nativeTab = [...win.gBrowser.tabs].find(tab => tab.linkedBrowser.currentURI.spec === urls[index] ||
+        SessionStore.getCustomTabValue(tab, "fluxion-last-window-tab") === (index === 1 ? "retained" : "second-workspace"));
+      ensure(nativeTab && win.FluxionUI.tabWorkspace(nativeTab) === expected, `${label}: workspace tab mapping lost`);
+    }
     if (external) ensure(actual.includes(externalURL), `${label}: external request was overwritten`);
     evidence.checks.push({ label, urls: actual, nativeSelectedURL, pinned: true, metadata: true });
   }
@@ -84,17 +92,11 @@
     return win;
   }
   async function open(options = {}) { return ready(BrowserWindowTracker.openWindow(options)); }
-  async function flush(win) {
-    await Promise.all([...win.gBrowser.tabs].map(tab => Promise.race([
-      Promise.resolve(tab.linkedBrowser.frameLoader?.requestTabStateFlush?.()), wait(3000),
-    ])));
-    stateOf(win); await wait(250);
-  }
   async function close(win) {
     const ordinal = ++closeNumber;
-    recordLifecycle(`close-${ordinal}-before-flush`, win);
-    await flush(win);
-    recordLifecycle(`close-${ordinal}-after-flush`, win);
+    // Do not pre-flush or wait for a save: users close windows directly.
+    // Gecko must collect its own final tab state through the normal close path.
+    recordLifecycle(`close-${ordinal}-without-test-flush`, mode === "existing" ? null : win);
     win.BrowserCommands.tryToCloseWindow();
     await until(() => win.closed, "native close-window command failed");
     recordLifecycle(`close-${ordinal}-closed`);
@@ -110,32 +112,102 @@
     }
   }
   async function seed(win) {
-    const original = [...win.gBrowser.tabs];
-    const tabs = urls.map(url => win.gBrowser.addTrustedTab(url));
+    const ui = win.FluxionUI, firstWorkspace = ui.workspaces()[0].id;
+    ui.switchWorkspace(firstWorkspace);
+    const tabs = [];
+    const openPage = async url => {
+      const tab = ui.newTab();
+      tab.linkedBrowser.loadURI(Services.io.newURI(url), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
+      await until(() => !tab.hasAttribute("busy") && tab.linkedBrowser.currentURI.spec === url, "Flow-created page did not load");
+      tabs.push(tab);
+    };
+    await openPage(urls[0]); await openPage(urls[1]);
+    const secondWorkspace = ui.workspaces().find(item => item.id !== firstWorkspace)?.id || ui.createWorkspace("Reading").id;
+    ui.switchWorkspace(secondWorkspace);
+    await openPage(urls[2]);
     win.gBrowser.pinTab(tabs[0]);
     win.gBrowser.selectedTab = tabs[2];
-    for (const tab of original) win.gBrowser.removeTab(tab, { animate: false });
+    for (const tab of [...win.gBrowser.tabs]) if (!tabs.includes(tab)) win.gBrowser.removeTab(tab, { animate: false });
     SessionStore.setCustomWindowValue(win, "fluxion-last-window-fixture", "retained");
+    SessionStore.setCustomWindowValue(win, "fluxion-last-window-workspaces", JSON.stringify({ first: firstWorkspace, second: secondWorkspace }));
     SessionStore.setCustomTabValue(tabs[1], "fluxion-last-window-tab", "retained");
+    SessionStore.setCustomTabValue(tabs[2], "fluxion-last-window-tab", "second-workspace");
     await until(() => urls.every(url => stateURLs(stateOf(win)).includes(url)), "seed pages did not load");
-    await flush(win);
     verifyTabs(win, "seed");
   }
+  async function verifyLastWorkspaceTab(win) {
+    const ui = win.FluxionUI;
+    ui.setSidebarState("expanded");
+    const retained = ui.newTab(), retainedWorkspace = ui.currentWorkspace();
+    const retainedURL = marker("hidden-workspace-must-survive");
+    retained.linkedBrowser.loadURI(Services.io.newURI(retainedURL), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
+    await until(() => !retained.hasAttribute("busy") && retained.linkedBrowser.currentURI.spec === retainedURL, "Hidden workspace fixture did not load");
+    for (const tab of [...win.gBrowser.tabs]) if (tab !== retained) win.gBrowser.removeTab(tab, { animate: false });
+    const other = ui.createWorkspace("Close fixture");
+    ensure(other && retained.hidden, "Closing fixture did not create a real hidden workspace tab");
+    const retainedGlobal = retained.linkedBrowser.browsingContext.currentWindowGlobal.innerWindowId;
+    for (const input of ["native-cmd-w-handler", "flow-widget-close-button"]) {
+      const closing = win.gBrowser.selectedTab;
+      ensure(win.gBrowser.visibleTabs.length === 1 && ui.tabWorkspace(closing) === other.id,
+        `${input}: fixture is not the workspace's final visible tab`);
+      if (input === "native-cmd-w-handler") {
+        win.BrowserCommands.closeTabOrWindow({ metaKey: true });
+      } else {
+        const button = await until(() => [...win.document.querySelectorAll("#fluxion-flow .fluxion-tab")]
+          .find(row => row._fluxionTab === closing)?.querySelector(".fluxion-close"), "Flow last-tab close control missing");
+        Services.focus.focusedWindow = win;
+        const box = button.getBoundingClientRect();
+        ensure(box.width >= 16 && box.height >= 16, "Flow close control has no clickable geometry");
+        for (const type of ["mousemove", "mousedown", "mouseup"]) win.synthesizeMouseEvent(type,
+          box.x + box.width / 2, box.y + box.height / 2, {
+            identifier: win.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons: type === "mousedown" ? 1 : 0,
+            clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: win.MouseEvent.MOZ_SOURCE_MOUSE,
+          }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+      }
+      await until(() => win.closed || !closing.parentNode, `${input}: final workspace tab did not close`);
+      ensure(!win.closed, `${input}: closing one workspace destroyed the entire browser window`);
+      await until(() => win.gBrowser.tabs.length === 2 && win.gBrowser.selectedTab !== closing, `${input}: native replacement tab did not settle`);
+      ensure(retained.parentNode && retained.hidden && ui.tabWorkspace(retained) === retainedWorkspace &&
+        retained.linkedBrowser.currentURI.spec === retainedURL && retained.linkedBrowser.browsingContext.currentWindowGlobal.innerWindowId === retainedGlobal,
+      `${input}: another workspace tab was changed, lost or reloaded`);
+      ensure(ui.currentWorkspace() === other.id && ui.tabWorkspace(win.gBrowser.selectedTab) === other.id,
+        `${input}: closing the workspace jumped to another workspace`);
+      evidence.checks.push({ label: input, windowRetained: true, hiddenPageRetained: true, workspaceRetained: true });
+    }
+  }
+  async function verifyFinalCheckpoint() {
+    if (mode === "existing") {
+      // This scenario must rely solely on Gecko's normal close and quit writes.
+      evidence.checks.push({ label: "zero-window-before-natural-quit", explicitStartupRestore: true,
+        testTriggeredSave: false, nativeUndoRetained: true });
+      return;
+    }
+    await SessionSaver.run();
+    await SessionSaver.run();
+    ensure((await closedNormal())._shouldRestore === true, "saving consumed the live undo-close record");
+    const disk = await IOUtils.readJSON(PathUtils.join(PathUtils.profileDir, "sessionstore-backups", "recovery.jsonlz4"), { decompress: true });
+    ensure(disk.windows.some(item => urls.every(url => stateURLs(item).includes(url))), "disk checkpoint did not project the closed last window");
+    ensure(!JSON.stringify(disk).includes("private-never-persist"), "private marker entered disk checkpoint");
+    evidence.checks.push({ label: "zero-window-disk-checkpoint", windowCount: disk.windows.length, nativeUndoRetained: true, privateExcluded: true });
+  }
   async function run() {
-    ensure(/\/fluxion-last-window-check\.[^/]+\/(profile|choice0|choice1)\/?$/.test(PathUtils.profileDir) &&
+    ensure(/\/fluxion-last-window-check\.[^/]+\/(profile|existing|choice0|choice1)\/?$/.test(PathUtils.profileDir) &&
       PathUtils.parent(PathUtils.profileDir) === root, "last-window gate requires its isolated profile and driver directory");
     Services.prefs.setBoolPref("browser.tabs.warnOnClose", false);
     Services.prefs.setBoolPref("browser.warnOnQuit", false);
     const first = await until(() => windows().find(win => win.FluxionUI && !PrivateBrowsingUtils.isWindowPrivate(win)), "initial normal window missing");
     await ready(first);
     await SessionStore.promiseAllWindowsRestored;
-    if (mode === "restore") {
+    if (mode === "restore" || mode === "existing-restore") {
       await until(() => urls.every(url => stateURLs(stateOf(first)).includes(url)), "closed-last-window session did not restore on relaunch");
       verifyTabs(first, "actual-relaunch");
-      ensure(Services.prefs.getIntPref("browser.startup.page") === 3 && !Services.prefs.prefHasUserValue("browser.startup.page"), "restore relied on a forced startup preference");
+      ensure(Services.prefs.getIntPref("browser.startup.page") === 3 &&
+        Services.prefs.prefHasUserValue("browser.startup.page") === (mode === "existing-restore"), "startup choice did not retain its original default/user provenance");
     } else {
       if (mode.startsWith("choice")) Services.prefs.setIntPref("browser.startup.page", Number(mode.slice(-1)));
+      else if (mode === "existing") Services.prefs.setIntPref("browser.startup.page", 3);
       else ensure(Services.prefs.getIntPref("browser.startup.page") === 3 && !Services.prefs.prefHasUserValue("browser.startup.page"), "fresh default does not restore sessions");
+      await verifyLastWorkspaceTab(first);
       await seed(first);
       await close(first);
       await closedNormal();
@@ -171,13 +243,7 @@
         await close(reopened);
         const closed = await closedNormal();
         ensure(closed._shouldRestore === true, "last regular window was not marked for next launch");
-        await SessionSaver.run();
-        await SessionSaver.run();
-        ensure((await closedNormal())._shouldRestore === true, "saving consumed the live undo-close record");
-        const disk = await IOUtils.readJSON(PathUtils.join(PathUtils.profileDir, "sessionstore-backups", "recovery.jsonlz4"), { decompress: true });
-        ensure(disk.windows.some(item => urls.every(url => stateURLs(item).includes(url))), "disk checkpoint did not project the closed last window");
-        ensure(!JSON.stringify(disk).includes("private-never-persist"), "private marker entered disk checkpoint");
-        evidence.checks.push({ label: "zero-window-disk-checkpoint", windowCount: disk.windows.length, nativeUndoRetained: true, privateExcluded: true });
+        await verifyFinalCheckpoint();
       }
     }
     write("health", "native-last-window-policy-verified");

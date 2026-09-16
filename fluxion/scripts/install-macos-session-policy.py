@@ -24,6 +24,7 @@ VERSION = "155.0.1"
 HASHES = {
     "modules/sessionstore/SessionStore.sys.mjs": "456cef74607b5abafc352909f6f4a67901140cb358cf606fc55c9f1f21d700a1",
     "modules/sessionstore/SessionSaver.sys.mjs": "c542e5d51cbf50bd27ffae0e294174444c87cbc8162eb2d51542ac72434ea374",
+    "chrome/browser/content/browser/tabbrowser/tabbrowser.js": "b9b385572ad4652dd24093f3058d3cd530effa4ff69867962f2e4379a85eda8b",
 }
 DEPENDENCY_HASHES = {
     # uriToLoadPromise is a self-replacing getter in this exact browser-init.
@@ -101,12 +102,42 @@ SAVER_REPLACEMENTS = [
     this._maybeClearCookiesAndStorage(state);'''),
 ]
 
+TAB_REPLACEMENTS = [
+    ('''        closeWindow =
+          closeWindowWithLastTab ?? this.#shouldCloseWindowWithLastTab;
+
+        if (closeWindow) {''', '''        closeWindow =
+          closeWindowWithLastTab ?? this.#shouldCloseWindowWithLastTab;
+
+        // Fluxion hides other workspaces, not closed or disposable tabs.
+        // Keep Gecko's empty-tab replacement when another workspace survives;
+        // explicit window closure and the actual final tab remain unchanged.
+        if (closeWindow && window.FluxionUI) {
+          const workspace = aTab.getAttribute("fluxion-workspace");
+          const ids = window.FluxionUI.workspaces().map(item => item.id);
+          if (ids.includes(workspace) && this.tabs.some(other =>
+            other !== aTab && other.isOpen && other.hidden &&
+            other.getAttribute("fluxion-workspace") !== workspace &&
+            ids.includes(other.getAttribute("fluxion-workspace")))) {
+            closeWindow = false;
+          }
+        }
+
+        if (closeWindow) {'''),
+]
+
+REPLACEMENTS = {
+    "modules/sessionstore/SessionStore.sys.mjs": STORE_REPLACEMENTS,
+    "modules/sessionstore/SessionSaver.sys.mjs": SAVER_REPLACEMENTS,
+    "chrome/browser/content/browser/tabbrowser/tabbrowser.js": TAB_REPLACEMENTS,
+}
+
 
 def patch_source(name, data):
     if hashlib.sha256(data).hexdigest() != HASHES[name]:
         raise ValueError(f"Unrecognized Gecko {VERSION} source: {name}")
     source = data.decode("utf-8")
-    replacements = STORE_REPLACEMENTS if name.endswith("SessionStore.sys.mjs") else SAVER_REPLACEMENTS
+    replacements = REPLACEMENTS[name]
     for before, after in replacements:
         if source.count(before) != 1:
             raise ValueError(f"Session policy anchor drift: {name}")

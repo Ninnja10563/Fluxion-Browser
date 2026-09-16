@@ -129,7 +129,7 @@ function fixture(size = 1000) {
     dirtyTabs: new Set(), rovingElements: new Map(), renderedMultiSelected: new Set(),
     renderedSelectedTab: null, renderedWorkspace: null, renderedFlat: false, selectionDirty: false,
     currentWorkspace: "focus", structureDirty: true, renderQueued: false,
-    pointerCloseHold: null, renderDeferredForClose: false, flowMenuSession: null, closingTabs: new Set(),
+    flowMenuSession: null, closingTabs: new Set(),
     focusTabAfterRender: null, focusGroupAfterRender: null, focusWorkspaceAfterRender: null,
     groupRenderSequence: 0, pinnedTabs, tabsList, pinnedLabel: {}, count: {},
     tabWorkspace: tab => tab.workspace, tabLabel: tab => tab?.label || "New tab", iconFor: () => "",
@@ -250,12 +250,12 @@ test("pinned and ordinary trees keep independent roving stops; external focus is
   assert.equal(f.gBrowser.selectedTab, f.tabs[1]);
 });
 
-test("pointer close hold never reconstructs placeholders during selection", () => {
+test("selection during row compression preserves surviving row identity", () => {
   const f = fixture(8), original = f.nodes();
-  f.context.pointerCloseHold = { tabs: new Set(), closed: new Set() };
+  f.row(f.tabs[0]).classList.toggle("is-closing", true);
+  f.row(f.tabs[0]).classList.toggle("is-close-releasing", true);
   f.gBrowser.selectedTab = f.tabs[3]; f.flush();
   assert.deepEqual(f.nodes(), original);
-  assert.equal(f.context.renderDeferredForClose, true);
   assert.equal(f.row(f.tabs[3]).getAttribute("aria-selected"), "true");
 });
 

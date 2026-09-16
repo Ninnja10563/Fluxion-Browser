@@ -19,8 +19,8 @@ function fixture() {
   const gBrowser = { selectedTab: tabs[0], getTabForBrowser: browser => tabs.find(tab => tab.linkedBrowser === browser),
     addTabsProgressListener: listener => registrations.push(listener), removeTabsProgressListener: listener => removals.push(listener) };
   const context = vm.createContext({ window, gBrowser, tabElements, dirtyTabs: new Set(), closingTabs: new Set(),
-    structureDirty: false, renderQueued: false, selectionDirty: false, pointerCloseHold: null,
-    flowMenuSession: null, renderDeferredForClose: false, updateWindowTitle() {}, syncHeldTabSelection() {},
+    structureDirty: false, renderQueued: false, selectionDirty: false,
+    flowMenuSession: null, updateWindowTitle() {},
     refreshFlowSelection: () => true, render: () => { renders++; },
     refreshTabElement: (tab, item) => refreshes.push({ tab, item }),
     on(target, type, listener, options) {

@@ -281,7 +281,7 @@
       if (value !== globalRootScheme) globalSchemeChanges.push(value);
     });
     schemeObserver.observe(root, { attributes: true, attributeFilter: ["style", "data-fluxion-workspace-appearance"] });
-    const evidence = report.workspaceTheme = { input: "Supported privileged editor API, real HTML form clicks, native macOS typed hex input; OS color-picker dialog not tested",
+    const evidence = report.workspaceTheme = { input: "Supported privileged editor API, Gecko widget-routed swatch and range pointer input, native macOS range keyboard and typed hex input; integrated picker, no OS color dialog",
       baseline, baselineScheme, globalRootScheme, geometry: [], inputEvents: [], previews: [] };
     async function open() {
       window.FluxionWorkspaceTheme.open(id, anchor);
@@ -299,21 +299,23 @@
       const padding = ["Top", "Right", "Bottom", "Left"].map(side => Number.parseFloat(surfaceStyle[`padding${side}`]));
       assert(surfaceStyle.backgroundColor === formStyle.backgroundColor && padding.every(value => value === 0),
         "Workspace theme panel retains a mismatched native backdrop or duplicate content padding");
-      const selector = page === "colors" ? "mode" : "appearance";
-      assert(window.getComputedStyle(field(selector)).backgroundImage.includes("arrow-down-12.svg"),
+      const selector = page === "picker" ? null : page === "colors" ? "mode" : "appearance";
+      assert(!selector || window.getComputedStyle(field(selector)).backgroundImage.includes("arrow-down-12.svg"),
         "Workspace theme appearance selector has no visible disclosure arrow");
-      const names = page === "colors" ? ["back", "mode", "color", "hex", "accent-color", "accent-hex"] : ["appearance", "colors"];
+      const names = page === "picker" ? ["back", "plane", "hue", "saturation", "lightness", "picker-hex"] :
+        page === "colors" ? ["back", "mode", "color", "hex", "accent-color", "accent-hex"] : ["appearance", "colors"];
       const controls = [...names, "save", "cancel", "reset"].map(name => {
         const node = field(name); assert(painted(node), `Workspace theme control is not painted: ${name}`);
         return { name, ...rect(node) };
       });
       evidence.geometry.push({ page, panel: panelBox, controls, surface: { background: surfaceStyle.backgroundColor,
-        formBackground: formStyle.backgroundColor, padding, selectArrow: window.getComputedStyle(field(selector)).backgroundImage } });
+        formBackground: formStyle.backgroundColor, padding, selectArrow: selector ? window.getComputedStyle(field(selector)).backgroundImage : null } });
       for (const box of controls) assert(contains(panelBox, box), `Workspace theme control is clipped: ${box.name}`);
       for (let first = 0; first < controls.length; first++) for (let second = first + 1; second < controls.length; second++) {
         assert(!overlaps(controls[first], controls[second]), `Workspace theme controls overlap: ${controls[first].name}/${controls[second].name}`);
       }
-      assert(field("color").type === "color" && field("accent-color").type === "color", "Workspace swatches do not expose native color inputs");
+      assert(field("color").localName === "button" && field("accent-color").localName === "button" &&
+        !panel.querySelector('input[type="color"]'), "Workspace swatches can still launch an outliving OS color dialog");
     }
     async function colors() {
       field("colors").click();
@@ -342,7 +344,7 @@
         await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
         await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Native theme input was not acknowledged: ${action}`, 20000);
         await wait(() => events.some(event => event.trusted && event.value === value), "Native theme hex input did not arrive through trusted events");
-        assert(color.value === value, "Native color control did not synchronize with the hex input");
+        assert(color.value === value && color.style.getPropertyValue("--swatch") === value, "Integrated color swatch did not synchronize with the hex input");
         evidence.inputEvents.push({ mode, part, value, events });
       } finally { hex.removeEventListener("input", onInput); }
     }
@@ -353,6 +355,48 @@
       "Unsaved workspace appearance changed persisted workspace data or global browser theme");
     await capture("capture-product-workspace-appearance");
     await colors();
+    const click = node => {
+      const box = rect(node), x = box.left + box.width / 2, y = box.top + box.height / 2;
+      assert(painted(node) && box.width > 0 && box.height > 0, "Integrated picker pointer target is not visible");
+      routePointer(x, y); routePointer(x, y, "mousedown", 1); routePointer(x, y, "mouseup", 0);
+    };
+    click(field("color"));
+    await wait(() => panel.state === "open" && painted(field("hue")) && !painted(field("hex")),
+      "Swatch pointer activation did not open the integrated picker inside its live popup");
+    const plane = field("plane"), planeBox = rect(plane), planeEvents = [];
+    const observePlane = event => planeEvents.push({ type: event.type, trusted: event.isTrusted, pointerId: event.pointerId });
+    for (const type of ["pointerdown", "pointermove", "pointerup"]) plane.addEventListener(type, observePlane);
+    try {
+      const x = planeBox.left + planeBox.width * .8, y = planeBox.top + planeBox.height * .7;
+      routePointer(planeBox.left + planeBox.width * .2, planeBox.top + planeBox.height * .3, "mousedown", 1);
+      routePointer(x, y, "mousemove", 1); routePointer(x, y, "mouseup", 0);
+      await wait(() => Number(field("saturation").value) === 80 && Number(field("lightness").value) === 30,
+        "Dragging the integrated color plane did not update saturation/lightness");
+      assert(planeEvents.some(event => event.type === "pointerdown" && event.trusted) &&
+        planeEvents.some(event => event.type === "pointerup" && event.trusted) && projection() === field("picker-hex").value,
+      "Integrated plane drag did not retain its live preview session");
+      evidence.plane = { events: planeEvents, saturation: field("saturation").value, lightness: field("lightness").value, preview: projection() };
+    } finally { for (const type of ["pointerdown", "pointermove", "pointerup"]) plane.removeEventListener(type, observePlane); }
+    const hue = field("hue"), pickerEvents = [];
+    const onPickerInput = event => pickerEvents.push({ trusted: event.isTrusted, value: hue.value, hex: field("picker-hex").value });
+    hue.addEventListener("input", onPickerInput);
+    try {
+      click(hue);
+      await wait(() => pickerEvents.some(event => event.trusted), "Routed range pointer input did not change the integrated picker");
+      const afterPointer = Number(hue.value), eventsBeforeKey = pickerEvents.length;
+      hue.focus();
+      await nativeWorkspaceKey("picker-right");
+      await wait(() => Number(hue.value) === afterPointer + 1 && pickerEvents.length > eventsBeforeKey,
+        "Native ArrowRight did not adjust the integrated hue range");
+      assert(panel.state === "open" && pickerEvents.at(-1).trusted && projection() === field("picker-hex").value &&
+        !persisted().theme, "Picker input lost its preview session or wrote data before Save");
+      evidence.picker = { events: pickerEvents, afterPointer, afterKeyboard: Number(hue.value), preview: projection() };
+      await geometry("picker");
+      await capture("capture-product-workspace-picker");
+    } finally { hue.removeEventListener("input", onPickerInput); }
+    field("back").click();
+    await wait(() => painted(field("hex")) && !painted(hue) && panel.state === "open",
+      "Integrated picker Back did not return to palette fields in the same session");
     await type("dark", "#304050", "dark");
     await type("dark", "#7baabb", "accent", "accent");
     await type("light", "#dde6dc", "light");
@@ -415,7 +459,7 @@
     evidence.globalSchemeChanges = globalSchemeChanges;
     report.checks.push("workspace-dock-symbol-group-centered-with-one-and-two-workspaces",
       "native-workspace-theme-controls-visible-contained-and-nonoverlapping",
-      "workspace-two-page-appearance-and-native-base-accent-live-preview",
+      "workspace-integrated-picker-pointer-native-range-keyboard-and-base-accent-live-preview",
       "workspace-theme-native-hex-save-persistence-switch-restoration-cancel-escape-and-staged-reset",
       "workspace-preview-preserves-global-embedder-color-scheme");
     } finally { schemeObserver.disconnect(); }
