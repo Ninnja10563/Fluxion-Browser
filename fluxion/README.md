@@ -8,14 +8,16 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-**0.70.1 native update/session/toolbar checks have passed; final full release
-verification and publication remain pending.** It adds
+**[0.70.1-preview.1 is published](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1).**
+All 1,126 tests and every mandatory native macOS gate passed. It adds
 Sparkle-backed update-and-restart, a quiet update indicator, shared automatic
 metadata checks with an About opt-out, and a sidebar-aware fullscreen toolbar
 policy. Normal windows remain open when their final tab closes; explicit window
 closure and Quit retain native session handling. See the
 [milestone](docs/milestone-0.70.1.md), [update contract](docs/update-channel.md)
-and [dependency inventory](docs/dependencies.md).
+and [dependency inventory](docs/dependencies.md). The
+[release provenance](release/provenance/v0.70.1-preview.1.md) records the exact
+verified source, build and promoted assets.
 
 The updater's initial scope is macOS 12+, the installed application outside its
 DMG, and the default Fluxion profile. Automatic checks do not download or install
@@ -25,9 +27,12 @@ upgrade to obtain the updater. An isolated signed-version fixture passed actual
 native replacement, observer-canceled quit/retry and exact same-profile tab,
 workspace, bookmark and preference restoration. This is not a physical
 unsaved-page-dialog test. Developer ID signing/notarization remains outstanding;
-no website-speed improvement is claimed.
+no website-speed improvement is claimed. Restoration was verified with
+restore-session startup selected; fresh-start choices remain authoritative.
+The seven-stage window gate also verifies actual native close-button activation,
+final-tab replacement, private exclusion and full Quit/relaunch.
 
-### Latest published milestone
+## Previous milestones
 
 Fluxion 0.70 is published: native Fluxion names and transparent F artwork,
 physical Control shortcuts, real bookmark import, immediate tab-close layout,
@@ -40,14 +45,12 @@ last-window recovery stages. Download the
 See the [milestone](docs/milestone-0.70.md),
 [candidate audit](docs/validation/0.70-candidate.md) and
 [release provenance](release/provenance/v0.70.0-preview.1.md).
-The original reported 0.69 profile and physical red-button behavior have not
-been independently reproduced. A programmatic Settings-to-page address-state
-transition remains under investigation. Automatic update installation is not
-part of the published 0.70 app; automatic workspace/container assignment also
-remains pending. The app is ad-hoc
+At the 0.70 release, the original reported 0.69 profile and physical red-button
+behavior had not been independently reproduced, and a programmatic
+Settings-to-page address-state transition remained under investigation.
+Automatic update installation is not part of the 0.70 app; automatic
+workspace/container assignment also remains pending. The app is ad-hoc
 signed, not Apple-notarized. 0.71 is the next measured performance milestone.
-
-## Previous milestones
 
 Fluxion 0.69 is published: the supplied app artwork, fully hidden/top-hover
 Focus navigation, an inset floating sidebar, matching New tab hover geometry,
@@ -60,7 +63,7 @@ All 1,009 tests and every mandatory native macOS gate passed. Download the
 for Apple Silicon (including M3) and Intel. See the
 [milestone](docs/milestone-0.69.md) and
 [release provenance](release/provenance/v0.69.0-preview.1.md).
-Automatic installation and workspace account containers remain pending.
+That release does not include automatic installation or workspace account containers.
 Physical M3/trackpad and OS colour-picker checks remain; this preview is
 ad-hoc signed, not Apple-notarized.
 
@@ -151,14 +154,14 @@ and controls, native multi-selection stays synchronized, and workspace sessions
 avoid redundant writes and duplicate ownership reads. Broader resource profiling
 and platform accessibility audits remain on the roadmap.
 
-## Latest published changes
+## Earlier published changes
 
 Fluxion 0.64 rejects expired or malformed release metadata without claiming the
 browser is current or retaining an old download action. Checks share one bounded
 request across windows and send no credentials, cookies, referrer or installed-
 version query. A serialized maintainer workflow refreshes the feed after release
 changes and periodically; it verifies public bytes and source identities before
-updating only its dedicated branch. Download and installation remain manual.
+updating only its dedicated branch. Download and installation remain manual in 0.64.
 
 Fluxion 0.63 gives whole groups a clear before/after insertion boundary and
 preserves collapsed state. Dragging either split pane onto a group moves both

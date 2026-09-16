@@ -14,26 +14,30 @@ The preview is ad-hoc signed but is not yet Apple-notarized. On first launch,
 macOS may require you to right-click Fluxion and choose **Open**, or approve it
 under **System Settings → Privacy & Security**.
 
-## Updating: 0.70.1 candidate
+## Updating: 0.70.1-preview.1
 
-The forthcoming updater-enabled build requires macOS 12 or later. Native signed
-replacement and same-profile restoration have passed in an isolated fixture;
-final full release verification/publication remain pending. The published 0.70
-app cannot install updates itself. Install the first updater-enabled DMG manually, replacing the app while
+The [updater-enabled release](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1)
+requires macOS 12 or later. All mandatory native release gates passed, including
+signed replacement and same-profile restoration in an isolated fixture. The
+0.70 app cannot install updates itself. Install the first updater-enabled DMG manually, replacing the app while
 it is closed and leaving the separate profile intact.
 
-In the candidate, Settings → About offers Automatic update checks, an explicit
+Settings → About offers Automatic update checks, an explicit
 check, and Update and restart when native installation is supported. An
 available-update toolbar icon performs the same explicit install action. Normal
 windows share one metadata check schedule, normally every five minutes; checks
 alone never download or install an application. Native quit remains cancellable
 for unsaved pages. Initial native updates support the default Fluxion profile,
 one running application process and an app outside the mounted DMG. Other
-configurations can use the clearly labeled manual DMG action.
+configurations can use the clearly labeled manual DMG action. Session restoration
+follows the startup preference: the updater does not override a fresh-start
+choice. The installation fixture verified restore-session startup.
 
 Sparkle's signed-feed/archive authentication is not Apple notarization. Do not
 disable Gatekeeper globally. See the [update contract](update-channel.md) and
-[candidate milestone](milestone-0.70.1.md) for evidence and remaining checks.
+[milestone](milestone-0.70.1.md) and
+[release provenance](../release/provenance/v0.70.1-preview.1.md) for evidence
+and remaining hardware checks.
 
 ## One-time setup for building from source
 

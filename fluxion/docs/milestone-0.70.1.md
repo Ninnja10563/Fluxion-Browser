@@ -1,12 +1,15 @@
 # Fluxion 0.70.1 — Updates and window behavior
 
-**Candidate: native update, session and toolbar checks have passed; the final
-complete release run and publication are pending.** The evidence below identifies
-individual runs rather than implying that an unpublished candidate has shipped.
+**[0.70.1-preview.1 is published](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1).**
+All 1,126 tests and every mandatory native macOS gate passed in
+[run 35075092968](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35075092968)
+on source `a28b4726610fba791d31381950e0d8e9cf5cf26b`. The release promotes
+those verified assets. See [release provenance](../release/provenance/v0.70.1-preview.1.md)
+for source, publication, asset and update-channel identities.
 
 ## Updates
 
-The candidate integrates Sparkle 2.10.0 through a privileged native bridge.
+The release integrates Sparkle 2.10.0 through a privileged native bridge.
 The maintained updater authenticates both its signed appcast and update archive
 against the embedded Ed25519 public key. The release-signing private key is not
 part of the application or repository.
@@ -33,6 +36,10 @@ application process and an installed application outside `/Volumes`. Other
 launch/profile arrangements keep the manual DMG route. Multiple ordinary
 windows in one process are not copies of one another.
 
+Updating preserves the startup choice: restore-session startup restores the
+session, while fresh-start choices are not overridden with a one-time restore.
+The native installation fixture verifies the restore-session configuration.
+
 Users of published 0.70 or earlier need one manual DMG upgrade before any native
 updater is available. Later automatic discovery still does not grant automatic
 installation consent. The preview remains ad-hoc signed, **not Apple-notarized**.
@@ -55,6 +62,41 @@ uses native fullscreen notifications and per-window state rather than rewriting
 a shared preference on every sidebar change.
 
 ## Native evidence
+
+The complete release run passed real Sparkle replacement from signed isolated
+bundle version `1.0.0b1` to `1.0.1b1`. All six required feed/archive GETs completed;
+each test archive contained 247,441,408 bytes. Wrongly signed and corrupted
+archives were refused without changing the running session. One native quit
+was canceled by a Gecko observer, then an explicit retry replaced the app and
+relaunched PID 12567 as PID 14130. The exact three tab URLs, selected tab, pinned
+state, workspace metadata, bookmark GUID `r-9rrQg8pgU1` and saved preference
+were retained. This is not a physical unsaved-page-dialog test or an upgrade
+of the published 0.70 binary.
+
+The same source passed all seven last-window phases: fresh restoration,
+explicit restore-session choice, actual close/relaunch, full Quit with a window
+open, and startup opt-outs. Four owned-process native AXCloseButton presses
+closed normal windows. Eighteen final-tab operations each kept the window with
+exactly one replacement tab; eight hidden-workspace checks retained the other
+page. Private markers stayed excluded. All three relaunches retained the exact
+session and actual selected page. The explicit-choice scenario uses normal
+shutdown without test-forced saves or pre-close diagnostic state collection;
+the separate fresh-profile case retains repeated checkpoint coverage.
+
+Restored history can arrive before the selected content process: an earlier
+run [35073288552](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35073288552)
+recorded a live `about:blank` document becoming the correct
+saved selection naturally after 106ms, and after 90ms following full Quit.
+The gate now passively waits for the exact saved and live selection, with
+initial/final diagnostics and a hard timeout; it never loads, selects or saves
+on the browser's behalf. The final release run needed no such delayed transition.
+
+Frame/product-chrome gates also passed inline update-control geometry at
+ordinary/narrow widths, expanded/compact fullscreen navigation, native top-edge
+pointer reveal/retraction and keyboard-owned address focus. Geometry-only
+fixtures do not manufacture update offers or establish installation behavior.
+
+### Earlier validation
 
 [Native updater run 35069931392](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35069931392)
 passed on source `69e0e8ab43ac4b61269341ee86d520466ae0341b`. It installed an
@@ -84,9 +126,8 @@ An earlier [run 35067865158](https://github.com/Ninnja10563/Fluxion-Browser/acti
 also passed the seven-stage last-window gate; neither earlier browser run
 substitutes for the final complete release run at the chosen source revision.
 
-## Remaining release and hardware checks
+## Remaining hardware and hardening checks
 
-Final full-pipeline acceptance and public DMG/feed publication remain pending.
 Physical M3/trackpad and wider accessibility checks remain separate from
 hosted-runner native widget/accessibility input evidence. The original reported
 user profile is not an imported recovery fixture.

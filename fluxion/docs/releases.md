@@ -1,16 +1,20 @@
 # Milestone release process
 
-## 0.70.1 updater candidate
+## 0.70.1-preview.1 updater release
 
-Native update, frame/product-chrome and last-window checks have passed in the
-runs recorded in [the milestone](milestone-0.70.1.md); the final complete release
-run and publication remain pending. The candidate introduces a
+All 1,126 tests and mandatory native gates passed in
+[run 35075092968](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35075092968)
+on source `a28b4726610fba791d31381950e0d8e9cf5cf26b`.
+The [0.70.1-preview.1 release](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1)
+promotes the verified assets; see [release provenance](../release/provenance/v0.70.1-preview.1.md)
+and [the milestone](milestone-0.70.1.md). It introduces a
 macOS 12+ Sparkle 2.10.0 bridge, signed appcast/archive publication, and a shared
 opt-out metadata-check coordinator. Actual authenticated replacement used signed
 isolated fixture versions, with observer-canceled Gecko quit, retry and exact
 same-default-profile restoration. That does not claim physical unsaved-page
-dialog input or a published 0.70 binary upgrade. The release must still preserve
-its complete native browser gates. Report failure cases separately; never
+dialog input or a published 0.70 binary upgrade. Restoration in the updater
+fixture uses startup choice 3; fresh-start choices remain authoritative. Future
+releases must preserve the complete native browser gates. Report failure cases separately; never
 substitute a policy-only mock for a native installation claim.
 
 Pin and verify Sparkle's archive before building. Ship its complete upstream
@@ -81,8 +85,8 @@ when it differs from the lock. Review Mozilla's release/security notes, update
 the version/URL/digest together using that release's official `SHA256SUMS`, run
 the full native gates, and publish a new Fluxion DMG promptly. This check does
 not install updates or claim users have the latest version. Published 0.70 and
-earlier use manual application updates; the 0.70.1 native installer is still a
-candidate. Firefox's updater remains blocked by `DisableAppUpdate` so it
+earlier use manual application updates; 0.70.1-preview.1 introduces Fluxion's
+native installer. Firefox's updater remains blocked by `DisableAppUpdate` so it
 cannot replace Fluxion with Firefox. Extension updates remain independent.
 About can now check the recent public Fluxion release list explicitly and offer
 a compatible macOS DMG. A metadata check is not a verification of downloaded

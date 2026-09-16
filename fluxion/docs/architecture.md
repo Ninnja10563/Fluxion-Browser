@@ -43,7 +43,7 @@ lifecycle as tab menus, retaining the actual opener for cancellation focus.
 Firefox-only cloud VPN enrollment is gated at startup rather than relabeled;
 see [product service policy](product-service-policy.md).
 
-The 0.70.1 candidate makes navigation visibility follow the sidebar. Expanded
+The 0.70.1 release makes navigation visibility follow the sidebar. Expanded
 and compact modes keep the native toolbar visible even in browser fullscreen;
 only hidden/Focus uses top-edge auto-hide. The privileged Focus controller
 observes Gecko's synchronous `fullscreen-nav-toolbox` notification and restores
@@ -56,8 +56,9 @@ frame gate passed expanded/compact persistence, native top-edge reveal and
 pointer-leave retraction, and keyboard-owned address focus followed by an actual
 page click to return focus before retraction. Gecko intentionally retries
 focused-input collapse on click/keydown, not scripted blur. See the
-[0.70.1 evidence](milestone-0.70.1.md); final full release verification remains
-separate from that gate pass.
+[0.70.1 evidence](milestone-0.70.1.md) and
+[release provenance](../release/provenance/v0.70.1-preview.1.md) for the complete
+passing native release run and exact promoted assets.
 
 General's default-browser action delegates to Gecko's native ShellService.
 Status comes from the operating system, not a Fluxion preference, and the UI
@@ -181,7 +182,7 @@ event loop. Re-audit these lifecycle assumptions against
 keep the isolated native macOS keyboard and stationary-pointer gates alongside
 the extracted renderer/state regression tests.
 
-Gecko's last-tab decision normally excludes hidden tabs. The 0.70.1 candidate's
+Gecko's last-tab decision normally excludes hidden tabs. The 0.70.1 release's
 pinned packaging patch keeps regular browser windows open after their final
 tab closes, including before Fluxion's sidebar has initialized. Gecko creates
 its ordinary empty-tab replacement. Explicit window closure, native page-leave
@@ -379,7 +380,7 @@ homepage. It overrides future new-tab destinations without navigating the
 selected browser: a SessionStore tab can still report `about:blank` while its
 saved page is being restored.
 
-### macOS last-window policy (0.69; expanded verification in 0.70 and candidate 0.70.1)
+### macOS last-window policy (0.69; expanded verification in 0.70 and 0.70.1)
 
 Firefox 155.0.1 normally restores only pinned tabs after closing its final macOS
 window, even with restore-session startup selected. Fluxion's build-time
@@ -414,16 +415,22 @@ startup choice from 1 to 3 and exercises normal quit/relaunch without test-force
 saving or pre-close diagnostic state collection; post-close waits allow native
 closed records to settle. Equal-default user values may be cleared by Gecko;
 the gate checks the effective choice and records its actual provenance. This
-uses the native close-window command, not a physical red-button click or an
-imported existing user profile.
-Its isolated-profile JSON reports are retained as release artifacts. Candidate
-code and unit tests alone are not evidence that this native gate has passed.
-The 0.70.1 candidate extends the fixture to native window-button input and
+uses isolated profiles, not an imported existing user profile.
+Its JSON reports are retained as release artifacts. Candidate code and unit
+tests alone are not evidence that this native gate has passed.
+The 0.70.1 release extends the fixture to actual native AXCloseButton input and
 final-tab closure/replacement, including hidden-workspace and private-window
-cases. That seven-stage gate passed in the runs recorded in the
+cases, plus full application Quit with a restored window still open. That
+seven-stage gate passed in the complete release run recorded in the
 [milestone](milestone-0.70.1.md). Its macOS accessibility/window input is not a
 physical user's click; the original reported user profile is not an imported fixture or a recovery
 guarantee. Concurrent windows retain independent session/workspace state.
+
+The relaunch gate waits passively for both exact saved tab state and the actual
+selected document: SessionStore's restored history can precede content-process
+navigation. Initial/final/timeout diagnostics record native pending/busy state
+and cached history. A permanently wrong selection still fails; the gate does
+not navigate, select or flush a tab to make restoration pass.
 
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,
@@ -618,7 +625,7 @@ The JSON discovery feed is HTTPS-delivered release metadata, not an Ed25519
 signature over a later download. It must not be confused with the native
 installer's separately authenticated appcast and archive.
 
-### Native Fluxion updater (0.70.1 candidate; native installation verified)
+### Native Fluxion updater (0.70.1; native installation verified)
 
 `FluxionUpdateCoordinatorCore.sys.mjs` is an injected-IO state machine, while
 `FluxionUpdateCoordinator.sys.mjs` owns one process-wide instance and its
@@ -666,9 +673,13 @@ retaining exact seeded tabs, selection/pin, workspace metadata, bookmark and
 preference. It canceled one actual native quit with a Gecko observer before
 retrying successfully; this does not test physical beforeunload-dialog input.
 Valid signed-feed authentication passed, but native altered-feed rejection is
-not inferred from separate signing interoperability tests. Run/source identities
-are recorded in the [milestone](milestone-0.70.1.md). The final complete native
-release run and publication remain pending. Developer
+not inferred from separate signing interoperability tests. The installation
+fixture uses restore-session startup; normal quit/relaunch retains fresh-start
+choices instead of forcing one-time restoration. It does not seed a private
+sentinel: separate session gates verify private exclusion and startup opt-outs.
+All mandatory gates passed for the release source; run/source and asset identities
+are recorded in the [milestone](milestone-0.70.1.md) and
+[release provenance](../release/provenance/v0.70.1-preview.1.md). Developer
 ID signing and notarization remain separate release-hardening work; Ed25519
 authenticated ad-hoc previews are still not Apple-notarized.
 

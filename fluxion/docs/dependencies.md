@@ -1,9 +1,11 @@
 # Build and runtime dependencies
 
-The 0.70.1 updater integration remains unpublished. Its native build,
-authenticated isolated-version installation, observer-canceled quit/retry and
-same-profile relaunch passed; the final complete release run is still required.
-See [the milestone](milestone-0.70.1.md) for exact evidence and limitations.
+The 0.70.1-preview.1 release includes the updater integration. All 1,126 tests
+and mandatory native gates passed, including authenticated isolated-version
+installation, observer-canceled quit/retry and same-profile relaunch. See
+[the milestone](milestone-0.70.1.md) and
+[release provenance](../release/provenance/v0.70.1-preview.1.md) for exact
+evidence and limitations.
 
 | Component | Purpose and boundary |
 | --- | --- |

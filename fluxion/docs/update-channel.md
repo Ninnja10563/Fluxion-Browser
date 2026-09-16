@@ -1,15 +1,16 @@
 # Verified update channel
 
-## 0.70.1 installation candidate — native replacement verified
+## 0.70.1-preview.1 — native replacement verified
 
 Published 0.70 and earlier discover updates and open a manual download only on
 request; those shipped apps cannot gain an installer without one manual DMG
-upgrade. The 0.70.1 candidate adds a pinned
+upgrade. The [0.70.1-preview.1 release](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.1-preview.1) adds a pinned
 [Sparkle 2.10.0 integration](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.0),
-not a shell-based replacement script. Its native installation gate passed with
-isolated signed fixture versions; final complete release verification and public
-publication remain pending. [The milestone](milestone-0.70.1.md) records exact
-source/run identities and does not claim an update of the published 0.70 binary.
+not a shell-based replacement script. All 1,126 tests and mandatory native gates
+passed, including real installation with isolated signed fixture versions.
+[The milestone](milestone-0.70.1.md) and
+[release provenance](../release/provenance/v0.70.1-preview.1.md) record exact
+source/run identities and do not claim an update of the published 0.70 binary.
 
 There are two distinct metadata paths. The existing expiring `releases.json`
 supports lightweight version discovery. It is HTTPS-delivered verified public
@@ -47,11 +48,15 @@ The native gate passed valid signed-feed authentication, corrupt/wrongly signed
 archive rejection, observer-canceled native quit, version-bound retry, actual
 replacement and same-default-profile relaunch. Its exact seeded tabs,
 selection/pin, workspace metadata, bookmark and preference were retained.
+The installation fixture uses restore-session startup (`browser.startup.page=3`);
+normal quit/relaunch does not force restoration over startup choices 0 or 1.
+It does not seed a private-window sentinel; separate session gates verify private
+exclusion and startup opt-outs.
 Observer cancellation is not a physical unsaved-page-dialog test. Version and
 app-identity policy checks and separate signing interoperability tests must not
 be confused with native invalid-feed rejection. Additional invalid-feed cases,
 read-only/interrupted-install recovery and wider physical-machine audits remain
-outside this installation evidence. The candidate is still ad-hoc signed, **not
+outside this installation evidence. The release is still ad-hoc signed, **not
 Apple-notarized**; Ed25519 authentication does not supply Developer ID signing
 or a notarization ticket. See [the milestone](milestone-0.70.1.md),
 [native bridge contract](../packaging/macos/updater/README.md) and
@@ -165,7 +170,7 @@ text/plain only after strict JSON/schema validation. The whole response is
 limited to 64 KiB and ten seconds. Expired or malformed data is unavailable,
 never current; the user can retry explicitly or open the releases page. Checks
 do not download the DMG/checksum. Published 0.70 and earlier offer only manual
-installation; the candidate's explicit install route authenticates through
+installation; 0.70.1's explicit install route authenticates through
 Sparkle separately.
 
 Before launching the native verifier, the maintainer shell separately discovers
