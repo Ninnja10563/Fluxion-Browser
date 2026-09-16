@@ -11,6 +11,7 @@
     input: "Native Gecko tab operations, synthetic chrome DragEvents, and chrome focus; not physical OS input" };
   let observer;
   let stopSetupDiagnostics = () => {};
+  let restoreThumbnailPreference = () => {};
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const write = (key, value) => {
     Services.prefs.setStringPref(`${prefix}.${key}`, value);
@@ -26,6 +27,26 @@
     do { if (await predicate()) return; await settle(); } while (Date.now() < deadline);
     throw new Error(message);
   };
+  function isolateThumbnailCapture() {
+    const pref = "browser.pagethumbnails.capturing_disabled";
+    assert(!Services.prefs.prefIsLocked(pref), "Structure fixture cannot override managed thumbnail capture");
+    const hadUserValue = Services.prefs.prefHasUserValue(pref);
+    const previous = Services.prefs.getBoolPref(pref, false);
+    let restored = false;
+    restoreThumbnailPreference = () => {
+      if (restored) return;
+      if (hadUserValue) Services.prefs.setBoolPref(pref, previous);
+      else Services.prefs.clearUserPref(pref);
+      restored = true;
+      report.thumbnailIsolation.restored = true;
+    };
+    report.thumbnailIsolation = { previous, hadUserValue, restored: false };
+    // Gecko's independent Top Sites thumbnail service can fetch visited URLs
+    // in a windowless browser. This fixture counts real tab document loads;
+    // exclude thumbnail work before visiting any fixture URL, not from counts.
+    Services.prefs.setBoolPref(pref, true);
+    assert(Services.prefs.getBoolPref(pref), "Structure thumbnail isolation did not apply");
+  }
   function observeSetupChannels(origin) {
     const evidence = report.setup.channels = { records: [], omitted: 0, unreadable: 0 };
     const topics = ["http-on-modify-request", "http-on-examine-response", "http-on-failed-opening-request"];
@@ -40,7 +61,14 @@
         if (evidence.records.length >= 128) { evidence.omitted++; return; }
         // Only fixed fixture routes and numeric native identities/statuses enter
         // the report. No headers, principals, redirect URLs, or arbitrary text.
+        const contextOwner = read(() => {
+          const embedder = window.BrowsingContext?.get(channel.loadInfo.browsingContextID)?.top?.embedderElement;
+          if (!embedder) return "unavailable";
+          if (embedder.getAttribute("messagemanagergroup") === "thumbnails") return "thumbnail";
+          return gBrowser.getTabForBrowser(embedder) ? "tab" : "other-browser";
+        });
         evidence.records.push({ phase, path: spec.endsWith("?step=1") ? "/transfer?step=1" : "/transfer",
+          contextOwner,
           channelId: read(() => channel.channelId), contextId: read(() => channel.loadInfo.browsingContextID),
           innerWindowId: read(() => channel.loadInfo.innerWindowID),
           browserContextId: read(() => browser?.browsingContext?.id ?? null),
@@ -67,6 +95,7 @@
   }
   async function run() {
     assert(/\/fluxion-structure-check\.[^/]+\/profile\/?$/.test(PathUtils.profileDir), "Requires isolated structure profile");
+    isolateThumbnailCapture();
     await SessionStore.promiseAllWindowsRestored;
     ui.setSidebarState("expanded");
     const workspace = ui.currentWorkspace();
@@ -440,6 +469,7 @@
       const remaining = fixtures.filter(tab => tab.parentNode);
       if (remaining.length) gBrowser.removeTabs(remaining, { animate: false });
     });
+    attempt(() => restoreThumbnailPreference());
     report.complete = Boolean(report.complete && !failures.length);
     if (failures.length) report.failures = failures.map(error => `${error.message}\n${error.stack || ""}`);
     attempt(() => write("report", JSON.stringify(report)));

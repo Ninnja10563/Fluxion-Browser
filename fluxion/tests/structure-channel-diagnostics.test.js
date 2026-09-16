@@ -8,13 +8,15 @@ const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-structure
 const begin = source.indexOf("  function observeSetupChannels("), end = source.indexOf("  async function run()", begin);
 assert.ok(begin >= 0 && end > begin);
 function fixture() {
-  const observers = new Map(), progress = new Set(), report = { setup: {} };
+  const observers = new Map(), progress = new Set(), report = { setup: {} }, contexts = new Map();
   const context = vm.createContext({ report, Ci: { nsIHttpChannel: {}, nsIWebProgressListener: { STATE_REDIRECTING: 2 } },
     Services: { obs: {
       addObserver(observer, topic) { observers.set(topic, observer); },
       removeObserver(observer, topic) { assert.equal(observers.get(topic), observer); observers.delete(topic); },
     } },
-    gBrowser: { addTabsProgressListener: listener => progress.add(listener), removeTabsProgressListener: listener => progress.delete(listener) },
+    window: { BrowsingContext: { get: id => contexts.get(id) } },
+    gBrowser: { addTabsProgressListener: listener => progress.add(listener), removeTabsProgressListener: listener => progress.delete(listener),
+      getTabForBrowser: browser => browser.isFixtureTab ? {} : null },
   });
   vm.runInContext(source.slice(begin, end), context);
   const stop = context.observeSetupChannels("http://127.0.0.1:4111");
@@ -22,7 +24,7 @@ function fixture() {
     channelId: 7, loadInfo: { browsingContextID: 11, innerWindowID: 13, isTopLevelLoad: true, externalContentPolicyType: 6 },
     status: 0, responseStatus: 200, QueryInterface() { return this; },
     authorization: "secret", getRequestHeader() { throw Error("Diagnostic must never read headers"); } };
-  return { observers, progress, report, channel, stop };
+  return { observers, progress, report, channel, stop, contexts };
 }
 
 test("setup channel evidence records native identity/status but excludes nonfixture URLs and private fields", () => {
@@ -46,6 +48,20 @@ test("setup channel evidence records native identity/status but excludes nonfixt
   assert.doesNotMatch(JSON.stringify(records), /secret|private|authorization|127\.0/);
   assert.equal(f.channel.URI.spec, "http://127.0.0.1:4111/transfer");
   assert.equal(f.channel.status, 0, "diagnostics never mutate channel state");
+});
+test("bounded context classification distinguishes real tabs from windowless thumbnail consumers", () => {
+  const f = fixture(), observer = f.observers.get("http-on-modify-request");
+  for (const [kind, embedder] of [
+    ["tab", { isFixtureTab: true, getAttribute: () => "browsers" }],
+    ["thumbnail", { getAttribute: () => "thumbnails" }],
+    ["other-browser", { getAttribute: () => "untrusted-arbitrary-string" }],
+    ["unavailable", null],
+  ]) {
+    f.contexts.set(11, { top: { embedderElement: embedder } });
+    observer.observe(f.channel, "http-on-modify-request");
+    assert.equal(f.report.setup.channels.records.at(-1).contextOwner, kind);
+  }
+  assert.doesNotMatch(JSON.stringify(f.report), /untrusted-arbitrary-string/);
 });
 
 test("setup diagnostics cap records, tolerate unavailable response getters and detach on cleanup", () => {

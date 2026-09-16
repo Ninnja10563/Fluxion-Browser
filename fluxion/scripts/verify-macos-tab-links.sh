@@ -21,13 +21,44 @@ owned() {
   expected="$app/Contents/MacOS/firefox --profile $profile"
   [[ "$command_line" == "$expected" || "$command_line" == "$expected "* ]]
 }
-cleanup() {
-  if owned; then
+owned_launcher() {
+  [[ -n "$browser_pid" ]] && kill -0 "$browser_pid" 2>/dev/null || return 1
+  local command_line parent_pid
+  command_line="$(ps -ww -p "$browser_pid" -o command=)" || return 1
+  parent_pid="$(ps -p "$browser_pid" -o ppid=)" || return 1
+  parent_pid="${parent_pid//[[:space:]]/}"
+  [[ "$parent_pid" == "$$" && "$command_line" == "$launcher about:blank" ]]
+}
+wait_for_owned_browser() {
+  local startup_attempt
+  # The Swift launcher execs Gecko in this same child PID. A live launcher is
+  # not yet an owned browser and must never receive keyboard/menu automation.
+  for ((startup_attempt=0; startup_attempt<120; startup_attempt++)); do
+    if owned; then return 0; fi
+    kill -0 "$browser_pid" 2>/dev/null || {
+      printf 'Tab links launcher exited before Gecko startup.\n' >&2; return 1;
+    }
+    sleep 0.1
+  done
+  printf 'Tab links launcher did not become the exact profile-owned Gecko process.\n' >&2
+  return 1
+}
+cleanup_browser() {
+  # Startup failure can leave the launched Swift process before its exec. Only
+  # terminate that exact direct child or the exact profile-owned Gecko process.
+  if owned || owned_launcher; then
     kill "$browser_pid" 2>/dev/null || true
-    for ((attempt=0; attempt<40; attempt++)); do owned || break; sleep 0.25; done
-    if owned; then kill -KILL "$browser_pid" 2>/dev/null || true; fi
+    local stop_attempt
+    for ((stop_attempt=0; stop_attempt<40; stop_attempt++)); do
+      if ! owned && ! owned_launcher; then break; fi
+      sleep 0.25
+    done
+    if owned || owned_launcher; then kill -KILL "$browser_pid" 2>/dev/null || true; fi
     wait "$browser_pid" 2>/dev/null || true
   fi
+}
+cleanup() {
+  cleanup_browser
   if [[ -n "$clipboard_pid" ]]; then
     touch "$driver/clipboard.finish"
     wait "$clipboard_pid" || true
@@ -68,6 +99,7 @@ FLUXION_PROFILE="$profile" FLUXION_TAB_LINKS_TEST=1 FLUXION_TAB_LINKS_DRIVER_DIR
   FLUXION_TAB_LINKS_ORIGIN="$origin" FLUXION_TAB_LINKS_TOKEN="$token" \
   "$launcher" about:blank > "$check_root/browser.log" 2>&1 &
 browser_pid=$!
+wait_for_owned_browser || exit 1
 sequence=1
 for ((attempt=0; attempt<800; attempt++)); do
   owned || break

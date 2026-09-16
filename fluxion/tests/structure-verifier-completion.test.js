@@ -10,13 +10,14 @@ assert.ok(start >= 0);
 // Execute the shipped completion and its real promise wiring. The 1000-tab
 // operation body is outside this cleanup test; no browser behavior is simulated.
 const completion = source.slice(start, source.lastIndexOf("})(window);"));
-async function fixture({ primary = false, restore = false, remove = false, persist = false, healthFlush = false } = {}) {
+async function fixture({ primary = false, restore = false, remove = false, persist = false, healthFlush = false, thumbnailRestore = false } = {}) {
   const events = [], prefs = new Map(), logged = [];
   const report = { complete: true, checks: ["native operations completed"] };
   const context = {
     report, prefix: "fluxion.structure.verification", fixtures: [{ parentNode: {} }], original: { parentNode: {} },
     observer: { disconnect() { events.push("disconnect"); } },
     stopSetupDiagnostics() { events.push("stop-setup-diagnostics"); },
+    restoreThumbnailPreference() { events.push("restore-thumbnail-preference"); if (thumbnailRestore) throw Error("thumbnail preference restore failed"); },
     gBrowser: { set selectedTab(value) { events.push("restore"); if (restore) throw Error("restore failed"); },
       removeTabs() { events.push("remove"); if (remove) throw Error("remove failed"); } },
     write(key, value) {
@@ -35,7 +36,7 @@ async function fixture({ primary = false, restore = false, remove = false, persi
 
 test("shipped completion cleans up and persists report before publishing success", async () => {
   const result = await fixture();
-  assert.deepEqual(result.events, ["stop-setup-diagnostics", "disconnect", "restore", "remove", "report", "health"]);
+  assert.deepEqual(result.events, ["stop-setup-diagnostics", "disconnect", "restore", "remove", "restore-thumbnail-preference", "report", "health"]);
   assert.equal(result.prefs.get("health"), "keyed-1000-tab-hierarchical-structure-verified");
   assert.equal(result.prefs.has("error"), false);
 });
@@ -46,9 +47,15 @@ test("cleanup failures cannot publish success and do not hide the original nativ
   for (const message of ["native assertion failed", "restore failed", "remove failed"]) assert.ok(result.prefs.get("error").includes(message));
   assert.equal(JSON.parse(result.prefs.get("report")).complete, false);
   assert.ok(result.events.includes("remove"), "restore failure must not skip fixture removal");
+  assert.ok(result.events.includes("restore-thumbnail-preference"), "operation or tab cleanup failure must still restore thumbnail preference");
   const cleanupOnly = await fixture({ remove: true });
   assert.equal(cleanupOnly.prefs.has("health"), false);
   assert.match(cleanupOnly.prefs.get("error"), /remove failed/);
+});
+test("thumbnail preference restoration failure blocks success publication", async () => {
+  const result = await fixture({ thumbnailRestore: true });
+  assert.equal(result.prefs.has("health"), false);
+  assert.match(result.prefs.get("error"), /thumbnail preference restore failed/);
 });
 
 test("report persistence failure prevents success and remains visible", async () => {
