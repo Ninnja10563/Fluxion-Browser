@@ -34,9 +34,12 @@ test("migration pointer actions hit the real owned control and reject hidden, di
   assert.equal(events.length, 3);
 });
 
-async function openFixture({ settingsNavigation = false, disabled = false } = {}) {
+async function openFixture({ settingsNavigation = false, disabled = false, loadingViews = [] } = {}) {
   const selectedTab = {}, browser = { tabs: [selectedTab], selectedTab }, events = [];
-  const shadow = { querySelector: () => ({ getAttribute: () => "page-selection" }) };
+  let loadingChecks = 0;
+  const shadow = { querySelector: () => ({ getAttribute: () => {
+    loadingChecks++; return loadingViews.length ? loadingViews.shift() : "page-selection";
+  } }) };
   const dialog = { closed: false, document: {
     documentURI: "chrome://browser/content/migration/migration-dialog-window.html", hasFocus: () => true,
     getElementById: () => ({ shadowRoot: shadow }),
@@ -47,11 +50,14 @@ async function openFixture({ settingsNavigation = false, disabled = false } = {}
   const context = vm.createContext({ dialog: null, assert: assertNative,
     window: { gBrowser: browser, document: { getElementById: () => command }, Event: class { constructor(type) { this.type = type; } } },
     Services: { wm: { getEnumerator: () => [dialog] }, focus: { activeWindow: dialog } },
-    wait: async (predicate, message) => { const value = await predicate(); assertNative(value, message); return value; },
+    wait: async (predicate, message) => {
+      for (let attempt = 0; attempt < 16; attempt++) { const value = await predicate(); if (value) return value; }
+      throw Error(message);
+    },
   });
   const start = source.indexOf("  async function openWizard()"), end = source.indexOf("  async function run()", start);
   await vm.runInContext(`${source.slice(start, end)}\nopenWizard();`, context);
-  return { events, context };
+  return { events, context, loadingChecks };
 }
 test("migration gate invokes the existing native command and requires a loaded focused standalone wizard", async () => {
   const result = await openFixture(); assert.deepEqual(result.events, ["command"]);
@@ -60,4 +66,49 @@ test("migration gate invokes the existing native command and requires a loaded f
 test("migration gate fails if import remains a preferences navigation or its native command is disabled", async () => {
   await assert.rejects(openFixture({ settingsNavigation: true }), /hidden preferences destination/);
   await assert.rejects(openFixture({ disabled: true }), /Native import command unavailable/);
+});
+
+test("migration wizard waits through missing view state and loading instead of treating undefined as loaded", async () => {
+  const result = await openFixture({ loadingViews: [undefined, "page-loading", "page-selection"] });
+  assert.equal(result.loadingChecks, 3);
+});
+
+async function settleFixture(sequence) {
+  const report = {}, selector = { id: "browser-profile-selector", contains: node => node === child }, child = {};
+  let sample = sequence[0], attempt = 0;
+  selector.getBoundingClientRect = () => ({ x: 24, y: 64, width: 320, height: 50 });
+  const dialog = { screenX: 400, screenY: 300, outerHeight: 300, innerWidth: 360, innerHeight: 280,
+    document: { readyState: "complete", hasFocus: () => sample.focus !== false }, windowUtils: {} };
+  const shadow = {
+    querySelector: id => id === "#browser-profile-selector" ? selector : { getAttribute: () => sample.view || "page-selection" },
+    elementFromPoint: () => sample.occluded ? {} : child,
+  };
+  const context = vm.createContext({ report, dialog, shadow, Services: { focus: { activeWindow: dialog } }, visible: () => true,
+    wait: async (predicate, message) => {
+      for (const state of sequence) {
+        sample = state; attempt++; dialog.outerWidth = state.width || 380;
+        dialog.windowUtils.isMozAfterPaintPending = Boolean(state.paint);
+        const value = await predicate(); if (value) return value;
+      }
+      throw Error(message);
+    },
+  });
+  const start = source.indexOf("  async function settledSelector("), end = source.indexOf("  function traceSelection(", start);
+  const value = await vm.runInContext(`${source.slice(start, end)}\nsettledSelector(shadow)`, context);
+  return { value, selector, report, attempt };
+}
+
+test("selector readiness waits for pending paint and resets stability after native resize or failed hit testing", async () => {
+  const result = await settleFixture([{ view: "page-loading" }, { paint: true }, { width: 380 },
+    { width: 420 }, { width: 420, occluded: true }, { width: 420 }, { width: 420 }, { width: 420 }]);
+  assert.equal(result.value, result.selector); assert.equal(result.attempt, 8);
+  assert.equal(result.report.selectionReadiness.geometryChanges, 1);
+  assert.equal(result.report.selectionReadiness.pendingPaintSamples, 1);
+  assert.equal(result.report.selectionReadiness.last.stable, 3);
+});
+
+test("persistent selector occlusion, focus loss or paint never passes the bounded readiness gate", async () => {
+  for (const state of [{ occluded: true }, { focus: false }, { paint: true }, { view: "page-loading" }]) {
+    await assert.rejects(settleFixture(Array(12).fill(state)), /stable painted, focused, hit-testable geometry/);
+  }
 });

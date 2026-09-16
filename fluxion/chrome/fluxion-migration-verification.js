@@ -44,13 +44,62 @@
     await dialog.customElements.whenDefined("migration-wizard");
     const wizard = dialog.document.getElementById("wizard");
     const shadow = await wait(() => wizard?.shadowRoot, "Native wizard shadow tree missing");
-    await wait(() => shadow.querySelector("#wizard-deck")?.getAttribute("selected-view") !== "page-loading",
-      "Native wizard did not finish loading");
+    await wait(() => {
+      const view = shadow.querySelector("#wizard-deck")?.getAttribute("selected-view");
+      return view && view !== "page-loading";
+    }, "Native wizard did not finish loading");
     Services.focus.focusedWindow = dialog;
     await wait(() => Services.focus.activeWindow === dialog && dialog.document.hasFocus(), "Native migration window is not focused");
     assert(window.gBrowser.tabs.length === tabs && window.gBrowser.selectedTab === selected,
       "Import changed the active tab or opened a hidden preferences destination");
     return { wizard, shadow };
+  }
+  async function settledSelector(shadow) {
+    // The standalone wizard sizes itself through ResizeObserver. Gecko's
+    // panel-list opens after rAF + a task and closes on resize; loaded DOM alone
+    // does not mean the native selector is ready for a pointer activation.
+    const diagnostics = report.selectionReadiness = { samples: 0, geometryChanges: 0, pendingPaintSamples: 0 };
+    let previous = "", stable = 0;
+    return wait(() => {
+      diagnostics.samples++;
+      const selector = shadow.querySelector("#browser-profile-selector");
+      const view = shadow.querySelector("#wizard-deck")?.getAttribute("selected-view");
+      const rect = selector?.getBoundingClientRect();
+      const pendingPaint = dialog.windowUtils.isMozAfterPaintPending;
+      if (pendingPaint) diagnostics.pendingPaintSamples++;
+      const hit = rect && shadow.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2);
+      const geometry = rect ? [dialog.screenX, dialog.screenY, dialog.outerWidth, dialog.outerHeight,
+        dialog.innerWidth, dialog.innerHeight, rect.x, rect.y, rect.width, rect.height].map(value => Math.round(value * 100) / 100) : [];
+      const signature = JSON.stringify(geometry);
+      if (previous && previous !== signature) diagnostics.geometryChanges++;
+      const ready = view === "page-selection" && dialog.document.readyState === "complete" &&
+        dialog.document.hasFocus() && Services.focus.activeWindow === dialog && !pendingPaint && visible(selector) &&
+        (hit === selector || selector.contains(hit)) && geometry.every(Number.isFinite);
+      stable = ready ? signature === previous ? stable + 1 : 1 : 0;
+      previous = signature;
+      diagnostics.last = { geometry, view, pendingPaint, hit: hit?.id || hit?.localName || null, stable };
+      return stable >= 3 ? selector : null;
+    }, "Native migration selector did not reach stable painted, focused, hit-testable geometry");
+  }
+  function traceSelection(shadow) {
+    const events = report.selectionEvents = [];
+    const targets = [dialog, shadow], types = ["resize", "blur", "focus", "mousedown", "mouseup", "click",
+      "popupshowing", "popupshown", "popuphiding", "popuphidden"];
+    const start = Date.now();
+    const observe = event => {
+      if (events.length >= 64) return;
+      const target = event.composedPath?.()[0] || event.target;
+      events.push({ elapsed: Date.now() - start, type: event.type, target: target?.id || target?.localName || "window",
+        trusted: event.isTrusted, panelState: shadow.querySelector("panel-list")?.parentElement?.state || null,
+        listOpen: Boolean(shadow.querySelector("panel-list")?.open) });
+    };
+    for (const target of targets) for (const type of types) target.addEventListener(type, observe, true);
+    return () => {
+      for (const target of targets) for (const type of types) target.removeEventListener(type, observe, true);
+      const list = shadow.querySelector("panel-list");
+      report.selectionFinal = { panelState: list?.parentElement?.state || null, listOpen: Boolean(list?.open),
+        choices: [...shadow.querySelectorAll("panel-item")].map(item => ({ key: item.getAttribute("key"), visible: visible(item) })) };
+    };
   }
   async function run() {
     assert(/\/fluxion-migration-check\.[^/]+\/profile\/?$/.test(PathUtils.profileDir) &&
@@ -84,11 +133,19 @@
       click(chooseFile);
       await wait(() => shadow.querySelector("#wizard-deck").getAttribute("selected-view") === "page-selection", "File import choices did not open");
     }
-    click(shadow.querySelector("#browser-profile-selector"));
-    const fileChoice = await wait(() => {
-      const candidate = shadow.querySelector('panel-item[key="file-bookmarks"]');
-      return visible(candidate) ? candidate : null;
-    }, "Native bookmark-file import choice is missing");
+    const stopTracing = traceSelection(shadow);
+    let fileChoice;
+    try {
+      click(await settledSelector(shadow));
+      await wait(() => shadow.querySelector("panel-list")?.parentElement?.state === "open" &&
+        shadow.querySelector("panel-list").open, "Native migration selector popup did not open after its real pointer activation");
+      fileChoice = await wait(() => {
+        const candidate = shadow.querySelector('panel-item[key="file-bookmarks"]');
+        return visible(candidate) ? candidate : null;
+      }, "Native bookmark-file import choice is missing");
+      const rect = fileChoice.getBoundingClientRect();
+      report.fileChoice = { key: fileChoice.getAttribute("key"), rect: { x: rect.x, y: rect.y, width: rect.width, height: rect.height } };
+    } finally { stopTracing(); }
     click(fileChoice.shadowRoot.querySelector("button"));
     stage("native-picker-selecting-fixture");
     await requestDriver("accept");
