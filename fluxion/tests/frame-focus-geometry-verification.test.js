@@ -6,7 +6,9 @@ const vm = require("node:vm");
 const source = fs.readFileSync(require.resolve("../chrome/fluxion-frame-verification.js"), "utf8");
 const start = source.indexOf("  function floatingSidebarEvidence("), end = source.indexOf("  async function focusNavigation(", start);
 assert.ok(start > 0 && end > start);
-const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence })`, {
+let hit = null;
+const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence })`, {
+  document: { elementFromPoint: () => hit },
   window: { getComputedStyle: node => node.style }, rect: node => node.box,
   near: (a, b) => Math.abs(a - b) < 1.5,
   assert(value, message) { if (!value) throw new Error(message); },
@@ -57,4 +59,19 @@ test("native new-tab hover gate rejects undersized, shifted, expanding or mismat
     const row = tab(34), button = tab(34), before = { ...button.box }; mutate(button);
     assert.throws(() => api.newTabGeometryEvidence("standard", row, button, before), /New tab|Hover/);
   }
+});
+
+test("native Focus gate checks top-layer address paint and hit testing independently of toolbox geometry", () => {
+  const field = { box: { left: 280, top: 6, width: 700, height: 32 }, id: "urlbar-input" };
+  const urlbar = { style: { opacity: "0", pointerEvents: "none" }, contains: node => node === field, matches: () => true };
+  hit = { id: "webpage" };
+  assert.equal(api.nativeAddressEvidence(urlbar, field, false).popover, true, "native popover stays owned by Gecko while its paint is hidden");
+  urlbar.style.opacity = "1";
+  assert.throws(() => api.nativeAddressEvidence(urlbar, field, false), /painted/);
+  urlbar.style.opacity = "0"; hit = field;
+  assert.throws(() => api.nativeAddressEvidence(urlbar, field, false), /intercepting/);
+  urlbar.style.opacity = "1"; urlbar.style.pointerEvents = "auto";
+  api.nativeAddressEvidence(urlbar, field, true);
+  hit = { id: "obscuring-panel" };
+  assert.throws(() => api.nativeAddressEvidence(urlbar, field, true), /restore/);
 });

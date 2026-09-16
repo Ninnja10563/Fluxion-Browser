@@ -29,6 +29,24 @@ test("shortcut validation rejects browser-reserved and conflicting chords", () =
   assert.equal(policy.validate("palette", "Accel+Alt+Shift+KeyK", current).ok, true);
 });
 
+test("Cocoa Command+Option dual Alt/AltGraph flags preserve shortcuts without capturing AltGr text", () => {
+  const cocoa = { code: "KeyK", metaKey: true, ctrlKey: false, altKey: true, shiftKey: true,
+    getModifierState: key => key === "AltGraph" };
+  assert.equal(policy.eventChord(cocoa, true), "Accel+Alt+Shift+KeyK");
+  for (const [code, action] of [["BracketLeft", "workspacePrevious"], ["BracketRight", "workspaceNext"]]) {
+    assert.equal(policy.eventChord({ ...cocoa, code, shiftKey: false }, true), policy.ACTIONS[action].defaultChord);
+  }
+  for (const fields of [{ metaKey: false }, { altKey: false }, { ctrlKey: true }, { isComposing: true }]) {
+    assert.equal(policy.eventChord({ ...cocoa, ...fields }, true), "");
+  }
+  assert.equal(policy.eventChord(cocoa, false), "", "non-macOS Meta is never the accelerator");
+  assert.equal(policy.eventChord({ ...cocoa, metaKey: false, ctrlKey: true }, false), "",
+    "Windows/Linux Ctrl+AltGr remains text input, not a shortcut");
+  const reserved = policy.eventChord({ ...cocoa, shiftKey: false }, true);
+  assert.equal(policy.validate("palette", reserved, policy.normaliseMap({})).ok, false,
+    "recognizing native modifiers must not relax reserved Command+Option bindings");
+});
+
 test("shortcut matching preserves extra modifiers and composed text", () => {
   const chord = { code: "KeyK", metaKey: true, ctrlKey: false, altKey: false, shiftKey: false };
   assert.equal(policy.eventChord({ ...chord, ctrlKey: true }, true), "");

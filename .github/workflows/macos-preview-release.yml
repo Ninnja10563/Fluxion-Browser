@@ -91,6 +91,11 @@ jobs:
           for icon in firefox.icns document.icns fileBookmark.icns; do
             cmp "$resources/fluxion.icns" "$resources/$icon"
           done
+          cmp 'fluxion/assets/app-icons/app-icon-1024.png' "$resources/fluxion/assets/app-icons/app-icon-1024.png"
+          iconset="$RUNNER_TEMP/fluxion-supplied-artwork.iconset"
+          iconutil -c iconset "$resources/fluxion.icns" -o "$iconset"
+          [[ "$(sips -g pixelWidth "$iconset/icon_512x512@2x.png" | awk '$1 == "pixelWidth:" {print $2}')" == 1024 ]]
+          [[ "$(sips -g pixelHeight "$iconset/icon_512x512@2x.png" | awk '$1 == "pixelHeight:" {print $2}')" == 1024 ]]
           python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],"rb")); assert "org.mozilla.updater" not in p.get("SMPrivilegedExecutables",{})' "$info"
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
           codesign --verify --deep --strict '.runtime/Fluxion.app'

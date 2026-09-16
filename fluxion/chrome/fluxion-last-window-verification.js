@@ -35,7 +35,7 @@
     throw new Error(message);
   }
   const windows = () => [...Services.wm.getEnumerator("navigator:browser")].filter(win => !win.closed);
-  const stateOf = win => JSON.parse(SessionStore.getWindowState(win)).windows[0];
+  const stateOf = win => SessionStore.getWindowState(win).windows[0];
   const stateURLs = state => state.tabs.map(tab => tab.entries?.[(tab.index || 1) - 1]?.url || "");
   function verifyTabs(win, label, external = false) {
     const state = stateOf(win), actual = stateURLs(state);

@@ -105,6 +105,19 @@
     assert(corners.every(corner => style[corner] === tabStyle[corner]), "New tab hover radius differs from normal tabs");
     return { density, tab, before, after, radii: corners.map(corner => style[corner]) };
   }
+  function nativeAddressEvidence(urlbar, field, revealed) {
+    const box = rect(field), style = window.getComputedStyle(urlbar);
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    if (revealed) {
+      assert(Number(style.opacity) === 1 && style.pointerEvents !== "none" && urlbar.contains(hit),
+        "Revealed Focus navigation did not restore the native top-layer address field");
+    } else {
+      assert(Number(style.opacity) === 0 && style.pointerEvents === "none" && !urlbar.contains(hit),
+        "Hidden Focus navigation leaves Gecko's top-layer address bar painted or intercepting page input");
+    }
+    return { field: box, opacity: style.opacity, pointerEvents: style.pointerEvents,
+      hit: hit?.id || hit?.localName, popover: urlbar.matches(":popover-open") };
+  }
   async function focusNavigation() {
     stage("native-focus-navigation");
     const controller = window.FluxionFocusMode, toolbox = document.getElementById("navigator-toolbox");
@@ -122,12 +135,16 @@
       await wait(() => !controller.state().revealed && Number(window.getComputedStyle(toolbox).opacity) === 0 &&
         rect(toolbox).bottom <= 1, `Focus navigation did not move fully offscreen: ${label}`);
       assert(window.getComputedStyle(toolbox).pointerEvents === "none", "Hidden navigation intercepts webpage input");
+      const urlbar = document.getElementById("urlbar"), field = document.querySelector("#urlbar > .urlbar-input-container");
+      evidence.geometry.push({ label: `${label}-native-address-top-layer`, ...nativeAddressEvidence(urlbar, field, false) });
       unchangedPage(label);
     };
     const shown = async label => {
       await wait(() => controller.state().revealed && Number(window.getComputedStyle(toolbox).opacity) === 1 &&
         rect(toolbox).top >= -1, `Focus navigation did not reveal: ${label}`);
       const navigation = rect(nav), field = rect(document.querySelector("#urlbar > .urlbar-input-container"));
+      evidence.geometry.push({ label: `${label}-native-address-top-layer`, ...nativeAddressEvidence(
+        document.getElementById("urlbar"), document.querySelector("#urlbar > .urlbar-input-container"), true) });
       assert(near(field.height, 32) && near(field.top - navigation.top, 6) && near(navigation.bottom - field.bottom, 6),
         "Focus navigation changed the normal address field height or balanced padding");
       unchangedPage(label);
@@ -174,19 +191,26 @@
       if (document.activeElement === window.gURLBar.inputField) assert(controller.state().revealed, "Focused address input hid after Escape");
       clickPage(); await hidden("page-click-after-cmd-l");
       await revealFromEdge("identity-popup-anchor");
-      const identity = document.getElementById("identity-icon-box") || document.getElementById("identity-box");
+      // Gecko155's Trust Panel replaces the legacy identity button on HTTPS.
+      // Choose the actual painted native security entry, without changing its feature gate.
+      const identity = ["trust-icon-container", "identity-icon-box"].map(id => document.getElementById(id)).find(node => {
+        if (!node) return false;
+        const box = rect(node), style = window.getComputedStyle(node);
+        return box.width > 0 && box.height > 0 && style.display !== "none" && style.visibility === "visible";
+      });
       assert(identity, "Native HTTPS identity control is missing");
       const identityBox = rect(identity), identityX = identityBox.left + identityBox.width / 2,
         identityY = identityBox.top + identityBox.height / 2;
       assert(identityBox.width > 0 && identityBox.height > 0 && identity.contains(document.elementFromPoint(identityX, identityY)),
         "Native HTTPS identity control is clipped or obscured");
       routePointer(identityX, identityY); routePointer(identityX, identityY, "mousedown", 1); routePointer(identityX, identityY, "mouseup", 0);
-      const popup = document.getElementById("identity-popup");
-      await wait(() => popup?.state === "open", "Real HTTPS identity popup did not open");
+      const popupId = identity.id === "trust-icon-container" ? "trustpanel-popup" : "identity-popup";
+      await wait(() => document.getElementById(popupId)?.state === "open", "Real HTTPS identity popup did not open");
+      const popup = document.getElementById(popupId);
       moveToPage(); await delay(300);
       await shown("identity-popup-held-open");
       assert(popup.state === "open", "Leaving navigation dismissed the native identity popup");
-      evidence.identity = { state: popup.state, panel: rect(popup), anchor: rect(identity) };
+      evidence.identity = { id: popupId, anchorId: identity.id, state: popup.state, panel: rect(popup), anchor: rect(identity) };
       await capture("capture-focus-navigation-security");
       await action("focus-identity-escape");
       await wait(() => popup.state === "closed", "Native Escape did not close the identity popup");

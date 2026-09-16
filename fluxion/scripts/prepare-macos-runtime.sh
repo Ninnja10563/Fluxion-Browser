@@ -52,7 +52,7 @@ for required_architecture in "${required_architectures[@]}"; do
     exit 69
   fi
 done
-for system_tool in ditto plutil lipo codesign python3; do
+for system_tool in ditto plutil lipo codesign python3 sips iconutil; do
   if ! command -v "$system_tool" >/dev/null 2>&1; then
     printf 'Required macOS system tool is unavailable: %s\n' "$system_tool" >&2
     exit 69
@@ -101,6 +101,38 @@ runtime_product_identity() {
   local package_digest
   package_digest="$(runtime_file_digest "$1")" || return 69
   printf '%s|%s' "$2" "$package_digest"
+}
+
+runtime_build_iconset() {
+  local icon_source="$1" iconset="$2" metadata icon_spec icon_size icon_name
+  [[ -s "$icon_source" ]] || { printf 'Fluxion icon source is missing.\n' >&2; return 69; }
+  metadata="$(sips -g format -g pixelWidth -g pixelHeight "$icon_source")" || return 69
+  if [[ "$(awk '$1 == "format:" {print $2}' <<<"$metadata")" != png ||
+        "$(awk '$1 == "pixelWidth:" {print $2}' <<<"$metadata")" != 1024 ||
+        "$(awk '$1 == "pixelHeight:" {print $2}' <<<"$metadata")" != 1024 ]]; then
+    printf 'Fluxion app artwork must be a readable 1024-by-1024 PNG.\n' >&2
+    return 69
+  fi
+  mkdir -p "$iconset"
+  for icon_spec in \
+    '16 icon_16x16.png' \
+    '32 icon_16x16@2x.png' \
+    '32 icon_32x32.png' \
+    '64 icon_32x32@2x.png' \
+    '128 icon_128x128.png' \
+    '256 icon_128x128@2x.png' \
+    '256 icon_256x256.png' \
+    '512 icon_256x256@2x.png' \
+    '512 icon_512x512.png' \
+    '1024 icon_512x512@2x.png'; do
+    read -r icon_size icon_name <<<"$icon_spec"
+    if [[ "$icon_size" == 1024 ]]; then
+      ditto "$icon_source" "$iconset/$icon_name" || return 69
+    else
+      sips -z "$icon_size" "$icon_size" "$icon_source" --out "$iconset/$icon_name" >/dev/null || return 69
+    fi
+    [[ -s "$iconset/$icon_name" ]] || { printf 'Fluxion icon variant is missing: %s\n' "$icon_name" >&2; return 69; }
+  done
 }
 
 runtime_brand_associations() {
@@ -294,30 +326,13 @@ if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp
   done
 
   icon_work="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-icon.XXXXXX")"
-  if qlmanage -t -s 1024 -o "$icon_work" "$fluxion_root/assets/fluxion.svg" \
-      >/dev/null 2>&1 && [[ -s "$icon_work/fluxion.svg.png" ]]; then
-    iconset="$icon_work/Fluxion.iconset"
-    mkdir -p "$iconset"
-    for icon_spec in \
-      '16 icon_16x16.png' \
-      '32 icon_16x16@2x.png' \
-      '32 icon_32x32.png' \
-      '64 icon_32x32@2x.png' \
-      '128 icon_128x128.png' \
-      '256 icon_128x128@2x.png' \
-      '256 icon_256x256.png' \
-      '512 icon_256x256@2x.png' \
-      '512 icon_512x512.png' \
-      '1024 icon_512x512@2x.png'; do
-      read -r icon_size icon_name <<<"$icon_spec"
-      sips -z "$icon_size" "$icon_size" "$icon_work/fluxion.svg.png" \
-        --out "$iconset/$icon_name" >/dev/null
-    done
-    iconutil -c icns "$iconset" -o "$resources/fluxion.icns"
+  iconset="$icon_work/Fluxion.iconset"
+  if runtime_build_iconset "$fluxion_root/assets/app-icons/app-icon-1024.png" "$iconset" &&
+      iconutil -c icns "$iconset" -o "$resources/fluxion.icns" && [[ -s "$resources/fluxion.icns" ]]; then
     plutil -replace CFBundleIconFile -string fluxion.icns "$info"
     runtime_brand_associations "$info" "$resources"
   else
-    printf 'macOS could not render the Fluxion icon; refusing a Firefox-branded build.\n' >&2
+    printf 'macOS could not package the supplied Fluxion artwork; refusing a Firefox-branded build.\n' >&2
     exit 1
   fi
   rm -rf -- "$icon_work"

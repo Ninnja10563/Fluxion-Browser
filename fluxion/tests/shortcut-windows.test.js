@@ -113,6 +113,8 @@ test("registered Settings capture receives existing global shortcuts before thei
   execute("fluxion-chrome.js", '  on(window, "keydown", event => {\n    if (document.activeElement === flow', '  }, true);');
   function dispatch(code, fields = {}, target = window.document.activeElement) {
     const event = { code, key: code === "Escape" ? "Escape" : code.replace("Key", ""), metaKey: true,
+      // Native Cocoa Option events set both flags, unlike constructed DOM events.
+      getModifierState(name) { return name === "AltGraph" && !!this.altKey; },
       target, composedPath: () => [target, window], prevented: false, stopped: false,
       preventDefault() { this.prevented = true; }, stopPropagation() { this.stopped = true; }, ...fields };
     for (const listener of capturing) listener(event);
@@ -137,7 +139,8 @@ test("registered Settings capture receives existing global shortcuts before thei
   dispatch("Backslash", { shiftKey: true });
   assert.deepEqual(calls, [], "old chord must stop activating the edited action");
   const reopened = h.openWindow();
-  assert.equal(reopened.api.matches({ code: "KeyK", metaKey: true, altKey: true, shiftKey: true }, "sidebar"), true);
+  assert.equal(reopened.api.matches({ code: "KeyK", metaKey: true, altKey: true, shiftKey: true,
+    getModifierState: name => name === "AltGraph" }, "sidebar"), true);
   assert.equal(reopened.api.matches({ code: "Backslash", metaKey: true, shiftKey: true }, "sidebar"), false);
   dispatch("KeyK"); assert.deepEqual(calls, ["all"]);
   targetListeners.get("click")();
@@ -153,6 +156,12 @@ test("registered Settings capture receives existing global shortcuts before thei
   assert.equal(key.dataset.capturing, "false");
   dispatch("BracketRight", { altKey: true });
   assert.deepEqual(calls, ["all", "tabs", 1], "blur must restore normal workspace shortcut dispatch");
+  dispatch("BracketLeft", { altKey: true });
+  assert.deepEqual(calls, ["all", "tabs", 1, -1], "both native Command+Option workspace shortcuts must dispatch");
+  for (const fields of [{ metaKey: false }, { ctrlKey: true }, { isComposing: true }]) {
+    dispatch("BracketRight", { altKey: true, ...fields });
+  }
+  assert.deepEqual(calls, ["all", "tabs", 1, -1], "Option text, composition and extra Control must not switch workspaces");
   targetListeners.get("click")();
   const persisted = h.prefs.getStringPref("fluxion.shortcuts");
   dispatch("KeyW");

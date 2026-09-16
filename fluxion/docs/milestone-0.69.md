@@ -48,6 +48,13 @@ control. Recording now ends on section/tab dismissal as well as blur, and
 tests exercise actual command dispatch, conflict rejection, persistence and
 Reset. The native gate starts with an unfocused recording control and sends
 real macOS keys after a widget-routed click; it does not pre-focus away the bug.
+Native input also exposed Cocoa's dual Option/AltGraph flags, now accepted only
+for legitimate macOS Command+Option chords. Protected and non-macOS combinations
+retain their restrictions.
+
+Application artwork is imported from the owner's supplied icon pack, with
+byte-level provenance in `assets/app-icons/README.md`. Native packaging uses
+the provided 1024px PNG; About and new-tab identity use matching supplied files.
 
 Workspace account containers and one-click installation are separate pending
 work, not features of this candidate. See [containers](workspace-containers.md)

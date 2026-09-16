@@ -52,7 +52,10 @@
 
   function eventChord(event, isMac) {
     if (!event?.code || /^(?:Meta|Control|Alt|Shift)/.test(event.code)) return "";
-    if (event.isComposing || event.getModifierState?.("AltGraph") ||
+    // Cocoa marks Option as both Alt and AltGraph (nsCocoaUtils::ModifiersForEvent).
+    // Only Command+Option is a shortcut exception; text-entry AltGr stays excluded.
+    const macCommandOption = isMac && event.metaKey && event.altKey && !event.ctrlKey;
+    if (event.isComposing || (event.getModifierState?.("AltGraph") && !macCommandOption) ||
         (isMac ? event.ctrlKey : event.metaKey)) return "";
     return serialise({
       accel: isMac ? event.metaKey : event.ctrlKey,

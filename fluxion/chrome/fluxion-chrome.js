@@ -141,7 +141,12 @@
       border: 0 !important;
     }
     #nav-bar-customization-target { align-items: center; gap: 2px; padding-inline-start: var(--fluxion-navigation-offset, 0px); }
-    #PersonalToolbar { padding-inline-start: var(--fluxion-chrome-rail, 0px) !important; }
+    #PersonalToolbar {
+      padding-inline-start: var(--fluxion-chrome-rail, 0px) !important;
+      background: var(--fluxion-bg) !important; color: var(--fluxion-ink) !important;
+      border: 0 !important; box-shadow: none !important;
+      --toolbarbutton-icon-fill: var(--fluxion-ink);
+    }
     #nav-bar #firefox-view-button,
     #nav-bar #fxa-toolbar-menu-button,
     #nav-bar #save-to-pocket-button,

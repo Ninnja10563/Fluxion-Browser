@@ -1440,7 +1440,7 @@
   );
   const aboutMark = create("div", "fluxion-about-mark");
   const aboutLogo = create("img");
-  aboutLogo.src = "resource://fluxion/assets/fluxion.svg";
+  aboutLogo.src = "resource://fluxion/assets/app-icons/app-icon-512.png";
   aboutLogo.alt = "";
   const aboutCopy = create("div");
   aboutCopy.append(

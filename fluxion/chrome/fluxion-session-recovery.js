@@ -204,10 +204,19 @@
     companion.gBrowser.pinTab(pinned);
     group.collapsed = true;
     const originals = [...groupTabs, ...splitTabs, pinned];
-    const sourceReady = await waitFor(() => ({ ok: [...originals, companionBuild, companionLife].every(tab =>
-      !tab.hasAttribute("busy") && [urls.groupA, urls.groupB, urls.splitA, urls.splitB, urls.pinned,
-        urls.companionBuild, urls.companionLife].includes(tabURL(tab))) }));
-    if (!sourceReady.ok) throw new Error("source recovery pages did not finish loading before adoption");
+    // Wait for every seeded page, including background tabs in the other
+    // workspace. A fixed sleep after adoption can race their initial load.
+    const seededPages = [
+      [groupTabs[0], urls.groupA], [groupTabs[1], urls.groupB],
+      [splitTabs[0], urls.splitA], [splitTabs[1], urls.splitB], [pinned, urls.pinned],
+      [companionBuild, urls.companionBuild], [companionLife, urls.companionLife],
+      [focusTabs[0], urls.focusIdle], [focusTabs[1], urls.focusActive],
+    ];
+    const sourceReady = await waitFor(() => ({ ok: seededPages.every(([tab, expected]) =>
+      !tab.hasAttribute("busy") && tabURL(tab) === expected) }));
+    if (!sourceReady.ok) throw new Error(`source recovery pages did not finish loading before adoption: ${JSON.stringify(
+      seededPages.map(([tab, expected]) => ({ expected, actual: tabURL(tab), busy: tab.hasAttribute("busy") }))
+    )}`);
     const transferred = await companion.FluxionTabTransfer.move(originals, window, {
       workspaceId: "build", selectTab: splitTabs[0],
     });

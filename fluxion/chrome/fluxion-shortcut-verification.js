@@ -165,6 +165,8 @@
       const observed = [], listener = event => {
         if (event.metaKey && ["KeyW", "KeyK"].includes(event.code)) {
           const record = { code: event.code, meta: event.metaKey, alt: event.altKey, shift: event.shiftKey,
+            ctrl: event.ctrlKey, altGraph: event.getModifierState("AltGraph"), composing: event.isComposing,
+            key: event.key, capturedChord: window.FluxionShortcuts.capture(event),
             trusted: event.isTrusted, captureTarget: event.target === capture };
           observed.push(record); report.nativeKeys.push({ action, ...record });
         }

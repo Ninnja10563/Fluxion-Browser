@@ -28,6 +28,15 @@
       opacity: 1; pointer-events: auto; transform: translateY(0);
       box-shadow: none !important;
     }
+    /* Gecko's address/search breakout is a native top-layer popover. It does
+       not inherit the toolbox's composited opacity or transformed clipping.
+       Hide its paint directly, preserving focus and Gecko's popover lifecycle. */
+    :root[data-fluxion-focus-mode]:not([data-fluxion-navigation-revealed="true"]) :is(#urlbar, #searchbar-new) {
+      opacity: 0 !important; pointer-events: none !important;
+    }
+    :root[data-fluxion-focus-mode]:not([data-fluxion-navigation-revealed="true"]) :is(#urlbar, #searchbar-new) * {
+      pointer-events: none !important;
+    }
     :root[data-fluxion-navigation-pinned] #navigator-toolbox,
     :root[data-fluxion-no-motion] #navigator-toolbox { transition: none !important; }
     @media (prefers-reduced-motion: reduce) {

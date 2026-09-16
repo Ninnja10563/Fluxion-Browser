@@ -291,6 +291,7 @@
     }
     async function geometry(page) {
       await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+      bookmarksSurface(`workspace-${page}-${scheme()}`);
       const panelBox = rect(panel);
       const surface = panel.panelContent, form = panel.querySelector(".fluxion-workspace-theme-form");
       assert(surface && form, "Workspace theme panel has no actual Gecko content surface");
@@ -324,6 +325,7 @@
       field("appearance").value = value;
       field("appearance").dispatchEvent(new window.Event("change", { bubbles: true }));
       await wait(() => scheme() === value, "Workspace appearance choice did not visibly change the active chrome scheme");
+      bookmarksSurface(`workspace-preview-${value}`);
       evidence.previews.push({ action: `appearance-${value}`, scheme: scheme(), projection: projection() });
     }
     async function type(mode, value, action, part = "base") {
@@ -418,6 +420,21 @@
       "workspace-preview-preserves-global-embedder-color-scheme");
     } finally { schemeObserver.disconnect(); }
   }
+  function bookmarksSurface(label) {
+    const ids = ["PersonalToolbar", "nav-bar", "fluxion-flow"];
+    const surfaces = ids.map(id => {
+      const node = document.getElementById(id);
+      assert(painted(node), `Expected browser surface is not painted: ${id}`);
+      const style = window.getComputedStyle(node);
+      return { id, background: style.backgroundColor, color: style.color,
+        boxShadow: style.boxShadow, borders: ["Top", "Right", "Bottom", "Left"].map(side => style[`border${side}Width`]) };
+    });
+    assert(surfaces.every(surface => surface.background === surfaces[0].background),
+      `Bookmarks toolbar does not match active workspace chrome: ${JSON.stringify(surfaces)}`);
+    assert(surfaces[0].boxShadow === "none" && surfaces[0].borders.every(value => Number.parseFloat(value) === 0),
+      "Bookmarks toolbar retains an unrelated frame separator or shadow");
+    (report.bookmarksSurfaces ||= []).push({ label, surfaces });
+  }
   function sidebarColumns(label) {
     const flow = document.getElementById("fluxion-flow");
     assert(flow?.dataset.state === "expanded", "Sidebar column check requires expanded Flow");
@@ -438,6 +455,7 @@
   }
   function geometry(label) {
     sidebarColumns(label);
+    bookmarksSurface(label);
     const nav = document.getElementById("nav-bar");
     const input = document.querySelector("#urlbar > .urlbar-input-container");
     assert(painted(nav) && painted(input), "Native navigation bar or actual Gecko address input is not painted");
