@@ -1,6 +1,8 @@
 # Fluxion 0.69 — Focus mode and workspace appearance
 
-Candidate; native macOS verification and publication are pending.
+Published as `v0.69.0-preview.1`. All 1,009 regression tests and every mandatory
+native macOS gate passed. See the [candidate audit](validation/0.69-candidate.md)
+and [release provenance](../release/provenance/v0.69.0-preview.1.md).
 
 The expanded sidebar stays integrated with the frame. Focus mode now fully
 hides the rounded surface instead of painting a three-pixel corner fragment.
@@ -39,8 +41,11 @@ or an unsupported claim that websites themselves now load faster.
 
 Fresh profiles default to restoring the previous session and displaying the
 bookmarks toolbar. Explicit existing choices remain authoritative. macOS
-last-window closure/reopening is separately investigated against SessionStore;
-changing the startup default alone is not evidence of that behavior.
+last-window closure/reopening follows that choice through a narrowly pinned
+SessionStore/SessionSaver patch. Native tests cover repeated closure, actual
+process relaunch, private-only activity, external requests and explicit startup
+opt-outs. A redundant homepage load can no longer overwrite the selected
+restored page. Lazy tabs remain lazy and native undo recovery is retained.
 
 Shortcut recording explicitly focuses its clicked button on macOS. Previously,
 the button could display Press shortcut while keys still reached a different

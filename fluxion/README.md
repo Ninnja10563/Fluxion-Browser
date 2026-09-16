@@ -8,13 +8,28 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.69 is published: the supplied app artwork, fully hidden/top-hover
+Focus navigation, an inset floating sidebar, matching New tab hover geometry,
+repeated workspace swipes and a unified workspace appearance editor. macOS
+shortcut recording and repeated last-window restoration are fixed. Fresh
+profiles restore sessions and show bookmarks by default; existing choices
+remain authoritative. Background indexing reuses timers during activity bursts.
+All 1,009 tests and every mandatory native macOS gate passed. Download the
+[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.69.0-preview.1)
+for Apple Silicon (including M3) and Intel. See the
+[milestone](docs/milestone-0.69.md) and
+[release provenance](release/provenance/v0.69.0-preview.1.md).
+Automatic installation and workspace account containers remain pending.
+Physical M3/trackpad and OS colour-picker checks remain; this preview is
+ad-hoc signed, not Apple-notarized.
+
 Fluxion 0.68 is published: workspace-heading options, per-workspace color
 editing, centered dock symbols, bidirectional swipe refinements and short
 transitions. Expanded Flow stays flat; the hover-revealed sidebar uses a thin
 outline and subtle corners. Fluxion's custom Settings adds six everyday
 browsing/privacy controls without automatically changing Gecko defaults.
 All 951 tests and every mandatory native macOS gate passed. Download the
-[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.68.0-preview.1)
+[0.68 universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.68.0-preview.1)
 for Apple Silicon (including M3) and Intel. See the
 [milestone](docs/milestone-0.68.md) and
 [release provenance](release/provenance/v0.68.0-preview.1.md).

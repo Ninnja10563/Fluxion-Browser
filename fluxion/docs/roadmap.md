@@ -13,6 +13,11 @@ controls work and its failure paths have been tested.
 
 ## Phase 2 — browser fundamentals hardening
 
+- repeated macOS last-window close/reopen and relaunch, with preserved selected
+  page, lazy tabs, pins and metadata; external requests and startup opt-outs
+  retained, private data excluded (published in 0.69 with native gates)
+- macOS pointer-focused shortcut recording and native Command+Option modifier
+  handling; bookmarks visibility in custom General settings (published in 0.69)
 - custom General/Privacy controls for smooth scrolling, hardware acceleration,
   download-location prompting, password saving, popup blocking and HTTPS-only
   mode (published in 0.68; exact asynchronous disk persistence, cross-window
@@ -48,6 +53,11 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- fully hidden Focus navigation with top-edge/keyboard/popup reveal, six-pixel
+  floating sidebar insets, matching New tab hover/close geometry, repeated
+  four-workspace swipes, unified appearance preview/save/cancel editor and
+  supplied application artwork (published in 0.69; physical trackpad and native
+  OS colour-picker-dialog audits remain)
 - workspace-associated account containers with tab placement independent of
   account identity ([audited design](workspace-containers.md); **not implemented,
   outside 0.69**, pending native cookie/storage isolation, creation-routing,
