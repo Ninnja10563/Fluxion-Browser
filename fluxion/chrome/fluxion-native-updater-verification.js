@@ -32,6 +32,12 @@
   const fixtureStatePath = PathUtils.join(config.root, "browser-state.json");
   const urls = ["pinned", "research", "other-workspace"].map(name => `data:text/html,${encodeURIComponent(`<title>Fluxion updater ${name}</title><p>${name}</p>`)}`);
   const stateURLs = state => state.tabs.map(tab => tab.entries?.[(tab.index || 1) - 1]?.url || "");
+  function sessionEvidence() {
+    const cached = stateURLs(SessionStore.getWindowState(window).windows[0]);
+    const live = [...window.gBrowser.tabs].map(tab => ({ url: tab.linkedBrowser.currentURI.spec, closing: !!tab.closing }));
+    const exact = values => values.length === urls.length && urls.every(url => values.filter(value => value === url).length === 1);
+    return { cached, live, ready: exact(cached) && exact(live.map(tab => tab.url)) && live.every(tab => !tab.closing) };
+  }
   async function snapshot(expected) {
     const state = SessionStore.getWindowState(window).windows[0], actual = stateURLs(state);
     ensure(actual.length === urls.length && urls.every(url => actual.filter(value => value === url).length === 1), "Update lost, duplicated or added session tabs");
@@ -96,6 +102,13 @@
       url: "https://fluxion-updater-fixture.invalid/retained", title: "Preserved updater fixture" });
     const expected = { token: config.token, phase: "seeded", firstWorkspace, secondWorkspace, bookmarkGUID: bookmark.guid };
     await IOUtils.writeUTF8(fixtureStatePath, JSON.stringify(expected));
+    // Page loading and SessionStore's asynchronous content updates settle
+    // independently. Observe the exact baseline without forcing a save/flush.
+    report.seedInitial = sessionEvidence(); await record();
+    await until(() => {
+      report.seedLatest = sessionEvidence();
+      return report.seedLatest.ready;
+    }, "Updater seed never reached the exact three-tab live and SessionStore baseline", 30000);
     report.seed = await snapshot(expected); await record();
     const { FluxionNativeUpdater: native } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionNativeUpdater.sys.mjs");
     await native.prepare();

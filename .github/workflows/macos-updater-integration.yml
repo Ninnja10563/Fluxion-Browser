@@ -1,0 +1,94 @@
+name: macOS native updater integration
+
+on:
+  workflow_dispatch:
+
+# A focused debugging gate, never a substitute for the full release workflow.
+# No production signing secret, release upload, or update-channel write is used.
+permissions:
+  contents: read
+
+jobs:
+  installer:
+    runs-on: macos-14
+    timeout-minutes: 25
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+
+      - name: Download official Firefox Gecko runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          node ./fluxion/scripts/download-gecko.mjs "$RUNNER_TEMP/firefox.dmg"
+          mkdir -p "$RUNNER_TEMP/firefox-volume" "$RUNNER_TEMP/firefox-source"
+          hdiutil attach "$RUNNER_TEMP/firefox.dmg" \
+            -mountpoint "$RUNNER_TEMP/firefox-volume" -nobrowse -readonly
+          ditto "$RUNNER_TEMP/firefox-volume/Firefox.app" "$RUNNER_TEMP/firefox-source/Firefox.app"
+          hdiutil detach "$RUNNER_TEMP/firefox-volume"
+          codesign --verify --deep --strict "$RUNNER_TEMP/firefox-source/Firefox.app"
+          locked_version="$(node -p "require('./fluxion/runtime/gecko-lock.json').version")"
+          source_version="$(plutil -extract CFBundleShortVersionString raw "$RUNNER_TEMP/firefox-source/Firefox.app/Contents/Info.plist")"
+          [[ "$source_version" == "$locked_version" ]]
+
+      - name: Build the actual universal Fluxion application
+        id: build
+        shell: bash
+        env:
+          FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
+          FLUXION_TARGET_ARCH: universal2
+          FLUXION_SKIP_LAUNCH_CHECK: "1"
+        run: |
+          set -euo pipefail
+          release_version="$(node -p 'require("./fluxion/package.json").version')"
+          export FLUXION_APP_VERSION="${release_version%%-*}"
+          ./fluxion/scripts/build-macos.sh --clean
+
+      - name: Verify native signed-update policy and production binary boundary
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fluxion-updater-policy-evidence"
+          frameworks="$GITHUB_WORKSPACE/.runtime/Fluxion.app/Contents/Frameworks"
+          xcrun clang -mmacosx-version-min=12.0 -fobjc-arc -O2 -Wall -Wextra -Wno-unused-parameter -Werror \
+            -F "$frameworks" -framework AppKit -framework Sparkle -Wl,-rpath,"$frameworks" \
+            fluxion/packaging/macos/updater/BridgePolicyTests.m -o "$RUNNER_TEMP/fluxion-updater-policy"
+          "$RUNNER_TEMP/fluxion-updater-policy" | tee "$RUNNER_TEMP/fluxion-updater-policy-evidence/policy.txt"
+          for binary in "$frameworks/libFluxionUpdater.dylib" "$frameworks/Sparkle.framework/Sparkle"; do
+            architectures="$(lipo -archs "$binary")"
+            [[ " $architectures " == *' arm64 '* && " $architectures " == *' x86_64 '* ]]
+          done
+          ! strings "$frameworks/libFluxionUpdater.dylib" | grep -F '127.0.0.1:38473'
+
+      - name: Verify signed-feed interoperability with an ephemeral key
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/fluxion-updater-policy-evidence"
+          node fluxion/scripts/verify-sparkle-signing-interop.mjs \
+            .runtime/sparkle-2.10.0/current/bin/sign_update \
+            "$RUNNER_TEMP/fluxion-updater-policy-evidence/interoperability.json"
+
+      - name: Verify real signed replacement, canceled quit, and same-profile relaunch
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        shell: bash
+        env:
+          FLUXION_NATIVE_UPDATER_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-native-updater-evidence
+        run: bash ./fluxion/scripts/verify-macos-native-updater.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native updater evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-native-updater-integration-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/fluxion-updater-policy-evidence
+            ${{ runner.temp }}/fluxion-native-updater-evidence
+          if-no-files-found: warn

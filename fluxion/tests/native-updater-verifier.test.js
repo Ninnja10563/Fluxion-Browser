@@ -30,3 +30,26 @@ test("a verifier preference alone cannot run the gate without its test-app confi
   assert.deepEqual(reads, ["/owned/Fluxion.app/Contents/Resources/fluxion/runtime/updater-test-gate.json"]);
   assert.deepEqual(errors, []);
 });
+
+test("updater seed waits for exact live and naturally delivered session state without accepting extras or duplicates", () => {
+  const start = source.indexOf("  function sessionEvidence() {");
+  const end = source.indexOf("  async function snapshot", start);
+  assert.ok(start > 0 && end > start);
+  const urls = ["data:pinned", "data:research", "data:other"];
+  let cached = [urls[0], urls[1], "about:blank"];
+  const tabs = urls.map(url => ({ linkedBrowser: { currentURI: { spec: url } }, closing: false }));
+  const inspect = vm.runInNewContext(`${source.slice(start, end)}; sessionEvidence`, {
+    urls, window: { gBrowser: { tabs } }, stateURLs: state => state.tabs,
+    SessionStore: { getWindowState: () => ({ windows: [{ tabs: cached }] }) },
+  });
+  assert.equal(inspect().ready, false);
+  assert.deepEqual(Array.from(inspect().cached), cached);
+  cached = [...urls]; assert.equal(inspect().ready, true);
+  cached = [...urls, "about:blank"]; assert.equal(inspect().ready, false);
+  cached = [urls[0], urls[0], urls[2]]; assert.equal(inspect().ready, false);
+  cached = [...urls]; tabs[1].closing = true; assert.equal(inspect().ready, false);
+  tabs[1].closing = false; tabs.push({ linkedBrowser: { currentURI: { spec: "about:blank" } } });
+  assert.equal(inspect().ready, false);
+  tabs.pop(); assert.equal(inspect().ready, true);
+  assert.doesNotMatch(source, /SessionSaver\.run|TabStateFlusher/);
+});
