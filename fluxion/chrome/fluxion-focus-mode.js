@@ -6,6 +6,7 @@
   const flow = document.getElementById("fluxion-flow");
   if (!toolbox || !flow || window.FluxionFocusMode) return;
   const cleanups = [], popups = new Set();
+  const HIDE_DELAY_MS = 60;
   let enabled = false, revealed = false, pointerInside = false, timer = 0, disposed = false;
   let sidebarState = null, nativeFocus = false;
   const edge = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
@@ -16,6 +17,11 @@
   style.textContent = `
     #fluxion-navigation-edge { display: none; }
     :root[data-fluxion-native-focus] #navigator-toolbox { z-index: 19 !important; }
+    /* Retain Gecko's native fullscreen geometry and popup guards, but not its
+       800ms collapse animation. Only explicitly hidden Flow opts into this. */
+    :root[data-fluxion-native-focus] #navigator-toolbox[fullscreenShouldAnimate] {
+      transition: margin-top 120ms cubic-bezier(.2,.7,.2,1) !important;
+    }
     :root[data-fluxion-focus-mode] #fluxion-navigation-edge {
       display: block; position: fixed; inset: 0 0 auto; height: 4px;
       z-index: 20; background: transparent;
@@ -24,7 +30,7 @@
       position: fixed !important; inset: 0 0 auto !important; width: auto !important;
       z-index: 19; opacity: 0; pointer-events: none;
       transform: translateY(calc(-100% - 2px));
-      transition: transform var(--fluxion-fast), opacity 100ms ease;
+      transition: transform 120ms cubic-bezier(.2,.7,.2,1), opacity 100ms ease;
     }
     :root[data-fluxion-focus-mode][data-fluxion-navigation-revealed="true"] #navigator-toolbox {
       opacity: 1; pointer-events: auto; transform: translateY(0);
@@ -40,9 +46,11 @@
       pointer-events: none !important;
     }
     :root[data-fluxion-navigation-pinned] #navigator-toolbox,
-    :root[data-fluxion-no-motion] #navigator-toolbox { transition: none !important; }
+    :root[data-fluxion-no-motion] #navigator-toolbox,
+    :root[data-fluxion-no-motion] #navigator-toolbox[fullscreenShouldAnimate] { transition: none !important; }
     @media (prefers-reduced-motion: reduce) {
-      :root[data-fluxion-focus-mode] #navigator-toolbox { transition: none !important; }
+      :root[data-fluxion-focus-mode] #navigator-toolbox,
+      :root[data-fluxion-native-focus] #navigator-toolbox[fullscreenShouldAnimate] { transition: none !important; }
     }
   `;
   root.append(style, edge);
@@ -80,7 +88,7 @@
         if (nativeFocus) window.FullScreen.hideNavToolbox(true);
         else paint(false);
       }
-    }, 180);
+    }, HIDE_DELAY_MS);
   }
   function keepNativeNavigationVisible() {
     if (disposed || !window.fullScreen || document.fullscreenElement ||

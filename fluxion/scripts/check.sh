@@ -27,6 +27,7 @@ bash -n \
   scripts/verify-macos-browsing.sh \
   scripts/verify-macos-file-picker.sh \
   scripts/verify-macos-tab-transfer.sh \
+  scripts/verify-macos-tab-links.sh \
   scripts/verify-macos-shortcuts.sh \
   scripts/verify-macos-sidebar-width.sh \
   scripts/verify-macos-selection.sh \
@@ -72,6 +73,9 @@ node --check chrome/core/theme.js
 node --check chrome/core/permissions.js
 node --check chrome/core/session-recovery.js
 node --check chrome/core/tab-organisation.js
+node --check chrome/core/tab-links.js
+node --check chrome/fluxion-tab-links.js
+node --check chrome/fluxion-tab-links-verification.js
 node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
 node --check chrome/core/memory-policy.js

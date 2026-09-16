@@ -9,16 +9,19 @@ const vm = require("node:vm");
 const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-chrome-layout.js"), "utf8");
 
 function fixture({ rail = { left: 0, right: 232, width: 232 },
-  controls = { left: 82, right: 1200, width: 1118 }, direction = "ltr", missing = null } = {}) {
+  controls = { left: 82, right: 1200, width: 1118 }, direction = "ltr", missing = null,
+  captions = [], toolboxBottom = 72 } = {}) {
   const writes = [], frames = new Map(), listeners = new Map(), observers = [];
   let sequence = 0, reads = 0;
   const element = name => ({ style: { values: new Map(), setProperty(key, value) {
     this.values.set(key, value); writes.push([name, key, value]);
   } } });
-  const root = element("root"), nav = element("nav");
+  const root = element("root"), nav = element("nav"), attributes = new Set();
+  root.hasAttribute = name => attributes.has(name);
+  const toolbox = { getBoundingClientRect: () => ({ bottom: toolboxBottom }) };
   const flow = { getBoundingClientRect() { reads++; return { ...rail }; } };
   const target = { getBoundingClientRect() { reads++; return { ...controls }; } };
-  const nodes = { "fluxion-flow": flow, "nav-bar": nav, "nav-bar-customization-target": target };
+  const nodes = { "fluxion-flow": flow, "nav-bar": nav, "nav-bar-customization-target": target, "navigator-toolbox": toolbox };
   if (missing) delete nodes[missing];
   const observer = kind => class {
     constructor(callback) { this.callback = callback; this.kind = kind; this.observed = []; observers.push(this); }
@@ -26,8 +29,8 @@ function fixture({ rail = { left: 0, right: 232, width: 232 },
     disconnect() { this.disconnected = true; }
   };
   const window = {
-    document: { documentElement: root, getElementById: id => nodes[id] || null },
-    getComputedStyle: () => ({ direction }),
+    document: { documentElement: root, getElementById: id => nodes[id] || null, querySelectorAll: () => captions },
+    getComputedStyle: node => ({ direction, ...node.style }),
     ResizeObserver: observer("resize"), MutationObserver: observer("mutation"),
     requestAnimationFrame(callback) { const id = ++sequence; frames.set(id, callback); return id; },
     cancelAnimationFrame(id) { frames.delete(id); },
@@ -38,10 +41,13 @@ function fixture({ rail = { left: 0, right: 232, width: 232 },
   const run = () => vm.runInContext(source, context);
   run();
   return {
-    window, root, nav, flow, target, writes, frames, observers, listeners, run,
+    window, root, nav, flow, target, toolbox, attributes, writes, frames, observers, listeners, run,
     get reads() { return reads; },
     offset: () => nav.style.values.get("--fluxion-navigation-offset"),
     width: () => root.style.values.get("--fluxion-chrome-rail"),
+    top: () => root.style.values.get("--fluxion-persistent-sidebar-top"),
+    captions(value) { captions = value; },
+    toolboxBottom(value) { toolboxBottom = value; },
     geometry(nextRail, nextControls = controls) { rail = nextRail; controls = nextControls; },
     direction(value) { direction = value; },
     flush() { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback()); },
@@ -81,7 +87,7 @@ test("RTL alignment uses the right-hand toolbar origin and follows live directio
   const appearance = f.observers.find(observer => observer.kind === "mutation");
   assert.equal(appearance.observed[0].node, f.root);
   assert.deepEqual(Array.from(appearance.observed[0].options.attributeFilter),
-    ["inFullscreen", "inDOMFullscreen", "sizemode", "chromedir"]);
+    ["inFullscreen", "inDOMFullscreen", "sizemode", "chromedir", "customizing"]);
   f.direction("ltr");
   f.geometry({ left: 0, right: 232, width: 232 }, { left: 82, right: 1200, width: 1118 });
   appearance.callback(); f.flush();
@@ -94,7 +100,7 @@ test("RTL alignment uses the right-hand toolbar origin and follows live directio
 
 test("resize, customization and explicit refresh share one frame and skip unchanged style writes", () => {
   const f = fixture(), resize = f.observers.find(observer => observer.kind === "resize");
-  assert.deepEqual(resize.observed.map(item => item.node), [f.flow, f.nav]);
+  assert.deepEqual(resize.observed.map(item => item.node), [f.flow, f.nav, f.toolbox]);
   f.geometry({ left: 0, right: 279.6, width: 279.6 });
   resize.callback(); resize.callback();
   f.listeners.get("aftercustomization")();
@@ -124,6 +130,42 @@ test("unload cancels pending alignment, disconnects observers and makes stale ca
   assert.equal(f.frames.size, 0);
   assert.equal(f.reads, reads);
   assert.equal(f.writes.length, writes);
+});
+
+function caption(box, style = {}) { return { getBoundingClientRect: () => box, style }; }
+test("persistent sidebar reserves only overlapping visible native caption controls, not navigation/bookmarks", () => {
+  const buttons = caption({ left: 8, right: 78, top: 12, bottom: 28, width: 70, height: 16 });
+  const f = fixture({ captions: [buttons] });
+  assert.equal(f.top(), "34px");
+  f.toolboxBottom(104); f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "34px", "extra bookmark rows do not push the heading down");
+  f.captions([caption(buttons.getBoundingClientRect(), { display: "none" })]);
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "6px", "fullscreen without painted caption controls reclaims the complete gap");
+  f.captions([caption(buttons.getBoundingClientRect(), { visibility: "collapse" })]);
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "6px", "collapsed XUL caption boxes cannot reserve a phantom gap");
+  f.captions([caption({ left: 1120, right: 1190, bottom: 28, width: 70, height: 16 })]);
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "6px", "opposite-edge caption controls do not reserve empty sidebar space");
+  f.direction("rtl");
+  f.geometry({ left: 968, right: 1200, width: 232 }, { left: 0, right: 1118, width: 1118 });
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "34px", "RTL reserves only controls on its own rail side");
+});
+
+test("narrow windows and customization fall back below the actual toolbox, then recover after widening", () => {
+  const f = fixture({ controls: { left: 82, right: 662, width: 580 } });
+  assert.equal(f.top(), "72px");
+  f.toolboxBottom(104); f.observers.find(o => o.kind === "resize").callback(); f.flush();
+  assert.equal(f.top(), "104px");
+  f.geometry({ left: 0, right: 232, width: 232 }, { left: 82, right: 1200, width: 1118 });
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "6px");
+  f.attributes.add("customizing"); f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "104px");
+  f.attributes.clear(); f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "6px");
 });
 
 test("missing chrome nodes and repeat initialization never register duplicate layout controllers", () => {

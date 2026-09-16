@@ -289,6 +289,11 @@
       transform: translateX(0); transform-origin: left center;
       transition: transform var(--fluxion-fast), box-shadow var(--fluxion-fast);
     }
+    #fluxion-flow[data-state="expanded"] > .fluxion-surface {
+      position: fixed; inset-block-start: var(--fluxion-persistent-sidebar-top, 72px);
+      inset-block-end: 0; inset-inline-start: 0; height: auto;
+      width: inherit;
+    }
     #fluxion-flow[data-state="compact"] { width: 44px; min-width: 44px; max-width: 44px; }
     #fluxion-flow[data-state="focus"] {
       width: 3px; min-width: 3px; max-width: 3px; cursor: pointer;

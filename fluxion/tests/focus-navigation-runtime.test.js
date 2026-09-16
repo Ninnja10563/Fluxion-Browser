@@ -3,8 +3,8 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-focus-mode.js"), "utf8");
 function fixture() {
-  const timers = new Map(), observers = [], listeners = new Map(), topics = new Map();
-  let sequence = 0, geometryReads = 0;
+  const timers = new Map(), deadlines = new Map(), observers = [], listeners = new Map(), topics = new Map();
+  let sequence = 0, geometryReads = 0, now = 0;
   const document = { activeElement: null };
   function node(id = "", parent = null, localName = "div") {
     const attrs = new Map();
@@ -32,7 +32,8 @@ function fixture() {
   document.addEventListener = toolbox.addEventListener; document.removeEventListener = toolbox.removeEventListener;
   const window = { document, gURLBar: { inputField: input, value: "", view: { isOpen: false, close() { this.isOpen = false; } } },
     gBrowser: { selectedBrowser: { focus() { document.activeElement = page; } } }, FluxionChromeLayout: { refresh() {} },
-    setTimeout(fn) { const id = ++sequence; timers.set(id, fn); return id; }, clearTimeout(id) { timers.delete(id); },
+    setTimeout(fn, delay = 0) { const id = ++sequence; timers.set(id, fn); deadlines.set(id, now + delay); return id; },
+    clearTimeout(id) { timers.delete(id); deadlines.delete(id); },
     addEventListener: toolbox.addEventListener, removeEventListener: toolbox.removeEventListener,
     MutationObserver: class { constructor(fn) { this.fn = fn; observers.push(this); } observe() {} disconnect() { this.disconnected = true; } },
   };
@@ -51,7 +52,13 @@ function fixture() {
   return { window, document, root, toolbox, flow, input, page, edge, timers, observers, topics, Services, node, emit,
     get reads() { return geometryReads; },
     enterFocus() { flow.dataset.state = "focus"; window.FluxionFocusMode.refresh(); },
-    flush() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
+    flush() { const pending = [...timers.values()]; timers.clear(); deadlines.clear(); pending.forEach(fn => fn()); },
+    advance(milliseconds) {
+      now += milliseconds;
+      for (const [id, fn] of [...timers]) if (deadlines.get(id) <= now) {
+        timers.delete(id); deadlines.delete(id); fn();
+      }
+    },
   };
 }
 test("top-edge reveal hides after leaving, without rewriting sidebar mode or moving native controls", () => {
@@ -63,6 +70,44 @@ test("top-edge reveal hides after leaving, without rewriting sidebar mode or mov
   f.emit(f.toolbox, "pointerleave"); f.flush();
   assert.equal(f.window.FluxionFocusMode.state().revealed, false);
   assert.equal(f.flow.dataset.state, "focus"); assert.equal(f.input.parent, f.toolbox);
+});
+test("navigation departure uses one short grace period, cancels on reentry and preserves native focus ownership", () => {
+  for (const fullscreen of [false, true]) {
+    const f = fixture(), hidden = [];
+    if (fullscreen) {
+      f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+      f.window.FullScreen = { hideNavToolbox(animate) { hidden.push(animate); } };
+    }
+    f.enterFocus(); f.flush(); hidden.length = 0;
+    f.emit(f.toolbox, "pointerenter"); f.emit(f.toolbox, "pointerleave");
+    f.advance(59);
+    assert.equal(fullscreen ? hidden.length === 0 : f.window.FluxionFocusMode.state().revealed, true);
+    f.emit(f.toolbox, "pointerenter"); f.advance(1);
+    assert.equal(hidden.length, 0, "a quick return must not retract under the pointer");
+    if (!fullscreen) assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+    f.emit(f.toolbox, "pointerleave"); f.advance(59);
+    assert.equal(hidden.length, 0);
+    if (!fullscreen) assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+    f.advance(1);
+    if (fullscreen) assert.deepEqual(hidden, [true], "native guards still own the actual hide");
+    else assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+    hidden.length = 0;
+    f.emit(f.toolbox, "pointerenter"); f.document.activeElement = f.input;
+    f.emit(f.toolbox, "focusin", f.input); f.emit(f.toolbox, "pointerleave"); f.advance(60);
+    assert.equal(hidden.length, 0, "shorter timing cannot defeat real address focus");
+    if (!fullscreen) assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+    f.document.activeElement = f.page; f.emit(f.toolbox, "focusout", f.input); f.advance(60);
+    if (fullscreen) assert.deepEqual(hidden, [true]);
+    else assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  }
+});
+test("Focus motion is short and scoped; reduced motion overrides both native and composited paths", () => {
+  const f = fixture(), css = f.root.children.find(n => n.id === "fluxion-focus-navigation-style").textContent;
+  assert.match(css, /:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\]\s*\{\s*transition: margin-top 120ms cubic-bezier\(\.2,\.7,\.2,1\) !important;/);
+  assert.match(css, /transition: transform 120ms cubic-bezier\(\.2,\.7,\.2,1\), opacity 100ms ease;/);
+  assert.match(css, /:root\[data-fluxion-no-motion\] #navigator-toolbox,\s*:root\[data-fluxion-no-motion\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/,
+    "browser motion-off rule must match the native override specificity");
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*:root\[data-fluxion-focus-mode\] #navigator-toolbox,\s*:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/);
 });
 test("native fullscreen keeps expanded and compact navigation visible without preference writes or notification loops", () => {
   const f = fixture(), shown = [];

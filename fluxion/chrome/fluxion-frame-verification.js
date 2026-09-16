@@ -88,6 +88,39 @@
     return { label, radii, overflow: [style.overflowX, style.overflowY], page: box,
       cornerHit: corner?.id || corner?.localName, backdrop: window.getComputedStyle(container).backgroundColor };
   }
+  function persistentSidebarEvidence(flow, label) {
+    const root = document.documentElement, surface = flow.querySelector(".fluxion-surface");
+    const rail = rect(flow), box = rect(surface), toolbox = rect(document.getElementById("navigator-toolbox"));
+    const target = rect(document.getElementById("nav-bar-customization-target"));
+    const rtl = window.getComputedStyle(flow).direction === "rtl";
+    const wanted = Math.max(0, rtl ? target.right - rail.left : rail.right - target.left);
+    const available = Math.max(0, target.width - 480);
+    const fallback = available + 1 < wanted || root.hasAttribute("customizing");
+    let expectedTop = fallback ? Math.max(6, toolbox.bottom) : 6;
+    const captions = [];
+    for (const buttons of document.querySelectorAll("#navigator-toolbox .titlebar-buttonbox")) {
+      const caption = rect(buttons), style = window.getComputedStyle(buttons);
+      if (caption.width <= 0 || caption.height <= 0 || caption.bottom <= 0 || style.visibility === "hidden" || style.visibility === "collapse" || style.display === "none") continue;
+      const hit = document.elementFromPoint(caption.left + caption.width / 2, caption.top + caption.height / 2);
+      assert(hit === buttons || buttons.contains(hit), `${label}: native window-button hit area is covered`);
+      captions.push(caption);
+      if (!fallback && caption.right > rail.left && caption.left < rail.right) expectedTop = Math.max(expectedTop, caption.bottom + 6);
+    }
+    assert(near(box.top, Math.ceil(expectedTop)) && near(box.bottom, window.innerHeight),
+      `${label}: persistent sidebar retains a navigation-sized gap or incorrect bottom inset: ${JSON.stringify({ box, expectedTop })}`);
+    assert(near(box.width, rail.width) && near(rtl ? box.right : box.left, rtl ? rail.right : rail.left),
+      `${label}: persistent sidebar lost its page-column alignment`);
+    let heading = null;
+    if (flow.dataset.state === "expanded") {
+      const node = surface.querySelector(".fluxion-workspace-heading"); heading = rect(node);
+      assert(near(heading.top - box.top, 6), `${label}: expanded heading lost its six-pixel top padding`);
+      const hit = document.elementFromPoint(heading.left + heading.width / 2, heading.top + heading.height / 2);
+      assert(hit === node || node.contains(hit), `${label}: expanded workspace heading is covered by native toolbar padding`);
+    }
+    const navigation = ["back-button", "forward-button", "reload-button"].map(id => navigationControlHitEvidence(document.getElementById(id)));
+    return { label, rail, surface: box, heading, captions, fallback, direction: rtl ? "rtl" : "ltr", navigation };
+  }
+
   function sidebarMotionEvidence(surface, revealed) {
     const style = window.getComputedStyle(surface);
     const properties = style.transitionProperty.split(",").map(value => value.trim());
@@ -217,6 +250,37 @@
     return { field: box, opacity: style.opacity, pointerEvents: style.pointerEvents,
       hit: hit?.id || hit?.localName, popover: urlbar.matches(":popover-open") };
   }
+  function navigationMotionEvidence(toolbox, native, reduced) {
+    const style = window.getComputedStyle(toolbox);
+    const properties = style.transitionProperty.split(",").map(value => value.trim());
+    const durations = style.transitionDuration.split(",").map(value => parseFloat(value));
+    const property = native ? "margin-top" : "transform", index = properties.indexOf(property);
+    if (reduced) assert(durations.every(value => value === 0), "Reduced motion retained navigation animation");
+    else assert(index >= 0 && Math.abs(durations[index % durations.length] - .12) < .001,
+      `Focus navigation did not use its scoped 120ms ${property} transition: ${style.transitionDuration}`);
+    return { native, reduced, properties, durations };
+  }
+  async function verifyNavigationMotion(toolbox, native) {
+    const root = document.documentElement, name = "ui.prefersReducedMotion";
+    const hadPreference = Services.prefs.prefHasUserValue(name), previous = Services.prefs.getIntPref(name, 0);
+    const hadAttribute = root.hasAttribute("data-fluxion-no-motion"), evidence = [];
+    try {
+      root.removeAttribute("data-fluxion-no-motion"); Services.prefs.setIntPref(name, 0);
+      await wait(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches, "Normal motion media override did not settle");
+      assert(!native || toolbox.hasAttribute("fullscreenShouldAnimate"), "Native Focus animation attribute was not produced by actual retraction");
+      evidence.push(navigationMotionEvidence(toolbox, native, false));
+      root.setAttribute("data-fluxion-no-motion", "true");
+      evidence.push({ source: "browser-motion-attribute", ...navigationMotionEvidence(toolbox, native, true) });
+      root.removeAttribute("data-fluxion-no-motion"); Services.prefs.setIntPref(name, 1);
+      await wait(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, "Reduced motion media override did not settle");
+      evidence.push({ source: "Gecko-system-media-test-override", ...navigationMotionEvidence(toolbox, native, true) });
+    } finally {
+      if (hadPreference) Services.prefs.setIntPref(name, previous); else Services.prefs.clearUserPref(name);
+      root.toggleAttribute("data-fluxion-no-motion", hadAttribute);
+    }
+    return evidence;
+  }
+
   async function focusNavigation() {
     stage("native-focus-navigation");
     const controller = window.FluxionFocusMode, toolbox = document.getElementById("navigator-toolbox");
@@ -272,6 +336,7 @@
     try {
       gBrowser.selectedBrowser.focus(); moveToPage();
       await hidden("initial-hidden");
+      evidence.motion = await verifyNavigationMotion(toolbox, false);
       await capture("capture-focus-navigation-hidden");
       await revealFromEdge("top-edge-hover");
       await capture("capture-focus-navigation-revealed");
@@ -475,8 +540,36 @@
       await delay(200);
       gap(mode);
       workspaceControls(mode, mode !== "focus");
+      if (mode === "expanded") report.geometry.push(persistentSidebarEvidence(flow, `persistent-${mode}`));
       if (mode === "expanded") report.geometry.push(sidebarSurfaceEvidence(flow.querySelector(".fluxion-surface"), "expanded"));
     }
+    const savedWindowSize = { width: window.outerWidth, height: window.outerHeight };
+    const root = document.documentElement;
+    const savedDirection = { attribute: root.getAttribute("chromedir"), value: root.style.getPropertyValue("direction"), priority: root.style.getPropertyPriority("direction") };
+    try {
+      ui.setSidebarState("expanded");
+      window.resizeTo(640, savedWindowSize.height);
+      await wait(() => near(rect(flow).width, 232) && window.outerWidth <= 700, "Narrow persistent-sidebar fixture did not resize");
+      await delay(250);
+      const narrow = persistentSidebarEvidence(flow, "persistent-expanded-narrow");
+      assert(narrow.fallback, "Narrow fixture did not exercise native-navigation fallback");
+      report.geometry.push(narrow);
+      window.resizeTo(savedWindowSize.width, savedWindowSize.height);
+      await wait(() => near(window.outerWidth, savedWindowSize.width), "Persistent-sidebar fixture did not restore window width");
+      root.setAttribute("chromedir", "rtl"); root.style.setProperty("direction", "rtl", "important");
+      window.FluxionChromeLayout.refresh();
+      await delay(250);
+      const rtl = persistentSidebarEvidence(flow, "persistent-expanded-rtl");
+      assert(rtl.direction === "rtl" && !rtl.fallback, "Wide RTL fixture did not reclaim its sidebar header gap");
+      report.geometry.push(rtl);
+    } finally {
+      if (savedDirection.attribute === null) root.removeAttribute("chromedir"); else root.setAttribute("chromedir", savedDirection.attribute);
+      if (savedDirection.value) root.style.setProperty("direction", savedDirection.value, savedDirection.priority); else root.style.removeProperty("direction");
+      window.resizeTo(savedWindowSize.width, savedWindowSize.height);
+      ui.setSidebarState("focus"); window.FluxionChromeLayout.refresh();
+    }
+    await delay(250);
+    report.checks.push("persistent-sidebar-heading-reclaims-navigation-gap-with-caption-hit-areas-narrow-fallback-and-rtl-alignment");
     stage("routed-edge-hover-and-sidebar-toggle");
     report.hoverEvents = [];
     for (const type of ["pointerenter", "pointerleave"]) {
@@ -682,6 +775,10 @@
       await window.FluxionTheme.set(theme);
       await wait(() => document.documentElement.dataset.fluxionTheme === theme, "Capture theme did not settle");
       await delay(350);
+      if (name === "capture-page-light" || name === "capture-page-dark") {
+        assert(flow.dataset.state === "expanded", "Expanded header screenshot is not in expanded mode");
+        report.geometry.push(persistentSidebarEvidence(flow, name));
+      }
       await action(name);
       report.captures.push({ name, theme, url: gBrowser.selectedBrowser.currentURI.spec, title: gBrowser.selectedTab.label });
     };
@@ -752,6 +849,7 @@
         rect(toolbox).height > 0 && !window.FluxionFocusMode.state().enabled,
       `Fullscreen ${mode} navigation retracted after real pointer departure`);
       evidence.geometry.push({ label: `browser-fullscreen-${mode}-persistent`, toolbox: rect(toolbox) });
+      if (mode === "expanded") evidence.geometry.push(persistentSidebarEvidence(document.getElementById("fluxion-flow"), "fullscreen-expanded-heading"));
     };
     const revealNativeNavigation = async label => {
       const toggler = document.getElementById("fullscr-toggler"), edge = rect(toggler);
@@ -861,6 +959,7 @@
       await action("capture-fullscreen-focus-revealed");
       moveToPage();
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
+      evidence.motion = await verifyNavigationMotion(toolbox, true);
       await action("fullscreen-location");
       await wait(() => evidence.keys.some(item => item.trusted && item.meta && item.key.toLowerCase() === "l") &&
         document.activeElement === window.gURLBar.inputField && !window.FullScreen.navToolboxHidden,

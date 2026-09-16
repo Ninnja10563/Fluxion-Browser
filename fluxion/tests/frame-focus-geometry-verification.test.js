@@ -7,11 +7,71 @@ const source = fs.readFileSync(require.resolve("../chrome/fluxion-frame-verifica
 const start = source.indexOf("  function floatingSidebarEvidence("), end = source.indexOf("  async function focusNavigation(", start);
 assert.ok(start > 0 && end > start);
 let hit = null;
-const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence, navigationControlHitEvidence })`, {
+const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence, navigationControlHitEvidence, navigationMotionEvidence })`, {
   document: { elementFromPoint: () => hit },
   window: { innerHeight: 800, getComputedStyle: node => node.style }, rect: node => node.box,
   near: (a, b) => Math.abs(a - b) < 1.5,
   assert(value, message) { if (!value) throw new Error(message); },
+});
+test("computed Focus timing gate rejects Gecko's former 800ms animation and motion-disabled regressions", () => {
+  for (const native of [false, true]) {
+    const toolbox = { style: { transitionProperty: native ? "margin-top" : "transform, opacity", transitionDuration: native ? "0.12s" : "0.12s, 0.1s" } };
+    api.navigationMotionEvidence(toolbox, native, false);
+    toolbox.style.transitionDuration = "0.8s";
+    assert.throws(() => api.navigationMotionEvidence(toolbox, native, false), /120ms/);
+    assert.throws(() => api.navigationMotionEvidence(toolbox, native, true), /Reduced motion/);
+    toolbox.style.transitionProperty = "none"; toolbox.style.transitionDuration = "0s";
+    api.navigationMotionEvidence(toolbox, native, true);
+  }
+});
+
+function persistentFixture() {
+  let direction = "ltr", target = { left: 82, right: 1200, width: 1118 }, hitOverride = null;
+  const node = (box, style = {}) => ({ box, style, contains: hit => hit === null });
+  const root = { hasAttribute: () => false };
+  const captions = [node({ left: 8, right: 78, top: 12, bottom: 28, width: 70, height: 16 })];
+  const heading = node({ left: 7, right: 225, top: 40, bottom: 80, width: 218, height: 40 });
+  const surface = node({ left: 0, right: 232, top: 34, bottom: 800, width: 232 });
+  surface.querySelector = () => heading;
+  const flow = node({ left: 0, right: 232, top: 72, bottom: 800, width: 232 });
+  flow.dataset = { state: "expanded" }; flow.querySelector = () => surface;
+  const nodes = { "navigator-toolbox": node({ bottom: 72 }), "nav-bar-customization-target": { get box() { return target; } } };
+  const a = source.indexOf("  function persistentSidebarEvidence("), b = source.indexOf("  function sidebarMotionEvidence(", a);
+  const verify = vm.runInNewContext(`${source.slice(a, b)}; persistentSidebarEvidence`, {
+    document: { documentElement: root, querySelectorAll: () => captions,
+      getElementById: id => nodes[id], elementFromPoint: () => hitOverride },
+    window: { innerHeight: 800, getComputedStyle: item => ({ direction, ...item.style }) },
+    rect: item => item.box, near: (a, b) => Math.abs(a - b) < 1.5,
+    navigationControlHitEvidence: () => ({ checked: true }),
+    assert(value, message) { if (!value) throw new Error(message); },
+  });
+  return { verify: () => verify(flow, "fixture"), flow, surface, heading, captions,
+    cover() { hitOverride = {}; }, target(value) { target = value; }, direction(value) { direction = value; } };
+}
+test("expanded native geometry gate validates caption-only inset and rejects old gap or covered headings", () => {
+  const f = persistentFixture();
+  assert.equal(f.verify().surface.top, 34);
+  f.surface.box.top = 72; f.heading.box.top = 78;
+  assert.throws(f.verify, /navigation-sized gap/);
+  f.surface.box.top = 34; f.heading.box.top = 42;
+  assert.throws(f.verify, /six-pixel/);
+  f.heading.box.top = 40; f.captions.length = 0;
+  f.surface.box.top = 6; f.heading.box.top = 12;
+  f.captions.push({ box: { left: 8, right: 78, bottom: 28, width: 70, height: 16 }, style: { visibility: "collapse" } });
+  assert.equal(f.verify().surface.top, 6);
+  f.cover(); assert.throws(f.verify, /heading is covered/);
+});
+test("expanded native geometry gate enforces narrow fallback and RTL column alignment", () => {
+  const f = persistentFixture();
+  f.target({ left: 82, right: 662, width: 580 });
+  f.surface.box.top = 72; f.heading.box.top = 78;
+  assert.equal(f.verify().fallback, true);
+  f.direction("rtl"); f.target({ left: 0, right: 1118, width: 1118 });
+  f.flow.box.left = 968; f.flow.box.right = 1200;
+  f.surface.box.left = 968; f.surface.box.right = 1200; f.surface.box.top = 6;
+  f.heading.box.top = 12;
+  assert.equal(f.verify().direction, "rtl");
+  f.surface.box.right = 1190; assert.throws(f.verify, /page-column alignment/);
 });
 test("native left navigation hit targets reject sidebar coverage even when their layout is unchanged", () => {
   const control = { id: "back-button", box: { left: 6, top: 6, width: 32, height: 32 }, contains: node => node === control };
