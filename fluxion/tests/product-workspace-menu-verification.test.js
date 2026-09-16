@@ -186,3 +186,34 @@ test("bookmarks palette gate compares actual painted sidebar surface, not its tr
   nodes["#PersonalToolbar"].style.borderBottomWidth = "1px";
   assert.throws(() => context.bookmarksSurface("separator"), /separator/);
 });
+
+test("bookmark preview gate awaits actual native color convergence and rejects a persistent mismatch", async () => {
+  const start = source.indexOf("  function bookmarksSurface("), end = source.indexOf("  function sidebarColumns(", start);
+  for (const persistent of [false, true]) {
+    const style = { backgroundColor: "rgb(233, 234, 231)", boxShadow: "none",
+      borderTopWidth: "0px", borderRightWidth: "0px", borderBottomWidth: "0px", borderLeftWidth: "0px" };
+    const bookmarks = { style: { ...style, backgroundColor: "rgb(31, 31, 31)" } }, node = { style };
+    let now = 0, attempts = 0;
+    const report = {}, context = vm.createContext({ report, painted: Boolean,
+      document: { querySelector: selector => selector === "#PersonalToolbar" ? bookmarks : node },
+      window: { performance: { now: () => now }, getComputedStyle: target => target.style },
+      async wait(condition, message, timeout) {
+        assert.equal(timeout, 2000);
+        while (!condition()) {
+          attempts++; now += 50;
+          if (now >= timeout) throw Error(message);
+          if (!persistent && now >= 100) bookmarks.style.backgroundColor = style.backgroundColor;
+        }
+      }, assert(value, message) { if (!value) throw Error(message); } });
+    vm.runInContext(source.slice(start, end), context);
+    if (persistent) {
+      await assert.rejects(context.settledBookmarksSurface("light"), /did not converge/);
+      assert.equal(report.bookmarksSurfaces, undefined, "failed convergence cannot emit passing surface evidence");
+    } else {
+      await context.settledBookmarksSurface("light");
+      assert.equal(attempts, 2);
+      assert.equal(report.bookmarksPaintConvergence[0].elapsed, 100);
+      assert.ok(report.bookmarksSurfaces[0].surfaces.every(surface => surface.background === style.backgroundColor));
+    }
+  }
+});

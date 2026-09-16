@@ -98,6 +98,33 @@ test("private-only activity retains the normal marker and cannot consume the pen
   assert.equal(reset.call({ _restoreLastWindow: true, _fluxionRestoreLastWindow: true }, { toolbar: { visible: true } }, true), true);
 });
 
+test("full last-window restoration cancels the memoized homepage without consuming explicit external requests", () => {
+  const restore = new Function("aWindow", "state", "newWindowState", store[5][1]);
+  for (const enabled of [false, true]) for (const overwriteTabs of [false, true]) for (const cached of [false, true]) {
+    let initializations = 0, restored = false;
+    const defaultURL = "file:///Fluxion.app/fluxion/newtab/index.html";
+    const request = overwriteTabs ? defaultURL : "https://external.example/request";
+    const init = { get uriToLoadPromise() {
+      initializations++;
+      delete this.uriToLoadPromise;
+      return (this.uriToLoadPromise = request);
+    } };
+    if (cached) void init.uriToLoadPromise;
+    const aWindow = { gBrowserInit: init }, desired = { tabs: ["retained"] };
+    restore.call({
+      _fluxionRestoreLastWindow: enabled,
+      _isCmdLineEmpty(win) { assert.equal(win, aWindow); return overwriteTabs; },
+      restoreWindow(win, state, options) {
+        assert.equal(win, aWindow); assert.equal(state, desired); assert.equal(options.overwriteTabs, overwriteTabs);
+        assert.equal(init.uriToLoadPromise, enabled && overwriteTabs ? null : request);
+        restored = true;
+      },
+    }, aWindow, {}, desired);
+    assert.equal(restored, true);
+    assert.equal(initializations, 1, "native lazy initializer is evaluated once, never replaced");
+  }
+});
+
 test("installer fails closed on unsupported source/version and does not mutate the runtime", () => {
   python(`
 with tempfile.TemporaryDirectory() as temp:
@@ -105,6 +132,7 @@ with tempfile.TemporaryDirectory() as temp:
  archive=p/'browser/omni.ja'
  with zipfile.ZipFile(archive,'w') as z:
   for name in m.HASHES:z.writestr(name,b'changed upstream')
+  for name in m.DEPENDENCY_HASHES:z.writestr(name,b'changed startup interface')
  original=archive.read_bytes()
  for version in ['155.0.2',m.VERSION]:
   (p/'application.ini').write_text('[App]\\nVersion='+version+'\\n')
@@ -130,6 +158,10 @@ with tempfile.TemporaryDirectory() as temp:
  with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:
   z.writestr('keep-before.bin',b'private archive fixture'*100)
   for name,data in originals.items():z.writestr(name,data)
+  for name in m.DEPENDENCY_HASHES:
+   data=b'unchanged verified startup interface'
+   m.DEPENDENCY_HASHES[name]=hashlib.sha256(data).hexdigest()
+   z.writestr(name,data)
   z.writestr('keep-after.bin',b'after data')
  archive.write_bytes(m.optimize_zip(archive.read_bytes(),{'keep-before.bin'}))
  with m._archive.readable_archive(archive) as z:

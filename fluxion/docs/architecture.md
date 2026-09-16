@@ -328,8 +328,9 @@ Firefox 155.0.1 normally restores only pinned tabs after closing its final macOS
 window, even with restore-session startup selected. Fluxion's build-time
 `scripts/install-macos-session-policy.py` makes that specific path follow the
 user's startup choice. It checks the exact 155.0.1 application version and full
-SHA-256 digests of `modules/sessionstore/SessionStore.sys.mjs` and
-`SessionSaver.sys.mjs` before changing either member. Unknown upstream sources
+SHA-256 digests of `modules/sessionstore/SessionStore.sys.mjs`,
+`SessionSaver.sys.mjs`, and the unchanged `browser-init.js` startup interface
+before changing either session module. Unknown upstream sources
 fail the build; a Gecko update requires explicit review and new native evidence.
 The archive is replaced atomically after CRC validation, preserving all other
 member contents/metadata, order, and Mozilla's optimized directory/preload layout.
@@ -337,6 +338,10 @@ member contents/metadata, order, and Mozilla's optimized directory/preload layou
 Only the last regular, non-private window is marked. Earlier closed windows stay
 closed. Reopening uses Gecko's existing window restoration and external-URL merge
 rules; explicit home-page/blank startup choices retain upstream behavior. The
+same-process full-restore path cancels browser-init's memoized default homepage
+request only when Gecko classified the window arguments as replaceable defaults;
+otherwise that delayed request would navigate the selected restored tab away.
+Explicit external URL/file requests are never canceled. The
 save snapshot projects a clone of the marked window for a subsequent launch,
 without consuming the live closed-window record needed by `undoCloseWindow`.
 Private-only activity cannot consume the normal restore marker, and permanent

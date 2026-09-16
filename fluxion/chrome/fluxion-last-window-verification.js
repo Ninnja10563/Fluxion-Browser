@@ -68,13 +68,15 @@
   }
   function verifyTabs(win, label, external = false) {
     const state = stateOf(win), actual = stateURLs(state);
+    const nativeSelectedURL = win.gBrowser.selectedBrowser.currentURI.spec;
+    ensure(nativeSelectedURL === actual[(state.selected || 1) - 1], `${label}: native selected page diverged from its restored session: ${nativeSelectedURL}`);
     for (const url of urls) ensure(actual.filter(item => item === url).length === 1, `${label}: missing/duplicate ${url}`);
     ensure(!actual.includes(privateURL), `${label}: private tab escaped`);
     ensure(state.tabs.find(tab => tab.entries?.some(entry => entry.url === urls[0]))?.pinned, `${label}: pinned state lost`);
     ensure(state.extData?.["fluxion-last-window-fixture"] === "retained", `${label}: window metadata lost`);
     ensure(state.tabs.find(tab => tab.entries?.some(entry => entry.url === urls[1]))?.extData?.["fluxion-last-window-tab"] === "retained", `${label}: tab metadata lost`);
     if (external) ensure(actual.includes(externalURL), `${label}: external request was overwritten`);
-    evidence.checks.push({ label, urls: actual, pinned: true, metadata: true });
+    evidence.checks.push({ label, urls: actual, nativeSelectedURL, pinned: true, metadata: true });
   }
   async function ready(win) {
     await until(() => win.gBrowser && win.FluxionUI && win.gBrowserInit?.delayedStartupFinished, "new native window failed startup");

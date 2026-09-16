@@ -291,7 +291,7 @@
     }
     async function geometry(page) {
       await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
-      bookmarksSurface(`workspace-${page}-${scheme()}`);
+      await settledBookmarksSurface(`workspace-${page}-${scheme()}`);
       const panelBox = rect(panel);
       const surface = panel.panelContent, form = panel.querySelector(".fluxion-workspace-theme-form");
       assert(surface && form, "Workspace theme panel has no actual Gecko content surface");
@@ -325,7 +325,7 @@
       field("appearance").value = value;
       field("appearance").dispatchEvent(new window.Event("change", { bubbles: true }));
       await wait(() => scheme() === value, "Workspace appearance choice did not visibly change the active chrome scheme");
-      bookmarksSurface(`workspace-preview-${value}`);
+      await settledBookmarksSurface(`workspace-preview-${value}`);
       evidence.previews.push({ action: `appearance-${value}`, scheme: scheme(), projection: projection() });
     }
     async function type(mode, value, action, part = "base") {
@@ -434,6 +434,19 @@
     assert(surfaces[0].boxShadow === "none" && surfaces[0].borders.every(value => Number.parseFloat(value) === 0),
       "Bookmarks toolbar retains an unrelated frame separator or shadow");
     (report.bookmarksSurfaces ||= []).push({ label, surfaces });
+  }
+  async function settledBookmarksSurface(label) {
+    const started = window.performance.now();
+    // Native PersonalToolbar animates background-color for 100ms after a
+    // palette change. A scheme attribute change is not a paint barrier.
+    await wait(() => {
+      const nodes = ["#PersonalToolbar", "#nav-bar", "#fluxion-flow > .fluxion-surface"].map(selector => document.querySelector(selector));
+      if (!nodes.every(painted)) return false;
+      const backgrounds = nodes.map(node => window.getComputedStyle(node).backgroundColor);
+      return backgrounds.every(value => value === backgrounds[0]);
+    }, `Bookmarks palette did not converge after the native transition: ${label}`, 2000);
+    bookmarksSurface(label);
+    (report.bookmarksPaintConvergence ||= []).push({ label, elapsed: window.performance.now() - started });
   }
   function sidebarColumns(label) {
     const flow = document.getElementById("fluxion-flow");

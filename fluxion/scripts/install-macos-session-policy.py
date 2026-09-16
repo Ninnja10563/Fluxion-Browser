@@ -25,6 +25,11 @@ HASHES = {
     "modules/sessionstore/SessionStore.sys.mjs": "456cef74607b5abafc352909f6f4a67901140cb358cf606fc55c9f1f21d700a1",
     "modules/sessionstore/SessionSaver.sys.mjs": "c542e5d51cbf50bd27ffae0e294174444c87cbc8162eb2d51542ac72434ea374",
 }
+DEPENDENCY_HASHES = {
+    # uriToLoadPromise is a self-replacing getter in this exact browser-init.
+    # Verify its interface too; it is not modified by this patch.
+    "chrome/browser/content/browser/browser-init.js": "0ea807ebb883698d1798a29c628b3c8c8888c5ae0bdfbabb1911b2a37fe894e1",
+}
 
 STORE_REPLACEMENTS = [
     ('''  initializeWindow(aWindow, aInitialState = null) {''', '''  // Fluxion: retain Gecko restoration, but make macOS's last regular window
@@ -57,6 +62,17 @@ STORE_REPLACEMENTS = [
       return;
     }
     for (let i = 0; i < this._closedWindows.length; i++) {'''),
+    ('''          let options = { overwriteTabs: this._isCmdLineEmpty(aWindow, state) };
+          this.restoreWindow(aWindow, newWindowState, options);''', '''          let options = { overwriteTabs: this._isCmdLineEmpty(aWindow, state) };
+          if (this._fluxionRestoreLastWindow && options.overwriteTabs) {
+            // browser-init caches the homepage URI before SessionStore sees
+            // this new window. Initial-session policy cannot anticipate a
+            // later last-window reopen: discard only that redundant default
+            // request, never an explicit external URL or file argument.
+            void aWindow.gBrowserInit.uriToLoadPromise;
+            aWindow.gBrowserInit.uriToLoadPromise = null;
+          }
+          this.restoreWindow(aWindow, newWindowState, options);'''),
 ]
 
 SAVER_REPLACEMENTS = [
@@ -141,8 +157,11 @@ def install(resources):
     with _archive.readable_archive(archive) as source:
         entries = source.infolist()
         names = [entry.filename for entry in entries]
-        if len(set(names)) != len(names) or any(names.count(name) != 1 for name in HASHES):
+        if len(set(names)) != len(names) or any(names.count(name) != 1 for name in {**HASHES, **DEPENDENCY_HASHES}):
             raise ValueError("Ambiguous or missing Gecko session modules")
+        for name, digest in DEPENDENCY_HASHES.items():
+            if hashlib.sha256(source.read(name)).hexdigest() != digest:
+                raise ValueError(f"Unrecognized Gecko {VERSION} startup interface: {name}")
         patches = {name: patch_source(name, source.read(name)) for name in HASHES}
         # Preserve upstream order and all ZipInfo metadata, including compression.
         preload_members = {entry.filename for entry in entries if entry.header_offset < preload}
