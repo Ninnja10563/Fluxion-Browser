@@ -18,6 +18,18 @@ test("directional native evidence requires a trusted boundary exit rather than a
     assert.throws(() => verify([candidate], band, false), /trusted/);
   }
 });
+test("animated native departure stays below navigation but above Gecko's immediate content-collapse target", () => {
+  const a = source.indexOf("  function animatedDeparturePoint("), b = source.indexOf("  function floatingSidebarEvidence(", a);
+  const point = vm.runInNewContext(`${source.slice(a, b)}; animatedDeparturePoint`, {
+    assert(value, message) { if (!value) throw new Error(message); },
+  });
+  const edge = { left: 0, top: 72, bottom: 1000, width: 3 };
+  const result = point(edge, { bottom: 72 }, { top: 122 });
+  assert.equal(result.y, 80); assert.equal(result.x, 1.5);
+  assert.throws(() => point(edge, { bottom: 72 }, { top: 50 }), /immediate/);
+  assert.throws(() => point(edge, { bottom: 72 }, { top: 80 }), /immediate/);
+  assert.throws(() => point({ ...edge, bottom: 78 }, { bottom: 72 }, { top: 122 }), /immediate/);
+});
 const start = source.indexOf("  function floatingSidebarEvidence("), end = source.indexOf("  async function focusNavigation(", start);
 assert.ok(start > 0 && end > start);
 let hit = null;

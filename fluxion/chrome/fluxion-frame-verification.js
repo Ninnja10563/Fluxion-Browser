@@ -191,6 +191,12 @@
     assert(candidates.length > 0, `No trusted ${upward ? "upward" : "downward"} toolbar exit reached the browser`);
     return candidates;
   }
+  function animatedDeparturePoint(edge, toolbar, nativeTarget) {
+    const y = Math.max(toolbar.bottom, edge.top) + 8;
+    assert(Number.isFinite(nativeTarget?.top) && y < nativeTarget.top && y < edge.bottom && edge.width > 0,
+      "No Flow departure point outside Gecko's immediate content-collapse region");
+    return { x: edge.left + edge.width / 2, y };
+  }
   function floatingSidebarEvidence(flow, surface, revealed) {
     const rail = rect(flow), box = rect(surface), style = window.getComputedStyle(surface);
     const viewport = { top: 0, bottom: window.innerHeight };
@@ -1085,12 +1091,19 @@
       evidence.motion = await verifyNavigationMotion(toolbox, true, async () => {
         await revealNativeNavigation("normal-motion-sidebar-retraction");
         const flow = document.getElementById("fluxion-flow"), edge = rect(flow);
-        const point = { x: edge.left + edge.width / 2, y: edge.top + Math.min(140, edge.height / 2) };
+        const band = rect(toolbox);
+        // A flush page now extends beneath the Flow activation strip. Use
+        // Gecko's actual near-toolbar buffer to exercise the animated timer,
+        // not its separate immediate content-enter collapse further down.
+        await wait(() => window.FullScreen.getMouseTargetRect()?.top > Math.max(band.bottom, edge.top) + 8,
+          "Native content-collapse tracking did not settle below the toolbar");
+        const nativeTarget = window.FullScreen.getMouseTargetRect();
+        const point = animatedDeparturePoint(edge, band, nativeTarget);
         const started = window.performance.now();
         routePointer(point.x, point.y);
         await wait(() => flow.dataset.revealed === "true" && window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
           "Native normal-motion Flow departure did not reveal the sidebar and retract navigation");
-        return { route: "native-top-edge-to-Flow-edge", point, elapsed: window.performance.now() - started,
+        return { route: "native-top-edge-to-Flow-edge", point, nativeTargetTop: nativeTarget.top, elapsed: window.performance.now() - started,
           sidebar: flow.dataset.state, toolbox: rect(toolbox), animationAttribute: toolbox.hasAttribute("fullscreenShouldAnimate") };
       });
       moveToPage();
