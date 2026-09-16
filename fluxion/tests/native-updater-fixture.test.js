@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const os = require("node:os");
 const path = require("node:path");
 const http = require("node:http");
+const net = require("node:net");
 const { pathToFileURL } = require("node:url");
 const fixture = import(pathToFileURL(path.resolve(__dirname, "../scripts/updater-fixture.mjs")));
 
@@ -107,6 +108,53 @@ test("updater loopback handler serves only the selected immutable signed-feed/ar
     assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "network.json"), "utf8")), records);
     fs.writeFileSync(path.join(root, "stage"), "../../signing.key");
     assert.equal((await request("/feed/appcast.xml")).status, 503);
+  } finally {
+    await new Promise(resolve => server.close(resolve)); fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("signed feed records completed output when client disconnects immediately after Content-Length bytes", async () => {
+  const { fixtureHandler } = await fixture;
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-server-")));
+  const records = [], completions = [];
+  const handler = fixtureHandler(root, records);
+  const server = http.createServer((request, response) => {
+    completions.push(new Promise(resolve => response.once("finish", resolve)));
+    handler(request, response);
+  });
+  try {
+    const feed = "signed-feed-" + "x".repeat(1177);
+    fs.writeFileSync(path.join(root, "corrupt.xml"), feed);
+    fs.writeFileSync(path.join(root, "stage"), "corrupt");
+    await new Promise(resolve => server.listen(0, "127.0.0.1", resolve));
+    for (let attempt = 0; attempt < 8; attempt++) {
+      await new Promise((resolve, reject) => {
+        const socket = net.connect(server.address().port, "127.0.0.1");
+        let received = Buffer.alloc(0);
+        socket.setTimeout(2000, () => socket.destroy(Error("Feed response timed out")));
+        socket.on("error", reject);
+        socket.on("connect", () => socket.write("GET /feed/appcast.xml HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: keep-alive\r\n\r\n"));
+        socket.on("data", chunk => {
+          received = Buffer.concat([received, chunk]);
+          const boundary = received.indexOf("\r\n\r\n");
+          if (boundary < 0) return;
+          const length = /content-length: (\d+)/i.exec(received.subarray(0, boundary).toString());
+          if (!length || received.length < boundary + 4 + Number(length[1])) return;
+          const body = received.subarray(boundary + 4).toString();
+          socket.destroy(); // deliberately do not wait for the server to close
+          try { assert.equal(body, feed); resolve(); } catch (error) { reject(error); }
+        });
+      });
+    }
+    let timer;
+    try {
+      await Promise.race([Promise.all(completions), new Promise((_, reject) => {
+        timer = setTimeout(() => reject(Error("Complete feeds never emitted response finish")), 2000);
+      })]);
+    } finally { clearTimeout(timer); }
+    assert.equal(records.length, 8);
+    assert.ok(records.every(record => record.completed && record.bytes === Buffer.byteLength(feed)));
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "network.json"), "utf8")), records);
   } finally {
     await new Promise(resolve => server.close(resolve)); fs.rmSync(root, { recursive: true, force: true });
   }

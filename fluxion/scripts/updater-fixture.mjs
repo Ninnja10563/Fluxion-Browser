@@ -111,6 +111,9 @@ export function fixtureHandler(root, records) {
     response.once("finish", () => { record.completed = true; fs.writeFileSync(path.join(root, "network.json"), JSON.stringify(records)); });
     response.writeHead(200);
     if (request.method === "HEAD") response.end();
+    // Queue end with the small complete feed: NSURLSession may close once
+    // Content-Length is satisfied, before a file stream's separate end event.
+    else if (filename.endsWith(".xml")) response.end(fs.readFileSync(file));
     else fs.createReadStream(file).on("error", () => response.destroy()).pipe(response);
   };
 }
