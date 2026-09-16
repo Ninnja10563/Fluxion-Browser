@@ -34,6 +34,7 @@ export function claimProfile(root, home = os.homedir()) {
     app: path.join(root, "live", "Fluxion.app") };
   write(path.join(profile, OWNER), { root, token: config.token });
   write(path.join(root, "gate.json"), config);
+  fs.writeFileSync(path.join(profile, "user.js"), 'user_pref("fluxion.verification.nativeUpdater", true);\n', { flag: "wx", mode: 0o600 });
   for (const name of ["signing", "wrong"]) {
     const pair = crypto.generateKeyPairSync("ed25519");
     const privateDER = pair.privateKey.export({ type: "pkcs8", format: "der" });

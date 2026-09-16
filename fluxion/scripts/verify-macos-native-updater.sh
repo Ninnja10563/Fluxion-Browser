@@ -64,6 +64,7 @@ public_key="$(<"$check_root/public-key.txt")"
   "$fluxion_root/packaging/macos/updater/FluxionUpdaterBridge.m" \
   -o "$app/Contents/Frameworks/libFluxionUpdater.dylib"
 codesign --force --sign - "$app/Contents/Frameworks/libFluxionUpdater.dylib"
+mkdir -p "$app/Contents/Resources/fluxion/runtime"
 cp "$check_root/gate.json" "$app/Contents/Resources/fluxion/runtime/updater-test-gate.json"
 python3 - "$app" "$public_key" <<'PY'
 import json,plistlib,sys

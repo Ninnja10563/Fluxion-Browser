@@ -18,6 +18,7 @@ test("updater fixture claims only an absent canonical default profile and never 
     assert.equal(config.profile, path.join(home, "Library/Application Support/Fluxion/Profiles/default"));
     assert.match(config.token, /^[a-f0-9]{48}$/);
     assert.equal(fs.statSync(config.profile).mode & 0o777, 0o700);
+    assert.equal(fs.readFileSync(path.join(config.profile, "user.js"), "utf8"), 'user_pref("fluxion.verification.nativeUpdater", true);\n');
     assert.equal(fs.statSync(path.join(root, "signing.key")).mode & 0o777, 0o600);
     assert.equal(Buffer.from(fs.readFileSync(path.join(root, "signing.key"), "utf8"), "base64").length, 32);
     assert.equal(Buffer.from(fs.readFileSync(path.join(root, "public-key.txt"), "utf8"), "base64").length, 32);

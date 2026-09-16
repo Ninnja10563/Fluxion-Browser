@@ -1,6 +1,7 @@
 /* global Services, ChromeUtils, SessionStore, IOUtils, PathUtils, Ci, Cu */
 (async function verifyNativeUpdater(window) {
   "use strict";
+  if (!Services.prefs.getBoolPref("fluxion.verification.nativeUpdater", false)) return;
   const resources = Services.dirsvc.get("GreD", Ci.nsIFile);
   const configPath = PathUtils.join(resources.path, "fluxion", "runtime", "updater-test-gate.json");
   if (!await IOUtils.exists(configPath)) return; // only copied into the test app, never the production bundle

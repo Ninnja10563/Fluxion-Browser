@@ -89,6 +89,20 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: node fluxion/scripts/verify-sparkle-signing-interop.mjs .runtime/sparkle-2.10.0/current/bin/sign_update
 
+      - name: Verify real signed replacement, canceled quit, and session-preserving relaunch
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_NATIVE_UPDATER_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-native-updater-evidence
+        run: bash ./fluxion/scripts/verify-macos-native-updater.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native installer evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-native-updater-evidence
+          path: ${{ runner.temp }}/fluxion-native-updater-evidence
+          if-no-files-found: warn
+
       - name: Verify application architecture and signature
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
@@ -429,20 +443,6 @@ jobs:
         with:
           name: Fluxion-${{ inputs.version }}-library-inspection
           path: ${{ runner.temp }}/fluxion-library.png
-          if-no-files-found: warn
-
-      - name: Verify real signed replacement, canceled quit, and session-preserving relaunch
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        env:
-          FLUXION_NATIVE_UPDATER_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-native-updater-evidence
-        run: bash ./fluxion/scripts/verify-macos-native-updater.sh '.runtime/Fluxion.app'
-
-      - name: Preserve native installer evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: Fluxion-${{ inputs.version }}-native-updater-evidence
-          path: ${{ runner.temp }}/fluxion-native-updater-evidence
           if-no-files-found: warn
 
       - name: Package DMG and checksum
