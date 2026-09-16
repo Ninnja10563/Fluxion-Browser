@@ -41,7 +41,7 @@ cleanup() {
   case "$check_root" in "${TMPDIR:-/tmp}"/fluxion-structure-check.*) rm -rf -- "$check_root";; esac
 }
 trap cleanup EXIT
-node "$fluxion_root/scripts/tab-transfer-fixture.mjs" 0 >"$server_log" 2>&1 &
+node "$fluxion_root/scripts/tab-transfer-fixture.mjs" 0 --structure-diagnostics >"$server_log" 2>&1 &
 server_pid=$!
 for ((attempt=0; attempt<80; attempt++)); do
   [[ ! -s "$server_log" ]] || break

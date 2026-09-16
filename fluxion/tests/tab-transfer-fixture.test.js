@@ -63,3 +63,38 @@ test("request diagnostics are bounded while the exact document load counter rema
   assert.deepEqual(state.requests.map(record => record.sequence), Array.from({ length: MAX_REQUEST_RECORDS }, (_, index) => index + 1));
   assert.deepEqual(logged, state.requests);
 });
+
+test("opt-in response evidence correlates reused connections and completed responses without changing load counts", async t => {
+  const { startFixture, MAX_LIFECYCLE_RECORDS } = await import("../scripts/tab-transfer-fixture.mjs");
+  const logged = [], { server, origin } = await startFixture(0, {
+    diagnostics: true, onResponseLifecycle: record => logged.push(record),
+  });
+  const agent = new http.Agent({ keepAlive: true, maxSockets: 1 });
+  t.after(() => { agent.destroy(); server.close(); server.closeAllConnections(); });
+  const request = () => new Promise((resolve, reject) => {
+    http.get(`${origin}/transfer?secret=private`, { agent, headers: { Cookie: "secret-cookie" } }, response => {
+      assert.equal(response.statusCode, 200);
+      response.resume(); response.on("end", resolve);
+    }).on("error", reject);
+  });
+  await request(); await request();
+  const initial = await (await fetch(`${origin}/state`)).json();
+  assert.equal(initial.loads, 2);
+  for (const sequence of [1, 2]) {
+    const events = initial.lifecycle.records.filter(record => record.sequence === sequence);
+    assert.deepEqual(events.map(record => record.event), ["request", "finish", "close"]);
+    assert.equal(events[1].responseFinished, true);
+    assert.equal(events[1].requestComplete, true);
+    assert.equal(events[1].status, 200);
+    assert.ok(events.every(record => record.connection === 1), "native HTTP connection reuse remains observable");
+  }
+  assert.doesNotMatch(JSON.stringify(initial.lifecycle), /secret|private|cookie/);
+  assert.deepEqual(logged, initial.lifecycle.records);
+  logged[0].event = "mutated callback copy";
+  for (let index = 0; index < MAX_LIFECYCLE_RECORDS / 3; index++) await request();
+  const after = await (await fetch(`${origin}/state`)).json();
+  assert.equal(after.loads, 2 + MAX_LIFECYCLE_RECORDS / 3);
+  assert.equal(after.lifecycle.records.length, MAX_LIFECYCLE_RECORDS);
+  assert.equal(after.lifecycle.omitted, 6);
+  assert.equal(after.lifecycle.records[0].event, "request");
+});

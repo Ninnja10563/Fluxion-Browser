@@ -421,9 +421,9 @@
     } finally { schemeObserver.disconnect(); }
   }
   function bookmarksSurface(label) {
-    const ids = ["PersonalToolbar", "nav-bar", "fluxion-flow"];
-    const surfaces = ids.map(id => {
-      const node = document.getElementById(id);
+    const selectors = ["#PersonalToolbar", "#nav-bar", "#fluxion-flow > .fluxion-surface"];
+    const surfaces = selectors.map(id => {
+      const node = document.querySelector(id);
       assert(painted(node), `Expected browser surface is not painted: ${id}`);
       const style = window.getComputedStyle(node);
       return { id, background: style.backgroundColor, color: style.color,

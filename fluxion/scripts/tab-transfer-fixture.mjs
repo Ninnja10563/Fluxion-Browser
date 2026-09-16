@@ -2,14 +2,17 @@ import http from "node:http";
 import { pathToFileURL } from "node:url";
 
 export const MAX_REQUEST_RECORDS = 64;
+export const MAX_LIFECYCLE_RECORDS = 192;
 const destinations = new Set(["document", "empty", "image", "iframe", "frame", "script", "style", "worker",
   "serviceworker", "sharedworker", "font", "audio", "video", "object", "embed", "manifest", "report", "track"]);
 const modes = new Set(["navigate", "cors", "no-cors", "same-origin", "websocket"]);
 const headerCategory = (value, allowed) => value === undefined ? "missing" : allowed.has(value) ? value : "other";
 
-export async function startFixture(port = 0, { onDocumentRequest } = {}) {
+export async function startFixture(port = 0, { onDocumentRequest, diagnostics = false, onResponseLifecycle } = {}) {
   let loads = 0;
   const requests = [];
+  const lifecycle = { records: [], omitted: 0 }, connections = new WeakMap();
+  let nextConnection = 0;
   const server = http.createServer((request, response) => {
     const expectedHost = `127.0.0.1:${server.address().port}`;
     response.setHeader("Cache-Control", "no-store");
@@ -18,10 +21,27 @@ export async function startFixture(port = 0, { onDocumentRequest } = {}) {
     const url = new URL(request.url, `http://${expectedHost}`);
     if (url.pathname === "/state") {
       response.writeHead(200, { "Content-Type": "application/json" })
-        .end(JSON.stringify({ loads, requests, omittedRequests: loads - requests.length })); return;
+        .end(JSON.stringify({ loads, requests, omittedRequests: loads - requests.length,
+          ...(diagnostics ? { lifecycle } : {}) })); return;
     }
     if (url.pathname !== "/transfer") { response.writeHead(404).end(); return; }
     loads++;
+    if (diagnostics) {
+      const sequence = loads;
+      if (!connections.has(request.socket)) connections.set(request.socket, ++nextConnection);
+      const connection = connections.get(request.socket);
+      const recordLifecycle = event => {
+        if (lifecycle.records.length >= MAX_LIFECYCLE_RECORDS) { lifecycle.omitted++; return; }
+        const record = { sequence, connection, event, status: response.statusCode,
+          requestComplete: request.complete, responseFinished: response.writableFinished };
+        lifecycle.records.push(record);
+        if (typeof onResponseLifecycle === "function") onResponseLifecycle({ ...record });
+      };
+      recordLifecycle("request");
+      response.once("finish", () => recordLifecycle("finish"));
+      response.once("close", () => recordLifecycle("close"));
+      request.once("aborted", () => recordLifecycle("aborted"));
+    }
     if (requests.length < MAX_REQUEST_RECORDS) {
       // Record only fixture routes and bounded header categories. Never retain
       // credentials, cookies, arbitrary query text, or raw header values.
@@ -51,6 +71,8 @@ document.getElementById("increment").addEventListener("click", () => {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const fixture = await startFixture(Number(process.argv[2] || 0), {
     onDocumentRequest: record => console.log(JSON.stringify({ type: "transfer-request", ...record })),
+    diagnostics: process.argv.includes("--structure-diagnostics"),
+    onResponseLifecycle: record => console.log(JSON.stringify({ type: "transfer-response", ...record })),
   });
   console.log(JSON.stringify({ origin: fixture.origin }));
   const close = () => { fixture.server.close(); fixture.server.closeAllConnections(); };

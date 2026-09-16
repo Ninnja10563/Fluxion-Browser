@@ -16,6 +16,7 @@ async function fixture({ primary = false, restore = false, remove = false, persi
   const context = {
     report, prefix: "fluxion.structure.verification", fixtures: [{ parentNode: {} }], original: { parentNode: {} },
     observer: { disconnect() { events.push("disconnect"); } },
+    stopSetupDiagnostics() { events.push("stop-setup-diagnostics"); },
     gBrowser: { set selectedTab(value) { events.push("restore"); if (restore) throw Error("restore failed"); },
       removeTabs() { events.push("remove"); if (remove) throw Error("remove failed"); } },
     write(key, value) {
@@ -34,7 +35,7 @@ async function fixture({ primary = false, restore = false, remove = false, persi
 
 test("shipped completion cleans up and persists report before publishing success", async () => {
   const result = await fixture();
-  assert.deepEqual(result.events, ["disconnect", "restore", "remove", "report", "health"]);
+  assert.deepEqual(result.events, ["stop-setup-diagnostics", "disconnect", "restore", "remove", "report", "health"]);
   assert.equal(result.prefs.get("health"), "keyed-1000-tab-hierarchical-structure-verified");
   assert.equal(result.prefs.has("error"), false);
 });

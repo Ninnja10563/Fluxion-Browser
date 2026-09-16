@@ -1,4 +1,4 @@
-/* global Services, SessionStore, PathUtils, Cu */
+/* global Services, SessionStore, PathUtils, Cu, Ci */
 (function verifyStructure(window) {
   "use strict";
   if (Services.env.get("FLUXION_STRUCTURE_TEST") !== "1") return;
@@ -10,6 +10,7 @@
   const report = { fixtureTabs: 1000, checks: [], baselines: [], unaffectedWrites: 0,
     input: "Native Gecko tab operations, synthetic chrome DragEvents, and chrome focus; not physical OS input" };
   let observer;
+  let stopSetupDiagnostics = () => {};
   const assert = (ok, message) => { if (!ok) throw new Error(message); };
   const write = (key, value) => {
     Services.prefs.setStringPref(`${prefix}.${key}`, value);
@@ -25,6 +26,45 @@
     do { if (await predicate()) return; await settle(); } while (Date.now() < deadline);
     throw new Error(message);
   };
+  function observeSetupChannels(origin) {
+    const evidence = report.setup.channels = { records: [], omitted: 0, unreadable: 0 };
+    const topics = ["http-on-modify-request", "http-on-examine-response", "http-on-failed-opening-request"];
+    let active = true;
+    const read = getter => { try { return getter(); } catch { return null; } };
+    const record = (request, phase, browser = null, flags = null, status = null) => {
+      if (!active || !request) return;
+      try {
+        const channel = request.QueryInterface(Ci.nsIHttpChannel);
+        const spec = channel.URI.spec;
+        if (spec !== `${origin}/transfer` && spec !== `${origin}/transfer?step=1`) return;
+        if (evidence.records.length >= 128) { evidence.omitted++; return; }
+        // Only fixed fixture routes and numeric native identities/statuses enter
+        // the report. No headers, principals, redirect URLs, or arbitrary text.
+        evidence.records.push({ phase, path: spec.endsWith("?step=1") ? "/transfer?step=1" : "/transfer",
+          channelId: read(() => channel.channelId), contextId: read(() => channel.loadInfo.browsingContextID),
+          innerWindowId: read(() => channel.loadInfo.innerWindowID),
+          browserContextId: read(() => browser?.browsingContext?.id ?? null),
+          topLevel: read(() => channel.loadInfo.isTopLevelLoad),
+          contentType: read(() => channel.loadInfo.externalContentPolicyType),
+          status: status ?? read(() => channel.status), responseStatus: read(() => channel.responseStatus),
+          originalIsCurrent: read(() => channel.originalURI.spec === spec),
+          flags, redirecting: flags === null ? null : Boolean(flags & Ci.nsIWebProgressListener.STATE_REDIRECTING),
+        });
+      } catch { evidence.unreadable++; }
+    };
+    const httpObserver = { observe: (request, topic) => record(request, topic) };
+    const progress = { onStateChange(browser, webProgress, request, flags, status) {
+      if (webProgress?.isTopLevel) record(request, "progress", browser, flags, status);
+    } };
+    for (const topic of topics) Services.obs.addObserver(httpObserver, topic);
+    gBrowser.addTabsProgressListener(progress);
+    return () => {
+      if (!active) return;
+      active = false;
+      for (const topic of topics) Services.obs.removeObserver(httpObserver, topic);
+      gBrowser.removeTabsProgressListener(progress);
+    };
+  }
   async function run() {
     assert(/\/fluxion-structure-check\.[^/]+\/profile\/?$/.test(PathUtils.profileDir), "Requires isolated structure profile");
     await SessionStore.promiseAllWindowsRestored;
@@ -46,8 +86,9 @@
     const documentLoads = async () => {
       const response = await window.fetch(`${origin}/state`, { credentials: "omit", cache: "no-store" });
       assert(response.ok, "Live structure document load evidence unavailable");
-      const { loads, requests, omittedRequests } = await response.json();
+      const { loads, requests, omittedRequests, lifecycle } = await response.json();
       report.documentRequests = { loads, requests, omittedRequests };
+      if (lifecycle) report.documentRequests.lifecycle = lifecycle;
       return loads;
     };
     const browserWindowCount = () => [...Services.wm.getEnumerator("navigator:browser")]
@@ -63,6 +104,7 @@
         remoteWithoutWindowGlobal: Boolean(tab.linkedBrowser.isRemoteBrowser && !global) };
     };
     report.setup = { windowCount: browserWindowCount(), initialLoads: await documentLoads(), navigations: [] };
+    stopSetupDiagnostics = observeSetupChannels(origin);
     const readLivePage = (tab, command = "Read") => tab.linkedBrowser.browsingContext.currentWindowGlobal
       .getActor("FluxionTabTransferVerification").sendQuery(`FluxionTabTransfer:${command}`, { origin });
     function livePageChromeReady(tab, state) {
@@ -101,6 +143,7 @@
     }
     assert(new Set([...livePages.values()].map(state => state.nonce)).size === 4, "Live fixture nonces are not distinct");
     const baselineLoads = await documentLoads();
+    stopSetupDiagnostics();
     report.liveDocuments = { pages: 4, baselineLoads, checks: [] };
     assert(baselineLoads === 4, `Live structure fixture did not load exactly four documents: observed ${baselineLoads}`);
     async function verifyLiveDocuments(operation) {
@@ -390,6 +433,7 @@
   function complete(primaryError = null) {
     const failures = primaryError ? [primaryError] : [];
     const attempt = action => { try { action(); } catch (error) { failures.push(error); } };
+    attempt(() => stopSetupDiagnostics());
     attempt(() => observer?.disconnect());
     attempt(() => { if (original?.parentNode) gBrowser.selectedTab = original; });
     attempt(() => {

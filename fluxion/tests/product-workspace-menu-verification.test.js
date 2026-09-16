@@ -165,3 +165,24 @@ test("native dock gate rejects shifted, overlapping, clipped or stale workspace 
   ];
   for (const { boxes, count } of scenarios) assert.throws(() => dockFixture(boxes).run(count), /workspace|Workspace|Centered/);
 });
+
+test("bookmarks palette gate compares actual painted sidebar surface, not its transparent layout rail", () => {
+  const start = source.indexOf("  function bookmarksSurface("), end = source.indexOf("  function sidebarColumns(", start);
+  assert.ok(start > 0 && end > start);
+  const style = { backgroundColor: "rgb(31, 31, 31)", color: "rgb(239, 239, 235)", boxShadow: "none",
+    borderTopWidth: "0px", borderRightWidth: "0px", borderBottomWidth: "0px", borderLeftWidth: "0px" };
+  const nodes = { "#PersonalToolbar": { style: { ...style } }, "#nav-bar": { style: { ...style } },
+    "#fluxion-flow": { style: { ...style, backgroundColor: "rgba(0, 0, 0, 0)" } },
+    "#fluxion-flow > .fluxion-surface": { style: { ...style } } };
+  const report = {}, context = vm.createContext({ report, painted: Boolean,
+    document: { querySelector: selector => nodes[selector] }, window: { getComputedStyle: node => node.style },
+    assert(value, message) { if (!value) throw Error(message); } });
+  vm.runInContext(source.slice(start, end), context);
+  context.bookmarksSurface("dark");
+  assert.equal(report.bookmarksSurfaces[0].surfaces[2].id, "#fluxion-flow > .fluxion-surface");
+  nodes["#PersonalToolbar"].style.backgroundColor = "rgb(42, 41, 50)";
+  assert.throws(() => context.bookmarksSurface("mismatch"), /does not match/);
+  nodes["#PersonalToolbar"].style.backgroundColor = style.backgroundColor;
+  nodes["#PersonalToolbar"].style.borderBottomWidth = "1px";
+  assert.throws(() => context.bookmarksSurface("separator"), /separator/);
+});

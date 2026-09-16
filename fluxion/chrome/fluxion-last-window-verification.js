@@ -22,7 +22,8 @@
   const marker = kind => `data:text/html,${encodeURIComponent(`<title>Fluxion last window ${kind}</title><p>${kind}</p>`)}`;
   const urls = [marker("pinned"), marker("normal-a"), marker("normal-b")];
   const privateURL = marker("private-never-persist"), externalURL = marker("external-request");
-  const evidence = { mode, checks: [] };
+  const evidence = { mode, checks: [], lifecycle: [] };
+  let closeNumber = 0;
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const ensure = (condition, message) => { if (!condition) throw new Error(message); };
   function write(name, value) {
@@ -37,6 +38,34 @@
   const windows = () => [...Services.wm.getEnumerator("navigator:browser")].filter(win => !win.closed);
   const stateOf = win => SessionStore.getWindowState(win).windows[0];
   const stateURLs = state => state.tabs.map(tab => tab.entries?.[(tab.index || 1) - 1]?.url || "");
+  function stateSummary(state) {
+    return {
+      closedId: state.closedId, closedAt: state.closedAt, shouldRestore: state._shouldRestore,
+      private: state.isPrivate, popup: state.isPopup, selected: state.selected,
+      metadata: state.extData?.["fluxion-last-window-fixture"],
+      tabs: (state.tabs || []).slice(0, 20).map(tab => ({
+        entries: (tab.entries || []).slice(0, 6).map(entry => entry.url?.slice(0, 700)),
+        index: tab.index, pinned: tab.pinned, hidden: tab.hidden, attributes: tab.attributes,
+        metadata: tab.extData?.["fluxion-last-window-tab"],
+      })),
+    };
+  }
+  function recordLifecycle(stage, win = null) {
+    const entry = { stage, at: Date.now() };
+    try {
+      if (win && !win.closed) {
+        entry.windowState = stateSummary(stateOf(win));
+        entry.nativeTabs = [...win.gBrowser.tabs].slice(0, 20).map(tab => ({
+          uri: tab.linkedBrowser.currentURI?.spec?.slice(0, 700), pending: tab.hasAttribute("pending"),
+          busy: tab.hasAttribute("busy"), closing: !!tab.closing, pinned: !!tab.pinned,
+          selected: tab === win.gBrowser.selectedTab,
+        }));
+      }
+      entry.closedRecords = SessionStore.getClosedWindowData().slice(0, 10).map(stateSummary);
+      entry.openWindowCount = windows().length;
+    } catch (error) { entry.diagnosticError = String(error); }
+    if (evidence.lifecycle.length < 30) evidence.lifecycle.push(entry);
+  }
   function verifyTabs(win, label, external = false) {
     const state = stateOf(win), actual = stateURLs(state);
     for (const url of urls) ensure(actual.filter(item => item === url).length === 1, `${label}: missing/duplicate ${url}`);
@@ -60,13 +89,23 @@
     stateOf(win); await wait(250);
   }
   async function close(win) {
+    const ordinal = ++closeNumber;
+    recordLifecycle(`close-${ordinal}-before-flush`, win);
     await flush(win);
+    recordLifecycle(`close-${ordinal}-after-flush`, win);
     win.BrowserCommands.tryToCloseWindow();
     await until(() => win.closed, "native close-window command failed");
+    recordLifecycle(`close-${ordinal}-closed`);
     await wait(450);
+    recordLifecycle(`close-${ordinal}-settled`);
   }
   async function closedNormal() {
-    return until(() => SessionStore.getClosedWindowData().find(item => urls.slice(1).every(url => stateURLs(item).includes(url))), "normal tabs missing from native closed-window record");
+    try {
+      return await until(() => SessionStore.getClosedWindowData().find(item => urls.slice(1).every(url => stateURLs(item).includes(url))), `normal tabs missing from native closed-window record after close ${closeNumber}`);
+    } catch (error) {
+      recordLifecycle(`close-${closeNumber}-record-timeout`);
+      throw error;
+    }
   }
   async function seed(win) {
     const original = [...win.gBrowser.tabs];
@@ -145,6 +184,7 @@
     Services.startup.quit(Ci.nsIAppStartup.eAttemptQuit);
   }
   run().catch(async error => {
+    recordLifecycle("terminal-error");
     write("error", `${error.message}\n${error.stack}`);
     evidence.error = `${error.message}\n${error.stack}`;
     try { await IOUtils.writeUTF8(PathUtils.join(root, `${mode}.json`), JSON.stringify(evidence, null, 2)); } catch (_) {}
