@@ -260,13 +260,17 @@
       `Focus navigation did not use its scoped 120ms ${property} transition: ${style.transitionDuration}`);
     return { native, reduced, properties, durations };
   }
-  async function verifyNavigationMotion(toolbox, native) {
+  async function verifyNavigationMotion(toolbox, native, retract = null) {
     const root = document.documentElement, name = "ui.prefersReducedMotion";
     const hadPreference = Services.prefs.prefHasUserValue(name), previous = Services.prefs.getIntPref(name, 0);
     const hadAttribute = root.hasAttribute("data-fluxion-no-motion"), evidence = [];
     try {
       root.removeAttribute("data-fluxion-no-motion"); Services.prefs.setIntPref(name, 0);
       await wait(() => !window.matchMedia("(prefers-reduced-motion: reduce)").matches, "Normal motion media override did not settle");
+      if (native) {
+        assert(typeof retract === "function", "Native motion verification requires a real pointer retraction cycle");
+        evidence.push({ source: "routed-pointer-cycle-after-normal-media", ...await retract() });
+      }
       assert(!native || toolbox.hasAttribute("fullscreenShouldAnimate"), "Native Focus animation attribute was not produced by actual retraction");
       evidence.push(navigationMotionEvidence(toolbox, native, false));
       root.setAttribute("data-fluxion-no-motion", "true");
@@ -279,6 +283,30 @@
       root.toggleAttribute("data-fluxion-no-motion", hadAttribute);
     }
     return evidence;
+  }
+
+  async function readyPageCapture() {
+    const browser = gBrowser.selectedBrowser, global = browser.browsingContext.currentWindowGlobal;
+    assert(global?.documentURI.spec === "https://example.org/" && !gBrowser.selectedTab.hasAttribute("busy"),
+      "Expanded screenshot target is not the completed HTTPS fixture");
+    const box = rect(browser);
+    const bitmap = await global.drawSnapshot(new window.DOMRect(0, 0, box.width, box.height), 1, "#ffffff");
+    let pixels;
+    try {
+      const canvas = document.createElementNS("http://www.w3.org/1999/xhtml", "canvas");
+      canvas.width = bitmap.width; canvas.height = bitmap.height;
+      const context = canvas.getContext("2d"); context.drawImage(bitmap, 0, 0);
+      const bytes = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      pixels = 0;
+      for (let index = 0; index < bytes.length; index += 4) {
+        if (Math.abs(bytes[index] - bytes[0]) + Math.abs(bytes[index + 1] - bytes[1]) + Math.abs(bytes[index + 2] - bytes[2]) > 48) pixels++;
+      }
+      assert(pixels > 100, "Remote screenshot fixture has no painted page content");
+    } finally { bitmap.close(); }
+    await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    await wait(() => !window.windowUtils.isMozAfterPaintPending && !window.windowUtils.isCompositorPaused &&
+      !window.windowUtils.isWindowFullyOccluded && document.hasFocus(), "Screenshot compositor did not settle after remote page paint");
+    return { global: global.innerWindowId, distinctContentPixels: pixels, page: box };
   }
 
   async function focusNavigation() {
@@ -778,6 +806,7 @@
       if (name === "capture-page-light" || name === "capture-page-dark") {
         assert(flow.dataset.state === "expanded", "Expanded header screenshot is not in expanded mode");
         report.geometry.push(persistentSidebarEvidence(flow, name));
+        report.geometry.push({ label: `${name}-paint-readiness`, ...await readyPageCapture() });
       }
       await action(name);
       report.captures.push({ name, theme, url: gBrowser.selectedBrowser.currentURI.spec, title: gBrowser.selectedTab.label });
@@ -959,7 +988,18 @@
       await action("capture-fullscreen-focus-revealed");
       moveToPage();
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
-      evidence.motion = await verifyNavigationMotion(toolbox, true);
+      evidence.motion = await verifyNavigationMotion(toolbox, true, async () => {
+        await revealNativeNavigation("normal-motion-sidebar-retraction");
+        const flow = document.getElementById("fluxion-flow"), edge = rect(flow);
+        const point = { x: edge.left + edge.width / 2, y: edge.top + Math.min(140, edge.height / 2) };
+        const started = window.performance.now();
+        routePointer(point.x, point.y);
+        await wait(() => flow.dataset.revealed === "true" && window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
+          "Native normal-motion Flow departure did not reveal the sidebar and retract navigation");
+        return { route: "native-top-edge-to-Flow-edge", point, elapsed: window.performance.now() - started,
+          sidebar: flow.dataset.state, toolbox: rect(toolbox), animationAttribute: toolbox.hasAttribute("fullscreenShouldAnimate") };
+      });
+      moveToPage();
       await action("fullscreen-location");
       await wait(() => evidence.keys.some(item => item.trusted && item.meta && item.key.toLowerCase() === "l") &&
         document.activeElement === window.gURLBar.inputField && !window.FullScreen.navToolboxHidden,

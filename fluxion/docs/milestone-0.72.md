@@ -23,8 +23,10 @@ The supplied five-second recording shows repeated fullscreen navigation
 reveal/retraction. Inspection of pinned Gecko source identified its 800 ms
 `margin-top` transition, in addition to Fluxion's 180 ms departure grace.
 Explicit Focus now scopes that native transition to 120 ms and uses 60 ms of
-departure grace. Normal-window Focus uses the same 120 ms slide. These are
-configured timing bounds, not precise measurements extracted from the video.
+departure grace. Normal-window Focus uses the same 120 ms slide. Gecko retains
+its immediate native collapse when the pointer enters webpage content; the
+120 ms override applies when Gecko requests an animated collapse. These are
+configured timings, not precise measurements extracted from the video.
 
 Pointer reentry cancels retraction. Actual address-field focus, native popups,
 customization, DOM/video fullscreen, policy locks and expanded/compact toolbar

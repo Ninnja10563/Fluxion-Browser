@@ -25,6 +25,38 @@ test("computed Focus timing gate rejects Gecko's former 800ms animation and moti
   }
 });
 
+test("native motion verifier establishes normal media before a fresh real retraction and restores overrides on failure", async () => {
+  const a = source.indexOf("  async function verifyNavigationMotion("), b = source.indexOf("  async function readyPageCapture(", a);
+  for (const mode of ["success", "missing-attribute", "missing-cycle"]) {
+    let media = 1, animated = false, cycles = 0;
+    const attrs = new Set(["data-fluxion-no-motion"]), observations = [];
+    const root = { hasAttribute: key => attrs.has(key), removeAttribute: key => attrs.delete(key),
+      setAttribute: key => attrs.add(key), toggleAttribute(key, present) { if (present) attrs.add(key); else attrs.delete(key); } };
+    const verify = vm.runInNewContext(`${source.slice(a, b)}; verifyNavigationMotion`, {
+      document: { documentElement: root }, window: { matchMedia: () => ({ matches: media === 1 }) },
+      Services: { prefs: { prefHasUserValue: () => true, getIntPref: () => media, setIntPref: (_name, value) => { media = value; } } },
+      wait: async predicate => { assert.ok(predicate()); },
+      assert(value, message) { if (!value) throw new Error(message); },
+      navigationMotionEvidence(_toolbox, native, reduced) { observations.push({ native, reduced, media, attribute: attrs.has("data-fluxion-no-motion") }); return { native, reduced }; },
+    });
+    const retract = async () => {
+      cycles++;
+      assert.equal(media, 0, "changing the preference after an earlier collapse cannot prove an animated cycle");
+      assert.equal(attrs.has("data-fluxion-no-motion"), false);
+      animated = mode === "success"; return { route: "real-pointer-cycle" };
+    };
+    const result = verify({ hasAttribute: () => animated }, true, mode === "missing-cycle" ? null : retract);
+    if (mode === "success") {
+      const evidence = await result;
+      assert.equal(evidence[0].route, "real-pointer-cycle");
+      assert.deepEqual(observations, [{ native: true, reduced: false, media: 0, attribute: false },
+        { native: true, reduced: true, media: 0, attribute: true }, { native: true, reduced: true, media: 1, attribute: false }]);
+    } else await assert.rejects(result, /real pointer retraction|actual retraction/);
+    assert.equal(cycles, mode === "missing-cycle" ? 0 : 1);
+    assert.equal(media, 1); assert.equal(attrs.has("data-fluxion-no-motion"), true);
+  }
+});
+
 function persistentFixture() {
   let direction = "ltr", target = { left: 82, right: 1200, width: 1118 }, hitOverride = null;
   const node = (box, style = {}) => ({ box, style, contains: hit => hit === null });
