@@ -16,6 +16,10 @@ it, and drag **Fluxion.app** into **Applications**. It supports Apple Silicon
 (including M3) and Intel. The prebuilt app includes Gecko: you do **not** need
 Firefox installed to use it.
 
+To open links from other apps in Fluxion, choose **Settings → General →
+Make Fluxion Default** and confirm with macOS. The status updates when the
+system confirms the change; Fluxion does not repeatedly prompt at startup.
+
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 

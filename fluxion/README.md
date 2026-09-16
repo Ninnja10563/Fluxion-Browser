@@ -8,6 +8,25 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+Fluxion 0.70 is published: native Fluxion names and transparent F artwork,
+physical Control shortcuts, real bookmark import, immediate tab-close layout,
+an integrated colour picker, native container actions, and **General → Make
+Fluxion Default**. Focus/fullscreen navigation and page corners are verified;
+closing a workspace's last visible tab keeps other workspaces' pages alive.
+All 1,065 tests and every mandatory native macOS gate passed, including six
+last-window recovery stages. Download the
+[0.70 universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.0-preview.1).
+See the [milestone](docs/milestone-0.70.md),
+[candidate audit](docs/validation/0.70-candidate.md) and
+[release provenance](release/provenance/v0.70.0-preview.1.md).
+The original reported 0.69 profile and physical red-button behavior have not
+been independently reproduced. A programmatic Settings-to-page address-state
+transition remains under investigation. Automatic update installation and
+automatic workspace/container assignment remain pending. The app is ad-hoc
+signed, not Apple-notarized. 0.71 is the next measured performance milestone.
+
+## Previous milestones
+
 Fluxion 0.69 is published: the supplied app artwork, fully hidden/top-hover
 Focus navigation, an inset floating sidebar, matching New tab hover geometry,
 repeated workspace swipes and a unified workspace appearance editor. macOS
@@ -15,7 +34,7 @@ shortcut recording and repeated last-window restoration are fixed. Fresh
 profiles restore sessions and show bookmarks by default; existing choices
 remain authoritative. Background indexing reuses timers during activity bursts.
 All 1,009 tests and every mandatory native macOS gate passed. Download the
-[latest universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.69.0-preview.1)
+[0.69 universal macOS preview](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.69.0-preview.1)
 for Apple Silicon (including M3) and Intel. See the
 [milestone](docs/milestone-0.69.md) and
 [release provenance](release/provenance/v0.69.0-preview.1.md).

@@ -13,6 +13,13 @@ controls work and its failure paths have been tested.
 
 ## Phase 2 — browser fundamentals hardening
 
+- native default-browser status and explicit OS confirmation from custom
+  General settings; physical Control shortcut recording, real HTML bookmark
+  import and native Fluxion branding (published in 0.70)
+- six last-window restoration stages, including explicit homepage→restore
+  choice and normal quit/relaunch without test-forced saving; closing the final
+  visible workspace tab preserves other workspaces' hidden pages (0.70).
+  The reported original 0.69 profile and physical red-button audit remain.
 - repeated macOS last-window close/reopen and relaunch, with preserved selected
   page, lazy tabs, pins and metadata; external requests and startup opt-outs
   retained, private data excluded (published in 0.69 with native gates)
@@ -53,6 +60,12 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- integrated pointer/keyboard colour field and paged theme editor, immediate
+  stationary-pointer tab-close settling, native fullscreen toolbar reveal and
+  actual eight-pixel content clipping (published in 0.70)
+- existing Gecko containers in tab context menus, preserving source tabs and
+  workspace placement without copying login/form/session data; actual account
+  isolation verified (0.70). This is not automatic workspace/container mapping.
 - fully hidden Focus navigation with top-edge/keyboard/popup reveal, six-pixel
   floating sidebar insets, matching New tab hover/close geometry, repeated
   four-workspace swipes, unified appearance preview/save/cancel editor and
@@ -60,7 +73,7 @@ controls work and its failure paths have been tested.
   OS colour-picker-dialog audits remain)
 - workspace-associated account containers with tab placement independent of
   account identity ([audited design](workspace-containers.md); **not implemented,
-  outside 0.69**, pending native cookie/storage isolation, creation-routing,
+  beyond the existing-container actions in 0.70**, pending automatic creation-routing,
   private-window and session/crash recovery gates)
 - hover/focus workspace-heading options, native workspace menus, per-workspace
   light/dark color editing, centered bottom symbols and refined bidirectional
