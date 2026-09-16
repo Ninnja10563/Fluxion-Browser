@@ -30,8 +30,10 @@ do {
     guard let pid = Int32(args[2]), pid > 0 else { throw NSError(domain: "FluxionFramePointer", code: 4) }
     let operation = args[1], app = URL(fileURLWithPath: args[3]).standardizedFileURL.path
     let stateURL = URL(fileURLWithPath: args[5])
-    let saved = FileManager.default.fileExists(atPath: stateURL.path)
-        ? try JSONDecoder().decode(SavedPointer.self, from: Data(contentsOf: stateURL)) : nil
+    let saved: SavedPointer?
+    if FileManager.default.fileExists(atPath: stateURL.path) {
+        saved = try JSONDecoder().decode(SavedPointer.self, from: Data(contentsOf: stateURL))
+    } else { saved = nil }
     if let saved { try require(saved.pid == pid && saved.app == app, "Pointer state belongs to another browser") }
     if operation == "restore" {
         if let saved {
