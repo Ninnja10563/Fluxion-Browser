@@ -3,9 +3,16 @@
   <channel>
     <title>Fluxion updates</title>
     <link>https://github.com/Ninnja10563/Fluxion-Browser/releases</link>
+    <item>
+      <title>Fluxion 0.70.1-preview.1</title>
+      <pubDate>Wed, 16 Sep 2026 09:01:25 GMT</pubDate>
+      <sparkle:channel>preview</sparkle:channel>
+      <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
+      <enclosure url="https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.70.1-preview.1/Fluxion-0.70.1-preview.1-macOS-universal.dmg" sparkle:version="0.70.1b1" sparkle:shortVersionString="0.70.1-preview.1" sparkle:installationType="application" sparkle:edSignature="zy4xq4XbCrZAgvJwiMLBa/ibn0rnJ10C8hly+BXnUkW7BGPhsaB9NJgqaq0MWWt0rYwIKyf+IHorxlGQwwgNCA==" length="270915249" type="application/octet-stream"/>
+    </item>
   </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: ecB5aSrXi8+7eFHlx06w1THKCDPnLDGktq07fbXTwtVjnsiQvXcM6fRrP3MCBz8FPS/wV3tRu1lk7X0WfWxMAw==
-length: 267
+edSignature: pd/1UZ7XuiFtwIqoN5Unf95RKq2htNtaOFg0mHBSPyf0FWS82Yf9V82TMBTT4Ar3d8Q5af1SGqiyjYw8P+9PCg==
+length: 939
 -->
