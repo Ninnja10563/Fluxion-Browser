@@ -43,7 +43,7 @@ mkdir -p "$driver"
 fixture="$check_root/Fluxion café bookmarks.html"
 cp "$fluxion_root/tests/fixtures/migration-bookmarks.html" "$fixture"
 /usr/bin/osacompile -o "$check_root/migration-driver.scpt" "$fluxion_root/packaging/macos/migration-picker-driver.applescript"
-/usr/bin/xcrun clang -Wall -Wextra -Werror -O2 "$fluxion_root/packaging/macos/file-picker-owner.c" -framework ApplicationServices -o "$check_root/picker-owner"
+/usr/bin/xcrun clang -Wall -Wextra -Werror -O2 -DFLUXION_MIGRATION_FIXTURE=1 "$fluxion_root/packaging/macos/file-picker-owner.c" -framework ApplicationServices -o "$check_root/picker-owner"
 /usr/bin/open -n -W -a "$app" --env "FLUXION_PROFILE=$profile" --env "FLUXION_MIGRATION_TEST=1" \
   --env "FLUXION_MIGRATION_DRIVER_DIR=$driver" --stdout "$browser_log" --stderr "$browser_error" about:blank &
 opener_pid=$!

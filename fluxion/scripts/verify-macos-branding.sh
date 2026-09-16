@@ -48,6 +48,30 @@ on run arguments
 end run
 APPLESCRIPT
 }
+native_key() {
+  owned || { printf 'Branding keyboard driver lost its exact owned browser process.\n' >&2; return 1; }
+  osascript - "$process_id" "$1" <<'APPLESCRIPT'
+on run arguments
+  set browserPID to (item 1 of arguments) as integer
+  set actionName to item 2 of arguments
+  with timeout of 10 seconds
+    tell application "System Events"
+      set ownedProcess to first application process whose unix id is browserPID
+      if (unix id of first application process whose frontmost is true) is not browserPID then error "Wrong foreground process"
+      tell ownedProcess
+        if actionName is "branding-location" then
+          keystroke "l" using command down
+        else if actionName is "branding-location-escape" then
+          key code 53
+        else
+          error "Unknown branding keyboard action"
+        end if
+      end tell
+    end tell
+  end timeout
+end run
+APPLESCRIPT
+}
 mkdir -p "$artifact_dir"
 FLUXION_PROFILE="$profile" FLUXION_VERIFY_BRANDING=1 FLUXION_BRANDING_DRIVER_DIR="$check_root" \
   "$launcher" about:blank >"$check_root/branding.log" 2>&1 &
@@ -58,6 +82,12 @@ for ((attempt=0; attempt<600; attempt++)); do
     foreground
     touch "$check_root/branding-foreground.sent"
   fi
+  for action in branding-location branding-location-escape; do
+    if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
+      native_key "$action"
+      touch "$check_root/$action.sent"
+    fi
+  done
   for capture in capture-branding-default-browser capture-branding-security; do
     if [[ -f "$check_root/$capture.ready" && ! -f "$check_root/$capture.sent" ]]; then
       owned || exit 1

@@ -74,30 +74,41 @@ static int same_process(const struct proc_bsdinfo *a, const struct proc_bsdinfo 
     a->pbi_start_tvsec == b->pbi_start_tvsec && a->pbi_start_tvusec == b->pbi_start_tvusec;
 }
 
+static int fixture_path_matches(const char *canonical, const char *temporary, off_t size) {
+#ifdef FLUXION_MIGRATION_FIXTURE
+  const char *filename = "Fluxion caf\xc3\xa9 bookmarks.html";
+  const char *prefix = "/fluxion-migration-check.";
+  const off_t expected_size = 423;
+#else
+  const char *filename = "Fluxion caf\xc3\xa9 upload.txt";
+  const char *prefix = "/fluxion-file-picker-check.";
+  const off_t expected_size = 87;
+#endif
+  size_t root_length = strlen(temporary);
+  if (size != expected_size || strlen(canonical) <= root_length ||
+      strncmp(canonical, temporary, root_length)) return 0;
+  const char *suffix = canonical + root_length;
+  if (strncmp(suffix, prefix, strlen(prefix))) return 0;
+  suffix += strlen(prefix);
+  size_t nonce = strcspn(suffix, "/");
+  if (nonce != 6 || !suffix[nonce] || strcmp(suffix + nonce + 1, filename)) return 0;
+  for (size_t i = 0; i < nonce; ++i) {
+    if ((suffix[i] < 'A' || suffix[i] > 'Z') && (suffix[i] < 'a' || suffix[i] > 'z') &&
+        (suffix[i] < '0' || suffix[i] > '9')) return 0;
+  }
+  return 1;
+}
+
 static int type_fixture_path(const char *path, pid_t owner, pid_t approved,
     const struct proc_bsdinfo *owner_identity, const struct proc_bsdinfo *panel_identity,
     responsible_pid_fn responsible) {
-  const char *leaf = strrchr(path, '/');
   char canonical[PATH_MAX], temporary[PATH_MAX];
   const char *temp_root = getenv("TMPDIR");
   struct stat file_info;
-  if (!leaf || strcmp(leaf + 1, "Fluxion caf\xc3\xa9 upload.txt") ||
-      !realpath(path, canonical) || !realpath(temp_root && *temp_root ? temp_root : "/tmp", temporary) ||
-      lstat(path, &file_info) || !S_ISREG(file_info.st_mode) || file_info.st_uid != getuid() || file_info.st_size != 87) {
+  if (!realpath(path, canonical) || !realpath(temp_root && *temp_root ? temp_root : "/tmp", temporary) ||
+      lstat(path, &file_info) || !S_ISREG(file_info.st_mode) || file_info.st_uid != getuid() ||
+      !fixture_path_matches(canonical, temporary, file_info.st_size)) {
     fputs("Refusing a non-fixture Unicode input path\n", stderr); return 1;
-  }
-  size_t root_length = strlen(temporary);
-  const char *prefix = "/fluxion-file-picker-check.";
-  const char *suffix = canonical + root_length;
-  if (strncmp(canonical, temporary, root_length) || strncmp(suffix, prefix, strlen(prefix))) {
-    fputs("Unicode input path is outside the owned temporary fixture namespace\n", stderr); return 1;
-  }
-  suffix += strlen(prefix);
-  size_t nonce = strcspn(suffix, "/");
-  if (nonce != 6 || !suffix[nonce] || strchr(suffix + nonce + 1, '/')) return 1;
-  for (size_t i = 0; i < nonce; ++i) {
-    if ((suffix[i] < 'A' || suffix[i] > 'Z') && (suffix[i] < 'a' || suffix[i] > 'z') &&
-        (suffix[i] < '0' || suffix[i] > '9')) return 1;
   }
   if (!CGPreflightPostEventAccess()) { fputs("Native keyboard event permission is unavailable\n", stderr); return 1; }
   CFStringRef text = CFStringCreateWithCString(NULL, path, kCFStringEncodingUTF8);

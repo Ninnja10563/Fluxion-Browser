@@ -32,6 +32,12 @@
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Branding capture not acknowledged: ${name}`, 20000);
     report.captures.push(name);
   }
+  async function nativeKey(name) {
+    assert(["branding-location", "branding-location-escape"].includes(name), "Invalid branding keyboard action");
+    assert(Services.focus.activeWindow === window, "Branding keyboard input lost its owned window");
+    await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
+    await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Branding key not acknowledged: ${name}`, 20000);
+  }
   async function strings() {
     const brand = Services.strings.createBundle("chrome://branding/locale/brand.properties");
     for (const id of ["brandShorterName", "brandShortName", "brandFullName"]) {
@@ -140,12 +146,43 @@
     window.FluxionUI.selectTab(tab);
     await wait(() => tab.linkedBrowser.currentURI.spec === "https://example.org/" &&
       tab.label === "Example Domain" && !tab.hasAttribute("busy"), "Real HTTPS branding fixture did not load", 35000);
-    // New Tab can leave the location field editing after selecting another tab.
-    // A user opens site security from content, through the painted native button.
-    window.gURLBar.view.close();
+    const locationState = () => ({ uri: gBrowser.selectedBrowser.currentURI.spec,
+      selectedFixture: gBrowser.selectedTab === tab, userTypedValue: gBrowser.selectedBrowser.userTypedValue,
+      value: window.gURLBar.value, proxy: document.getElementById("urlbar").getAttribute("pageproxystate"),
+      searchMode: window.gURLBar.searchMode, focused: document.activeElement === window.gURLBar.inputField,
+      settingsVisible: document.documentElement.hasAttribute("data-fluxion-settings-visible"),
+      anchors: ["trust-icon-container", "identity-icon-box"].map(id => {
+        const node = document.getElementById(id);
+        if (!node) return { id, missing: true };
+        const box = node.getBoundingClientRect(), style = window.getComputedStyle(node);
+        const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+        return { id, left: box.left, top: box.top, width: box.width, height: box.height,
+          display: style.display, visibility: style.visibility, hit: hit?.id || hit?.localName,
+          hitInside: node.contains(hit) };
+      }) });
+    report.securityNavigation = { before: locationState(), keys: [] };
+    const observeKey = event => {
+      report.securityNavigation.keys.push({ key: event.key, meta: event.metaKey, trusted: event.isTrusted });
+    };
+    window.addEventListener("keydown", observeKey, true);
+    try {
+      // Exercise the actual location/revert keyboard path, without forcing
+      // page-proxy flags or manufacturing native security state.
+      await nativeKey("branding-location");
+      await wait(() => document.activeElement === window.gURLBar.inputField &&
+        report.securityNavigation.keys.some(key => key.trusted && key.meta && key.key.toLowerCase() === "l"),
+      "Native Command-L did not focus the branding fixture location");
+      await nativeKey("branding-location-escape");
+      await wait(() => !window.gURLBar.view.isOpen && report.securityNavigation.keys.some(key => key.trusted && key.key === "Escape"),
+        "Native Escape did not finish reverting the branding fixture location");
+    } finally {
+      window.removeEventListener("keydown", observeKey, true);
+      report.securityNavigation.afterRevert = locationState();
+    }
     tab.linkedBrowser.focus();
     let identity;
     await wait(() => {
+      report.securityNavigation.beforeIdentity = locationState();
       identity = ["trust-icon-container", "identity-icon-box"].map(id => document.getElementById(id)).find(painted);
       if (!identity || document.activeElement === window.gURLBar.inputField) return false;
       const box = identity.getBoundingClientRect();
