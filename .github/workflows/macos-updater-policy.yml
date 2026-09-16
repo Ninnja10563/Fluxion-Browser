@@ -1,0 +1,33 @@
+name: macOS updater trust policy
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  policy:
+    runs-on: macos-14
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Fetch reviewed Sparkle distribution
+        run: |
+          set -euo pipefail
+          node fluxion/scripts/download-sparkle.mjs "$RUNNER_TEMP/Sparkle.tar.xz"
+          mkdir "$RUNNER_TEMP/sparkle"
+          tar -xJf "$RUNNER_TEMP/Sparkle.tar.xz" -C "$RUNNER_TEMP/sparkle"
+          codesign --verify --deep --strict "$RUNNER_TEMP/sparkle/Sparkle.framework"
+      - name: Compile and execute native trust policy
+        run: |
+          set -euo pipefail
+          xcrun clang -mmacosx-version-min=12.0 -fobjc-arc -O2 -Wall -Wextra -Wno-unused-parameter -Werror \
+            -F "$RUNNER_TEMP/sparkle" -framework AppKit -framework Sparkle -Wl,-rpath,"$RUNNER_TEMP/sparkle" \
+            fluxion/packaging/macos/updater/BridgePolicyTests.m -o "$RUNNER_TEMP/fluxion-updater-policy"
+          "$RUNNER_TEMP/fluxion-updater-policy"
+      - name: Verify signing interoperability without production secrets
+        if: ${{ !cancelled() }}
+        run: node fluxion/scripts/verify-sparkle-signing-interop.mjs "$RUNNER_TEMP/sparkle/bin/sign_update"
