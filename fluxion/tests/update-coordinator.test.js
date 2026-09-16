@@ -47,6 +47,15 @@ test("concurrent manual and scheduled checks share one request and clear stale e
   assert.equal(h.coordinator.getState().evidence, undefined);
   await h.coordinator.install(); assert.equal(h.commands.length, 0);
 });
+test("current candidate displays both installed and latest published versions without offering a downgrade", async () => {
+  const h = await fixture();
+  h.setResult({ state: "current", latest: "0.70.0-preview.1" });
+  await h.coordinator.check();
+  assert.match(h.coordinator.getState().detail, /Installed 0\.70\.1-preview\.1/);
+  assert.match(h.coordinator.getState().detail, /Latest published: 0\.70\.0-preview\.1/);
+  assert.equal(h.coordinator.getState().canInstall, false);
+  await h.coordinator.install(); assert.equal(h.commands.length, 0);
+});
 test("an explicit click binds native consent to the displayed version; double clicks cannot start two installers", async () => {
   const h = await fixture(); h.coordinator.watch(() => {}); await h.coordinator.check();
   await Promise.all([h.coordinator.install(), h.coordinator.install()]);

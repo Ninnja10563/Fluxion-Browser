@@ -1,5 +1,31 @@
 # Milestone release process
 
+## 0.70.1 updater candidate
+
+Native verification and publication are pending. The candidate introduces a
+macOS 12+ Sparkle 2.10.0 bridge, signed appcast/archive publication, and a shared
+opt-out metadata-check coordinator. These source changes do not establish an
+installer pass. The release must preserve its complete native browser gates and
+add actual authenticated old-to-new replacement, cancellable Gecko quit and
+same-default-profile relaunch evidence. Report failure cases separately; never
+substitute a policy-only mock for a native installation claim.
+
+Pin and verify Sparkle's archive before building. Ship its complete upstream
+license and sign nested framework/XPC/bridge executables before the outer app.
+The embedded Ed25519 public key is public; its private counterpart belongs only
+in the maintainer signing environment, never in source or artifacts. Signed
+appcast and archive authentication do not make this ad-hoc preview notarized.
+The first updater-enabled release requires a manual DMG upgrade from 0.70 and
+earlier. See [update-channel.md](update-channel.md) for the two metadata paths,
+default-profile scope and explicit-install consent boundary.
+
+The product toolbar gate measures the real update indicator when temporarily
+shown at 1280 and 800 pixels, restores its prior visibility and labels that
+evidence as geometry-only. It does not manufacture a release offer or establish
+download/install behavior. The separate native updater gate must do that.
+
+## Existing browser and distribution gates
+
 `macOS integration diagnostics` is a separate, read-only-permission workflow
 for developing native Settings accessibility, external URL/file delivery,
 AI credential/privacy checks, real transfers and native website authentication,
@@ -50,8 +76,9 @@ metadata need not be byte-for-byte reproducible.
 when it differs from the lock. Review Mozilla's release/security notes, update
 the version/URL/digest together using that release's official `SHA256SUMS`, run
 the full native gates, and publish a new Fluxion DMG promptly. This check does
-not install updates or claim users have the latest version. Preview application
-updates are manual; Firefox's updater is blocked by `DisableAppUpdate` so it
+not install updates or claim users have the latest version. Published 0.70 and
+earlier use manual application updates; the 0.70.1 native installer is still a
+candidate. Firefox's updater remains blocked by `DisableAppUpdate` so it
 cannot replace Fluxion with Firefox. Extension updates remain independent.
 About can now check the recent public Fluxion release list explicitly and offer
 a compatible macOS DMG. A metadata check is not a verification of downloaded

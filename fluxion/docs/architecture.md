@@ -43,6 +43,17 @@ lifecycle as tab menus, retaining the actual opener for cancellation focus.
 Firefox-only cloud VPN enrollment is gated at startup rather than relabeled;
 see [product service policy](product-service-policy.md).
 
+The 0.70.1 candidate makes navigation visibility follow the sidebar. Expanded
+and compact modes keep the native toolbar visible even in browser fullscreen;
+only hidden/Focus uses top-edge auto-hide. The privileged Focus controller
+observes Gecko's synchronous `fullscreen-nav-toolbox` notification and restores
+expanded/compact navigation with `FullScreen.showNavToolbox(false)` before paint.
+It checks the originating toolbox, so another window cannot change this one.
+There is no repeated global preference rewrite or replacement of Gecko's
+fullscreen methods. Address input, menus and security panels keep native focus
+ownership; DOM/video fullscreen and kiosk handling remain native. Packaged
+pointer-leave and expanded/compact persistence verification is still pending.
+
 General's default-browser action delegates to Gecko's native ShellService.
 Status comes from the operating system, not a Fluxion preference, and the UI
 does not assume that a completed request means the user accepted confirmation.
@@ -165,11 +176,12 @@ event loop. Re-audit these lifecycle assumptions against
 keep the isolated native macOS keyboard and stationary-pointer gates alongside
 the extracted renderer/state regression tests.
 
-Gecko's last-tab decision normally excludes hidden tabs. The pinned packaging
-patch vetoes only its window-close branch when a live hidden tab belongs to
-another valid Fluxion workspace; Gecko then creates its ordinary empty-tab
-replacement. Explicit window closure, native page-leave prompts and actual
-final-tab behavior remain native. The exact upstream tabbrowser hash is part of
+Gecko's last-tab decision normally excludes hidden tabs. The 0.70.1 candidate's
+pinned packaging patch keeps regular browser windows open after their final
+tab closes, including before Fluxion's sidebar has initialized. Gecko creates
+its ordinary empty-tab replacement. Explicit window closure, native page-leave
+prompts, popup closure and cross-window adoption teardown remain native. This
+does not duplicate an existing window's tabs into new windows. The exact upstream tabbrowser hash is part of
 the session-policy guard and must be re-audited on an engine upgrade.
 
 ### Account containers
@@ -362,7 +374,7 @@ homepage. It overrides future new-tab destinations without navigating the
 selected browser: a SessionStore tab can still report `about:blank` while its
 saved page is being restored.
 
-### macOS last-window policy (0.69; expanded verification in 0.70)
+### macOS last-window policy (0.69; expanded verification in 0.70 and candidate 0.70.1)
 
 Firefox 155.0.1 normally restores only pinned tabs after closing its final macOS
 window, even with restore-session startup selected. Fluxion's build-time
@@ -401,6 +413,11 @@ uses the native close-window command, not a physical red-button click or an
 imported existing user profile.
 Its isolated-profile JSON reports are retained as release artifacts. Candidate
 code and unit tests alone are not evidence that this native gate has passed.
+The 0.70.1 candidate extends the fixture to native window-button input and
+final-tab closure/replacement, including hidden-workspace and private-window
+cases. That extended candidate gate has not yet established a native pass;
+the original reported user profile is not an imported fixture or a recovery
+guarantee. Concurrent windows retain independent session/workspace state.
 
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
 operations. Fluxion only projects those groups into Flow; labels, colours,
@@ -560,17 +577,18 @@ The intended release build is an automated Firefox source build that applies
 the same `chrome/` code as a shallow patch stack and supplies Fluxion branding.
 Keeping product code outside Gecko makes rebasing much smaller than a deep
 Firefox fork. The daily upstream version check flags when the reviewed runtime
-needs a security-update review. Preview users must install the new Fluxion DMG;
+needs a security-update review. Published 0.70 and earlier require manual DMG upgrades;
 Mozilla's `DisableAppUpdate` policy prevents the inherited updater from
 overwriting the product, without disabling extension or security-service updates.
 
-About provides an explicit Fluxion release check. `FluxionUpdates` is a privileged,
-process-shared module; importing it performs no network request. A user action
+`FluxionUpdates` is the privileged, process-shared release-discovery module;
+importing it performs no network request. Each requested check
 fetches only the fixed public verified-feed endpoint, omitting credentials and
 referrer, rejecting redirects, and bounding the streamed response to 64 KiB and
 at most two release channels. A 10-second deadline aborts the request, including response-body
-reads. Concurrent checks share one request; failures are not retried
-automatically. Rate-limit responses create a shared cooldown using GitHub's
+reads. Concurrent checks share one request. The low-level checker returns
+failures without retrying; scheduling belongs to the coordinator below.
+Rate-limit responses create a shared cooldown using GitHub's
 retry/reset advice (one minute when no valid future advice is supplied); checks
 during that interval return the retry time without another network request.
 Other failures are not cached. Expired-feed, rate-limit, malformed-response, and network failures are not
@@ -590,11 +608,55 @@ digests and channels as a whole. A serialized workflow refreshes the dedicated
 branch without force updates. The browser never falls back to authenticated API
 access. See [the update channel contract](update-channel.md), including the
 native gate's independent public-release comparison and credential boundary.
-This remains release discovery, not a signed updater or client-side verification
-of a later manual download.
-Downloading is a separate user action through Gecko, and installation remains
-manual. Developer ID signing, notarization, and authenticated automatic updates
-remain release-hardening work.
+The JSON discovery feed is HTTPS-delivered release metadata, not an Ed25519
+signature over a later download. It must not be confused with the native
+installer's separately authenticated appcast and archive.
+
+### Native Fluxion updater (0.70.1 candidate; native acceptance pending)
+
+`FluxionUpdateCoordinatorCore.sys.mjs` is an injected-IO state machine, while
+`FluxionUpdateCoordinator.sys.mjs` owns one process-wide instance and its
+timers. Normal-window subscriptions enable metadata checks after an initial
+delay and normally every five minutes, with bounded failure backoff and server
+retry timing; no automatic download/install permission follows. Closing the
+last normal subscriber or disabling About's Automatic update checks stops
+scheduled discovery. Private subscriptions do not start that monitor. About
+retains an explicit manual check.
+
+`fluxion-updates-ui.js` adds a quiet native toolbar action only when useful.
+For an installable offer its accessible label names the version and restart;
+activation calls the coordinator's install method directly. Active updates,
+manual-only offers and failures open About for status. About and the toolbar
+share immutable snapshots; neither owns network requests or polling timers.
+The manual DMG route remains separately labeled and available where supported.
+
+`FluxionNativeUpdater.sys.mjs` loads the Objective-C bridge through privileged
+js-ctypes, retains its library for process lifetime and bounds JSON command/
+status messages. There is no webpage actor, localhost service or shell command
+path. The bridge runs Sparkle 2.10.0 on the native main thread. Its embedded
+Ed25519 public key authenticates the signed feed and application archive before
+installation; consent remains bound to the approved version/channel. The
+display version retains `major.minor.patch-preview.N`, while its Apple bundle
+version uses `major.minor.patchbN` for Sparkle's prerelease ordering; stable
+versions retain `major.minor.patch`. These identities must agree rather than
+comparing only a shortened release number. The
+framework archive itself is pinned by URL, size and SHA-256. The complete
+[upstream license](../third_party/sparkle/LICENSE) is retained.
+
+Sparkle requests normal Apple-event quit, so Gecko can cancel for unsaved pages
+and finish its own profile/session shutdown. A canceled quit offers retry; no
+force termination is authorized. Initial native installation is limited to the
+canonical default profile, one running Fluxion application process and an app
+outside a mounted DMG. Sparkle relaunches the application bundle, not arbitrary
+profile arguments, so unsupported profiles retain manual installation instead
+of silently switching profiles. macOS 12 or later is required.
+
+Users need one manual upgrade from 0.70 or earlier to obtain the updater.
+Candidate source and unit tests do not establish authenticated replacement,
+quit cancellation, profile preservation or relaunch on macOS: the dedicated
+native end-to-end gate and ordinary browser gates are still required. Developer
+ID signing and notarization remain separate release-hardening work; Ed25519
+authenticated ad-hoc previews are still not Apple-notarized.
 
 The macOS bundle includes `fluxion/runtime-provenance.json` with source version,
 build IDs, original executable/signature-manifest hashes, and a source identity.
@@ -1239,30 +1301,19 @@ refresh rates on content-heavy browsing sessions.
 
 ## Pointer-close stability
 
-Flow treats the close button's pointer coordinates as a short-lived layout
-anchor. After a pointer click, the native Gecko tab closes immediately after
-the 120ms fade, but its inert Flow row keeps occupying the same vertical slot.
-An accidental repeat click at the unchanged coordinates therefore reaches no
-other close control. The first pointer movement outside the original button's
-4px guard releases the row; it compresses to zero height over 120ms and then a
-single coalesced render projects the remaining native tabs. Scrolling, window
-deactivation, keyboard input, disabled animation, and reduced motion release
-the hold immediately.
+The earlier stationary-pointer row hold was removed in 0.70 at the user's
+request. Pointer-close rows compress over the short close transition and then
+reconcile immediately, without requiring mouse movement. Reduced motion skips
+the animation. Surviving rows preserve identity; Gecko still owns before-unload
+permission, selected-tab changes and SessionStore. If a page cancels closing,
+Fluxion restores its still-live row instead of removing the native tab.
 
-The hold contains only native-tab and transient DOM references. It never owns
-a URL, navigation entry, closed-tab record, or tab order. Gecko still performs
-the close, before-unload handling, selected-tab change, and SessionStore write.
-Flow updates selected-row accessibility state and the window title even while
-layout is held. A native multi-selection or split pair fades and releases as
-one operation, while keyboard Delete/Backspace and middle click keep their
-direct workflows.
-
-This adapts Firefox's horizontal close-target sizing principle to a vertical
-list; current upstream `tabs.js` explicitly skips its horizontal sizing lock in
-vertical mode. The packaged macOS gate closes the middle of three real Gecko
-tabs, repeats a click at the exact coordinates, and blocks packaging unless
-only the intended tab closes, the following row stays fixed until movement,
-and the held row then compresses away.
+The native frame gate now closes a middle row and a final row without moving
+the pointer, requiring following rows/New Tab to settle within a bounded
+interval and a subsequent native keyboard close to remain correct. It no
+longer tests or promises suppression of a deliberate second click at the same
+coordinates. This is layout correctness evidence, not a physical-display
+frame-rate guarantee.
 
 ## Sidebar sizing ownership
 

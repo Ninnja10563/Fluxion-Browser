@@ -37,7 +37,7 @@ export function repositoryAPI(token, fetchImpl = globalThis.fetch) {
 }
 
 /** Publish only verified public metadata. Never rebuild, alter or publish releases. */
-export async function publishReleaseFeed({ api, build, now = () => Date.now() }) {
+export async function publishReleaseFeed({ api, build, buildSparkle, now = () => Date.now() }) {
   const readHead = async () => {
     const value = await api("GET", "/git/ref/heads/update-channel");
     if (value === null) return null;
@@ -47,6 +47,12 @@ export async function publishReleaseFeed({ api, build, now = () => Date.now() })
   const before = await readHead();
   const feed = await build();
   if (!FluxionReleaseFeed.validate(feed, now())) fail("Refusing invalid or expired publication feed");
+  // Both discovery and executable-update metadata come from the same verified
+  // release set. Failure to authenticate either prevents all remote writes.
+  const appcast = buildSparkle ? await buildSparkle(feed) : null;
+  if (buildSparkle && (typeof appcast !== "string" || !appcast.startsWith("<?xml") ||
+      !appcast.includes("<!-- sparkle-signatures:") || Buffer.byteLength(appcast) > 1024 * 1024))
+    fail("Invalid signed appcast publication");
   if (await readHead() !== before) fail("Update branch changed during verification; rerun publication");
   let baseTree;
   if (before) {
@@ -57,7 +63,8 @@ export async function publishReleaseFeed({ api, build, now = () => Date.now() })
   // Preserve any other files on the dedicated branch. Bootstrap has no parent;
   // no source checkout or directory is deleted to create the feed-only tree.
   const tree = await api("POST", "/git/trees", { ...(baseTree ? { base_tree: baseTree } : {}),
-    tree: [{ path: "releases.json", mode: "100644", type: "blob", content: `${JSON.stringify(feed, null, 2)}\n` }] });
+    tree: [{ path: "releases.json", mode: "100644", type: "blob", content: `${JSON.stringify(feed, null, 2)}\n` },
+      ...(appcast ? [{ path: "appcast.xml", mode: "100644", type: "blob", content: appcast }] : [])] });
   if (!sha(tree?.sha)) fail("Invalid published tree identity");
   const commit = await api("POST", "/git/commits", { message: `Refresh verified releases ${feed.generatedAt}`,
     tree: tree.sha, parents: before ? [before] : [] });
@@ -74,7 +81,9 @@ export async function publishReleaseFeed({ api, build, now = () => Date.now() })
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   if (process.argv.slice(2).join(" ") !== "--publish") fail("Usage: publish-release-feed.mjs --publish");
   const token = process.env.GH_TOKEN || "";
+  const { buildSparkleFeed } = await import("./build-sparkle-feed.mjs");
   const result = await publishReleaseFeed({ api: repositoryAPI(token),
+    buildSparkle: feed => buildSparkleFeed(feed, { seed: process.env.FLUXION_SPARKLE_PRIVATE_KEY }),
     build: () => buildReleaseFeed({ apiToken: token }) });
   console.log(JSON.stringify(result));
 }

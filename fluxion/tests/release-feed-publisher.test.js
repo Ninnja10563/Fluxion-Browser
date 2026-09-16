@@ -48,6 +48,20 @@ test("bootstrap creates an independent feed tree without modifying source branch
   assert.deepEqual(f.calls.find(c => c.path === "/git/commits").body.parents, []);
   assert.deepEqual(f.calls.find(c => c.path === "/git/refs").body, { ref: REF, sha: NEXT });
 });
+test("signed appcast and discovery are committed atomically only after both authenticate", async () => {
+  const f = fixture();
+  const xml = '<?xml version="1.0"?><rss/>\n<!-- sparkle-signatures:\nedSignature: fixture\nlength: 0\n-->\n';
+  f.buildSparkle = async verified => { assert.deepEqual(verified, feed()); return xml; };
+  await f.run();
+  const tree = f.calls.find(call => call.path === "/git/trees").body.tree;
+  assert.deepEqual(tree.map(item => item.path), ["releases.json", "appcast.xml"]);
+  assert.equal(tree[1].content, xml);
+  for (const buildSparkle of [async () => { throw Error("Invalid release signature"); }, async () => "unsigned"]) {
+    const refused = fixture(); refused.buildSparkle = buildSparkle;
+    await assert.rejects(refused.run());
+    assert.ok(refused.calls.every(call => call.method === "GET"));
+  }
+});
 test("failed verification and invalid manifests cause no remote writes", async () => {
   for (const build of [async () => { throw new Error("Download failed"); }, async () => ({}), async () => ({ ...feed(), expiresAt: new Date(NOW).toISOString() })]) {
     const f = fixture(); f.build = build; await assert.rejects(f.run());

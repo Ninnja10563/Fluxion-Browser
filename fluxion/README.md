@@ -8,6 +8,23 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**0.70.1 is in development; native release verification is pending.** It adds
+Sparkle-backed update-and-restart, a quiet update indicator, shared automatic
+metadata checks with an About opt-out, and a sidebar-aware fullscreen toolbar
+policy. Normal windows remain open when their final tab closes; explicit window
+closure and Quit retain native session handling. See the
+[milestone](docs/milestone-0.70.1.md), [update contract](docs/update-channel.md)
+and [dependency inventory](docs/dependencies.md).
+
+The updater's initial scope is macOS 12+, the installed application outside its
+DMG, and the default Fluxion profile. Automatic checks do not download or install
+an application. An explicit action requests normal, cancellable browser quit
+before replacement and restart. Users on 0.70 or earlier need one manual DMG
+upgrade to obtain the updater. Developer ID signing/notarization and native
+end-to-end acceptance remain outstanding; no website-speed improvement is claimed.
+
+### Latest published milestone
+
 Fluxion 0.70 is published: native Fluxion names and transparent F artwork,
 physical Control shortcuts, real bookmark import, immediate tab-close layout,
 an integrated colour picker, native container actions, and **General → Make
@@ -21,8 +38,9 @@ See the [milestone](docs/milestone-0.70.md),
 [release provenance](release/provenance/v0.70.0-preview.1.md).
 The original reported 0.69 profile and physical red-button behavior have not
 been independently reproduced. A programmatic Settings-to-page address-state
-transition remains under investigation. Automatic update installation and
-automatic workspace/container assignment remain pending. The app is ad-hoc
+transition remains under investigation. Automatic update installation is not
+part of the published 0.70 app; automatic workspace/container assignment also
+remains pending. The app is ad-hoc
 signed, not Apple-notarized. 0.71 is the next measured performance milestone.
 
 ## Previous milestones
@@ -190,17 +208,17 @@ and Library adapt to the space remaining beside Flow.
 
 ## Published preview
 
-[Fluxion 0.66](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.66.0-preview.1)
+[Fluxion 0.70](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.0-preview.1)
 is available as a universal macOS DMG for Apple Silicon (including M3) and Intel.
 Quit the old app, then replace Fluxion.app using the DMG. Your separate Fluxion
 profile is retained. The adjustable sidebar includes Compact and edge-hover collapse,
 workspace keyboard navigation and the native browser's services.
 
-All 871 regression tests and every mandatory native release gate passed,
+All 1,065 regression tests and every mandatory native release gate passed,
 including Command-W, real webpage/split rendering, 1,000-tab structural changes,
 native menus, clean/crash recovery, private-data exclusion, local Memory,
 responsive Settings and actual anonymous update discovery. See
-[verified release provenance](release/provenance/v0.66.0-preview.1.md).
+[verified release provenance](release/provenance/v0.70.0-preview.1.md).
 This remains an ad-hoc-signed development preview, not Apple-notarized; the
 full [roadmap](docs/roadmap.md) is not complete.
 
@@ -217,8 +235,8 @@ The current preview is runnable and includes:
 - one-stop roving keyboard focus for workspaces, pinned apps, ordinary tabs,
   and native group headings; tree-style Up/Down/Home/End plus
   expand/collapse/parent-child arrows, stable focus after selection or close,
-  pointer-close rows that hold their position against accidental repeat clicks
-  and then compress on movement; title and audio updates preserve row/control
+  pointer-close rows that compress without waiting for cursor movement;
+  title and audio updates preserve row/control
   identity, with packaged 200-tab initial and repeated-update gates;
 - per-workspace active-page memory: returning to a workspace resumes the exact
   native tab last used there, with Gecko recency as a safe first-visit fallback;
@@ -352,6 +370,8 @@ Prerequisites:
 
 Python 3 is also required when building from source to merge application-update
 policy safely. The downloaded Fluxion app itself needs neither Python nor Node.
+The 0.70.1 native updater adds the pinned Sparkle framework and a macOS 12
+deployment target; see [dependencies](docs/dependencies.md).
 
 Then, from Terminal:
 
@@ -583,3 +603,5 @@ Fluxion-authored code is available under the repository's MIT license. Preview
 DMGs bundle Mozilla Firefox/Gecko components under their respective licenses;
 Mozilla trademarks and third-party components retain their own terms. Fluxion
 is an independent project and is not affiliated with Mozilla.
+Updater-enabled builds also bundle Sparkle 2.10.0 and its dependencies under the
+[complete upstream license](third_party/sparkle/LICENSE).

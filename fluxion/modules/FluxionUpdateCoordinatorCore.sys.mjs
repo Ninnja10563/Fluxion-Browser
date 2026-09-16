@@ -67,7 +67,7 @@ export class UpdateCoordinator {
       this.failures = error ? Math.min(this.failures + 1, 4) : 0;
       const detail = result.state === "available"
         ? `${result.latest} is available.${canInstall ? " Update and restart when you are ready." : ` ${installerDetail}`}`
-        : result.state === "current" ? `No newer compatible release found. Installed ${this.installed}.`
+        : result.state === "current" ? `No newer compatible release found. Installed ${this.installed}.${result.latest ? ` Latest published: ${result.latest}.` : ""}`
           : result.state === "unsupported" ? "Packaged update downloads are available for macOS only."
             : error ? ({ offline: "You are offline. Fluxion will check again later.", "invalid-feed": "The update feed expired or could not be verified.",
               "rate-limit": "The update server temporarily refused the request. Fluxion will respect its retry time." }[result.reason] || "Could not safely check for updates. Try again later.")

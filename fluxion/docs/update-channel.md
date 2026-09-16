@@ -1,32 +1,58 @@
 # Verified update channel
 
-## One-click installation: pending
+## 0.70.1 installation candidate — native verification pending
 
-The released browser checks for updates and opens a download only on request.
-It does **not** yet replace the installed application or restart into an update.
-The current C launcher exits into Gecko; it cannot host a long-lived Cocoa
-updater by simply linking another framework.
+Published 0.70 and earlier discover updates and open a manual download only on
+request; those shipped apps cannot gain an installer without one manual DMG
+upgrade. The 0.70.1 candidate adds a pinned
+[Sparkle 2.10.0 integration](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.0),
+not a shell-based replacement script. This document does not claim that its
+native acceptance gate or public release has passed.
 
-The selected direction for this additional milestone is a maintained native
-[Sparkle 2 integration](https://sparkle-project.org/documentation/), with a
-dedicated native integration layer, rather than an unsigned shell installer.
-Before enabling an Update and Restart control, the release pipeline needs a
-maintainer-controlled Ed25519 signing key, its public key embedded in the app,
-signed update archives and an appcast. Private keys must never be committed,
-printed in build logs, or included in release artifacts. Developer ID signing
-and notarization remain separate distribution work; the ad-hoc preview needs
-explicit native compatibility testing, not relaxed production security checks.
+There are two distinct metadata paths. The existing expiring `releases.json`
+supports lightweight version discovery. It is HTTPS-delivered verified public
+metadata, not the executable-signing trust anchor. An explicit install action
+uses Sparkle's separately signed `appcast.xml` and signed archive, authenticated
+with the embedded Ed25519 public key. `runtime/sparkle-lock.json` pins the
+framework version/archive and public key; maintainers keep the corresponding
+private signing material outside the repository, app, logs and release artifacts.
 
-Installation must honor canceled browser quit and finish normal SessionStore
-and profile flushing before replacement. Native old-to-new tests must cover
-corrupt payloads, wrong app identity, downgrade refusal, read-only destinations,
-interrupted replacement, recovery and relaunch. Profile data is never part of
-application replacement. The existing HTTPS feed and SHA-256 records are useful
-integrity evidence, but do not substitute for a release-signing trust anchor.
-Users will need one manual installation of the first updater-enabled version.
-No signing key or automatic installer has been provisioned by this design note.
+The shared coordinator schedules discovery approximately every five minutes
+while normal windows are registered, starting after a short delay and applying
+failure backoff/server retry timing. Settings → About can opt out or check
+manually. Private-window subscriptions do not start automatic checks. Discovery
+never grants consent to download, replace or restart the application.
 
-## Existing manual discovery
+The available-update icon explicitly names “Update to VERSION and restart
+Fluxion.” Clicking it binds consent to that offer. Progress, cancel/retry when
+supported, release notes and a manual-DMG fallback live in About. A stale offer
+must be refreshed rather than silently substituting a different version for
+the one approved.
+
+The privileged Gecko module loads a native main-thread bridge with js-ctypes;
+neither the C launcher nor webpages host the updater. Sparkle requests normal
+Apple-event quit. Gecko retains unsaved-page confirmation, SessionStore and
+profile flushing; canceled quit must leave the running app intact and permit a
+version-bound retry. No forced termination is an acceptable success path.
+
+Initial installation scope is macOS 12+, the canonical default profile, one
+running Fluxion application process and an application outside its mounted
+DMG. Sparkle relaunches the bundle without arbitrary profile arguments, so other
+profiles use manual installation rather than being silently redirected.
+Multiple windows in that one process remain independent windows.
+
+Native old-to-new tests must establish valid signed-feed authentication,
+corrupt/wrongly signed archive rejection, version
+and app-identity enforcement, cancel/retry, replacement and same-profile
+relaunch before release. Additional invalid-feed cases, read-only/interrupted-install recovery and wider
+physical-machine audits must be reported according to actual evidence, not
+inferred from local tests. The candidate is still ad-hoc signed, **not
+Apple-notarized**; Ed25519 authentication does not supply Developer ID signing
+or a notarization ticket. See [the milestone](milestone-0.70.1.md),
+[native bridge contract](../packaging/macos/updater/README.md) and
+[dependency/license inventory](dependencies.md).
+
+## Existing discovery feed and publication history
 
 The published 0.64 preview uses this feed for manual update discovery. Published 0.63
 and earlier keep their existing explicit GitHub API request; their successful
@@ -69,8 +95,9 @@ channel, identity, date, size and digest validation rejects the entire malformed
 feed. Generated/verified timestamps have bounded clock skew; expiry is no more
 than seven days after generation. Expired data cannot report a current browser.
 
-This is maintainer-controlled metadata delivered over HTTPS, not an independent
-digital signature or a native-build attestation. Existing build and release
+This JSON is maintainer-controlled metadata delivered over HTTPS, not an independent
+digital signature or a native-build attestation. The separate Sparkle appcast
+does not change that JSON's meaning. Existing build and release
 gates remain responsible for browser validation before public release.
 
 ## Deployment
@@ -83,9 +110,11 @@ release. Reconcile periodically to refresh expiry and detect removed or changed
 assets. Initial bootstrap must describe an already verified public release,
 never the candidate awaiting its own validation.
 
-The browser consumer must preserve explicit action, a bounded deadline/response,
+The low-level browser consumer must preserve a bounded deadline/response,
 single-flight sharing, no credentials/cookies/referrer, canonical destinations,
-preview/stable compatibility and no automatic asset download. Raw hosting can
+preview/stable compatibility and no automatic asset download. The 0.70.1
+coordinator adds optional scheduled metadata requests, not installation consent.
+Raw hosting can
 also fail or cache stale content; expiry and actionable failure UI are required.
 The native gate must observe a real public HTTP 200 response and compare the
 selected release with independent published-release evidence. Local fixtures
@@ -125,12 +154,14 @@ endpoint returned HTTP 200 and the correct available version/source/assets.
 
 The fixed endpoint is
 `https://raw.githubusercontent.com/Ninnja10563/Fluxion-Browser/update-channel/releases.json`.
-The browser performs one manual, shared, credential-free GET with no query
+Each discovery request is a shared, credential-free GET with no query
 parameters, cookies, referrer or API fallback. It accepts JSON or raw-hosting
 text/plain only after strict JSON/schema validation. The whole response is
 limited to 64 KiB and ten seconds. Expired or malformed data is unavailable,
 never current; the user can retry explicitly or open the releases page. Checks
-do not download the DMG/checksum. Installation remains manual.
+do not download the DMG/checksum. Published 0.70 and earlier offer only manual
+installation; the candidate's explicit install route authenticates through
+Sparkle separately.
 
 Before launching the native verifier, the maintainer shell separately discovers
 actual GitHub releases and anonymously hashes public DMG/checksum bytes. Its

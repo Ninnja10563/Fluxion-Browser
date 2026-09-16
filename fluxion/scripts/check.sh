@@ -44,6 +44,9 @@ bash -n \
   scripts/verify-macos-last-window.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
+node --check scripts/sign-update-asset.mjs
+node --check scripts/build-sparkle-feed.mjs
+node --check scripts/verify-sparkle-signing-interop.mjs
 node --check scripts/updater-fixture.mjs
 node --check chrome/fluxion-native-updater-verification.js
 node --check scripts/benchmark-tab-search.cjs

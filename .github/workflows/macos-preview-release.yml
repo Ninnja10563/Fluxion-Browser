@@ -85,6 +85,10 @@ jobs:
           FLUXION_CAPTURE_PATH: ${{ runner.temp }}/fluxion-chrome.png
         run: ./fluxion/scripts/verify-macos-app.sh '.runtime/Fluxion.app'
 
+      - name: Verify signed-feed interoperability with the shipped Sparkle verifier
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: node fluxion/scripts/verify-sparkle-signing-interop.mjs .runtime/sparkle-2.10.0/current/bin/sign_update
+
       - name: Verify application architecture and signature
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         shell: bash
@@ -450,6 +454,18 @@ jobs:
             --version "$RELEASE_VERSION" \
             --output-dir "$GITHUB_WORKSPACE/dist"
 
+      - name: Authenticate verified release archive
+        shell: bash
+        env:
+          FLUXION_SPARKLE_PRIVATE_KEY: ${{ secrets.FLUXION_SPARKLE_PRIVATE_KEY }}
+          RELEASE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERSION" == "$(node -p 'require("./fluxion/package.json").version')" ]]
+          asset="dist/Fluxion-${RELEASE_VERSION}-macOS-universal.dmg"
+          node fluxion/scripts/sign-update-asset.mjs "$asset" "$RELEASE_VERSION" "$GITHUB_SHA" \
+            .runtime/sparkle-2.10.0/current/bin/sign_update "${asset}.sparkle.json"
+
       - name: Preserve packaged assets
         uses: actions/upload-artifact@v7
         with:
@@ -457,6 +473,7 @@ jobs:
           path: |
             dist/*.dmg
             dist/*.sha256
+            dist/*.sparkle.json
           if-no-files-found: error
 
       - name: Publish GitHub prerelease
@@ -473,6 +490,7 @@ jobs:
           gh release create "$RELEASE_TAG" \
             "dist/Fluxion-${RELEASE_VERSION}-macOS-universal.dmg" \
             "dist/Fluxion-${RELEASE_VERSION}-macOS-universal.dmg.sha256" \
+            "dist/Fluxion-${RELEASE_VERSION}-macOS-universal.dmg.sparkle.json" \
             --target "$GITHUB_SHA" \
             --title "Fluxion ${RELEASE_VERSION} — Gecko Foundation Preview" \
             --notes-file fluxion/release/preview-notes.md \
