@@ -1,36 +1,36 @@
 {
   "schemaVersion": 1,
   "repository": "Ninnja10563/Fluxion-Browser",
-  "generatedAt": "2026-09-16T09:51:10.837Z",
-  "expiresAt": "2026-09-17T09:51:10.837Z",
+  "generatedAt": "2026-09-16T10:39:33.663Z",
+  "expiresAt": "2026-09-17T10:39:33.663Z",
   "releases": [
     {
-      "id": 389799993,
-      "tag_name": "v0.70.2-preview.1",
+      "id": 389832563,
+      "tag_name": "v0.71.0-preview.1",
       "draft": false,
       "prerelease": true,
-      "html_url": "https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.2-preview.1",
-      "published_at": "2026-09-16T09:50:56.000Z",
+      "html_url": "https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.71.0-preview.1",
+      "published_at": "2026-09-16T10:39:13.000Z",
       "assets": [
         {
-          "id": 567661599,
-          "name": "Fluxion-0.70.2-preview.1-macOS-universal.dmg",
+          "id": 567743250,
+          "name": "Fluxion-0.71.0-preview.1-macOS-universal.dmg",
           "state": "uploaded",
-          "size": 270767026,
-          "digest": "sha256:ea59bb3f8e80c2c224758c5fb44f850a9c4e6254eae752a96b589c5c847d8d70",
-          "browser_download_url": "https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.70.2-preview.1/Fluxion-0.70.2-preview.1-macOS-universal.dmg"
+          "size": 270765858,
+          "digest": "sha256:3997f063d5d94a25b919d698f951dad011191261111e126e6d1ce854a74b86dc",
+          "browser_download_url": "https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.71.0-preview.1/Fluxion-0.71.0-preview.1-macOS-universal.dmg"
         },
         {
-          "id": 567661597,
-          "name": "Fluxion-0.70.2-preview.1-macOS-universal.dmg.sha256",
+          "id": 567743252,
+          "name": "Fluxion-0.71.0-preview.1-macOS-universal.dmg.sha256",
           "state": "uploaded",
           "size": 111,
-          "digest": "sha256:1cf77e98761b8ab5757e88348919e0f7d79de845829afc07466fb03fd006c894",
-          "browser_download_url": "https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.70.2-preview.1/Fluxion-0.70.2-preview.1-macOS-universal.dmg.sha256"
+          "digest": "sha256:0b1456217c0e98157db07e86bd12d530605ac237cfe9667980cfea4c6c2b7778",
+          "browser_download_url": "https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.71.0-preview.1/Fluxion-0.71.0-preview.1-macOS-universal.dmg.sha256"
         }
       ],
-      "sourceCommit": "eca27212472017d3b174dc4d158a7709b0ed5e0a",
-      "verifiedAt": "2026-09-16T09:51:10.118Z"
+      "sourceCommit": "eb6e48c1580276f1522953bf6b97eb2e348f1eef",
+      "verifiedAt": "2026-09-16T10:39:32.752Z"
     }
   ]
 }
