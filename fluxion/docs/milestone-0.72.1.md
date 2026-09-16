@@ -1,6 +1,10 @@
 # Fluxion 0.72.1 — Focus direction, flush pages and final-tab focus
 
-Candidate; native packaged validation is required before release.
+Published as [0.72.1-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.1-preview.1).
+All 1,186 tests and mandatory native macOS gates passed on source
+`6ab2f0ca2e7358fd24568cc7ea96409a6e7cb87d`, run
+[35155069119](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35155069119).
+See [release provenance](../release/provenance/v0.72.1-preview.1.md).
 
 ## Directional navigation
 
@@ -65,5 +69,16 @@ view reuse. Tests reject stale/rejected queries and a view that never opens.
 It records bounded lifecycle evidence without forcing a query, proxy, URI or
 popup state; the single dismissal Escape and final security checks remain.
 
-Native macOS validation and publication are pending. Physical M3/trackpad
-assessment and broader hardware performance profiling remain outside this fix.
+The accepted run passed native macOS CGEvent movement up to the menu bar and
+back below the toolbar, native Cmd-W with four other workspace tabs preserved,
+and native fullscreen widget-routed directional checks. Actual screenshots
+confirm the flush content frame. The real animated cycle retained its native
+animation attribute and computed 120 ms transition; both reduced-motion
+controls produced zero duration. Its 222.29 ms measured fixture cycle includes
+dispatch and polling, not a claimed 120 ms end-to-end response time.
+
+The branding fixture recorded a completed new query, open view before the
+first trusted Escape, and a valid native HTTPS proxy afterward. All broader
+session restoration, updater, privacy, browsing and accessibility gates passed.
+Physical M3/trackpad assessment and broader hardware profiling remain outside
+this fix. The preview is ad-hoc signed, not Apple-notarized.

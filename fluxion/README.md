@@ -8,6 +8,15 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.72.1-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.1-preview.1)**
+retains Focus navigation when moving up into the macOS menu bar and retracts
+it on downward departure. Hidden-sidebar content is edge-to-edge. Closing the
+last tab in a workspace skips its row wait and no longer implicitly focuses
+the address field in Focus. All 1,186 tests and mandatory native macOS gates
+passed, including actual OS menu-bar pointer movement and native Cmd-W with
+other workspace tabs preserved. See the [milestone](docs/milestone-0.72.1.md)
+and [provenance](release/provenance/v0.72.1-preview.1.md).
+
 **[0.72.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.0-preview.1)**
 raises the expanded sidebar heading while protecting native window controls,
 shortens animated Focus navigation to 120 ms, and adds native single/multiple

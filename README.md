@@ -23,13 +23,13 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
-**[0.72.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.0-preview.1)**
-raises the expanded workspace heading, shortens animated Focus retraction,
-and adds Copy Tab Link / Copy Selected Tab Links to the native context menu.
-All 1,171 tests and mandatory native macOS gates passed. The 0.71 tab-management
-optimizations and session fixes remain. See the
-[milestone](fluxion/docs/milestone-0.72.md) and
-[provenance](fluxion/release/provenance/v0.72.0-preview.1.md).
+**[0.72.1-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.1-preview.1)**
+keeps Focus navigation visible on upward menu-bar exits, removes hidden-sidebar
+page framing, and fixes implicit address focus after final-workspace-tab closure.
+All 1,186 tests and mandatory native macOS gates passed. Prior tab-management,
+session and tab-link features remain. See the
+[milestone](fluxion/docs/milestone-0.72.1.md) and
+[provenance](fluxion/release/provenance/v0.72.1-preview.1.md).
 No website benchmark or physical M3 performance improvement is claimed.
 
 Since 0.70.1, optional automatic update checks offer an explicit Update and restart action

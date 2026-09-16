@@ -194,6 +194,10 @@ controls work and its failure paths have been tested.
   native single/multiple tab-link copying (0.72; normal/fullscreen, RTL,
   reduced-motion, real menu and pasteboard checks passed; physical M3/trackpad
   assessment remains)
+- directional Focus toolbar retention on upward exits, edge-to-edge hidden
+  sidebar content and no implicit address focus after final-workspace-tab
+  replacement (0.72.1; native OS-pointer, Cmd-W, fullscreen, reduced-motion,
+  session and security gates passed; expanded/compact behavior retained)
 - preserve Flow row identity during ordinary same-workspace tab selection
   (implemented in published 0.58: 1,000-tab native selection/identity/mutation
   gate, correct native multi-selection event target, pinned/group/split state
