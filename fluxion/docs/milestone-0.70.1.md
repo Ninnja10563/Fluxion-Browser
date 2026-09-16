@@ -98,3 +98,21 @@ and interrupted-install recovery must not be inferred from these passing cases.
 
 No website benchmark, fastest-browser, or original-user-profile recovery claim
 is made. The measured performance milestone remains separate.
+
+### Continuous-wheel fixture timing
+
+Run [35074101093](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35074101093)
+at `ee22f4ecc8832f26380e4b690728eee8f743ae7c` exposed a test-input timing error:
+one requested 25ms delay between routed momentum events took 231.04875ms,
+crossing the existing 220ms gesture-idle boundary. All 13 events were trusted
+and canceled; replaying their recorded times through the unchanged state machine
+reproduced the second switch. The continuous-input fixture now sends its bounded
+native burst without inter-event timer yields and requires recorded cadence to
+remain below that boundary. Its count, cancellation, one-switch and unchanged
+page-history assertions remain, as do the separate delayed/new-gesture cases.
+There is no threshold increase, retry or skipped check.
+
+This does not solve physical trackpad phase detection: Gecko's exposed
+[WheelEvent interface](https://searchfox.org/firefox-main/source/dom/webidl/WheelEvent.webidl)
+has no momentum-phase property for this JavaScript controller. A sufficiently
+long gap in delivered input is still classified by the existing idle heuristic.

@@ -30,6 +30,21 @@
     // No DOM dispatchEvent or direct workspace call is used for the gesture.
     utils.sendWheelEvent(point.x, point.y, dx, dy, 0, window.WheelEvent.DOM_DELTA_PIXEL, 0, 0, 0, flags);
   };
+  function continuousMomentum(point) {
+    // Timer scheduling is not a native gesture clock: a busy runner can turn a
+    // requested 25ms pause into a distinct gesture's idle interval. Deliver a
+    // bounded native burst here; later tests retain actual separated gestures.
+    for (let index = 0; index < 12; index++) wheel(point, 60, 0, true);
+  }
+  function continuousCadence(events, idleBoundaryMs) {
+    const gaps = events.slice(1).map((event, index) => event.at - events[index].at);
+    assert(events.length === 13 && Number.isFinite(idleBoundaryMs) && idleBoundaryMs > 0 &&
+      gaps.every(gap => Number.isFinite(gap) && gap >= 0), "Continuous wheel burst has invalid cadence evidence");
+    const maxGapMs = Math.max(...gaps);
+    assert(maxGapMs < idleBoundaryMs,
+      `Continuous wheel burst crossed the ${idleBoundaryMs}ms idle boundary: ${maxGapMs}ms`);
+    return { events: events.length, maxGapMs, idleBoundaryMs, driver: "synchronous native-wheel burst; no inter-event timer yields" };
+  }
   const move = point => window.synthesizeMouseEvent("mousemove", point.x, point.y, {
     identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons: 0,
     clickCount: 0, modifiers: 0, inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE,
@@ -110,7 +125,9 @@
     stage("routed-horizontal-and-momentum");
     wheel(point, 60);
     await wait(() => ui.currentWorkspace() === second.id, "Horizontal pixel wheel did not select the next workspace");
-    for (let index = 0; index < 12; index++) { wheel(point, 60, 0, true); await delay(25); }
+    continuousMomentum(point);
+    await Promise.resolve(); // Let captured cancellation evidence finish, not a timer between wheel events.
+    report.continuousMomentum = continuousCadence(report.events, window.FluxionWorkspaceSwipe.DEFAULTS.idle);
     assert(ui.currentWorkspace() === second.id, "Momentum skipped more than one workspace");
     assert(report.events.length === 13 && report.events.every(event => event.trusted && event.cancelled && event.dx === 60),
       `Horizontal wheel events did not follow the trusted, cancelled sidebar route: ${JSON.stringify(report.events)}`);
