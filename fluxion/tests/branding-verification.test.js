@@ -15,20 +15,25 @@ function helper(start, end, extra = {}) {
 test("native application-menu evidence checks every product action without rewriting Mozilla legal text", () => {
   const h = helper("  function validateApplicationMenu(", "  async function applicationMenu(");
   const labels = ["Fluxion", "About Fluxion", "Settings…", "Set Fluxion as Default Browser", "Services", "Hide Fluxion", "Hide Others", "Show All", "Quit Fluxion"];
-  assert.equal(h.validateApplicationMenu(labels).length, 4);
+  assert.equal(h.validateApplicationMenu(labels, true).length, 4);
   for (const label of ["About Fluxion", "Set Fluxion as Default Browser", "Hide Fluxion", "Quit Fluxion"]) {
-    assert.throws(() => h.validateApplicationMenu(labels.map(value => value === label ? value.replace("Fluxion", "Firefox") : value)), /missing/);
-    assert.throws(() => h.validateApplicationMenu(labels.filter(value => value !== label)), /missing/);
+    assert.throws(() => h.validateApplicationMenu(labels.map(value => value === label ? value.replace("Fluxion", "Firefox") : value), true), /missing/);
+    assert.throws(() => h.validateApplicationMenu(labels.filter(value => value !== label), true), /missing/);
   }
   assert.throws(() => h.validateApplicationMenu(["Firefox", ...labels.slice(1)]), /not named Fluxion/);
   assert.throws(() => h.validateApplicationMenu([...labels, "Share Firefox"]), /retains Firefox/);
+  const hiddenDefault = labels.filter(value => value !== "Set Fluxion as Default Browser");
+  assert.equal(h.validateApplicationMenu(hiddenDefault, false).length, 3);
+  assert.throws(() => h.validateApplicationMenu(hiddenDefault, true), /missing: Set Fluxion/);
+  assert.throws(() => h.validateApplicationMenu([...hiddenDefault, "Set Firefox as Default Browser"], false), /retains Firefox/);
 });
 test("application-menu verifier retains actual OS evidence and both native window labels without forcing localization", async () => {
   const labels = ["Fluxion", "About Fluxion", "Set Fluxion as Default Browser", "Hide Fluxion", "Quit Fluxion"];
   const report = { checks: [], captures: [] }, writes = [];
-  const document = { getElementById: id => ({ getAttribute: name => `${id}:${name}` }) };
+  const document = { getElementById: id => ({ getAttribute: name => id === "menu_setAsDefault" ? "Set Fluxion as Default Browser" : `${id}:${name}` }) };
   const h = helper("  function validateApplicationMenu(", "  async function strings(", {
-    report, window: { document }, Services: { appShell: { hiddenDOMWindow: { document } } },
+    report, window: { document }, Services: { appShell: { hiddenDOMWindow: { document } }, prefs: { getBoolPref: () => false } },
+    requireProductString: (id, actual, expected) => assert.equal(actual, expected),
     driver: "/owned", PathUtils: { join: (...parts) => parts.join("/") }, plain: String,
     IOUtils: { writeUTF8: async (...args) => writes.push(args), exists: async () => true, readUTF8: async () => labels.join("\n") },
     wait: async condition => assert.equal(await condition(), true),
@@ -38,6 +43,32 @@ test("application-menu verifier retains actual OS evidence and both native windo
   assert.deepEqual(Array.from(report.applicationMenu.nativeLabels), labels);
   assert.equal(report.applicationMenu.windows.hidden.menu_FileQuitItem, "menu_FileQuitItem:label");
   assert.equal(report.applicationMenu.windows.browser.aboutName, "aboutName:label");
+});
+test("application-menu default action follows native preference/status gating while its localization is always checked", async () => {
+  for (const scenario of ["pref-off", "already-default", "visible", "unexpectedly-missing", "bad-hidden-label"]) {
+    const enabled = scenario !== "pref-off", isDefault = scenario === "already-default";
+    const labels = ["Fluxion", "About Fluxion", "Hide Fluxion", "Quit Fluxion"];
+    if (scenario === "visible") labels.push("Set Fluxion as Default Browser");
+    const document = { getElementById: () => ({ getAttribute: () => scenario === "bad-hidden-label" ? "Set Firefox as Default Browser" : "Set Fluxion as Default Browser" }) };
+    let nativeReads = 0;
+    const report = { checks: [], captures: [] };
+    const h = helper("  function validateApplicationMenu(", "  async function strings(", {
+      report, window: { document }, Services: { appShell: { hiddenDOMWindow: { document } }, prefs: { getBoolPref: () => enabled } },
+      Cc: { "@mozilla.org/browser/shell-service;1": { getService: () => ({ isDefaultBrowser(startup) {
+        nativeReads++; assert.equal(startup, false); return isDefault;
+      } }) } }, Ci: { nsIShellService: {} },
+      requireProductString: (id, actual, expected) => assert.equal(actual, expected), plain: String,
+      driver: "/owned", PathUtils: { join: (...parts) => parts.join("/") },
+      IOUtils: { writeUTF8: async () => {}, exists: async () => true, readUTF8: async () => labels.join("\n") },
+      wait: async condition => assert.equal(await condition(), true),
+    });
+    if (scenario === "unexpectedly-missing") await assert.rejects(h.applicationMenu(), /missing: Set Fluxion/);
+    else if (scenario === "bad-hidden-label") await assert.rejects(h.applicationMenu(), /Firefox/);
+    else await h.applicationMenu();
+    assert.equal(nativeReads, enabled ? 1 : 0);
+    assert.equal(report.applicationMenu.defaultActionEnabled, enabled);
+    assert.equal(report.applicationMenu.nativeDefault, enabled ? isDefault : null);
+  }
 });
 test("Extensions branding gate opens the native widget, preserves content and closes even after a bad illustration", async () => {
   for (const scenario of ["valid", "wrong-image", "missing-action", "missing-description"]) {

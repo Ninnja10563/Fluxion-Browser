@@ -22,3 +22,12 @@ attribution, protocol identifiers and security wording remain intact.
 
 All 0.72.1 Focus-direction, edge-to-edge and final-tab protections are retained.
 This is not a website-speed or physical M3 performance claim.
+
+The first candidate's actual OS capture already showed About/Hide/Quit Fluxion.
+Its new test incorrectly required the default-browser action to be visible:
+Gecko 155 ships `browser.macAppMenu.setAsDefaultShown=false`, and when enabled
+also hides the action if it is already the default. The verifier now observes
+that preference/native status, always checks the browser and hidden-window
+default-action label, and requires its OS entry when native policy makes it
+visible. Visible Firefox labels still fail. No OS default or product policy is
+changed. The initial candidate was not released.

@@ -1,4 +1,4 @@
-/* global Services, SessionStore, PathUtils, IOUtils, Ci, Cu, ChromeUtils */
+/* global Services, SessionStore, PathUtils, IOUtils, Cc, Ci, Cu, ChromeUtils */
 (function verifyFluxionBranding(window) {
   "use strict";
   if (Services.env.get("FLUXION_VERIFY_BRANDING") !== "1") return;
@@ -38,8 +38,9 @@
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Branding key not acknowledged: ${name}`, 20000);
   }
-  function validateApplicationMenu(labels) {
-    const required = ["About Fluxion", "Set Fluxion as Default Browser", "Hide Fluxion", "Quit Fluxion"];
+  function validateApplicationMenu(labels, defaultActionVisible) {
+    const required = ["About Fluxion", "Hide Fluxion", "Quit Fluxion"];
+    if (defaultActionVisible) required.push("Set Fluxion as Default Browser");
     assert(Array.isArray(labels) && labels[0] === "Fluxion", "Native application menu is not named Fluxion");
     for (const label of required) assert(labels.includes(label), `Native application menu is missing: ${label}`);
     assert(!labels.some(label => /\bFirefox\b/.test(label)), "Native application menu retains Firefox product branding");
@@ -48,18 +49,26 @@
   async function applicationMenu() {
     // Observe the already-created native menu before asking Fluent to resolve
     // any new labels: translating it here could conceal an early-startup bug.
+    // Gecko's Cocoa menu gates this item on its Nimbus preference, then on
+    // native default-browser status. The stock 155 preference is false.
+    const defaultActionEnabled = Services.prefs.getBoolPref("browser.macAppMenu.setAsDefaultShown", false);
+    const nativeDefault = defaultActionEnabled
+      ? Cc["@mozilla.org/browser/shell-service;1"].getService(Ci.nsIShellService).isDefaultBrowser(false) : null;
     await IOUtils.writeUTF8(PathUtils.join(driver, "branding-application-menu.ready"), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, "branding-application-menu.sent")),
       "Native application menu was not inspected", 20000);
     const labels = (await IOUtils.readUTF8(PathUtils.join(driver, "branding-application-menu.txt"))).trim().split(/\r?\n/);
-    report.applicationMenu = { nativeLabels: labels, windows: {} };
+    report.applicationMenu = { nativeLabels: labels, defaultActionEnabled, nativeDefault, windows: {} };
     for (const [name, menuWindow] of [["browser", window], ["hidden", Services.appShell.hiddenDOMWindow]]) {
       report.applicationMenu.windows[name] = Object.fromEntries(
         ["aboutName", "menu_setAsDefault", "menu_mac_hide_app", "menu_FileQuitItem"].map(id =>
           [id, plain(menuWindow.document.getElementById(id)?.getAttribute("label") || "")])
       );
     }
-    validateApplicationMenu(labels);
+    for (const [name, items] of Object.entries(report.applicationMenu.windows)) {
+      requireProductString(`${name}.menu_setAsDefault`, items.menu_setAsDefault, "Set Fluxion as Default Browser");
+    }
+    validateApplicationMenu(labels, defaultActionEnabled && !nativeDefault);
     report.captures.push("capture-branding-application-menu");
     report.checks.push("actual-macos-accessibility-application-menu-labels-use-fluxion-without-invoking-actions");
   }
