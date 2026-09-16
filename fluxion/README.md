@@ -8,6 +8,16 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.71.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.71.0-preview.1)**
+reduces repeated tab-management work: direct sleeping-tab ownership lookup,
+linear workspace selection and live-validated per-open palette organisation
+analysis. All 1,149 tests and mandatory native macOS gates passed, including
+1,000 genuine HTTPS lazy tabs in the normal command palette. Reproducible
+comparisons and native timing limits are recorded in the
+[milestone](docs/milestone-0.71.md) and
+[provenance](release/provenance/v0.71.0-preview.1.md). This does not claim higher
+website benchmark scores; structural changes and physical M3 profiling remain.
+
 **[0.70.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.2-preview.1)**
 fixes fullscreen Focus retraction over Settings and the floating sidebar,
 including older saved autohide preferences. The floating heading is anchored
@@ -57,7 +67,8 @@ behavior had not been independently reproduced, and a programmatic
 Settings-to-page address-state transition remained under investigation.
 Automatic update installation is not part of the 0.70 app; automatic
 workspace/container assignment also remains pending. The app is ad-hoc
-signed, not Apple-notarized. 0.71 is the next measured performance milestone.
+signed, not Apple-notarized. The first measured 0.71 performance slice is now
+published above; broader profiling remains.
 
 Fluxion 0.69 is published: the supplied app artwork, fully hidden/top-hover
 Focus navigation, an inset floating sidebar, matching New tab hover geometry,

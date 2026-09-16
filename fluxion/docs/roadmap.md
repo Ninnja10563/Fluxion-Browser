@@ -185,9 +185,10 @@ controls work and its failure paths have been tested.
   content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
 - linear sleeping ownership checks and ordinary workspace preference selection,
-  plus live-input-validated command-palette organisation memoization (0.71
-  candidate; reproducible frozen-source comparisons in [milestone](milestone-0.71.md);
-  full native verification required before release, physical M3 profiling remains)
+  plus live-input-validated command-palette organisation memoization (published
+  0.71; reproducible frozen-source comparisons and mandatory 1,000-HTTPS-tab
+  native palette gate passed; [milestone](milestone-0.71.md) records timing
+  limits, while structural-update and physical M3 profiling remain)
 - preserve Flow row identity during ordinary same-workspace tab selection
   (implemented in published 0.58: 1,000-tab native selection/identity/mutation
   gate, correct native multi-selection event target, pinned/group/split state

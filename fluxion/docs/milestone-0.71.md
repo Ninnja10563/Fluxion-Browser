@@ -1,8 +1,11 @@
 # Fluxion 0.71 — Less repeated work with many tabs
 
-Release candidate; publication requires the full packaged macOS verification
-suite, including native sleeping, workspace/session restoration and an expanded
-all-mode command-palette gate. This document does not claim a published build.
+All 1,149 regression tests and every required packaged macOS gate passed in
+[run 35084369845](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35084369845)
+at source `eb6e48c1580276f1522953bf6b97eb2e348f1eef`. The
+[0.71.0-preview.1 release](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.71.0-preview.1)
+promotes that exact verified archive. See
+[provenance](../release/provenance/v0.71.0-preview.1.md).
 
 This performance slice removes three sources of repeated browser-chrome work:
 
@@ -45,6 +48,29 @@ opening, the 1,000-tab corpus performs no additional grouping analyses or URL
 parses, instead of 30 analyses and 30,000 parses. Changed input still triggers
 fresh analysis. These are deterministic work counts, not website benchmark
 scores, memory savings or battery-life claims.
+
+## Packaged native evidence
+
+The expanded mandatory Flow gate used 1,000 genuine HTTPS lazy tabs created by
+Gecko, without loading their documents. All remained pending and the selected
+page did not change. It verified bounded results, input focus, and live grouping,
+title, workspace, close and new-tab invalidation through the shipped palette.
+
+On the hosted macOS runner, the nine unchanged all-mode queries took
+8.73–22.41 ms synchronous dispatch and 12.25–36.86 ms to the next frame.
+Cold opening took 33.34 ms dispatch and 55.09 ms to the next frame. The complete
+16-sample sequence, including structural invalidation, had a 33.10 ms median and
+213.36 ms maximum input-to-frame time. The 997-tab grouping change was the
+slowest sample; a subsequent title change took 125.80 ms to the next frame.
+These are current-build observations, not a matched native before/after result
+or a high-refresh-rate guarantee. Structural updates need further profiling.
+
+The original tab-search gate passed 20 samples with a 21.44 ms median and
+124.76 ms p95 input-to-frame time. The 200-tab background-event gate retained
+every row/control with zero structural removals through 24 batches. Real native
+sleep/discard and pin-during-flush protection passed. Workspace, crash/session,
+seven-stage last-window and signed updater/relaunch gates also remained required
+and passed; none were bypassed for performance.
 
 The user's reported score of 32.6 has no identified benchmark/version or matched
 hardware baseline. Neither this milestone nor Linux CPU-only fixtures establish

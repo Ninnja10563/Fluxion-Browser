@@ -23,12 +23,13 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
-**[0.70.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.70.2-preview.1)**
-fixes hidden-sidebar navigation retraction over Settings and the floating
-sidebar in macOS fullscreen, and moves the floating heading to the top inset.
-All 1,136 tests and mandatory native gates passed. See the
-[milestone](fluxion/docs/milestone-0.70.2.md) and
-[provenance](fluxion/release/provenance/v0.70.2-preview.1.md).
+**[0.71.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.71.0-preview.1)**
+reduces repeated sleeping-tab scans, workspace-selection reads and unchanged
+command-palette grouping analysis. All 1,149 tests and mandatory native macOS
+gates passed, including a new 1,000-tab all-mode palette check. Existing Focus
+and session fixes are retained. See the [milestone](fluxion/docs/milestone-0.71.md)
+and [provenance](fluxion/release/provenance/v0.71.0-preview.1.md).
+This is a measured browser-chrome optimization, not a website-speed claim.
 
 Since 0.70.1, optional automatic update checks offer an explicit Update and restart action
 through Sparkle. Native verification covers signed replacement, canceled
