@@ -67,6 +67,9 @@ process (PID 3042 → 4375). The same default-profile fixture retained its exact
 three tab URLs, selected tab, pinned state, workspace metadata, bookmark GUID
 and saved preference. This proves observer cancellation, not a physical click
 on an unsaved-page confirmation dialog.
+The updater fixture uses restore-session startup (`browser.startup.page=3`).
+It does not override fresh-start choices or seed a private-window sentinel;
+private exclusion and startup opt-outs are covered by separate session gates.
 
 [Browser run 35069330208](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35069330208),
 on source `679d572e6de407620e535a8630641265c014eccf`, passed its product-chrome,

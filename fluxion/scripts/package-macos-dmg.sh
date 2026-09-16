@@ -76,7 +76,19 @@ try:
         info = plistlib.load(handle)
     if not isinstance(info, dict):
         raise ValueError('application Info.plist is not a dictionary')
-    if constant('PRODUCT_VERSION') != base or any(info.get(key) != base for key in ('CFBundleShortVersionString', 'CFBundleVersion')):
+    # Sparkle compares Apple's native bundle version, not the display release.
+    # Keep packaging older, pre-updater apps from their own metadata, but never
+    # allow a new signed-update app to fall back by omitting its release marker.
+    signed_update_app = 'FluxionReleaseVersion' in info or tuple(map(int, base.split('.'))) > (0, 70, 0)
+    native_version = base
+    if signed_update_app:
+        preview = release.split('-preview.', 1)
+        if len(preview) == 2 and not 1 <= int(preview[1]) <= 255:
+            raise ValueError('signed-update preview number must be between 1 and 255')
+        native_version = release.replace('-preview.', 'b')
+        if info.get('FluxionReleaseVersion') != release:
+            raise ValueError('signed-update release marker disagrees with bundled Settings')
+    if constant('PRODUCT_VERSION') != base or info.get('CFBundleShortVersionString') != base or info.get('CFBundleVersion') != native_version:
         raise ValueError('bundled Settings release and application bundle versions disagree')
     if sys.argv[2] and sys.argv[2] != release:
         raise ValueError(f'requested version {sys.argv[2]} does not match packaged release {release}')

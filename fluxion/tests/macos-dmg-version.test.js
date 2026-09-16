@@ -19,10 +19,14 @@ function fixture(t, release = "0.12.0-preview.2") {
   fs.writeFileSync(path.join(app, "Contents/MacOS/Fluxion"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
   const metadata = (version = release, overrides = {}) => {
     const base = version.split("-")[0];
+    const [major, minor, patch] = base.split(".").map(Number);
+    const signed = overrides.signed ?? (major > 0 || minor > 70 || minor === 70 && patch > 0);
+    const bundle = signed ? version.replace("-preview.", "b") : base;
     fs.writeFileSync(settings, `(() => {\n const PRODUCT_VERSION = "${overrides.product || base}";\n const PRODUCT_RELEASE = "${version}";\n})();\n`);
     fs.writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict>
       <key>CFBundleShortVersionString</key><string>${overrides.short || base}</string>
-      <key>CFBundleVersion</key><string>${overrides.bundle || base}</string></dict></plist>`);
+      <key>CFBundleVersion</key><string>${overrides.bundle || bundle}</string>
+      ${signed ? `<key>FluxionReleaseVersion</key><string>${overrides.fluxion || version}</string>` : ""}</dict></plist>`);
   };
   metadata();
   fs.writeFileSync(path.join(bin, "uname"), "#!/bin/sh\nprintf 'Darwin\\n'\n", { mode: 0o755 });
@@ -53,11 +57,33 @@ test("default DMG release comes from supplied older app, independently of checko
   assert.equal(f.calls().filter(call => call.name === "hdiutil").length, 1);
 });
 
-test("explicit current release succeeds only with matching bundled full release and base version", t => {
+test("explicit current release packages the exact signed native beta version and full release marker", t => {
   const release = require("../package.json").version, f = fixture(t, release);
   const result = f.run("--version", release);
   assert.equal(result.status, 0, result.stderr);
   assert.ok(fs.existsSync(path.join(f.output, `Fluxion-${release}-macOS-universal.dmg`)));
+  assert.ok(fs.readFileSync(f.plist, "utf8").includes(`<string>${release.replace("-preview.", "b")}</string>`));
+  assert.ok(f.calls().some(call => call.name === "lipo"));
+  assert.ok(f.calls().some(call => call.name === "codesign" && call.args.join(" ").startsWith("--verify --deep --strict")));
+});
+
+test("signed native version, display release, and marker must agree before any packaging tools run", t => {
+  for (const overrides of [{ bundle: "0.70.1" }, { bundle: "0.70.1b2" }, { short: "0.70.1b1" },
+    { fluxion: "0.70.1-preview.2" }, { signed: false }]) {
+    const f = fixture(t, "0.70.1-preview.1"); f.metadata("0.70.1-preview.1", overrides);
+    const result = f.run();
+    assert.notEqual(result.status, 0, JSON.stringify(overrides));
+    assert.deepEqual(f.calls(), []); assert.equal(fs.existsSync(f.output), false);
+  }
+});
+
+test("signed prerelease mapping enforces Apple's 1 through 255 beta bound", t => {
+  for (const release of ["0.70.1-preview.0", "0.70.1-preview.256", "0.70.1-preview.01"]) {
+    const f = fixture(t, release), result = f.run();
+    assert.notEqual(result.status, 0, release); assert.deepEqual(f.calls(), []);
+  }
+  const f = fixture(t, "0.70.1-preview.255"), result = f.run();
+  assert.equal(result.status, 0, result.stderr);
 });
 
 test("same-base but wrong preview or stable release is rejected before expensive tools or output creation", t => {
