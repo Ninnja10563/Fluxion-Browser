@@ -1,6 +1,10 @@
 # Fluxion 0.72.2 — Extensions branding and native menu evidence
 
-Candidate; packaged native verification is required before publication.
+Published as [0.72.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.2-preview.1).
+All 1,191 tests and mandatory native macOS gates passed on source
+`594b0c42a607091cb6c369ea35f81e85f828a080`, run
+[35157356045](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35157356045).
+See [release provenance](../release/provenance/v0.72.2-preview.1.md).
 
 The Extensions empty-state illustration was an independent native SVG missing
 from the branding manifest. It now reuses the owner's existing transparent F,
@@ -31,3 +35,17 @@ that preference/native status, always checks the browser and hidden-window
 default-action label, and requires its OS entry when native policy makes it
 visible. Visible Firefox labels still fail. No OS default or product policy is
 changed. The initial candidate was not released.
+
+The accepted native run captured About Fluxion, Hide Fluxion and Quit Fluxion
+in the actual OS menu. The default action was legitimately hidden by the stock
+preference; its browser and hidden-window labels were both correct. Native
+visible-default-action behavior is covered conditionally and by behavioral
+tests, not claimed as an OS capture on this runner. No application-menu string
+change was needed in current source. An older installed version or existing
+profile discrepancy remains unconfirmed because the user's version is unknown.
+
+The actual widget-routed Extensions popup painted the exact supplied mark at
+100×100 intrinsic size, with native heading, explanation and enabled Discover
+extensions action intact. Both captures were inspected. Broader security,
+session restoration, privacy, accessibility and real updater gates passed.
+This remains an ad-hoc-signed, non-notarized macOS 12+ preview.

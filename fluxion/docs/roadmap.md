@@ -198,6 +198,9 @@ controls work and its failure paths have been tested.
   sidebar content and no implicit address focus after final-workspace-tab
   replacement (0.72.1; native OS-pointer, Cmd-W, fullscreen, reduced-motion,
   session and security gates passed; expanded/compact behavior retained)
+- complete native Extensions empty-state product artwork and actual macOS
+  application-menu branding evidence (0.72.2; real popup and OS-menu captures,
+  native visibility-policy checks and strict resource verification passed)
 - preserve Flow row identity during ordinary same-workspace tab selection
   (implemented in published 0.58: 1,000-tab native selection/identity/mutation
   gate, correct native multi-selection event target, pinned/group/split state

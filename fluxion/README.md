@@ -8,6 +8,15 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.72.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.2-preview.1)**
+uses the supplied transparent F in the native Extensions popup, with native
+text and controls retained. Actual macOS application-menu labels are captured
+and checked, not just their localization resources. All 1,191 tests and
+mandatory native gates passed; screenshots were reviewed. See the
+[milestone](docs/milestone-0.72.2.md) and
+[provenance](release/provenance/v0.72.2-preview.1.md). Existing-profile stale
+menu wording was not reproduced; no speculative cache deletion is performed.
+
 **[0.72.1-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.1-preview.1)**
 retains Focus navigation when moving up into the macOS menu bar and retracts
 it on downward departure. Hidden-sidebar content is edge-to-edge. Closing the
