@@ -56,6 +56,20 @@ export function releaseProfile(root) {
   fs.rmSync(expected, { recursive: true });
 }
 
+export function installGate(root) {
+  root = fs.realpathSync(root);
+  const config = read(path.join(root, "gate.json"));
+  const app = path.join(root, "live", "Fluxion.app");
+  if (config.root !== root || config.app !== app || !/^fluxion-updater-check\.[A-Za-z0-9]{6}$/.test(path.basename(root))) throw Error("Refusing mismatched updater fixture app");
+  const resources = path.join(app, "Contents", "Resources", "fluxion");
+  if (fs.realpathSync(resources) !== resources) throw Error("Fixture resources are not canonical");
+  // Production packaging intentionally omits runtime test data. Only the owned
+  // copy receives this directory, before its final test-only signature.
+  const runtime = path.join(resources, "runtime");
+  fs.mkdirSync(runtime, { mode: 0o700 });
+  fs.copyFileSync(path.join(root, "gate.json"), path.join(runtime, "updater-test-gate.json"), fs.constants.COPYFILE_EXCL);
+}
+
 export function makeFeeds(root, signTool) {
   const sign = (key, filename) => {
     const result = spawnSync(signTool, ["--ed-key-file", path.join(root, `${key}.key`), "-p", filename], { encoding: "utf8", timeout: 90000 });
@@ -105,6 +119,7 @@ async function main() {
   const [action, root, argument] = process.argv.slice(2);
   if (action === "claim") { claimProfile(root); return; }
   if (action === "release") { releaseProfile(root); return; }
+  if (action === "install-gate") { installGate(root); return; }
   if (action === "feeds") { makeFeeds(root, argument); return; }
   if (action === "serve") {
     const server = http.createServer(fixtureHandler(root, []));
@@ -113,6 +128,6 @@ async function main() {
     for (const signal of ["SIGINT", "SIGTERM"]) process.on(signal, () => server.close(() => process.exit(0)));
     return;
   }
-  throw Error("usage: updater-fixture.mjs claim|release|feeds|serve ROOT [SIGN_TOOL]");
+  throw Error("usage: updater-fixture.mjs claim|release|install-gate|feeds|serve ROOT [SIGN_TOOL]");
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) main().catch(error => { console.error(error.message); process.exitCode = 1; });

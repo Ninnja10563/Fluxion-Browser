@@ -43,6 +43,25 @@ test("updater fixture rejects symlinked default-profile parents before claiming 
   } finally { fs.rmSync(base, { recursive: true, force: true }); }
 });
 
+test("owned updater app setup creates the runtime directory omitted by production packaging", async () => {
+  const { claimProfile, installGate } = await fixture;
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-policy-")));
+  try {
+    const home = path.join(base, "home"); fs.mkdirSync(home);
+    const root = fs.mkdtempSync(path.join(base, "fluxion-updater-check."));
+    const config = claimProfile(root, home);
+    const resources = path.join(config.app, "Contents", "Resources", "fluxion");
+    fs.mkdirSync(resources, { recursive: true });
+    assert.equal(fs.existsSync(path.join(resources, "runtime")), false);
+    installGate(root);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(resources, "runtime", "updater-test-gate.json"), "utf8")), config);
+    assert.throws(() => installGate(root), /EEXIST/);
+    fs.writeFileSync(path.join(root, "gate.json"), JSON.stringify({ ...config, app: path.join(base, "unowned.app") }));
+    assert.throws(() => installGate(root), /mismatched updater fixture app/);
+    assert.equal(fs.existsSync(path.join(base, "unowned.app")), false);
+  } finally { fs.rmSync(base, { recursive: true, force: true }); }
+});
+
 test("updater loopback handler serves only the selected immutable signed-feed/archive pair", async () => {
   const { fixtureHandler } = await fixture;
   const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-server-"))), records = [];
