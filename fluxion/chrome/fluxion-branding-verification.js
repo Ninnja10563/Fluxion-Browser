@@ -141,16 +141,61 @@
       panel: { left: panel.left, top: panel.top, width: panel.width, height: panel.height } };
   }
   async function nativeLocationRevert(locationState) {
+    const urlbar = window.gURLBar, lifecycle = [];
+    report.securityNavigation.lifecycle = lifecycle;
+    const record = (stage, context = null) => {
+      if (lifecycle.length >= 32) return;
+      const state = locationState();
+      lifecycle.push({ stage, viewOpen: urlbar.view.isOpen, proxy: state.proxy,
+        hasTypedValue: state.userTypedValue !== null, focused: document.activeElement === urlbar.inputField,
+        ...(context ? { resultCount: context.results?.length || 0 } : {}) });
+    };
+    const queryObserver = {
+      onQueryStarted: context => record("query-started", context),
+      onQueryResults: context => record("query-results", context),
+      onQueryFinished: context => record("query-finished", context),
+      onQueryCancelled: context => record("query-cancelled", context),
+      onViewOpen: () => record("view-open"), onViewClose: () => record("view-close"),
+    };
+    const previousQuery = urlbar.lastQueryContextPromise, initiallyOpen = urlbar.view.isOpen;
     const observeKey = event => {
-      report.securityNavigation.keys.push({ key: event.key, meta: event.metaKey, trusted: event.isTrusted });
+      report.securityNavigation.keys.push({ key: event.key, meta: event.metaKey, trusted: event.isTrusted,
+        viewOpen: urlbar.view.isOpen, focused: document.activeElement === urlbar.inputField });
+      record(`keydown-${event.key}`);
     };
     const escapes = () => report.securityNavigation.keys.filter(key => key.trusted && key.key === "Escape").length;
     window.addEventListener("keydown", observeKey, true);
+    urlbar.controller.addListener(queryObserver);
     try {
       await nativeKey("branding-location");
       await wait(() => document.activeElement === window.gURLBar.inputField &&
         report.securityNavigation.keys.some(key => key.trusted && key.meta && key.key.toLowerCase() === "l"),
       "Native Command-L did not focus the branding fixture location");
+      // Gecko 155 startQuery replaces this promise and resolves it after the
+      // current query's finished notification. Focus alone precedes asynchronous
+      // results: Escape then takes the closed-view revert branch, not dismissal.
+      // A closed view must start a new Cmd-L query; an already-open native view
+      // may reuse its current one. Do not start/cancel a query or assign state.
+      // If Gecko replaces a query, await its successor.
+      let watched = null, settled = false, queryError = false;
+      const readiness = report.securityNavigation.queryReadiness = { initiallyOpen, watchedQueries: 0, settled: false, reusedInitialQuery: false };
+      await wait(() => {
+        const current = urlbar.lastQueryContextPromise;
+        if ((!initiallyOpen && current === previousQuery) || !current || typeof current.then !== "function") return false;
+        if (current !== watched) {
+          watched = current; settled = false; queryError = false; readiness.watchedQueries++;
+          Promise.resolve(current).then(context => {
+            if (watched !== current) return;
+            settled = true; record("current-query-resolved", context);
+          }, () => { if (watched === current) queryError = true; });
+        }
+        assert(!queryError, "Native branding location query rejected");
+        readiness.settled = settled;
+        readiness.reusedInitialQuery = watched === previousQuery;
+        return settled && watched === urlbar.lastQueryContextPromise && urlbar.view.isOpen &&
+          document.activeElement === urlbar.inputField;
+      }, "Native Command-L suggestions did not finish their current query and open before Escape");
+      record("ready-before-first-escape");
       await nativeKey("branding-location-escape");
       await wait(() => !window.gURLBar.view.isOpen && escapes() === 1,
         "First native Escape did not dismiss the branding location suggestions");
@@ -170,7 +215,10 @@
       }, "Native Escape did not restore the valid unedited HTTPS security proxy");
     } finally {
       window.removeEventListener("keydown", observeKey, true);
+      urlbar.controller.removeListener(queryObserver);
       report.securityNavigation.afterRevert = locationState();
+      report.securityNavigation.afterRevert.viewOpen = urlbar.view.isOpen;
+      record("location-preparation-finished");
     }
   }
   async function securityPanel() {

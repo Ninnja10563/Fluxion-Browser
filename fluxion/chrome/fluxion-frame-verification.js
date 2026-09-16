@@ -944,8 +944,17 @@
     const evidence = report.fullscreen = { input: "Real window.fullScreen transition, Gecko widget-routed hover, native macOS Cmd-L/Escape", keys: [], geometry: [] };
     const tab = gBrowser.addTrustedTab("https://example.org/", { skipAnimation: true });
     ui.setTabWorkspace(tab, ui.currentWorkspace()); ui.selectTab(tab);
-    await wait(() => tab.label === "Example Domain" && !tab.hasAttribute("busy") &&
-      tab.linkedBrowser.currentURI.spec === "https://example.org/", "Fullscreen HTTPS fixture did not finish loading", 35000);
+    try {
+      await wait(() => tab.label === "Example Domain" && !tab.hasAttribute("busy") &&
+        tab.linkedBrowser.currentURI.spec === "https://example.org/", "Fullscreen HTTPS fixture did not finish loading", 35000);
+    } finally {
+      // Preserve the failed load state too: a timeout alone cannot distinguish
+      // a transport failure from incorrect selection or workspace ownership.
+      evidence.httpsLoad = { requested: "https://example.org/", uri: tab.linkedBrowser.currentURI.spec,
+        documentURI: tab.linkedBrowser.browsingContext?.currentWindowGlobal?.documentURI?.spec ?? null,
+        title: tab.label, busy: tab.hasAttribute("busy"), pending: tab.hasAttribute("pending"),
+        selected: gBrowser.selectedTab === tab, workspace: ui.currentWorkspace() };
+    }
     const toolbox = document.getElementById("navigator-toolbox"), browser = tab.linkedBrowser;
     const moveToPage = () => { const box = rect(browser); routePointer(box.right - 60, box.top + Math.min(160, box.height / 2)); };
     const verifyPersistentNavigation = async mode => {

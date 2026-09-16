@@ -33,3 +33,37 @@ selection after final-tab replacement in Focus, without blanket asynchronous
 blur or overriding deliberate keyboard focus.
 
 This does not claim a website-speed gain or completion of the original roadmap.
+
+## Verification
+
+The local suite includes behavioral coverage for trusted upward and
+downward exits, the in-progress reveal transform, mode changes, native reveal
+edges, explicit address focus, cancellation of final-tab closure, and zero
+layout reservation for the hidden sidebar in both text directions.
+
+The first full native candidate passed the new OS-pointer, edge-to-edge and
+final-workspace-tab checks, but failed the existing animation fixture. Making
+the page flush also moved its old pointer target into Gecko's immediate
+content-collapse region. The fixture now uses Gecko's actual near-toolbar
+buffer to exercise the separate animated path, without setting animation
+attributes or weakening duration assertions. The deeper-page immediate-collapse
+checks remain. That candidate was not released; a complete rerun is required.
+
+An unchanged-source candidate subsequently timed out loading the fullscreen
+HTTPS fixture before entering fullscreen. Its failed tab state was not captured,
+so a network cause is plausible but not established. The following run passed
+the complete frame gate, including the genuine animated path (point y=80,
+native immediate-collapse boundary y=122), but caught a separate branding
+fixture Escape/readiness failure. A trusted Escape arrived; the unresolved
+condition was native suggestions remaining or reopening. The fixture had
+awaited keyboard focus but not the asynchronous native query/view readiness.
+Neither failed candidate was published. HTTPS load-state diagnostics now retain
+URI, document URI, title, loading, selection and workspace on success or timeout.
+The branding fixture now passively waits for the current native query to settle
+and the view to open, following query replacement and legitimate already-open
+view reuse. Tests reject stale/rejected queries and a view that never opens.
+It records bounded lifecycle evidence without forcing a query, proxy, URI or
+popup state; the single dismissal Escape and final security checks remain.
+
+Native macOS validation and publication are pending. Physical M3/trackpad
+assessment and broader hardware performance profiling remain outside this fix.
