@@ -189,6 +189,11 @@ controls work and its failure paths have been tested.
   0.71; reproducible frozen-source comparisons and mandatory 1,000-HTTPS-tab
   native palette gate passed; [milestone](milestone-0.71.md) records timing
   limits, while structural-update and physical M3 profiling remain)
+- expanded sidebar heading aligned below actual native caption controls, with
+  narrow-window fallback; scoped 120 ms animated Focus navigation and explicit
+  native single/multiple tab-link copying (0.72; normal/fullscreen, RTL,
+  reduced-motion, real menu and pasteboard checks passed; physical M3/trackpad
+  assessment remains)
 - preserve Flow row identity during ordinary same-workspace tab selection
   (implemented in published 0.58: 1,000-tab native selection/identity/mutation
   gate, correct native multi-selection event target, pinned/group/split state

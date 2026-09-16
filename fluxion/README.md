@@ -8,6 +8,17 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.72.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.0-preview.1)**
+raises the expanded sidebar heading while protecting native window controls,
+shortens animated Focus navigation to 120 ms, and adds native single/multiple
+tab-link copying. Narrow windows retain a safe navigation fallback. Both
+reduced-motion controls suppress navigation animation. All 1,171 tests and
+mandatory native macOS gates passed, including actual keyboard menu commands,
+clipboard bytes, fullscreen geometry, 1,000-tab structural changes and session
+restoration. See the [milestone](docs/milestone-0.72.md) and
+[provenance](release/provenance/v0.72.0-preview.1.md). This is not a website-speed
+or physical M3 benchmark claim.
+
 **[0.71.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.71.0-preview.1)**
 reduces repeated tab-management work: direct sleeping-tab ownership lookup,
 linear workspace selection and live-validated per-open palette organisation

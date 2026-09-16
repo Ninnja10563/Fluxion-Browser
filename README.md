@@ -23,13 +23,14 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
-**[0.71.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.71.0-preview.1)**
-reduces repeated sleeping-tab scans, workspace-selection reads and unchanged
-command-palette grouping analysis. All 1,149 tests and mandatory native macOS
-gates passed, including a new 1,000-tab all-mode palette check. Existing Focus
-and session fixes are retained. See the [milestone](fluxion/docs/milestone-0.71.md)
-and [provenance](fluxion/release/provenance/v0.71.0-preview.1.md).
-This is a measured browser-chrome optimization, not a website-speed claim.
+**[0.72.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.0-preview.1)**
+raises the expanded workspace heading, shortens animated Focus retraction,
+and adds Copy Tab Link / Copy Selected Tab Links to the native context menu.
+All 1,171 tests and mandatory native macOS gates passed. The 0.71 tab-management
+optimizations and session fixes remain. See the
+[milestone](fluxion/docs/milestone-0.72.md) and
+[provenance](fluxion/release/provenance/v0.72.0-preview.1.md).
+No website benchmark or physical M3 performance improvement is claimed.
 
 Since 0.70.1, optional automatic update checks offer an explicit Update and restart action
 through Sparkle. Native verification covers signed replacement, canceled
