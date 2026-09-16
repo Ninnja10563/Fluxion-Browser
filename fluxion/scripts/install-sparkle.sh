@@ -21,6 +21,12 @@ ln -sfn "$extracted" "$cache/current"
 frameworks="$app/Contents/Frameworks"
 mkdir -p "$frameworks"
 ditto "$extracted/Sparkle.framework" "$frameworks/Sparkle.framework"
+# The upstream framework omits the distribution's license file. Ship the full
+# reviewed notice inside the sealed app, not just alongside its source code.
+cmp "$extracted/LICENSE" "$fluxion_root/third_party/sparkle/LICENSE"
+notices="$app/Contents/Resources/fluxion/third_party/sparkle"
+mkdir -p "$notices"
+ditto "$extracted/LICENSE" "$notices/LICENSE"
 xcrun clang "${flags[@]}" -mmacosx-version-min=12.0 -fobjc-arc -fvisibility=hidden -dynamiclib -O2 -Wall -Wextra -Wno-unused-parameter -Werror \
   -F "$frameworks" -framework AppKit -framework Sparkle -Wl,-rpath,@loader_path \
   "$fluxion_root/packaging/macos/updater/FluxionUpdaterBridge.m" -o "$frameworks/libFluxionUpdater.dylib"

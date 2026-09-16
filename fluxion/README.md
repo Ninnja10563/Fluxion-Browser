@@ -8,7 +8,8 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
-**0.70.1 is in development; native release verification is pending.** It adds
+**0.70.1 native update/session/toolbar checks have passed; final full release
+verification and publication remain pending.** It adds
 Sparkle-backed update-and-restart, a quiet update indicator, shared automatic
 metadata checks with an About opt-out, and a sidebar-aware fullscreen toolbar
 policy. Normal windows remain open when their final tab closes; explicit window
@@ -20,8 +21,11 @@ The updater's initial scope is macOS 12+, the installed application outside its
 DMG, and the default Fluxion profile. Automatic checks do not download or install
 an application. An explicit action requests normal, cancellable browser quit
 before replacement and restart. Users on 0.70 or earlier need one manual DMG
-upgrade to obtain the updater. Developer ID signing/notarization and native
-end-to-end acceptance remain outstanding; no website-speed improvement is claimed.
+upgrade to obtain the updater. An isolated signed-version fixture passed actual
+native replacement, observer-canceled quit/retry and exact same-profile tab,
+workspace, bookmark and preference restoration. This is not a physical
+unsaved-page-dialog test. Developer ID signing/notarization remains outstanding;
+no website-speed improvement is claimed.
 
 ### Latest published milestone
 

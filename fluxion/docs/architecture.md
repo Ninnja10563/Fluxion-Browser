@@ -51,8 +51,13 @@ expanded/compact navigation with `FullScreen.showNavToolbox(false)` before paint
 It checks the originating toolbox, so another window cannot change this one.
 There is no repeated global preference rewrite or replacement of Gecko's
 fullscreen methods. Address input, menus and security panels keep native focus
-ownership; DOM/video fullscreen and kiosk handling remain native. Packaged
-pointer-leave and expanded/compact persistence verification is still pending.
+ownership; DOM/video fullscreen and kiosk handling remain native. The packaged
+frame gate passed expanded/compact persistence, native top-edge reveal and
+pointer-leave retraction, and keyboard-owned address focus followed by an actual
+page click to return focus before retraction. Gecko intentionally retries
+focused-input collapse on click/keydown, not scripted blur. See the
+[0.70.1 evidence](milestone-0.70.1.md); final full release verification remains
+separate from that gate pass.
 
 General's default-browser action delegates to Gecko's native ShellService.
 Status comes from the operating system, not a Fluxion preference, and the UI
@@ -415,8 +420,9 @@ Its isolated-profile JSON reports are retained as release artifacts. Candidate
 code and unit tests alone are not evidence that this native gate has passed.
 The 0.70.1 candidate extends the fixture to native window-button input and
 final-tab closure/replacement, including hidden-workspace and private-window
-cases. That extended candidate gate has not yet established a native pass;
-the original reported user profile is not an imported fixture or a recovery
+cases. That seven-stage gate passed in the runs recorded in the
+[milestone](milestone-0.70.1.md). Its macOS accessibility/window input is not a
+physical user's click; the original reported user profile is not an imported fixture or a recovery
 guarantee. Concurrent windows retain independent session/workspace state.
 
 Tab groups use Gecko's native `MozTabbrowserTabGroup` and `gBrowser` group
@@ -612,7 +618,7 @@ The JSON discovery feed is HTTPS-delivered release metadata, not an Ed25519
 signature over a later download. It must not be confused with the native
 installer's separately authenticated appcast and archive.
 
-### Native Fluxion updater (0.70.1 candidate; native acceptance pending)
+### Native Fluxion updater (0.70.1 candidate; native installation verified)
 
 `FluxionUpdateCoordinatorCore.sys.mjs` is an injected-IO state machine, while
 `FluxionUpdateCoordinator.sys.mjs` owns one process-wide instance and its
@@ -629,6 +635,8 @@ activation calls the coordinator's install method directly. Active updates,
 manual-only offers and failures open About for status. About and the toolbar
 share immutable snapshots; neither owns network requests or polling timers.
 The manual DMG route remains separately labeled and available where supported.
+The unslop-ui review kept this status/action inline and quiet: no permanent
+spinner, decorative badge or promotional card.
 
 `FluxionNativeUpdater.sys.mjs` loads the Objective-C bridge through privileged
 js-ctypes, retains its library for process lifetime and bounds JSON command/
@@ -652,9 +660,15 @@ profile arguments, so unsupported profiles retain manual installation instead
 of silently switching profiles. macOS 12 or later is required.
 
 Users need one manual upgrade from 0.70 or earlier to obtain the updater.
-Candidate source and unit tests do not establish authenticated replacement,
-quit cancellation, profile preservation or relaunch on macOS: the dedicated
-native end-to-end gate and ordinary browser gates are still required. Developer
+The dedicated native gate passed signed isolated-version replacement,
+wrongly signed/corrupt archive rejection and same-default-profile relaunch,
+retaining exact seeded tabs, selection/pin, workspace metadata, bookmark and
+preference. It canceled one actual native quit with a Gecko observer before
+retrying successfully; this does not test physical beforeunload-dialog input.
+Valid signed-feed authentication passed, but native altered-feed rejection is
+not inferred from separate signing interoperability tests. Run/source identities
+are recorded in the [milestone](milestone-0.70.1.md). The final complete native
+release run and publication remain pending. Developer
 ID signing and notarization remain separate release-hardening work; Ed25519
 authenticated ad-hoc previews are still not Apple-notarized.
 

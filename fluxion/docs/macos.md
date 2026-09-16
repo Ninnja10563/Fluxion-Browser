@@ -16,9 +16,10 @@ under **System Settings → Privacy & Security**.
 
 ## Updating: 0.70.1 candidate
 
-The forthcoming updater-enabled build requires macOS 12 or later. Native
-verification is still pending; the published 0.70 app cannot install updates
-itself. Install the first updater-enabled DMG manually, replacing the app while
+The forthcoming updater-enabled build requires macOS 12 or later. Native signed
+replacement and same-profile restoration have passed in an isolated fixture;
+final full release verification/publication remain pending. The published 0.70
+app cannot install updates itself. Install the first updater-enabled DMG manually, replacing the app while
 it is closed and leaving the separate profile intact.
 
 In the candidate, Settings → About offers Automatic update checks, an explicit
@@ -32,7 +33,7 @@ configurations can use the clearly labeled manual DMG action.
 
 Sparkle's signed-feed/archive authentication is not Apple notarization. Do not
 disable Gatekeeper globally. See the [update contract](update-channel.md) and
-[candidate milestone](milestone-0.70.1.md) for verification requirements.
+[candidate milestone](milestone-0.70.1.md) for evidence and remaining checks.
 
 ## One-time setup for building from source
 

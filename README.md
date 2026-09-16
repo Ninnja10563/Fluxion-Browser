@@ -24,8 +24,9 @@ These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
 The forthcoming **0.70.1** adds optional automatic update checks and an explicit
-Update and restart action through Sparkle. Native installation verification is
-still pending; this is not a published-release claim. Users of 0.70 and earlier
+Update and restart action through Sparkle. Native signed replacement, canceled
+quit/retry and same-profile restoration passed in an isolated macOS fixture;
+the final full release run and publication remain pending. Users of 0.70 and earlier
 must install the first updater-enabled DMG manually. The initial integration
 requires macOS 12 or later and Fluxion's default profile. See the
 [0.70.1 milestone](fluxion/docs/milestone-0.70.1.md) for scope and limitations.

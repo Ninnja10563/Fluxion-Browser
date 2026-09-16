@@ -1,13 +1,15 @@
 # Verified update channel
 
-## 0.70.1 installation candidate — native verification pending
+## 0.70.1 installation candidate — native replacement verified
 
 Published 0.70 and earlier discover updates and open a manual download only on
 request; those shipped apps cannot gain an installer without one manual DMG
 upgrade. The 0.70.1 candidate adds a pinned
 [Sparkle 2.10.0 integration](https://github.com/sparkle-project/Sparkle/releases/tag/2.10.0),
-not a shell-based replacement script. This document does not claim that its
-native acceptance gate or public release has passed.
+not a shell-based replacement script. Its native installation gate passed with
+isolated signed fixture versions; final complete release verification and public
+publication remain pending. [The milestone](milestone-0.70.1.md) records exact
+source/run identities and does not claim an update of the published 0.70 binary.
 
 There are two distinct metadata paths. The existing expiring `releases.json`
 supports lightweight version discovery. It is HTTPS-delivered verified public
@@ -41,12 +43,15 @@ DMG. Sparkle relaunches the bundle without arbitrary profile arguments, so other
 profiles use manual installation rather than being silently redirected.
 Multiple windows in that one process remain independent windows.
 
-Native old-to-new tests must establish valid signed-feed authentication,
-corrupt/wrongly signed archive rejection, version
-and app-identity enforcement, cancel/retry, replacement and same-profile
-relaunch before release. Additional invalid-feed cases, read-only/interrupted-install recovery and wider
-physical-machine audits must be reported according to actual evidence, not
-inferred from local tests. The candidate is still ad-hoc signed, **not
+The native gate passed valid signed-feed authentication, corrupt/wrongly signed
+archive rejection, observer-canceled native quit, version-bound retry, actual
+replacement and same-default-profile relaunch. Its exact seeded tabs,
+selection/pin, workspace metadata, bookmark and preference were retained.
+Observer cancellation is not a physical unsaved-page-dialog test. Version and
+app-identity policy checks and separate signing interoperability tests must not
+be confused with native invalid-feed rejection. Additional invalid-feed cases,
+read-only/interrupted-install recovery and wider physical-machine audits remain
+outside this installation evidence. The candidate is still ad-hoc signed, **not
 Apple-notarized**; Ed25519 authentication does not supply Developer ID signing
 or a notarization ticket. See [the milestone](milestone-0.70.1.md),
 [native bridge contract](../packaging/macos/updater/README.md) and

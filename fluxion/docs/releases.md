@@ -2,12 +2,15 @@
 
 ## 0.70.1 updater candidate
 
-Native verification and publication are pending. The candidate introduces a
+Native update, frame/product-chrome and last-window checks have passed in the
+runs recorded in [the milestone](milestone-0.70.1.md); the final complete release
+run and publication remain pending. The candidate introduces a
 macOS 12+ Sparkle 2.10.0 bridge, signed appcast/archive publication, and a shared
-opt-out metadata-check coordinator. These source changes do not establish an
-installer pass. The release must preserve its complete native browser gates and
-add actual authenticated old-to-new replacement, cancellable Gecko quit and
-same-default-profile relaunch evidence. Report failure cases separately; never
+opt-out metadata-check coordinator. Actual authenticated replacement used signed
+isolated fixture versions, with observer-canceled Gecko quit, retry and exact
+same-default-profile restoration. That does not claim physical unsaved-page
+dialog input or a published 0.70 binary upgrade. The release must still preserve
+its complete native browser gates. Report failure cases separately; never
 substitute a policy-only mock for a native installation claim.
 
 Pin and verify Sparkle's archive before building. Ship its complete upstream
@@ -22,7 +25,8 @@ default-profile scope and explicit-install consent boundary.
 The product toolbar gate measures the real update indicator when temporarily
 shown at 1280 and 800 pixels, restores its prior visibility and labels that
 evidence as geometry-only. It does not manufacture a release offer or establish
-download/install behavior. The separate native updater gate must do that.
+download/install behavior. The separate native updater gate establishes the
+bounded installation evidence described above.
 
 ## Existing browser and distribution gates
 

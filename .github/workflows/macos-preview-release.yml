@@ -131,6 +131,7 @@ jobs:
           [[ "$(sips -g pixelHeight "$iconset/icon_512x512@2x.png" | awk '$1 == "pixelHeight:" {print $2}')" == 1024 ]]
           python3 -c 'import plistlib,sys; p=plistlib.load(open(sys.argv[1],"rb")); assert "org.mozilla.updater" not in p.get("SMPrivilegedExecutables",{})' "$info"
           cmp "$resources/fluxion.icns" "$resources/firefox.icns"
+          cmp 'fluxion/third_party/sparkle/LICENSE' "$resources/fluxion/third_party/sparkle/LICENSE"
           codesign --verify --deep --strict '.runtime/Fluxion.app'
           locked_version="$(node -p "require('./fluxion/runtime/gecko-lock.json').version")"
           [[ "$(plutil -extract upstreamVersion raw "$resources/fluxion/runtime-provenance.json")" == "$locked_version" ]]

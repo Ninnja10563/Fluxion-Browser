@@ -1,8 +1,9 @@
 # Build and runtime dependencies
 
-The 0.70.1 updater integration is a candidate, not a validated release. Its
-native build, authenticated old-to-new installation, quit cancellation and
-same-profile relaunch gates must pass before publication.
+The 0.70.1 updater integration remains unpublished. Its native build,
+authenticated isolated-version installation, observer-canceled quit/retry and
+same-profile relaunch passed; the final complete release run is still required.
+See [the milestone](milestone-0.70.1.md) for exact evidence and limitations.
 
 | Component | Purpose and boundary |
 | --- | --- |

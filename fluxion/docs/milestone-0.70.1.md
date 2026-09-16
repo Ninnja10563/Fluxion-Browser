@@ -1,8 +1,8 @@
 # Fluxion 0.70.1 — Updates and window behavior
 
-**Candidate in development. Native verification and publication are pending.**
-The presence of source code or passing local tests is not evidence that a
-packaged native update has installed successfully.
+**Candidate: native update, session and toolbar checks have passed; the final
+complete release run and publication are pending.** The evidence below identifies
+individual runs rather than implying that an unpublished candidate has shipped.
 
 ## Updates
 
@@ -22,7 +22,8 @@ Fluxion” label. Clicking it requests that version's installation. During an
 update the same control opens About for status; About exposes actual progress,
 cancel/retry when available, release notes and a separate manual DMG action.
 The control is quiet when no action is needed, without a permanent spinner or
-decorative notification badge.
+decorative notification badge. The unslop-ui review kept this a small inline
+toolbar action rather than adding a notification card or persistent promotion.
 
 Sparkle requests ordinary browser quit rather than killing Gecko. Unsaved-page
 confirmation and shutdown/profile flushing remain native. Canceling quit must
@@ -53,20 +54,44 @@ toolbar; DOM/video fullscreen stays under Gecko's controller. The implementation
 uses native fullscreen notifications and per-window state rather than rewriting
 a shared preference on every sidebar change.
 
-## Acceptance still required
+## Native evidence
 
-- Packaged macOS toolbar, Settings and geometry checks, including the visible
-  update indicator at both ordinary and narrow window widths.
-- Actual signed old-to-new update, valid signed-feed authentication,
-  corrupt/wrongly signed archive rejection, canceled quit,
-  retry, application replacement and same-default-profile relaunch.
-- Native final-tab closure and actual window-close/session recovery cases,
-  including private exclusion and startup opt-outs.
-- Physical M3/trackpad and wider accessibility checks remain separate from
-  hosted-runner widget-routing evidence.
+[Native updater run 35069931392](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35069931392)
+passed on source `69e0e8ab43ac4b61269341ee86d520466ae0341b`. It installed an
+actually signed isolated fixture from bundle version `1.0.0b1` to `1.0.1b1`
+through Sparkle, not a mock replacement and not an upgrade of the published
+0.70 binary. Wrongly signed and corrupt archives were rejected while the live
+session remained unchanged. A quit observer canceled one real native quit
+request; version-bound retry then replaced the app and relaunched a different
+process (PID 3042 → 4375). The same default-profile fixture retained its exact
+three tab URLs, selected tab, pinned state, workspace metadata, bookmark GUID
+and saved preference. This proves observer cancellation, not a physical click
+on an unsaved-page confirmation dialog.
 
-Additional invalid-feed, read-only destination and interrupted-install recovery
-cases must not be claimed from the narrower archive-rejection gate.
+[Browser run 35069330208](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35069330208),
+on source `679d572e6de407620e535a8630641265c014eccf`, passed its product-chrome,
+frame and last-window gates. These cover the inline update control's geometry
+at ordinary/narrow widths, expanded/compact fullscreen navigation, actual
+top-edge pointer reveal/retraction, retained keyboard focus, and a real page
+click returning focus before native retraction. The indicator geometry fixture
+does not manufacture an update offer or establish installation behavior.
+Last-window checks include native window-button activation, final-tab
+replacement, hidden-workspace retention, private exclusion and startup opt-outs.
+An earlier [run 35067865158](https://github.com/Ninnja10563/Fluxion-Browser/actions/runs/35067865158)
+also passed the seven-stage last-window gate; neither earlier browser run
+substitutes for the final complete release run at the chosen source revision.
+
+## Remaining release and hardware checks
+
+Final full-pipeline acceptance and public DMG/feed publication remain pending.
+Physical M3/trackpad and wider accessibility checks remain separate from
+hosted-runner native widget/accessibility input evidence. The original reported
+user profile is not an imported recovery fixture.
+
+The native installation gate authenticated a valid signed feed; its rejection
+cases concern archives, not an altered feed. Separate signing interoperability
+tests are not native invalid-feed installation evidence. Read-only destination
+and interrupted-install recovery must not be inferred from these passing cases.
 
 No website benchmark, fastest-browser, or original-user-profile recovery claim
 is made. The measured performance milestone remains separate.
