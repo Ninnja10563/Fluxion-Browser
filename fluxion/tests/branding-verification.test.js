@@ -48,3 +48,15 @@ test("native resource evidence requires exact supplied mark bytes and separate s
     assert.throws(() => h.validateNativeArt(`trustpanel-graphic-${state}.svg`, `<svg>${image}</svg>`, mark), /status badge/);
   }
 });
+test("security evidence rejects detached or zero-size popup anchors while allowing native panel insets", () => {
+  const h = helper("  function validateSecurityAnchor(", "  async function securityPanel(");
+  const anchor = { left: 420, top: 28, bottom: 60, width: 28, height: 32 };
+  const panel = { left: 416, top: 64, width: 400, height: 312 };
+  const result = h.validateSecurityAnchor(anchor, panel);
+  assert.equal(result.anchor.left, 420);
+  assert.equal(result.panel.top, 64);
+  assert.throws(() => h.validateSecurityAnchor(anchor, { ...panel, left: 4, top: 0 }), /detached/);
+  assert.throws(() => h.validateSecurityAnchor(anchor, { ...panel, top: 130 }), /detached/);
+  assert.throws(() => h.validateSecurityAnchor({ ...anchor, width: 0 }, panel), /painted bounds/);
+  assert.throws(() => h.validateSecurityAnchor(anchor, { ...panel, height: 0 }), /painted bounds/);
+});

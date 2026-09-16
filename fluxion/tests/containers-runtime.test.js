@@ -30,7 +30,12 @@ function fixture() {
     setAttribute(key, value) { this.attrs.set(key, value); }
     getAttribute(key) { return this.attrs.get(key) || ""; }
     appendChild(child) { child.parentNode = this; this.children.push(child); return child; }
-    insertBefore(child) { return this.appendChild(child); }
+    insertBefore(child, reference) {
+      if (reference == null) return this.appendChild(child);
+      const index = this.children.indexOf(reference);
+      assert.ok(index >= 0, "insertBefore reference must belong to the menu");
+      child.parentNode = this; this.children.splice(index, 0, child); return child;
+    }
     replaceChildren() { this.children = []; }
     remove() { this.parentNode.children = this.parentNode.children.filter(child => child !== this); this.parentNode = null; }
     addEventListener(type, callback) { if (!this.listeners.has(type)) this.listeners.set(type, []); this.listeners.get(type).push(callback); }
@@ -38,6 +43,9 @@ function fixture() {
     emit(type) { for (const callback of this.listeners.get(type) || []) callback({ target: this }); }
   }
   const root = new Node("menupopup"), window = new Node("window");
+  const originalCommands = ["Duplicate Tab", "Reload Tab", "Pin Tab"].map(label => {
+    const item = new Node("menuitem"); item.setAttribute("label", label); root.appendChild(item); return item;
+  });
   const document = { getElementById: id => id === "fluxion-tab-context" ? root : null, createXULElement: tag => new Node(tag) };
   let enabled = true, privateWindow = false, policy = {}, identityList = [
     { userContextId: 1, public: true, name: "Personal", icon: "circle", color: "blue" },
@@ -75,11 +83,25 @@ function fixture() {
       path.includes("PrivateBrowsingUtils") ? { PrivateBrowsingUtils: { isWindowPrivate: () => privateWindow } } :
       { E10SUtils: { deserializePrincipal: value => JSON.parse(value) } } } };
   vm.runInNewContext(source, sandbox);
-  const menu = root.children[0], popup = menu.children[0];
-  return { window, root, menu, popup, tabs, browser, created, alerts, observers, prefObservers, api: window.FluxionContainers,
+  const menu = root.children.find(node => node.getAttribute("id") === "fluxion-container-menu"), popup = menu.children[0];
+  return { window, root, menu, popup, originalCommands, tabs, browser, created, alerts, observers, prefObservers, api: window.FluxionContainers,
     show() { root.emit("popupshowing"); popup.emit("popupshowing"); }, context: value => { context = value; },
     identities: () => identityList, enabled: value => { enabled = value; }, private: value => { privateWindow = value; }, policy: value => { policy = value; } };
 }
+
+test("container account-copy action follows Duplicate without replacing or reordering native commands", () => {
+  const f = fixture();
+  assert.deepEqual(f.root.children.map(item => item.getAttribute("label")),
+    ["Duplicate Tab", "Open in Container", "Reload Tab", "Pin Tab"]);
+  assert.equal(f.root.children[0], f.originalCommands[0]);
+  assert.equal(f.root.children[0].localName, "menuitem");
+  assert.deepEqual(f.root.children.filter(item => item !== f.menu), f.originalCommands);
+  f.show();
+  assert.equal(f.menu.hidden, false);
+  assert.equal(f.popup.children.length, 2);
+  f.window.emit("unload");
+  assert.deepEqual(f.root.children, f.originalCommands);
+});
 
 test("container menu uses public Gecko identities and frozen multi-selection, opens fresh same-workspace URLs without removing originals", () => {
   const f = fixture(); f.tabs[0].workspace = "other"; f.tabs[0].pinned = true; f.tabs[0].muted = true;

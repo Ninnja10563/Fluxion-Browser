@@ -41,13 +41,18 @@ and provenance are in `assets/app-icons/README.md`.
 
 The last-visible-tab close decision is narrowly patched to account for live tabs
 hidden in other workspaces. Native last-window tests now include Flow-created
-pages across workspaces and an explicitly stored restore preference in an
-isolated profile, not an imported user profile. That scenario uses normal quit
+pages across workspaces and an explicit homepage-to-restore startup choice in an
+isolated profile, not an imported user profile. Gecko may omit a user preference
+that equals its default; the gate records both the effective value and its
+provenance. That scenario uses normal quit
 and relaunch with no test-forced session saving or pre-close state collection;
 post-close waits allow native closed records to settle. The separate fresh-profile
 scenario retains repeated-checkpoint coverage. These paths remain release blockers until the
 packaged macOS tests pass; startup opt-outs must not be overwritten to
 manufacture a pass.
+The confirmed last-visible-tab bug is distinct from the reported last-window
+restoration issue: this tests the native close-window command used by ordinary
+window closure, not the user's original profile or a physical red-button click.
 
 ## Distribution and next milestone
 

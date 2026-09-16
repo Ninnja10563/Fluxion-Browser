@@ -16,7 +16,8 @@
   const menu = xul("menu", { id: "fluxion-container-menu", label: "Open in Container" });
   const popup = xul("menupopup", { id: "fluxion-container-popup" });
   menu.appendChild(popup);
-  root.insertBefore(menu, root.firstElementChild);
+  // Keep Duplicate first, followed by its fresh-account/container alternative.
+  root.insertBefore(menu, root.children[1] || null);
   const allowed = () => !window.closed && !PrivateBrowsingUtils.isWindowPrivate(window) &&
     Services.prefs.getBoolPref("privacy.userContext.enabled", false) &&
     Services.policies?.getActivePolicies()?.Containers?.Enabled !== false;

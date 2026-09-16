@@ -19,6 +19,35 @@
     while (!(await condition())) { assert(Date.now() < deadline, message); await delay(50); }
   };
   const near = (a, b) => Math.abs(a - b) < 1.5;
+  function nativeFullscreenEdgePoint(box, scale) {
+    assert(Number.isFinite(scale) && scale > 0 && box.width > 0 && box.height > 0,
+      "Fullscreen edge has invalid device-pixel geometry");
+    // SynthesizeMouseEvent rounds CSS coordinates to device pixels. At 1x,
+    // the midpoint of Gecko's [0,1)px toggler rounds OUTSIDE it to y=1.
+    const x = Math.round((box.left + box.width / 2) * scale) / scale;
+    const y = Math.ceil(box.top * scale) / scale;
+    assert(x >= box.left && x < box.right && y >= box.top && y < box.bottom,
+      "Fullscreen edge has no addressable device pixel");
+    return { x, y };
+  }
+  async function settleFullscreenPresentation(fullscreen) {
+    const started = window.performance.now();
+    let previous = "", stableSince = started, last;
+    await wait(() => {
+      last = { fullscreen: window.fullScreen, width: window.outerWidth, height: window.outerHeight,
+        innerWidth: window.innerWidth, innerHeight: window.innerHeight, x: window.screenX, y: window.screenY };
+      const signature = JSON.stringify(last), now = window.performance.now();
+      if (signature !== previous) { previous = signature; stableSince = now; }
+      return last.fullscreen === fullscreen && now - stableSince >= 1000 && document.hasFocus() &&
+        Services.focus.activeWindow === window && !window.windowUtils.isMozAfterPaintPending &&
+        !window.windowUtils.isCompositorPaused && !window.windowUtils.isWindowFullyOccluded;
+    }, "Native fullscreen presentation did not settle with active, painted, stable geometry", 15000);
+    // Cocoa reports the fullscreen size on its initial resize, before the OS
+    // crossfade finishes. Stable DOM flags alone are not screenshot readiness.
+    return { ...last, elapsed: window.performance.now() - started, stableForMs: window.performance.now() - stableSince,
+      pendingPaint: window.windowUtils.isMozAfterPaintPending, compositorPaused: window.windowUtils.isCompositorPaused,
+      fullyOccluded: window.windowUtils.isWindowFullyOccluded };
+  }
   function sidebarSurfaceEvidence(surface, mode) {
     const style = window.getComputedStyle(surface);
     const radii = [style.borderTopLeftRadius, style.borderTopRightRadius,
@@ -696,6 +725,7 @@
       window.fullScreen = true;
       await wait(() => window.fullScreen && root.hasAttribute("inFullscreen") && root.hasAttribute("macOSNativeFullscreen"),
         "Actual macOS browser fullscreen did not enter", 25000);
+      evidence.entryPresentation = await settleFullscreenPresentation(true);
       ui.setSidebarState("focus");
       await wait(() => !window.FluxionFocusMode.state().enabled && document.activeElement !== window.gURLBar.inputField &&
         window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
@@ -705,9 +735,19 @@
       await action("capture-fullscreen-focus-hidden");
       const toggler = document.getElementById("fullscr-toggler"), edge = rect(toggler);
       assert(!toggler.hidden && edge.height >= 1, "Native fullscreen hover target is unavailable");
-      routePointer(edge.left + edge.width / 2, edge.top + edge.height / 2);
-      await wait(() => !window.FullScreen.navToolboxHidden && rect(toolbox).top >= -1,
-        "Native fullscreen top-edge hover did not reveal navigation");
+      const point = nativeFullscreenEdgePoint(edge, window.devicePixelRatio);
+      const hit = document.elementFromPoint(point.x, point.y);
+      evidence.hover = { edge, point, devicePixelRatio: window.devicePixelRatio, hit: hit?.id || hit?.localName, events: [] };
+      assert(hit === toggler || toggler.contains(hit), "Native fullscreen edge is covered by another chrome surface");
+      const observed = event => evidence.hover.events.push({ trusted: event.isTrusted, type: event.type,
+        x: event.clientX, y: event.clientY, target: event.target?.id });
+      toggler.addEventListener("mouseover", observed, true);
+      try {
+        routePointer(point.x, point.y);
+        await wait(() => evidence.hover.events.some(event => event.trusted && event.target === "fullscr-toggler") &&
+          !window.FullScreen.navToolboxHidden && rect(toolbox).top >= -1,
+        "Native fullscreen top-edge hover did not reach its real target and reveal navigation");
+      } finally { toggler.removeEventListener("mouseover", observed, true); }
       await action("capture-fullscreen-focus-revealed");
       moveToPage(); window.FullScreen.hideNavToolbox(false);
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
@@ -729,6 +769,7 @@
       await wait(() => !window.fullScreen && !root.hasAttribute("inFullscreen") &&
         near(window.outerWidth, originalSize.width) && near(window.outerHeight, originalSize.height),
       "Native fullscreen did not exit and restore its original window geometry", 25000);
+      evidence.exitPresentation = await settleFullscreenPresentation(false);
       ui.setSidebarState("expanded"); browser.focus();
       await wait(() => !window.FluxionFocusMode.state().enabled && rect(toolbox).top >= -1,
         "Normal expanded navigation did not recover after fullscreen");

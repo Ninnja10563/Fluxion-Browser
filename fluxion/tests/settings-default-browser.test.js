@@ -19,7 +19,10 @@ test("General reads actual default-browser state without a startup prompt or def
     assert.equal(h.writes().length, 0);
     assert.equal(h.button.textContent, "Make Fluxion Default");
     assert.equal(h.button.disabled, alreadyDefault);
-    assert.equal(h.status.getAttribute("role"), "status");
+    assert.equal(h.status.getAttribute("role"), null, "Gecko STATUSBAR has no subtree-name rule for describedby");
+    assert.equal(h.status.getAttribute("aria-live"), "polite");
+    assert.equal(h.status.getAttribute("aria-atomic"), "true");
+    assert.equal(h.document.getElementById(h.button.getAttribute("aria-describedby")), h.status);
     assert.match(h.status.textContent, alreadyDefault ? /is your default/ : /is not your default/);
     assert.ok(h.calls.every(call => call.args[0] === false && call.args[1] === true));
     if (alreadyDefault) { await h.button.dispatchEvent({ type: "click" }); assert.equal(h.writes().length, 0); }

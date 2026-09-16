@@ -36,7 +36,7 @@ function checkpointFixture(mode) {
     IOUtils: { readJSON: async () => { calls.push("read-disk"); return disk; } },
     PathUtils: { profileDir: "/isolated", join: (...parts) => parts.join("/") },
     stateURLs: state => state.urls, ensure: (ok, message) => { if (!ok) throw Error(message); } });
-  const start = source.indexOf("  async function verifyFinalCheckpoint()"), end = source.indexOf("  async function run()", start);
+  const start = source.indexOf("  async function verifyFinalCheckpoint()"), end = source.indexOf("  function verifyStartupChoice(", start);
   assert.ok(start >= 0 && end > start);
   vm.runInContext(source.slice(start, end), context);
   return { calls, evidence, closed, disk, run: () => context.verifyFinalCheckpoint() };
@@ -61,6 +61,42 @@ test("fresh seed retains repeated checkpoint checks and rejects missing sessions
   await assert.rejects(missing.run(), /did not project the closed last window/);
   const leaked = checkpointFixture("seed"); leaked.disk.windows[0].urls.push("data:private-never-persist");
   await assert.rejects(leaked.run(), /private marker entered disk checkpoint/);
+});
+
+function startupFixture(mode, userValue) {
+  const calls = [], checks = [], defaultValue = 3;
+  const prefs = {
+    getIntPref: () => userValue ?? defaultValue,
+    getDefaultBranch: () => ({ getIntPref: () => defaultValue }),
+    prefHasUserValue: () => userValue !== undefined,
+    setIntPref(name, value) { calls.push([name, value]); userValue = value === defaultValue ? undefined : value; },
+  };
+  const context = vm.createContext({ mode, Services: { prefs }, evidence: { checks },
+    ensure: (ok, message) => { if (!ok) throw Error(message); } });
+  const start = source.indexOf("  function verifyStartupChoice("), end = source.indexOf("  async function run()", start);
+  vm.runInContext(source.slice(start, end), context);
+  return { calls, checks, select: () => context.selectExplicitRestore(), verify: () => context.verifyStartupChoice("fixture") };
+}
+
+test("explicit restore fixture supports Gecko clearing a same-default user value without changing the default", () => {
+  const f = startupFixture("existing");
+  f.select();
+  assert.deepEqual(f.calls, [["browser.startup.page", 1], ["browser.startup.page", 3]]);
+  assert.equal(f.checks[0].startupValue, 3);
+  assert.equal(f.checks[0].defaultValue, 3);
+  assert.equal(f.checks[0].hasUserValue, false);
+  startupFixture("existing-restore").verify();
+  for (const value of [0, 1]) assert.throws(() => startupFixture("existing-restore", value).verify(), /startup choice changed/);
+});
+
+test("fresh-profile restore still requires an untouched default and relaunch verification never rewrites a choice", () => {
+  for (const mode of ["seed", "restore"]) {
+    const fresh = startupFixture(mode); fresh.verify(); assert.deepEqual(fresh.calls, []);
+    assert.throws(() => startupFixture(mode, 3).verify(), /replaced by a user preference/);
+  }
+  const optedOut = startupFixture("existing-restore", 1);
+  assert.throws(optedOut.verify, /startup choice changed/);
+  assert.deepEqual(optedOut.calls, []);
 });
 
 function verifierFixture() {

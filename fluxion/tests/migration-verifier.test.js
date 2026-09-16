@@ -9,13 +9,21 @@ const assertNative = (ok, message) => { if (!ok) throw Error(message); };
 
 test("migration pointer actions hit the real owned control and reject hidden, disabled or foreign targets", () => {
   const events = [], dialog = { document: { defaultView: { getComputedStyle: () => ({ visibility: "visible" }) } },
-    windowUtils: { sendMouseEvent: (...args) => events.push(args) } };
+    windowUtils: { DEFAULT_MOUSE_POINTER_ID: 1 }, MouseEvent: { MOZ_SOURCE_MOUSE: 1 },
+    synthesizeMouseEvent: (...args) => events.push(args) };
   const target = { isConnected: true, disabled: false, ownerDocument: dialog.document,
     getBoundingClientRect: () => ({ x: 10, y: 20, width: 40, height: 24 }) };
   const context = vm.createContext({ dialog, target, assert: assertNative });
   vm.runInContext(source.slice(source.indexOf("  const visible ="), source.indexOf("  const requestDriver =")), context);
   vm.runInContext("click(target)", context);
-  assert.deepEqual(events, [["mousemove", 30, 32, 0, 0, 0], ["mousedown", 30, 32, 0, 1, 0], ["mouseup", 30, 32, 0, 1, 0]]);
+  assert.deepEqual(events.map(args => args.slice(0, 3)), [["mousemove", 30, 32], ["mousedown", 30, 32], ["mouseup", 30, 32]]);
+  for (const [type, , , options, routing] of events) {
+    assert.deepEqual(JSON.parse(JSON.stringify(options)), { identifier: 1, button: 0,
+      buttons: type === "mousedown" ? 1 : 0, clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: 1 });
+    assert.deepEqual(JSON.parse(JSON.stringify(routing)), {
+      isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true,
+    });
+  }
   for (const change of [() => { target.disabled = true; }, () => { target.isConnected = false; },
     () => { target.getBoundingClientRect = () => ({ width: 0, height: 24 }); },
     () => { target.ownerDocument = { defaultView: dialog.document.defaultView }; }]) {

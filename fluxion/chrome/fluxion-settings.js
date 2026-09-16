@@ -418,8 +418,10 @@
   row(general, "Default browser", "Checking your default browser…", makeDefault);
   const defaultStatus = document.getElementById(makeDefault.getAttribute("aria-describedby"));
   defaultStatus.id = "fluxion-default-browser-status";
-  defaultStatus.setAttribute("role", "status");
+  // Gecko's status role excludes subtree text from aria-describedby. Keep the
+  // ordinary row description while announcing complete status updates politely.
   defaultStatus.setAttribute("aria-live", "polite");
+  defaultStatus.setAttribute("aria-atomic", "true");
   makeDefault.setAttribute("aria-describedby", defaultStatus.id);
   let defaultShell = null, defaultRequestPending = false, defaultBrowserDisposed = false, defaultStatusTimer = 0;
   const stopDefaultBrowserPolling = () => {

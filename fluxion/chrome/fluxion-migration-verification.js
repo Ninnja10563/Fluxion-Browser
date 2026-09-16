@@ -22,7 +22,11 @@
     assert(visible(node) && node.ownerDocument === dialog.document, "Migration control is hidden, disabled or foreign");
     const rect = node.getBoundingClientRect();
     for (const type of ["mousemove", "mousedown", "mouseup"]) {
-      dialog.windowUtils.sendMouseEvent(type, rect.x + rect.width / 2, rect.y + rect.height / 2, 0, type === "mousemove" ? 0 : 1, 0);
+      dialog.synthesizeMouseEvent(type, rect.x + rect.width / 2, rect.y + rect.height / 2, {
+        identifier: dialog.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0,
+        buttons: type === "mousedown" ? 1 : 0, clickCount: type === "mousemove" ? 0 : 1,
+        modifiers: 0, inputSource: dialog.MouseEvent.MOZ_SOURCE_MOUSE,
+      }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
     }
   };
   const requestDriver = async action => {

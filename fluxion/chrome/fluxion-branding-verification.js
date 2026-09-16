@@ -124,16 +124,46 @@
     }, "New Tab did not paint the transparent Fluxion mark");
     report.checks.push("new-tab-flow-row-paints-transparent-mark");
   }
+  function validateSecurityAnchor(anchor, panel) {
+    assert(anchor.width > 0 && anchor.height > 0 && panel.width > 0 && panel.height > 0,
+      "Security popup or native identity anchor has no painted bounds");
+    // Native panel shadow/arrow insets vary by platform. Require the actual
+    // bottom-left anchor relationship, not a detached window-origin popup.
+    assert(Math.abs(panel.top - anchor.bottom) <= 24 && Math.abs(panel.left - anchor.left) <= 24,
+      "Native security popup is detached from its identity anchor");
+    return { anchor: { left: anchor.left, top: anchor.top, bottom: anchor.bottom, width: anchor.width, height: anchor.height },
+      panel: { left: panel.left, top: panel.top, width: panel.width, height: panel.height } };
+  }
   async function securityPanel() {
     const tab = gBrowser.addTrustedTab("https://example.org/", { skipAnimation: true });
     window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace());
     window.FluxionUI.selectTab(tab);
     await wait(() => tab.linkedBrowser.currentURI.spec === "https://example.org/" &&
       tab.label === "Example Domain" && !tab.hasAttribute("busy"), "Real HTTPS branding fixture did not load", 35000);
-    await window.gTrustPanelHandler.showPopup({ reason: "fluxion-branding-verification" });
-    const panel = document.getElementById("trustpanel-popup");
-    await wait(() => panel?.state === "open" && document.getElementById("trustpanel-header")?.textContent.includes("Fluxion"),
+    // New Tab can leave the location field editing after selecting another tab.
+    // A user opens site security from content, through the painted native button.
+    window.gURLBar.view.close();
+    tab.linkedBrowser.focus();
+    let identity;
+    await wait(() => {
+      identity = ["trust-icon-container", "identity-icon-box"].map(id => document.getElementById(id)).find(painted);
+      if (!identity || document.activeElement === window.gURLBar.inputField) return false;
+      const box = identity.getBoundingClientRect();
+      return identity.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+    }, "Native HTTPS identity control is missing, clipped or still obscured by location editing");
+    assert(typeof window.synthesizeMouseEvent === "function", "Native widget pointer router unavailable");
+    const anchor = identity.getBoundingClientRect(), x = anchor.left + anchor.width / 2, y = anchor.top + anchor.height / 2;
+    for (const [type, buttons] of [["mousemove", 0], ["mousedown", 1], ["mouseup", 0]]) {
+      window.synthesizeMouseEvent(type, x, y, { identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID,
+        button: 0, buttons, clickCount: type === "mousemove" ? 0 : 1, modifiers: 0,
+        inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE },
+      { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+    }
+    await wait(() => document.getElementById("trustpanel-popup")?.state === "open" &&
+      document.getElementById("trustpanel-header")?.textContent.includes("Fluxion"),
       "Native Fluxion trust panel did not finish localizing");
+    const panel = document.getElementById("trustpanel-popup");
+    const geometry = validateSecurityAnchor(identity.getBoundingClientRect(), panel.getBoundingClientRect());
     assert(panel.getAttribute("tracking-protection") === "enabled", "Fixture unexpectedly disabled tracking protection");
     const header = document.getElementById("trustpanel-header");
     requireProductString("painted-trust-header", header.textContent.trim(), "Fluxion is on guard");
@@ -150,7 +180,8 @@
     assert(painted(graphic) && backgroundImage.includes("trustpanel-graphic-enabled.svg"),
       "Actual native security illustration is not using the replaced branded resource");
     report.security = { state: panel.getAttribute("tracking-protection"), connection: panel.getAttribute("connection"),
-      header: header.textContent.trim(), graphic: backgroundImage };
+      header: header.textContent.trim(), graphic: backgroundImage, anchorId: identity.id,
+      input: "Gecko widget-routed native identity button click", geometry };
     await capture("capture-branding-security");
     panel.hidePopup();
     await wait(() => panel.state === "closed", "Native security panel did not close");

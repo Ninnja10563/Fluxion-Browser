@@ -392,10 +392,13 @@ runtime replacement of SessionStore methods.
 `verify-macos-last-window.sh` exercises actual close/reopen, pinned and normal
 tabs, custom session metadata, private exclusion, external-URL preservation,
 repeated disk checkpoints in the fresh-profile scenario, a separate process
-relaunch, and both startup opt-outs. Another isolated profile explicitly stores
-startup choice 3 and exercises normal quit/relaunch without test-forced session
+relaunch, and both startup opt-outs. Another isolated profile explicitly changes
+startup choice from 1 to 3 and exercises normal quit/relaunch without test-forced session
 saving or pre-close diagnostic state collection; post-close waits allow native
-closed records to settle. This is not an imported existing user profile.
+closed records to settle. Equal-default user values may be cleared by Gecko;
+the gate checks the effective choice and records its actual provenance. This
+uses the native close-window command, not a physical red-button click or an
+imported existing user profile.
 Its isolated-profile JSON reports are retained as release artifacts. Candidate
 code and unit tests alone are not evidence that this native gate has passed.
 

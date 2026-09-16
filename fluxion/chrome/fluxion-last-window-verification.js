@@ -190,6 +190,25 @@
     ensure(!JSON.stringify(disk).includes("private-never-persist"), "private marker entered disk checkpoint");
     evidence.checks.push({ label: "zero-window-disk-checkpoint", windowCount: disk.windows.length, nativeUndoRetained: true, privateExcluded: true });
   }
+  function verifyStartupChoice(label) {
+    const value = Services.prefs.getIntPref("browser.startup.page");
+    const defaultValue = Services.prefs.getDefaultBranch("").getIntPref("browser.startup.page");
+    const hasUserValue = Services.prefs.prefHasUserValue("browser.startup.page");
+    ensure(value === 3, `${label}: restore-session startup choice changed`);
+    if (mode === "seed" || mode === "restore") {
+      ensure(defaultValue === 3 && !hasUserValue, `${label}: fresh restore default was replaced by a user preference`);
+    }
+    evidence.checks.push({ label, startupValue: value, defaultValue, hasUserValue });
+  }
+  function selectExplicitRestore() {
+    Services.prefs.setIntPref("browser.startup.page", 1);
+    ensure(Services.prefs.getIntPref("browser.startup.page") === 1 &&
+      Services.prefs.prefHasUserValue("browser.startup.page"), "explicit homepage choice did not take effect");
+    // Gecko clears a nonsticky user value when it equals the default. Choosing
+    // restore explicitly must retain its behavior, not an unnecessary user bit.
+    Services.prefs.setIntPref("browser.startup.page", 3);
+    verifyStartupChoice("explicit-homepage-to-restore-choice");
+  }
   async function run() {
     ensure(/\/fluxion-last-window-check\.[^/]+\/(profile|existing|choice0|choice1)\/?$/.test(PathUtils.profileDir) &&
       PathUtils.parent(PathUtils.profileDir) === root, "last-window gate requires its isolated profile and driver directory");
@@ -201,12 +220,11 @@
     if (mode === "restore" || mode === "existing-restore") {
       await until(() => urls.every(url => stateURLs(stateOf(first)).includes(url)), "closed-last-window session did not restore on relaunch");
       verifyTabs(first, "actual-relaunch");
-      ensure(Services.prefs.getIntPref("browser.startup.page") === 3 &&
-        Services.prefs.prefHasUserValue("browser.startup.page") === (mode === "existing-restore"), "startup choice did not retain its original default/user provenance");
+      verifyStartupChoice("relaunch-startup-choice");
     } else {
       if (mode.startsWith("choice")) Services.prefs.setIntPref("browser.startup.page", Number(mode.slice(-1)));
-      else if (mode === "existing") Services.prefs.setIntPref("browser.startup.page", 3);
-      else ensure(Services.prefs.getIntPref("browser.startup.page") === 3 && !Services.prefs.prefHasUserValue("browser.startup.page"), "fresh default does not restore sessions");
+      else if (mode === "existing") selectExplicitRestore();
+      else verifyStartupChoice("fresh-startup-choice");
       await verifyLastWorkspaceTab(first);
       await seed(first);
       await close(first);
