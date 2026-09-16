@@ -4,7 +4,7 @@ import { UpdateCoordinator } from "resource://fluxion/modules/FluxionUpdateCoord
 import { FluxionUpdates } from "resource://fluxion/modules/FluxionUpdates.sys.mjs";
 import { FluxionNativeUpdater } from "resource://fluxion/modules/FluxionNativeUpdater.sys.mjs";
 
-const INSTALLED = "0.70.2-preview.1";
+const INSTALLED = "0.71.0-preview.1";
 const AUTO_PREF = "fluxion.updates.automaticChecks";
 const controller = new UpdateCoordinator({ installed: INSTALLED, platform: Services.appinfo.OS,
   checkRelease: (installed, platform) => FluxionUpdates.check(installed, platform), installer: FluxionNativeUpdater,

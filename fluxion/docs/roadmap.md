@@ -60,6 +60,9 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- Focus retraction over Settings and the floating sidebar, including saved
+  disabled autohide preferences without preference rewrites; viewport-inset
+  heading and genuine navigation hit testing (published in 0.70.2).
 - integrated pointer/keyboard colour field and paged theme editor, immediate
   stationary-pointer tab-close settling, native fullscreen toolbar reveal and
   actual eight-pixel content clipping (published in 0.70)
@@ -181,6 +184,10 @@ controls work and its failure paths have been tested.
   200-tab initial render and repeated content-update gates, stable in-place
   content updates, and bounded activity/battery/media/memory-aware
   Browser Memory scheduler implemented; broader resource profiling remains)
+- linear sleeping ownership checks and ordinary workspace preference selection,
+  plus live-input-validated command-palette organisation memoization (0.71
+  candidate; reproducible frozen-source comparisons in [milestone](milestone-0.71.md);
+  full native verification required before release, physical M3 profiling remains)
 - preserve Flow row identity during ordinary same-workspace tab selection
   (implemented in published 0.58: 1,000-tab native selection/identity/mutation
   gate, correct native multi-selection event target, pinned/group/split state
@@ -213,9 +220,11 @@ controls work and its failure paths have been tested.
   version checks, official asset validation, and manual download/installation;
   published 0.64 replaces anonymous API dependency with a verified, expiring
   public feed, serialized publication and native independent-release comparison;
-  automatic installation remains unfinished)
-- macOS notarization, Windows signing, Linux packages, and authenticated
-  automatic installation/update service
+  0.70.1 adds signed Sparkle installation/restart with explicit consent,
+  cancellable quit, restored tabs and real signed-replacement verification;
+  default-profile/single-process macOS scope remains)
+- macOS notarization, Windows signing, Linux packages, and broader-profile
+  automatic installation/update support
 - signed and notarized Apple Silicon DMGs attached to GitHub Releases for each
   stable, release-worthy milestone; early milestone DMGs remain clearly marked
   prereleases until Developer ID signing and notarization are configured

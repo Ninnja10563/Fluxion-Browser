@@ -28,6 +28,7 @@
   let memoryRequest = 0;
   let memoryPendingGateComplete = false;
   const tabSearchItems = new WeakMap();
+  let organisationCache = null;
 
   const create = (tag, className) => {
     const element = document.createElementNS(HTML, tag);
@@ -171,27 +172,40 @@
     gBrowser.selectedTab = tab;
   }
 
-  function organisationSuggestion() {
-    const records = [...gBrowser.tabs]
-      .filter(tab => ui.tabWorkspace(tab) === ui.currentWorkspace())
-      .map(tab => {
-        const url = tab.linkedBrowser?.currentURI?.spec || "";
-        let hostname = "";
-        try { hostname = new URL(url).hostname; } catch (_) {}
-        return {
-          tab,
-          title: tab.label || tab.getAttribute("label") || "",
-          hostname,
-          url,
-          pinned: tab.pinned,
-          grouped: Boolean(tab.group),
-          split: Boolean(tab.splitview),
-        };
-      });
-    return FluxionTabOrganisation.suggestGroup(records);
+  function sameOrganisationRecord(left, right) {
+    return left && right && left.tab === right.tab && left.title === right.title && left.url === right.url &&
+      left.pinned === right.pinned && left.grouped === right.grouped && left.split === right.split;
   }
 
-  function applyOrganisationSuggestion(suggestion) {
+  function organisationSuggestion() {
+    const workspace = ui.currentWorkspace();
+    const previous = !layer.hidden && organisationCache?.workspace === workspace ? organisationCache : null;
+    const records = [];
+    let unchanged = Boolean(previous);
+    for (const tab of gBrowser.tabs) {
+      if (tab.closing || ui.tabWorkspace(tab) !== workspace) continue;
+      const record = { tab, title: tab.label || tab.getAttribute("label") || "",
+        url: tab.linkedBrowser?.currentURI?.spec || "", pinned: tab.pinned,
+        grouped: Boolean(tab.group), split: Boolean(tab.splitview) };
+      const prior = previous?.records[records.length];
+      if (sameOrganisationRecord(prior, record)) records.push(prior);
+      else {
+        unchanged = false;
+        record.hostname = "";
+        try { record.hostname = new URL(record.url).hostname; } catch (_) {}
+        records.push(record);
+      }
+    }
+    if (unchanged && previous.records.length === records.length) return previous.suggestion;
+    const suggestion = FluxionTabOrganisation.suggestGroup(records);
+    // Cache only for this open palette. Live ordered fields are checked on
+    // every use, including mutations delivered without a tab attribute event.
+    organisationCache = layer.hidden ? null : { workspace, records, suggestion };
+    return suggestion;
+  }
+
+  function applyOrganisationSuggestion() {
+    const workspace = ui.currentWorkspace(), suggestion = organisationSuggestion();
     if (!suggestion?.records?.length) return;
     const tabs = suggestion.records.map(record => record.tab).filter(tab => tab?.parentNode);
     if (tabs.length < 3) return;
@@ -201,7 +215,13 @@
       "Group Related Tabs",
       `Group these ${tabs.length} tabs as “${suggestion.name}”?\n\n${preview}`,
     );
-    if (accepted) ui.createSuggestedGroup(tabs, suggestion.name);
+    if (!accepted || ui.currentWorkspace() !== workspace) return;
+    // A native confirmation can spin a nested event loop. Never apply a group
+    // whose targets or displayed metadata changed while consent was pending.
+    const latest = organisationSuggestion();
+    if (latest?.name !== suggestion.name || latest.records.length !== suggestion.records.length ||
+        !suggestion.records.every((record, index) => sameOrganisationRecord(record, latest.records[index]))) return;
+    ui.createSuggestedGroup(tabs, suggestion.name);
   }
 
   function commandItems() {
@@ -355,7 +375,7 @@
         kind: "Tabs",
         boost: 8,
         keywords: ["organise organize cluster related tabs", suggestion.name],
-        run: () => applyOrganisationSuggestion(suggestion),
+        run: () => applyOrganisationSuggestion(),
       });
     }
     items.splice(9, 0, {
@@ -966,6 +986,7 @@
   }
 
   function open(nextMode = "all", sourceTab = null) {
+    organisationCache = null;
     window.clearTimeout(placesTimer);
     memoryRequest += 1;
     aiRequest += 1;
@@ -1002,6 +1023,7 @@
   }
 
   function close() {
+    organisationCache = null;
     window.clearTimeout(placesTimer);
     memoryRequest += 1;
     aiRequest += 1;
@@ -1061,6 +1083,7 @@
     if (!layer.hidden && !["ask", "compare", "memory"].includes(mode)) render(false);
   });
   on(window, "unload", () => {
+    organisationCache = null;
     window.clearTimeout(placesTimer);
     memoryRequest += 1;
     aiRequest += 1;

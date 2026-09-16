@@ -297,7 +297,95 @@
     window.FluxionPalette.close();
   }
 
-  run().then(verifyTabSearch).then(() => {
+  async function verifyOrganisationSearch() {
+    ui.selectTab(originalSelected);
+    const previous = fixtures.splice(0);
+    gBrowser.removeTabs(previous.filter(tab => tab.parentNode), { animate: false });
+    await waitFor(() => previous.every(tab => !tab.parentNode), "Previous search corpus did not close", 10000);
+    const addLazy = (index, title) => {
+      const uri = `https://palette-${index}.invalid/reference`;
+      const tab = gBrowser.addTrustedTab(uri, { skipAnimation: true, createLazyBrowser: true });
+      ui.setTabWorkspace(tab, originalWorkspace);
+      fixtures.push(tab);
+      assert(tab.linkedBrowser.currentURI.spec === uri && tab.hasAttribute("pending"),
+        "Organisation fixture did not retain a real pending HTTPS native tab");
+      tab.setAttribute("label", title);
+      changed(tab, ["label"]);
+      return tab;
+    };
+    for (let index = 0; index < 1000; index++) addLazy(index, `Quasar ${index}`);
+    await settle();
+    const samples = [], invalidations = [];
+    const report = { fixtureTabs: 1000, uriSource: "native addTrustedTab HTTPS createLazyBrowser",
+      input: "Gecko DOM input events; CPU dispatch and input-to-frame, not OS typing or a frame-rate claim",
+      samples, invalidations };
+    const save = () => Services.prefs.setStringPref(`${prefix}.organisation.metrics`, JSON.stringify(report));
+    const started = window.performance.now();
+    window.FluxionPalette.open("all");
+    const coldDispatch = window.performance.now() - started;
+    await frame();
+    samples.push({ phase: "cold-open", dispatchMs: coldDispatch, toFrameMs: window.performance.now() - started });
+    const input = document.getElementById("fluxion-palette-input");
+    const results = document.getElementById("fluxion-palette-results");
+    const query = async (phase, expected, value = "Suggest tab group") => {
+      input.value = value;
+      const start = window.performance.now();
+      input.dispatchEvent(new window.Event("input", { bubbles: true }));
+      const dispatchMs = window.performance.now() - start;
+      await frame();
+      samples.push({ phase, dispatchMs, toFrameMs: window.performance.now() - start });
+      const rows = [...results.querySelectorAll(".fluxion-palette-result")];
+      assert(rows.length <= 12, "All-mode search exceeded its twelve-result DOM bound");
+      assert(document.activeElement === input, "All-mode query moved input focus");
+      const suggestion = rows.find(row => row.querySelector(".fluxion-palette-result-label")?.textContent === "Suggest tab group");
+      assert(expected === null ? !suggestion : suggestion?.querySelector(".fluxion-palette-result-detail")?.textContent === expected,
+        `Live organisation result was stale during ${phase}: ${suggestion?.textContent || "no suggestion"}`);
+      assert(gBrowser.selectedTab === originalSelected, "Organisation search activated a pending corpus tab");
+      save();
+    };
+    for (let repeat = 0; repeat < 3; repeat++) {
+      for (const value of ["Suggest tab gr", "Suggest tab grou", "Suggest tab group"]) {
+        await query("warm-query", "Group 8 related tabs as “Quasar”", value);
+      }
+    }
+    // A real native group excludes its members; the remaining three make
+    // title, workspace, closure and new-tab invalidation observable in the UI.
+    gBrowser.addTabGroup(fixtures.slice(0, -3), { label: "Excluded corpus", color: "gray" });
+    await query("native-group", "Group 3 related tabs as “Quasar”");
+    invalidations.push("native-group");
+    const remaining = fixtures.slice(-3);
+    for (let index = 0; index < remaining.length; index++) {
+      remaining[index].setAttribute("label", `Nebula ${index}`);
+      changed(remaining[index], ["label"]);
+    }
+    await query("metadata-change", "Group 3 related tabs as “Nebula”");
+    invalidations.push("title");
+    const otherWorkspace = ui.workspaces().find(workspace => workspace.id !== originalWorkspace).id;
+    ui.setTabWorkspace(remaining[0], otherWorkspace);
+    await query("workspace-exclusion", null);
+    ui.setTabWorkspace(remaining[0], originalWorkspace);
+    await query("workspace-return", "Group 3 related tabs as “Nebula”");
+    invalidations.push("workspace");
+    gBrowser.removeTab(remaining[2], { animate: false });
+    await query("closed-tab", null);
+    addLazy(1000, "Nebula replacement");
+    await query("new-tab", "Group 3 related tabs as “Nebula”");
+    invalidations.push("closed-tab", "new-tab");
+    const live = fixtures.filter(tab => tab.parentNode && !tab.closing);
+    assert(live.every(tab => tab.hasAttribute("pending") && !tab.hasAttribute("busy")),
+      "Organisation fixture unexpectedly loaded a lazy HTTPS document");
+    report.pendingTabs = live.length;
+    const sorted = samples.map(sample => sample.toFrameMs).sort((a, b) => a - b);
+    report.inputToFrameMs = { p50: sorted[Math.ceil(sorted.length * .5) - 1],
+      p95: sorted[Math.ceil(sorted.length * .95) - 1], max: sorted.at(-1) };
+    save();
+    assert(report.inputToFrameMs.p95 < 500 && report.inputToFrameMs.max < 1500,
+      "All-mode organisation exceeded the hosted-runner responsiveness ceiling");
+    Services.prefs.setStringPref(`${prefix}.organisation.health`, "live-1000-https-palette-organisation-verified");
+    window.FluxionPalette.close();
+  }
+
+  run().then(verifyTabSearch).then(verifyOrganisationSearch).then(() => {
     drainMutations();
     Services.prefs.setStringPref(`${prefix}.metrics`, JSON.stringify(backgroundMetrics || metrics()));
     Services.prefs.setStringPref(`${prefix}.health`, "stable-200-tab-background-updates");

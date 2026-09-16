@@ -6,7 +6,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 
-function fixture({ nativeFixture = false } = {}) {
+function fixture({ nativeFixture = false, privateWindow = false } = {}) {
   let finishFlush;
   const flushing = new Promise(resolve => { finishFlush = resolve; });
   const events = new Map();
@@ -17,8 +17,9 @@ function fixture({ nativeFixture = false } = {}) {
     preferences.set(key, value);
     prefObservers.get(key)?.observe();
   };
-  const calls = { prepare: 0, discard: 0 };
+  const calls = { prepare: 0, discard: 0, timers: 0, lookups: 0 };
   const tab = {
+    parentNode: {},
     linkedBrowser: { getAttribute: () => "", currentURI: { spec: "https://example.com/?fluxion-sleep-race-test=1" } }, linkedPanel: "panel", lastAccessed: 1,
     hasAttribute: key => attributes.has(key),
     setAttribute: (key, value) => attributes.set(key, value),
@@ -26,6 +27,7 @@ function fixture({ nativeFixture = false } = {}) {
   };
   const gBrowser = {
     tabs: [tab], selectedTab: {},
+    getTabForBrowser(browser) { calls.lookups++; return this.tabs.find(item => item.linkedBrowser === browser); },
     tabContainer: { addEventListener() {}, dispatchEvent() {} },
     prepareDiscardBrowser() { calls.prepare += 1; return flushing; },
     discardBrowser(target, force) {
@@ -36,7 +38,7 @@ function fixture({ nativeFixture = false } = {}) {
     },
   };
   const window = {
-    setTimeout(callback, delay) { if (delay === 1800) calls.runFixture = callback; return 1; }, clearTimeout() {},
+    setTimeout(callback, delay) { calls.timers++; if (delay === 1800) calls.runFixture = callback; return 1; }, clearTimeout() {},
     addEventListener: (type, callback) => events.set(type, callback),
     FluxionUI: { currentWorkspace: () => "focus", setTabWorkspace() {},
       selectTab(target) { gBrowser.selectedTab = target; } },
@@ -52,7 +54,7 @@ function fixture({ nativeFixture = false } = {}) {
   gBrowser.removeTab = target => { gBrowser.tabs = gBrowser.tabs.filter(item => item !== target); };
   const context = vm.createContext({
     window, gBrowser,
-    ChromeUtils: { importESModule: () => ({ PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
+    ChromeUtils: { importESModule: () => ({ PrivateBrowsingUtils: { isWindowPrivate: () => privateWindow } }) },
     Services: {
       env: { get: name => nativeFixture && name === "FLUXION_VISUAL_SLEEP_TEST" ? "1" : "" },
       prefs: {
@@ -102,6 +104,8 @@ for (const [name, change] of [
   ["another window selects Never", f => f.preferences.set("fluxion.tabs.sleepMinutes", 0)],
   ["another window changes and restores the interval", f => { f.setPref(0); f.setPref(30); }],
   ["tab moves to another window", f => { f.gBrowser.tabs = []; }],
+  ["tab is detached", f => { f.tab.parentNode = null; }],
+  ["tab begins closing", f => { f.tab.closing = true; }],
   ["browser is replaced", f => { f.tab.linkedBrowser = {}; }],
   ["window closes", f => f.unload()],
 ]) {
@@ -125,4 +129,29 @@ test("concurrent sleep calls flush and discard an eligible tab only once", async
   assert.equal(await pending, true);
   assert.equal(f.calls.discard, 1);
   assert.equal(f.attributes.get("fluxion-sleeping"), "true");
+});
+
+test("sleep ownership checks use Gecko's live browser map without enumerating the tab list", async () => {
+  const f = fixture();
+  let owned = true;
+  f.gBrowser.getTabForBrowser = browser => { f.calls.lookups++; return owned && browser === f.tab.linkedBrowser ? f.tab : null; };
+  Object.defineProperty(f.gBrowser, "tabs", { get() { throw new Error("Single-tab sleep must not enumerate all tabs"); } });
+  const pending = f.controller.sleep(f.tab);
+  assert.equal(f.calls.prepare, 1);
+  owned = false;
+  f.finishFlush();
+  assert.equal(await pending, false);
+  assert.equal(f.calls.lookups, 2);
+  assert.equal(f.calls.discard, 0, "ownership must be revalidated after the asynchronous flush");
+});
+
+test("private windows never schedule periodic sleeping work, including after preference changes", async () => {
+  const f = fixture({ privateWindow: true });
+  assert.equal(f.calls.timers, 0);
+  f.controller.setMinutes(5);
+  assert.equal(f.calls.timers, 0);
+  assert.equal(await f.controller.run(), 0);
+  assert.equal(await f.controller.sleep(f.tab, { forceAge: true }), false);
+  assert.equal(f.calls.prepare, 0);
+  assert.equal(f.calls.discard, 0);
 });

@@ -38,7 +38,8 @@
   }
 
   async function sleep(tab, { forceAge = false } = {}) {
-    if (destroyed || !tab || pending.has(tab) || ![...gBrowser.tabs].includes(tab)) return false;
+    if (destroyed || !tab?.parentNode || tab.closing || pending.has(tab) ||
+        gBrowser.getTabForBrowser(tab.linkedBrowser) !== tab) return false;
     const scheduledMinutes = minutes();
     const threshold = scheduledMinutes * 60_000;
     if (!threshold && !forceAge) return false;
@@ -57,7 +58,8 @@
       const currentThreshold = currentMinutes * 60_000;
       if (destroyed || scheduledRevision !== preferenceRevision ||
           currentMinutes !== scheduledMinutes ||
-          (!currentThreshold && !forceAge) || ![...gBrowser.tabs].includes(tab) ||
+          (!currentThreshold && !forceAge) || !tab.parentNode || tab.closing ||
+          gBrowser.getTabForBrowser(browser) !== tab ||
           tab.linkedBrowser !== browser ||
           !FluxionTabSleepingPolicy.canSleep(tab, tabState(tab, Date.now(), forceAge ? 0 : currentThreshold))) {
         return false;
@@ -92,7 +94,7 @@
 
   function schedule() {
     window.clearTimeout(timer);
-    if (destroyed) return;
+    if (destroyed || PrivateBrowsingUtils.isWindowPrivate(window)) return;
     const delay = FluxionTabSleepingPolicy.nextCheckDelay(minutes());
     if (delay) timer = window.setTimeout(async () => {
       try { await run(); } catch (error) { Cu.reportError(error); }

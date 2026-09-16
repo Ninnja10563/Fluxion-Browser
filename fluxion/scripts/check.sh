@@ -50,6 +50,9 @@ node --check scripts/verify-sparkle-signing-interop.mjs
 node --check scripts/updater-fixture.mjs
 node --check chrome/fluxion-native-updater-verification.js
 node --check scripts/benchmark-tab-search.cjs
+node --check scripts/benchmark-tab-sleeping.cjs
+node --check scripts/benchmark-workspace-selection.cjs
+node --check scripts/benchmark-palette-organisation.cjs
 node --check scripts/browsing-fixture.mjs
 node --check chrome/core/url.js
 node --check chrome/core/search.js
