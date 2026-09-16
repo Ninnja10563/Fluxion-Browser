@@ -223,7 +223,10 @@
     :root[inDOMFullscreen] #tabbrowser-tabpanels .browserStack { border-radius: 0; }
     :root[inDOMFullscreen] #browser { --fluxion-page-inset: 0px; }
     #browser:has(#fluxion-flow[data-state="compact"]) { --fluxion-flow-layout-width: 44px; }
-    #browser:has(#fluxion-flow[data-state="focus"]) { --fluxion-flow-layout-width: 3px; }
+    #browser:has(#fluxion-flow[data-state="focus"]) {
+      --fluxion-flow-layout-width: 0px; --fluxion-page-inset: 0px;
+    }
+    #browser:has(#fluxion-flow[data-state="focus"]) .browserStack { border-radius: 0; }
     #tabbrowser-tabpanels[splitview] .split-view-panel.deck-selected > .browserContainer {
       outline: 1px solid color-mix(in srgb, var(--fluxion-accent) 70%, transparent) !important;
     }
@@ -297,6 +300,7 @@
     #fluxion-flow[data-state="compact"] { width: 44px; min-width: 44px; max-width: 44px; }
     #fluxion-flow[data-state="focus"] {
       width: 3px; min-width: 3px; max-width: 3px; cursor: pointer;
+      position: absolute; inset-block: 0; inset-inline-start: 0;
       background: transparent;
     }
     #fluxion-flow[data-state="focus"]::before {
@@ -1983,7 +1987,14 @@
       : null;
   }
 
-  function closeMotionDuration() {
+  function closeMotionDuration(tabs = []) {
+    const closing = new Set(tabs);
+    // No adjacent workspace rows need a compression animation when the final
+    // one closes. Request native removal promptly; permitUnload still decides
+    // whether the close commits, and Gecko owns creation of any replacement.
+    if (closing.size && ![...gBrowser.tabs].some(candidate =>
+      candidate.parentNode && !candidate.closing && !closing.has(candidate) &&
+      tabWorkspace(candidate) === currentWorkspace)) return 0;
     return document.documentElement.hasAttribute("data-fluxion-no-motion") ||
       window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 120;
   }
@@ -2021,7 +2032,7 @@
           scheduleRender();
         }
       }
-    }, closeMotionDuration());
+    }, closeMotionDuration(tabs));
   }
 
   function closeTabs(tabs, options = {}) {

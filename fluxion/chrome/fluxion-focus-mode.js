@@ -7,7 +7,7 @@
   if (!toolbox || !flow || window.FluxionFocusMode) return;
   const cleanups = [], popups = new Set();
   const HIDE_DELAY_MS = 60;
-  let enabled = false, revealed = false, pointerInside = false, timer = 0, disposed = false;
+  let enabled = false, revealed = false, pointerInside = false, pointerAbove = false, timer = 0, disposed = false;
   let sidebarState = null, nativeFocus = false;
   const edge = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
   edge.id = "fluxion-navigation-edge";
@@ -60,7 +60,7 @@
   }
   function cancel() { if (timer) window.clearTimeout(timer); timer = 0; }
   function keepOpen() {
-    return pointerInside || toolbox.contains(document.activeElement) || popups.size > 0 ||
+    return pointerInside || pointerAbove || toolbox.contains(document.activeElement) || popups.size > 0 ||
       Boolean(window.gURLBar?.view?.isOpen) || root.hasAttribute("customizing");
   }
   function paint(value) {
@@ -110,9 +110,12 @@
   function refresh() {
     if (disposed) return;
     const enteringFocus = flow.dataset.state === "focus" && sidebarState !== "focus";
+    if (sidebarState !== flow.dataset.state) pointerAbove = false;
     sidebarState = flow.dataset.state;
-    nativeFocus = Boolean(window.fullScreen && sidebarState === "focus" &&
+    const nextNativeFocus = Boolean(window.fullScreen && sidebarState === "focus" &&
       !document.fullscreenElement && !root.hasAttribute("inDOMFullscreen") && !root.hasAttribute("customizing"));
+    if (nativeFocus !== nextNativeFocus) { pointerAbove = false; pointerInside = false; }
+    nativeFocus = nextNativeFocus;
     root.toggleAttribute("data-fluxion-native-focus", nativeFocus);
     // New Tab automatically focuses the location field. An explicit collapse
     // must not inherit that focus as a request to pin the navigation open.
@@ -130,7 +133,7 @@
     const next = flow.dataset.state === "focus" && !root.hasAttribute("inFullscreen") &&
       !root.hasAttribute("inDOMFullscreen") && !root.hasAttribute("customizing");
     if (next !== enabled) {
-      cancel(); enabled = next; pointerInside = false;
+      cancel(); enabled = next; pointerInside = false; pointerAbove = false;
       root.toggleAttribute("data-fluxion-focus-mode", enabled);
       if (!enabled) root.removeAttribute("data-fluxion-navigation-pinned");
       paint(enabled && keepOpen());
@@ -141,10 +144,38 @@
   }
   const trustedChrome = event => event.isTrusted === true &&
     event.target?.ownerDocument === document && event.target?.nodePrincipal?.isSystemPrincipal === true;
-  on(edge, "pointerenter", event => { if (trustedChrome(event)) { pointerInside = true; reveal(); } });
-  on(edge, "pointerleave", event => { if (trustedChrome(event)) { pointerInside = false; scheduleHide(); } });
-  on(toolbox, "pointerenter", event => { if (trustedChrome(event)) { pointerInside = true; reveal(); } });
-  on(toolbox, "pointerleave", event => { if (trustedChrome(event)) { pointerInside = false; scheduleHide(); } });
+  function enterNavigation(event) {
+    if (!trustedChrome(event)) return;
+    pointerInside = true; pointerAbove = false; cancel(); reveal();
+  }
+  function navigationBottom() {
+    const box = toolbox.getBoundingClientRect();
+    // During reveal, its transformed bottom can still be above the pointer.
+    // The fully revealed band starts at the window edge; Cocoa's menu-bar
+    // translation can move it farther down, never shorten that safe band.
+    return Math.max(box.height, box.bottom);
+  }
+  function leaveNavigation(event) {
+    if (!trustedChrome(event)) return;
+    pointerInside = false;
+    if (!enabled && !nativeFocus) return;
+    // Above/side exits lead toward native window controls or the macOS menu
+    // bar, not back to browsing. Retain the reveal until a trusted pointer
+    // returns below the whole toolbox (including an optional bookmarks row).
+    const bottom = navigationBottom();
+    pointerAbove = !Number.isFinite(event.clientY) || !Number.isFinite(bottom) || event.clientY < bottom;
+    if (pointerAbove) cancel(); else scheduleHide();
+  }
+  for (const target of [edge, toolbox, document.getElementById("fullscr-toggler")].filter(Boolean)) {
+    on(target, "pointerenter", enterNavigation);
+    on(target, "pointerleave", leaveNavigation);
+  }
+  on(window, "pointermove", event => {
+    if (!pointerAbove || (!enabled && !nativeFocus) || !trustedChrome(event) || !Number.isFinite(event.clientY)) return;
+    if (event.clientY >= navigationBottom()) {
+      pointerAbove = false; pointerInside = false; scheduleHide();
+    }
+  }, { capture: true, passive: true });
   // Deliberately keep the offscreen toolbox focusable: Gecko's Cmd-L, menu
   // commands and accessibility navigation retain their native focus routing.
   on(toolbox, "focusin", () => reveal({ immediate: true }));
@@ -166,7 +197,7 @@
   }, true);
   on(window, "blur", event => {
     if (event.target !== window) return;
-    pointerInside = false; scheduleHide();
+    pointerInside = false; pointerAbove = false; scheduleHide();
   });
   const observer = new window.MutationObserver(refresh);
   observer.observe(flow, { attributes: true, attributeFilter: ["data-state"] });

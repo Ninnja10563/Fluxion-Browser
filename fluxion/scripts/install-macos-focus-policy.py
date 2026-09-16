@@ -17,6 +17,22 @@ _spec.loader.exec_module(archive_tools)
 VERSION = "155.0.1"
 ENTRY = "chrome/browser/content/browser/browser-fullScreenAndPointerLock.js"
 SHA256 = "88464e8fef698473f4ad09036c4392845aaf61bc37f011fa9dd6054e48950748"
+# The session policy runs first. Pin its exact Gecko 155.0.1 tabbrowser output,
+# so neither an upstream drift nor a changed earlier policy is silently accepted.
+TAB_ENTRY = "chrome/browser/content/browser/tabbrowser/tabbrowser.js"
+TAB_SHA256 = "5f673b0f29d7af0637f89e9b22480c47faed94aaa770c0f2029eeaf7fc715e70"
+TAB_REPLACEMENTS = [
+    ('''        if (aNewTab) {
+          gURLBar.select();
+        }''', '''        // A last-tab replacement is not a request to edit the address.
+        // Explicit Focus keeps its toolbar hidden until a real location/menu
+        // action. Do not blur an existing editor or alter native close guards.
+        if (aNewTab &&
+            !document.documentElement.hasAttribute("data-fluxion-focus-mode") &&
+            !document.documentElement.hasAttribute("data-fluxion-native-focus")) {
+          gURLBar.select();
+        }'''),
+]
 REPLACEMENTS = [
     ('''    if (!Services.prefs.getBoolPref("browser.fullscreen.autohide")) {
       return;
@@ -53,6 +69,17 @@ def patch_source(data):
     return source.encode("utf-8")
 
 
+def patch_tab_source(data):
+    if hashlib.sha256(data).hexdigest() != TAB_SHA256:
+        raise ValueError("Unrecognized session-policy-patched native tab source")
+    source = data.decode("utf-8")
+    for before, after in TAB_REPLACEMENTS:
+        if source.count(before) != 1:
+            raise ValueError("Native replacement focus policy anchor drift")
+        source = source.replace(before, after, 1)
+    return source.encode("utf-8")
+
+
 def install(resources):
     resources = Path(resources)
     archive = resources / "browser" / "omni.ja"
@@ -67,21 +94,21 @@ def install(resources):
     with archive_tools._archive.readable_archive(archive) as source:
         entries = source.infolist()
         names = [entry.filename for entry in entries]
-        if len(set(names)) != len(names) or names.count(ENTRY) != 1:
+        if len(set(names)) != len(names) or names.count(ENTRY) != 1 or names.count(TAB_ENTRY) != 1:
             raise ValueError("Ambiguous or missing native fullscreen source")
-        patched = patch_source(source.read(ENTRY))
+        patched = {ENTRY: patch_source(source.read(ENTRY)), TAB_ENTRY: patch_tab_source(source.read(TAB_ENTRY))}
         preload_members = {entry.filename for entry in entries if entry.header_offset < preload}
         output = io.BytesIO()
         with zipfile.ZipFile(output, "w", allowZip64=False) as target:
             for entry in entries:
-                target.writestr(entry, patched if entry.filename == ENTRY else source.read(entry))
+                target.writestr(entry, patched.get(entry.filename, source.read(entry)))
         result = archive_tools.optimize_zip(output.getvalue(), preload_members)
     descriptor, temporary = tempfile.mkstemp(prefix=".fluxion-focus-", dir=archive.parent)
     try:
         with os.fdopen(descriptor, "wb") as target:
             target.write(result)
         with archive_tools._archive.readable_archive(temporary) as check:
-            if check.testzip() is not None or check.read(ENTRY) != patched:
+            if check.testzip() is not None or any(check.read(name) != data for name, data in patched.items()):
                 raise ValueError("Native Focus archive validation failed")
         os.chmod(temporary, archive.stat().st_mode & 0o777)
         os.replace(temporary, archive)

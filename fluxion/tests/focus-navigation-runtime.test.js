@@ -19,15 +19,16 @@ function fixture() {
       hasAttribute: name => attrs.has(name), getAttribute: name => attrs.get(name) ?? null,
       setAttribute: (name, value) => attrs.set(name, String(value)), removeAttribute: name => attrs.delete(name),
       toggleAttribute(name, value) { if (value) attrs.set(name, ""); else attrs.delete(name); },
-      getBoundingClientRect() { geometryReads++; return { top: 0, height: 44 }; },
+      getBoundingClientRect() { geometryReads++; return { top: 0, bottom: 44, height: 44 }; },
     };
     return n;
   }
   const root = node("root"), toolbox = node("navigator-toolbox", root), flow = node("fluxion-flow", root);
+  const toggler = node("fullscr-toggler", root);
   const page = node("page"), input = node("urlbar-input", toolbox);
   flow.dataset.state = "expanded"; document.activeElement = page;
   document.documentElement = root;
-  document.getElementById = id => ({ "navigator-toolbox": toolbox, "fluxion-flow": flow })[id];
+  document.getElementById = id => ({ "navigator-toolbox": toolbox, "fluxion-flow": flow, "fullscr-toggler": toggler })[id];
   document.createElementNS = (_, name) => node("", null, name);
   document.addEventListener = toolbox.addEventListener; document.removeEventListener = toolbox.removeEventListener;
   const window = { document, gURLBar: { inputField: input, value: "", view: { isOpen: false, close() { this.isOpen = false; } } },
@@ -45,11 +46,11 @@ function fixture() {
   vm.runInNewContext(source, { window, Services });
   const edge = root.children.find(n => n.id === "fluxion-navigation-edge");
   const emit = (owner, type, target = owner, extra = {}) => {
-    const event = { target, type, isTrusted: true, ...extra };
+    const event = { target, type, isTrusted: true, clientY: type === "pointerleave" ? 60 : 10, ...extra };
     for (const fn of [...(listeners.get(owner)?.get(type) || [])]) fn(event);
     return event;
   };
-  return { window, document, root, toolbox, flow, input, page, edge, timers, observers, topics, Services, node, emit,
+  return { window, document, root, toolbox, flow, toggler, input, page, edge, timers, observers, topics, Services, node, emit,
     get reads() { return geometryReads; },
     enterFocus() { flow.dataset.state = "focus"; window.FluxionFocusMode.refresh(); },
     flush() { const pending = [...timers.values()]; timers.clear(); deadlines.clear(); pending.forEach(fn => fn()); },
@@ -108,6 +109,94 @@ test("Focus motion is short and scoped; reduced motion overrides both native and
   assert.match(css, /:root\[data-fluxion-no-motion\] #navigator-toolbox,\s*:root\[data-fluxion-no-motion\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/,
     "browser motion-off rule must match the native override specificity");
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*:root\[data-fluxion-focus-mode\] #navigator-toolbox,\s*:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/);
+});
+test("upward and sideways navigation exits retain reveal until a trusted pointer crosses below the whole toolbox", () => {
+  for (const native of [false, true]) {
+    for (const y of [-20, 0, 43, undefined]) {
+      const f = fixture(), calls = [];
+      if (native) {
+        f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+        f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+      }
+      f.enterFocus(); f.flush(); calls.length = 0;
+      f.emit(f.toolbox, "pointerenter");
+      f.emit(f.toolbox, "pointerleave", f.toolbox, { clientY: y });
+      f.advance(1000);
+      assert.equal(calls.length, 0);
+      if (!native) assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+      f.emit(f.window, "pointermove", f.page, { clientY: 43 }); f.advance(1000);
+      assert.equal(calls.length, 0);
+      if (!native) assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+      f.emit(f.window, "pointermove", f.page, { clientY: 44 }); f.advance(59);
+      assert.equal(calls.length, 0);
+      if (!native) assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+      f.advance(1);
+      if (native) assert.deepEqual(calls, [true]);
+      else assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+      const reads = f.reads;
+      for (let i = 0; i < 50; i++) f.emit(f.window, "pointermove", f.page, { clientY: 200 });
+      assert.equal(f.reads, reads, "ordinary page pointer movement must not read layout");
+    }
+  }
+});
+test("native toggler reveal toward the menu bar survives shown notifications, then retracts below", () => {
+  const f = fixture(), calls = [];
+  f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+  f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+  f.enterFocus(); f.flush(); calls.length = 0;
+  f.emit(f.toggler, "pointerenter");
+  f.Services.obs.notifyObservers(f.toolbox, "fullscreen-nav-toolbox", "shown");
+  f.emit(f.toggler, "pointerleave", f.toggler, { clientY: -1 }); f.advance(1000);
+  assert.equal(calls.length, 0);
+  f.Services.obs.notifyObservers(f.toolbox, "fullscreen-nav-toolbox", "shown"); f.advance(1000);
+  assert.equal(calls.length, 0, "native reveal bookkeeping cannot defeat the upward latch");
+  f.emit(f.window, "pointermove", f.flow, { clientY: 100 }); f.advance(60);
+  assert.deepEqual(calls, [true]);
+});
+test("upward retention uses the revealed toolbar band even during the first reveal animation frame", () => {
+  const f = fixture(); f.enterFocus();
+  f.toolbox.getBoundingClientRect = () => ({ top: -46, bottom: -2, height: 44 });
+  f.emit(f.edge, "pointerenter");
+  f.emit(f.edge, "pointerleave", f.edge, { clientY: 0 }); f.advance(1000);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.emit(f.window, "pointermove", f.page, { clientY: 20 }); f.advance(1000);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.emit(f.window, "pointermove", f.page, { clientY: 44 }); f.advance(60);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});
+test("DOM fullscreen and customization release prior native upward-pointer ownership", () => {
+  for (const mode of ["inDOMFullscreen", "customizing"]) {
+    const f = fixture(), calls = [];
+    f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+    f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+    f.enterFocus(); f.flush(); calls.length = 0;
+    f.emit(f.toolbox, "pointerenter"); f.emit(f.toolbox, "pointerleave", f.toolbox, { clientY: -1 });
+    f.root.setAttribute(mode, "true"); f.window.FluxionFocusMode.refresh(); f.advance(1000);
+    assert.equal(calls.length, 0);
+    f.root.removeAttribute(mode); f.window.FluxionFocusMode.refresh(); f.advance(60);
+    assert.deepEqual(calls, [true], `${mode} must not retain stale pointer ownership on return`);
+  }
+});
+test("upward retention rejects content/synthetic motion, protects address focus, and releases on blur or mode change", () => {
+  const f = fixture(); f.enterFocus();
+  const upward = () => {
+    f.emit(f.toolbox, "pointerenter"); f.emit(f.toolbox, "pointerleave", f.toolbox, { clientY: -1 });
+  };
+  upward();
+  const web = f.node("web"); web.nodePrincipal.isSystemPrincipal = false;
+  f.emit(f.window, "pointermove", web, { clientY: 100 });
+  f.emit(f.window, "pointermove", f.page, { clientY: 100, isTrusted: false }); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.document.activeElement = f.input;
+  f.emit(f.window, "pointermove", f.page, { clientY: 100 }); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true, "real keyboard ownership is independent of pointer direction");
+  f.document.activeElement = f.page; f.emit(f.toolbox, "focusout"); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  upward(); f.emit(f.window, "blur"); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  upward(); f.flow.dataset.state = "expanded"; f.window.FluxionFocusMode.refresh();
+  f.enterFocus(); f.flush();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
 });
 test("native fullscreen keeps expanded and compact navigation visible without preference writes or notification loops", () => {
   const f = fixture(), shown = [];

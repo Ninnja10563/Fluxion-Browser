@@ -58,6 +58,30 @@ function fixture(count = 1000, privateWindow = false) {
 }
 const settle = async () => { await Promise.resolve(); await Promise.resolve(); };
 
+test("native last-visible-tab replacement inherits its closed workspace without selecting or changing hidden workspace tabs", async () => {
+  for (const privateWindow of [false, true]) {
+    const h = fixture(3, privateWindow), [closed, hidden, replacement] = h.tabs;
+    closed.closing = true;
+    hidden.hidden = true; hidden.saved[WORKSPACE] = "build"; hidden.attrs[WORKSPACE] = "build";
+    hidden.saved[ACTIVE] = "true";
+    replacement.saved = {}; replacement.attrs = {};
+    h.gBrowser.selectedTab = replacement;
+    h.emit("TabSelect"); await settle();
+    assert.deepEqual(h.switches, [], "unassigned native replacement does not jump to another workspace");
+    // Flow's pending structural render resolves the new native tab through
+    // the shipped authoritative accessor, not a second placeholder creation.
+    assert.equal(h.context.tabWorkspace(replacement), "focus");
+    h.emit("TabSelect"); await settle();
+    assert.equal(replacement.saved[WORKSPACE], "focus");
+    assert.equal(h.context.currentWorkspace, "focus");
+    assert.equal(hidden.saved[WORKSPACE], "build");
+    assert.equal(hidden.saved[ACTIVE], "true");
+    assert.equal(hidden.hidden, true);
+    assert.equal(h.gBrowser.selectedTab, replacement);
+    assert.equal(h.tabs.length, 3, "no duplicate placeholder is created");
+  }
+});
+
 test("1000-tab authoritative marker pass reads each candidate workspace once", () => {
   const h = fixture();
   h.context.rememberWorkspaceTab(h.tabs[800]);

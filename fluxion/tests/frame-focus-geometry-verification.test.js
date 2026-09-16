@@ -4,6 +4,20 @@ const assert = require("node:assert/strict");
 const fs = require("node:fs");
 const vm = require("node:vm");
 const source = fs.readFileSync(require.resolve("../chrome/fluxion-frame-verification.js"), "utf8");
+test("directional native evidence requires a trusted boundary exit rather than an arbitrary pointer event", () => {
+  const a = source.indexOf("  function directionalExitEvidence("), b = source.indexOf("  function floatingSidebarEvidence(", a);
+  const verify = vm.runInNewContext(`${source.slice(a, b)}; directionalExitEvidence`, {
+    assert(value, message) { if (!value) throw new Error(message); },
+  });
+  const band = { top: 0, bottom: 72 };
+  const event = { type: "pointerleave", trusted: true, y: -4 };
+  assert.equal(verify([event], band, true).length, 1);
+  assert.throws(() => verify([event], band, false), /downward/);
+  event.y = 76; assert.equal(verify([event], band, false).length, 1);
+  for (const candidate of [{ ...event, trusted: false }, { ...event, type: "pointermove" }, { ...event, y: 30 }]) {
+    assert.throws(() => verify([candidate], band, false), /trusted/);
+  }
+});
 const start = source.indexOf("  function floatingSidebarEvidence("), end = source.indexOf("  async function focusNavigation(", start);
 assert.ok(start > 0 && end > start);
 let hit = null;

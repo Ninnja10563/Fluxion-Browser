@@ -218,7 +218,7 @@ test("Flow pointer closing compresses the vacated row without waiting for moveme
   assert.doesNotMatch(chrome, /pointerCloseHold|releasePointerCloseHold|renderDeferredForClose/);
   assert.match(chrome, /is-close-releasing/);
   assert.match(chrome, /closingTabs\.has\(tab\)/);
-  assert.match(chrome, /closeMotionDuration\(\)/);
+  assert.match(chrome, /closeMotionDuration\(tabs\)/);
   assert.match(macVerifier, /FLUXION_VISUAL_CLOSE_STABILITY_TEST=1/);
   assert.match(macVerifier, /pointer-close-compresses-without-movement/);
 });
@@ -379,7 +379,9 @@ test("Appearance switches live Gecko themes and stays searchable from the palett
   assert.match(chrome, /--fluxion-sidebar-width: 232px/);
   assert.match(chrome, /--fluxion-flow-layout-width: var\(--fluxion-sidebar-width\)/);
   assert.match(chrome, /--fluxion-flow-layout-width: 44px/);
-  assert.match(chrome, /--fluxion-flow-layout-width: 3px/);
+  assert.match(chrome, /--fluxion-flow-layout-width: 0px; --fluxion-page-inset: 0px/);
+  assert.match(chrome, /#browser:has\(#fluxion-flow\[data-state="focus"\]\) \.browserStack \{ border-radius: 0; \}/);
+  assert.match(chrome, /#fluxion-flow\[data-state="focus"\] \{[^}]*position: absolute; inset-block: 0; inset-inline-start: 0;/);
   assert.match(settings, /inset-inline-start: calc\(var\(--fluxion-flow-layout-width\) \+ var\(--fluxion-page-inset\)\)/);
   assert.match(library, /inset-inline-start: calc\(var\(--fluxion-flow-layout-width\) \+ var\(--fluxion-page-inset\)\)/);
   assert.match(settings, /width: 184px; min-width: 184px/);

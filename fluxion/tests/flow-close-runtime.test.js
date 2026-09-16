@@ -56,7 +56,7 @@ function fixture() {
   // lifecycle is modeled from Firefox155.0.1: committed TabClose precedes DOM
   // teardown; canceled permitUnload emits no event. Physical macOS keyboard
   // dispatch and Gecko's actual dialog are separate packaged-browser checks.
-  vm.runInContext(block("  function closeMotionDuration()", "  function vectorGlyph(") +
+  vm.runInContext(block("  function closeMotionDuration(", "  function vectorGlyph(") +
     block("  function render()", "  function updateWindowTitle()") +
     block("  function scheduleRender(", "  const popupSet ="), context);
   function commitClose(tab) {
@@ -120,6 +120,34 @@ test("reduced motion and disabled animation close without a timed visual wait", 
     await f.finishTimers(); f.flush();
     assert.equal(f.tabElements.has(tab), false);
   }
+});
+
+test("last workspace row closes without the compression delay while other workspaces survive", async () => {
+  for (const canceled of [false, true]) {
+    const f = fixture(), tab = f.tabs[0], row = f.tabElements.get(tab);
+    for (const other of f.tabs.slice(1)) other.workspace = "other";
+    tab.cancelClose = canceled;
+    f.context.closeWithStability(tab, row);
+    assert.deepEqual(f.timerDelays, [0]);
+    assert.equal(tab.closing, false, "request remains asynchronous and native permitUnload still owns commitment");
+    await f.finishTimers(); f.flush();
+    assert.equal(tab.closing, !canceled);
+    assert.ok(f.tabs.slice(1).every(other => other.parentNode && !other.closing));
+    if (canceled) {
+      assert.equal(f.tabElements.get(tab), row);
+      assert.equal(row.classList.contains("is-closing"), false);
+      assert.equal(f.context.closingTabs.has(tab), false);
+    }
+  }
+});
+
+test("closing all remaining workspace rows together ignores detached and already-closing rows", async () => {
+  const f = fixture(); f.tabs[2].closing = true; f.tabs[3].parentNode = null;
+  f.context.contextTabs = () => f.tabs.slice(0, 2);
+  f.context.closeWithStability(f.tabs[0], f.tabElements.get(f.tabs[0]));
+  assert.deepEqual(f.timerDelays, [0]);
+  await f.finishTimers();
+  assert.ok(f.tabs.slice(0, 2).every(tab => tab.closing));
 });
 
 test("keyboard close during another row's compression removes both without pointer input", async () => {

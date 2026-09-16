@@ -9,7 +9,7 @@
   const driver = Services.env.get("FLUXION_FRAME_DRIVER_DIR");
   const report = {
     keyboard: "native macOS System Events Cmd-W, Cmd-Shift-T, Cmd-L and Escape",
-    pointer: "Gecko Window.synthesizeMouseEvent input routing; no OS pointer movement claimed",
+    pointer: "Normal-window menu-bar exit uses native macOS CGEvent movement; other pointer checks use Gecko widget routing",
     fullscreenTested: false, checks: [], captures: [], geometry: [], keys: [],
   };
   const assert = (value, message) => { if (!value) throw new Error(message); };
@@ -79,13 +79,18 @@
     assert(stack && container, "Native webpage stack is missing");
     const style = window.getComputedStyle(stack), radii = [style.borderTopLeftRadius, style.borderTopRightRadius,
       style.borderBottomRightRadius, style.borderBottomLeftRadius];
-    assert(radii.every(radius => radius === "8px") && style.overflowX === "clip" && style.overflowY === "clip",
+    const focus = document.getElementById("fluxion-flow")?.dataset.state === "focus";
+    const radius = focus ? "0px" : "8px";
+    assert(radii.every(value => value === radius) && style.overflowX === "clip" && style.overflowY === "clip",
       `Native webpage has square or unclipped corners: ${label}`);
     const box = rect(browser), center = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
     assert(browser === center || browser.contains(center), `Page center is obscured: ${label}`);
-    const corner = document.elementFromPoint(box.left + .5, box.top + .5);
-    assert(corner !== browser && !browser.contains(corner), `Remote content escapes the rounded top-left clip: ${label}`);
-    return { label, radii, overflow: [style.overflowX, style.overflowY], page: box,
+    // Focus keeps a three-pixel pointer edge over the page, not beside it.
+    // Probe the bottom-right corner away from the left and top reveal edges.
+    const corner = document.elementFromPoint(focus ? box.right - .5 : box.left + .5, focus ? box.bottom - .5 : box.top + .5);
+    assert(focus ? corner === browser || browser.contains(corner) : corner !== browser && !browser.contains(corner),
+      focus ? `Focus page still has a rounded or inset corner: ${label}` : `Remote content escapes the rounded top-left clip: ${label}`);
+    return { label, focus, radii, overflow: [style.overflowX, style.overflowY], page: box,
       cornerHit: corner?.id || corner?.localName, backdrop: window.getComputedStyle(container).backgroundColor };
   }
   function persistentSidebarEvidence(flow, label) {
@@ -179,6 +184,12 @@
   async function action(name) {
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Native driver did not acknowledge ${name}`, 20000);
+  }
+  function directionalExitEvidence(events, box, upward) {
+    const candidates = events.filter(event => event.type === "pointerleave" && event.trusted &&
+      (upward ? event.y <= box.top : event.y >= box.bottom));
+    assert(candidates.length > 0, `No trusted ${upward ? "upward" : "downward"} toolbar exit reached the browser`);
+    return candidates;
   }
   function floatingSidebarEvidence(flow, surface, revealed) {
     const rail = rect(flow), box = rect(surface), style = window.getComputedStyle(surface);
@@ -364,10 +375,74 @@
     try {
       gBrowser.selectedBrowser.focus(); moveToPage();
       await hidden("initial-hidden");
+      evidence.geometry.push(pageCornerEvidence(gBrowser.selectedBrowser, "normal-focus-flush-page"));
       evidence.motion = await verifyNavigationMotion(toolbox, false);
       await capture("capture-focus-navigation-hidden");
       await revealFromEdge("top-edge-hover");
       await capture("capture-focus-navigation-revealed");
+      const departures = [], observeDeparture = event => {
+        if (departures.length < 32) departures.push({ type: event.type, trusted: event.isTrusted, x: event.clientX, y: event.clientY, screenY: event.screenY });
+      };
+      toolbox.addEventListener("pointerleave", observeDeparture);
+      try {
+        const band = rect(toolbox), x = window.mozInnerScreenX + band.left + band.width / 2;
+        const inside = { x, y: window.mozInnerScreenY + band.top + 20 };
+        const menu = { x, y: Math.max(0, window.screen.availTop - 12) };
+        assert(menu.y < window.mozInnerScreenY && inside.y > menu.y, "Normal-window fixture has no real macOS menu-bar space above it");
+        await IOUtils.writeUTF8(PathUtils.join(driver, "pointer-menu-up.json"), JSON.stringify({ points: [inside, menu] }));
+        await action("pointer-menu-up");
+        await delay(300);
+        const upward = directionalExitEvidence(departures, band, true);
+        await shown("native-menu-bar-upward-exit-retained");
+        const aboveCount = departures.length;
+        const pagePoint = { x, y: window.mozInnerScreenY + band.bottom + 140 };
+        await IOUtils.writeUTF8(PathUtils.join(driver, "pointer-menu-down.json"), JSON.stringify({ points: [inside, pagePoint] }));
+        await action("pointer-menu-down");
+        await hidden("native-menu-bar-return-downward-retract");
+        evidence.directionalDeparture = { source: "macOS CGEvent; exact active owned PID", inside, menu, pagePoint,
+          upward, downward: directionalExitEvidence(departures.slice(aboveCount), band, false) };
+      } finally { toolbox.removeEventListener("pointerleave", observeDeparture); }
+      const ui = window.FluxionUI, previousWorkspace = ui.currentWorkspace(), previousTab = gBrowser.selectedTab;
+      const preserved = [...gBrowser.tabs].filter(tab => !tab.closing);
+      const workspace = ui.createWorkspace("Focus final-tab fixture", { activate: false });
+      assert(workspace, "Last-workspace Focus fixture could not create its isolated workspace");
+      let replacement;
+      try {
+        const closing = gBrowser.addTrustedTab("about:blank?fluxion-focus-final-tab", { skipAnimation: true });
+        ui.setTabWorkspace(closing, workspace.id); ui.switchWorkspace(workspace.id); ui.selectTab(closing);
+        await wait(() => gBrowser.selectedTab === closing && !closing.hasAttribute("busy"), "Last-workspace fixture tab did not settle");
+        closing.linkedBrowser.focus(); moveToPage(); await hidden("before-last-workspace-close");
+        const keyCount = report.keys.length;
+        await action("close-focus-workspace");
+        await wait(() => !closing.parentNode && gBrowser.selectedTab !== closing &&
+          ui.tabWorkspace(gBrowser.selectedTab) === workspace.id, "Closing last workspace tab did not retain the window and correct replacement workspace");
+        replacement = gBrowser.selectedTab;
+        assert(preserved.every(tab => tab.parentNode && !tab.closing), "Last-workspace close discarded tabs from another workspace");
+        assert(report.keys.slice(keyCount).filter(key => key.trusted && key.meta && !key.shift && !key.alt && !key.control && key.key.toLowerCase() === "w").length === 1,
+          "Last-workspace fixture did not receive its actual native Cmd-W");
+        assert(document.activeElement !== window.gURLBar.inputField, "Implicit replacement-tab focus pinned navigation after last-workspace close");
+        await hidden("after-last-workspace-close");
+        await revealFromEdge("last-workspace-hover");
+        const box = rect(toolbox), exits = [];
+        const observe = event => exits.push({ type: event.type, trusted: event.isTrusted, y: event.clientY });
+        toolbox.addEventListener("pointerleave", observe);
+        try {
+          routePointer(box.left + box.width / 2, box.top + 20);
+          routePointer(box.left + box.width / 2, box.top - 8);
+          await delay(300); await shown("last-workspace-upward-retained");
+          directionalExitEvidence(exits, box, true);
+          routePointer(box.left + box.width / 2, box.top + 20);
+          moveToPage(); await hidden("last-workspace-downward-retract");
+        } finally { toolbox.removeEventListener("pointerleave", observe); }
+        evidence.lastWorkspaceClose = { input: "native macOS Cmd-W; subsequent directional hover uses Gecko widget routing",
+          workspace: workspace.id, replacementWorkspace: ui.tabWorkspace(replacement), replacementURL: replacement.linkedBrowser.currentURI.spec,
+          preservedTabs: preserved.length, nativeCommandCount: 1, implicitAddressFocus: false };
+      } finally {
+        if (previousTab.parentNode) ui.selectTab(previousTab); else ui.switchWorkspace(previousWorkspace);
+        if (replacement?.parentNode) gBrowser.removeTab(replacement, { animate: false });
+        ui.deleteWorkspace(workspace.id, { confirm: false });
+      }
+      await revealFromEdge("after-native-menu-return");
       moveToPage(); await hidden("pointer-left");
       await action("focus-location");
       await wait(() => evidence.keys.some(key => key.key.toLowerCase() === "l" && key.trusted && key.meta &&
@@ -529,9 +604,9 @@
       "Real HTTPS example.org page did not finish loading", 35000);
     const gap = mode => {
       const outer = rect(browser), sidebar = rect(flow), page = rect(deck);
-      const values = { start: page.left - sidebar.right, end: outer.right - page.right,
+      const values = { start: page.left - (mode === "focus" ? outer.left : sidebar.right), end: outer.right - page.right,
         top: page.top - outer.top, bottom: outer.bottom - page.bottom };
-      assert(Object.values(values).every(value => near(value, 4)), `Frame inset is not a consistent four pixels in ${mode}: ${JSON.stringify(values)}`);
+      assert(Object.values(values).every(value => near(value, mode === "focus" ? 0 : 4)), `Frame inset is incorrect in ${mode}: ${JSON.stringify(values)}`);
       assert(page.width > 200 && page.height > 100, "Frame squeezed the page below a usable size");
       report.geometry.push({ mode, outer, sidebar, page, gaps: values });
     };
@@ -667,7 +742,7 @@
     assert(flow.dataset.state === "expanded" && !surface.inert, "Expand left the sidebar surface hidden or inert");
     report.geometry.push(sidebarSurfaceEvidence(surface, "expanded-after-reveal"));
     report.checks.push("flush-expanded-sidebar-and-rounded-outlined-hover-overlay-with-real-capture");
-    report.checks.push("expanded-compact-focus-consistent-insets-and-overlay-without-page-reflow");
+    report.checks.push("expanded-compact-four-pixel-insets-and-focus-flush-page-with-overlay-without-reflow");
     report.checks.push("routed-pointer-edge-reveal-three-cycles-and-compact-expand-never-hides");
     report.checks.push("bottom-symbol-workspace-dock-with-accessible-toggle-in-each-mode");
     stage("inline-new-tab-and-scroll-stable-workspace-dock");
@@ -986,6 +1061,25 @@
         "Native fullscreen top-edge hover did not reach its real target and reveal navigation");
       } finally { toggler.removeEventListener("mouseover", observed, true); }
       await action("capture-fullscreen-focus-revealed");
+      const fullscreenDepartures = [], fullscreenBand = rect(toolbox);
+      const departure = event => fullscreenDepartures.push({ type: event.type, trusted: event.isTrusted,
+        x: event.clientX, y: event.clientY });
+      toolbox.addEventListener("pointerleave", departure);
+      try {
+        const x = fullscreenBand.left + fullscreenBand.width / 2;
+        routePointer(x, fullscreenBand.top + 20);
+        routePointer(x, fullscreenBand.top - 8);
+        await delay(300);
+        assert(!window.FullScreen.navToolboxHidden && rect(toolbox).top >= -1,
+          "Upward widget-routed fullscreen departure retracted navigation");
+        evidence.directionalDeparture = { source: "Gecko widget routing; not an OS fullscreen-menu interaction",
+          upward: directionalExitEvidence(fullscreenDepartures, fullscreenBand, true) };
+        const previous = fullscreenDepartures.length;
+        routePointer(x, fullscreenBand.top + 20);
+        moveToPage();
+        await wait(() => window.FullScreen.navToolboxHidden, "Downward fullscreen return did not retract navigation");
+        evidence.directionalDeparture.downward = directionalExitEvidence(fullscreenDepartures.slice(previous), fullscreenBand, false);
+      } finally { toolbox.removeEventListener("pointerleave", departure); }
       moveToPage();
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
       evidence.motion = await verifyNavigationMotion(toolbox, true, async () => {
@@ -1044,7 +1138,7 @@
       assert(Services.prefs.getBoolPref("browser.fullscreen.autohide") &&
         !Services.prefs.prefHasUserValue("browser.fullscreen.autohide"), "Fixture did not restore original fullscreen preference provenance");
       report.fullscreenTested = true;
-      report.checks.push("real-macos-browser-fullscreen-delegates-hover-and-cmd-l-with-eight-pixel-page-corners");
+      report.checks.push("real-macos-browser-fullscreen-delegates-hover-and-cmd-l-with-flush-focus-and-rounded-expanded-pages");
       report.checks.push("fullscreen-expanded-and-compact-navigation-stay-visible-focus-alone-retracts-on-native-pointer-leave");
       report.checks.push("fullscreen-focus-retracts-over-settings-and-floating-sidebar-with-saved-autohide-false-unchanged",
         "floating-sidebar-has-viewport-six-pixel-insets-and-heading-padding-even-with-toolbar-visible");

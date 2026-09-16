@@ -10,6 +10,7 @@ check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-frame-check.XXXXXX")"
 profile="$check_root/profile"
 artifact_dir="${FLUXION_FRAME_ARTIFACT_DIR:-$check_root/captures}"
 process_id=""
+pointer_pid=""
 owned() {
   [[ -n "$process_id" ]] && kill -0 "$process_id" 2>/dev/null || return 1
   local command_line expected_prefix
@@ -18,6 +19,9 @@ owned() {
   [[ "$command_line" == "$expected_prefix" || "$command_line" == "$expected_prefix "* ]]
 }
 cleanup() {
+  if [[ -n "$pointer_pid" && -x "$check_root/frame-pointer" && -f "$check_root/pointer-state.json" ]]; then
+    "$check_root/frame-pointer" restore "$pointer_pid" "$app" "$check_root/unused.json" "$check_root/pointer-state.json" || true
+  fi
   if owned; then
     kill "$process_id" 2>/dev/null || true
     for ((stop_attempt=0; stop_attempt<40; stop_attempt++)); do owned || break; sleep 0.25; done
@@ -49,7 +53,7 @@ on run arguments
     end if
     if (unix id of first application process whose frontmost is true) is not browserPID then error "Wrong foreground process"
     tell ownedProcess
-      if actionName is "close-ordinary" or actionName is "close-after-pointer" then keystroke "w" using command down
+      if actionName is "close-ordinary" or actionName is "close-after-pointer" or actionName is "close-focus-workspace" then keystroke "w" using command down
       if actionName is "restore-ordinary" then keystroke "t" using {command down, shift down}
       if actionName is "focus-location" or actionName is "fullscreen-location" then keystroke "l" using command down
       if actionName is "focus-location-escape" or actionName is "focus-identity-escape" or actionName is "fullscreen-location-escape" then key code 53
@@ -60,17 +64,24 @@ end run
 APPLESCRIPT
 }
 mkdir -p "$artifact_dir"
+xcrun swiftc "$fluxion_root/scripts/frame-pointer.swift" -o "$check_root/frame-pointer"
 FLUXION_PROFILE="$profile" FLUXION_FRAME_TEST=1 FLUXION_FRAME_DRIVER_DIR="$check_root" \
   "$launcher" about:blank >"$check_root/browser.log" 2>&1 &
 process_id=$!
+pointer_pid="$process_id"
 for ((attempt=0; attempt<960; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
   for action in foreground close-ordinary restore-ordinary close-after-pointer capture-sidebar-revealed \
     capture-focus-navigation-hidden capture-focus-navigation-revealed focus-location focus-location-escape \
     capture-focus-navigation-security focus-identity-escape capture-page-light capture-page-dark capture-page-split capture-settings \
-    capture-fullscreen-focus-hidden capture-fullscreen-focus-revealed fullscreen-location fullscreen-location-escape capture-fullscreen-restored; do
+    capture-fullscreen-focus-hidden capture-fullscreen-focus-revealed fullscreen-location fullscreen-location-escape capture-fullscreen-restored \
+    pointer-menu-up pointer-menu-down close-focus-workspace; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
+      if [[ "$action" == pointer-menu-* ]]; then
+        owned || exit 1
+        "$check_root/frame-pointer" move "$process_id" "$app" "$check_root/$action.json" "$check_root/pointer-state.json" > "$artifact_dir/$action.json"
+      fi
       if [[ "$action" == capture-* ]]; then
         owned || exit 1
         screencapture -x "$artifact_dir/$action.png"
@@ -89,4 +100,4 @@ if [[ "$result" != 0 ]] || ! grep -Fq 'user_pref("fluxion.frame.verification.hea
   exit 1
 fi
 grep 'fluxion.frame.verification' "$profile/prefs.js"
-printf 'Verified native macOS close/reopen, Focus Cmd-L/Escape, retained identity popup, floating sidebar, normal-size New tab hover, and real browser fullscreen hover/Cmd-L/exit with clipped eight-pixel page corners. OS mouse movement and DOM fullscreen video are not claimed.\n'
+printf 'Verified native macOS close/reopen, Focus Cmd-L/Escape, native menu-bar pointer exit/return, retained identity popup, floating sidebar, and real browser fullscreen with flush Focus pages and eight-pixel expanded corners. Other pointer checks use Gecko widget routing; DOM fullscreen video is not claimed.\n'

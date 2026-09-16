@@ -17,9 +17,10 @@
     // Keep native window buttons and toolbar overflow ownership. Padding starts
     // navigation at the page column only when enough room exists beside them.
     const available = Math.max(0, controls.width - 480);
-    const wanted = rtl ? controls.right - rail.left : rail.right - controls.left;
+    const overlay = flow.dataset?.state === "focus";
+    const wanted = overlay ? 0 : rtl ? controls.right - rail.left : rail.right - controls.left;
     const offset = Math.round(Math.min(available, Math.max(0, wanted)));
-    const width = Math.round(rail.width);
+    const width = overlay ? 0 : Math.round(rail.width);
     // Lift the persistent rail above the bookmarks/navigation rows, reserving
     // only actual native caption controls that overlap this side of the window.
     // Narrow windows retain the original below-toolbox layout: native toolbar

@@ -14,6 +14,27 @@ const replacements = JSON.parse(python("print(json.dumps(m.REPLACEMENTS))"));
 const prefAllowsHide = new Function("Services", "window", "document", "BrowserHandler", `${replacements[0][1]} return true;`);
 const inputVeto = new Function("focused", "document", "BrowserHandler", "gNavToolbox", "fluxionFocus",
   `return Boolean(focused && focused.ownerDocument == document && ${replacements[1][1]});`);
+const tabReplacements = JSON.parse(python("print(json.dumps(m.TAB_REPLACEMENTS))"));
+const focusReplacement = new Function("aNewTab", "document", "gURLBar", tabReplacements[0][1]);
+
+test("automatic last-tab replacements do not claim address focus in explicit Focus, without blurring real editing", () => {
+  for (const mode of ["expanded", "compact", "focus", "native-focus"]) for (const aNewTab of [false, true]) {
+    for (const alreadyEditing of [false, true]) {
+      const originalFocus = alreadyEditing ? { id: "urlbar-input", value: "unfinished query" } : { id: "page" };
+      const document = { activeElement: originalFocus, documentElement: { hasAttribute: name =>
+        name === "data-fluxion-focus-mode" ? mode === "focus" : name === "data-fluxion-native-focus" && mode === "native-focus" } };
+      let selects = 0;
+      const gURLBar = { select() { selects++; } };
+      focusReplacement(aNewTab, document, gURLBar);
+      assert.equal(selects, Number(aNewTab && ["expanded", "compact"].includes(mode)));
+      assert.equal(document.activeElement, originalFocus, "no deferred or blanket focus release");
+      if (alreadyEditing) assert.equal(originalFocus.value, "unfinished query");
+      gURLBar.select();
+      assert.equal(selects, Number(aNewTab && ["expanded", "compact"].includes(mode)) + 1,
+        "explicit native location commands are not intercepted");
+    }
+  }
+});
 
 test("native Focus alone bypasses stale autohide=false, without changing any preference or DOM/kiosk behavior", () => {
   for (const pref of [false, true]) for (const locked of [false, true]) for (const explicit of [false, true]) for (const fullScreen of [false, true]) {
@@ -55,6 +76,8 @@ with tempfile.TemporaryDirectory() as temp:
   assert archive.read_bytes()==before
  data='\\n'.join(before for before,after in m.REPLACEMENTS).encode()
  m.SHA256=hashlib.sha256(data).hexdigest()
+ tabdata='\\n'.join(before for before,after in m.TAB_REPLACEMENTS).encode()
+ m.TAB_SHA256=hashlib.sha256(tabdata).hexdigest()
  for duplicate in [False,True]:
   with zipfile.ZipFile(archive,'w') as z:
    z.writestr('other',b'unchanged')
@@ -73,9 +96,12 @@ with tempfile.TemporaryDirectory() as temp:
  (p/'application.ini').write_text('[App]\\nVersion='+m.VERSION+'\\n')
  data='\\n'.join(before for before,after in m.REPLACEMENTS).encode()
  m.SHA256=hashlib.sha256(data).hexdigest()
+ tabdata='\\n'.join(before for before,after in m.TAB_REPLACEMENTS).encode()
+ m.TAB_SHA256=hashlib.sha256(tabdata).hexdigest()
  with zipfile.ZipFile(archive,'w',compression=zipfile.ZIP_DEFLATED) as z:
   z.writestr('keep-first',b'preloaded bytes'*100)
   z.writestr(m.ENTRY,data)
+  z.writestr(m.TAB_ENTRY,tabdata)
   z.writestr('keep-last',b'other policy output unchanged')
  archive.write_bytes(m.archive_tools.optimize_zip(archive.read_bytes(),{'keep-first'}))
  archive.chmod(0o640)
@@ -87,7 +113,7 @@ with tempfile.TemporaryDirectory() as temp:
   assert z.testzip() is None and z.namelist()==list(before)
   assert {i.filename for i in z.infolist() if i.header_offset<preload}=={'keep-first'}
   for i in z.infolist():
-   expected=m.patch_source(data) if i.filename==m.ENTRY else before[i.filename][0]
+   expected=m.patch_source(data) if i.filename==m.ENTRY else m.patch_tab_source(tabdata) if i.filename==m.TAB_ENTRY else before[i.filename][0]
    assert z.read(i)==expected
    assert (i.date_time,i.compress_type,i.external_attr)==before[i.filename][1:]
  assert archive.stat().st_mode&0o777==0o640
@@ -99,6 +125,23 @@ with tempfile.TemporaryDirectory() as temp:
  assert archive.read_bytes()==original
 `);
 });
+test("unrecognized tab policy prevents either native member from being written", () => {
+  python(`
+with tempfile.TemporaryDirectory() as temp:
+ p=pathlib.Path(temp);(p/'browser').mkdir();archive=p/'browser/omni.ja'
+ (p/'application.ini').write_text('[App]\\nVersion='+m.VERSION+'\\n')
+ data='\\n'.join(before for before,after in m.REPLACEMENTS).encode()
+ m.SHA256=hashlib.sha256(data).hexdigest()
+ with zipfile.ZipFile(archive,'w') as z:
+  z.writestr(m.ENTRY,data)
+  z.writestr(m.TAB_ENTRY,b'changed or unpatched tabbrowser source')
+ before=archive.read_bytes()
+ try:m.install(p)
+ except ValueError as error:assert 'session-policy-patched' in str(error)
+ else:raise AssertionError('unknown tab source accepted')
+ assert archive.read_bytes()==before
+`);
+});
 test("source anchor drift and build cache omissions fail closed", () => {
   python(`
 data=b'no expected source anchors'
@@ -106,8 +149,14 @@ m.SHA256=hashlib.sha256(data).hexdigest()
 try:m.patch_source(data)
 except ValueError:pass
 else:raise AssertionError('missing anchors accepted')
+m.TAB_SHA256=hashlib.sha256(data).hexdigest()
+try:m.patch_tab_source(data)
+except ValueError:pass
+else:raise AssertionError('missing tab focus anchor accepted')
 `);
   const build = fs.readFileSync(resolve(__dirname, "../scripts/prepare-macos-runtime.sh"), "utf8");
   assert.match(build, /runtime_file_digest "\$fluxion_root\/scripts\/install-macos-focus-policy\.py"/);
   assert.match(build, /python3 "\$fluxion_root\/scripts\/install-macos-focus-policy\.py" "\$resources"/);
+  assert.ok(build.indexOf('python3 "$fluxion_root/scripts/install-macos-session-policy.py"') <
+    build.indexOf('python3 "$fluxion_root/scripts/install-macos-focus-policy.py"'), "tab source must have the pinned session policy first");
 });

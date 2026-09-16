@@ -117,6 +117,20 @@ test("resize, customization and explicit refresh share one frame and skip unchan
   assert.equal(f.frames.size, 0);
 });
 
+test("Focus hover edge overlays the page instead of reserving a navigation or bookmarks gutter", () => {
+  const f = fixture({ controls: { left: 0, right: 1200, width: 1200 } });
+  f.flow.dataset = { state: "focus" };
+  f.geometry({ left: 0, right: 3, width: 3 });
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.offset(), "0px"); assert.equal(f.width(), "0px");
+  f.direction("rtl"); f.geometry({ left: 1197, right: 1200, width: 3 });
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.offset(), "0px"); assert.equal(f.width(), "0px");
+  f.flow.dataset.state = "compact"; f.geometry({ left: 1156, right: 1200, width: 44 });
+  f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.offset(), "44px"); assert.equal(f.width(), "44px");
+});
+
 test("unload cancels pending alignment, disconnects observers and makes stale callbacks harmless", () => {
   const f = fixture(), api = f.window.FluxionChromeLayout;
   api.refresh();

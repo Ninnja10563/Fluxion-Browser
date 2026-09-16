@@ -71,6 +71,15 @@ fullscreen or kiosk handling. A viewport-fixed sidebar removes the toolbar's
 reserved space; a scoped native-toolbox stacking level keeps navigation above
 it. See [the 0.70.2 milestone](milestone-0.70.2.md) for validation status.
 
+The 0.72.1 correction retains navigation after upward pointer departure and
+removes the page frame only in hidden-sidebar mode. The same Focus installer
+also pins the exact `tabbrowser.js` output from the preceding session-policy
+patch. It skips only Gecko's implicit address-field selection after an
+automatic last-tab replacement in explicit Focus; native replacement creation,
+close permission checks, existing editor focus and deliberate Cmd-L remain
+owned by Gecko. Both archive members validate before either is rewritten. See
+[the 0.72.1 milestone](milestone-0.72.1.md) for validation status.
+
 General's default-browser action delegates to Gecko's native ShellService.
 Status comes from the operating system, not a Fluxion preference, and the UI
 does not assume that a completed request means the user accepted confirmation.
