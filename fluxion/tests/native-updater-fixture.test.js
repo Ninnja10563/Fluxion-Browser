@@ -10,7 +10,7 @@ const fixture = import(pathToFileURL(path.resolve(__dirname, "../scripts/updater
 
 test("updater fixture claims only an absent canonical default profile and never adopts existing user data", async () => {
   const { claimProfile } = await fixture;
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-policy-"));
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-policy-")));
   try {
     const home = path.join(base, "home"); fs.mkdirSync(home);
     const root = fs.mkdtempSync(path.join(base, "fluxion-updater-check."));
@@ -31,7 +31,7 @@ test("updater fixture claims only an absent canonical default profile and never 
 
 test("updater fixture rejects symlinked default-profile parents before claiming or generating keys", async () => {
   const { claimProfile } = await fixture;
-  const base = fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-policy-"));
+  const base = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-policy-")));
   try {
     const home = path.join(base, "home"), outside = path.join(base, "outside");
     fs.mkdirSync(home); fs.mkdirSync(outside); fs.symlinkSync(outside, path.join(home, "Library"));
@@ -44,8 +44,14 @@ test("updater fixture rejects symlinked default-profile parents before claiming 
 
 test("updater loopback handler serves only the selected immutable signed-feed/archive pair", async () => {
   const { fixtureHandler } = await fixture;
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-server-")), records = [];
-  const server = http.createServer(fixtureHandler(root, records));
+  const root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-updater-server-"))), records = [];
+  const completions = [], handler = fixtureHandler(root, records);
+  const server = http.createServer((request, response) => {
+    // Client 'end' may precede the server's 'finish' callback on macOS. Observe
+    // actual server completion, after the handler has persisted its evidence.
+    handler(request, response);
+    completions.push(new Promise(resolve => response.once("finish", resolve)));
+  });
   const request = (resource, method = "GET") => new Promise((resolve, reject) => {
     const req = http.request({ hostname: "127.0.0.1", port: server.address().port, path: resource, method }, response => {
       const chunks = []; response.on("data", value => chunks.push(value)); response.on("end", () => resolve({ status: response.statusCode, body: Buffer.concat(chunks).toString(), headers: response.headers }));
@@ -70,8 +76,15 @@ test("updater loopback handler serves only the selected immutable signed-feed/ar
     fs.writeFileSync(path.join(root, "stage"), "valid");
     assert.equal((await request("/feed/appcast.xml")).body, "signed-valid");
     assert.equal((await request("/releases/valid.zip")).body, "real-archive-bytes");
+    let completionTimeout;
+    try {
+      await Promise.race([Promise.all(completions), new Promise((_, reject) => {
+        completionTimeout = setTimeout(() => reject(Error("Fixture responses did not finish")), 2000);
+      })]);
+    } finally { clearTimeout(completionTimeout); }
     assert.ok(records.every(record => record.completed && record.bytes > 0));
     assert.equal(records.length, 5);
+    assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root, "network.json"), "utf8")), records);
     fs.writeFileSync(path.join(root, "stage"), "../../signing.key");
     assert.equal((await request("/feed/appcast.xml")).status, 503);
   } finally {
