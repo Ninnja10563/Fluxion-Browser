@@ -84,3 +84,37 @@ for data in [normal,warning,disabled]:
  assert b'filter=' not in data
 `);
 });
+
+test("native Extensions empty state packages the existing transparent F without changing its controls or layout rules", () => {
+  python(`
+import base64,xml.etree.ElementTree as ET
+name='chrome/browser/skin/classic/browser/addons/extensions-panel-empty-illustration.svg'
+rule=art['archives']['browser/omni.ja'][name]
+assert rule=={'sha256':'df233112dc63cd14a04e235ba97959d4b07aaea756b034f7b700d669b91c498b','kind':'normal'}
+original=b'<svg xmlns="http://www.w3.org/2000/svg" width="329" height="162"><path id="original-fox"/></svg>'
+images={'version':art['version'],'markSHA256':art['markSHA256'],'archives':{'browser/omni.ja':{name:{**rule,'sha256':hashlib.sha256(original).hexdigest()}}}}
+strings={'version':manifest['version'],'archives':{}}
+# Archive routing remains native: the browser document, popup commands and CSS
+# are opaque unchanged bytes; only the image they already request is replaced.
+untouched={
+ 'chrome/browser/content/browser/browser.xhtml':b'<html:img src="chrome://browser/skin/addons/extensions-panel-empty-illustration.svg" loading="lazy"/><toolbarbutton id="unified-extensions-manage-extensions" data-l10n-id="unified-extensions-manage-extensions"/>',
+ 'chrome/browser/skin/classic/browser/addons/unified-extensions.css':b'#unified-extensions-empty-state > img { align-self:center; max-width:100%; height:auto; }',
+ 'chrome/browser/content/browser/browser-unified-extensions.js':b'untouched native extension permissions and management commands',
+}
+with tempfile.TemporaryDirectory() as temp:
+ p=pathlib.Path(temp);(p/'browser').mkdir();(p/'application.ini').write_text('[App]\\nVersion=155.0.1\\n')
+ with zipfile.ZipFile(p/'browser/omni.ja','w') as z:
+  z.writestr(name,original)
+  for path,data in untouched.items():z.writestr(path,data)
+ (p/'browser/omni.ja').write_bytes(m.archive_tools.optimize_zip((p/'browser/omni.ja').read_bytes(),{name,*untouched}))
+ m.install(p,strings,images)
+ with m.archive_tools._archive.readable_archive(p/'browser/omni.ja') as z:
+  for path,data in untouched.items():assert z.read(path)==data
+  svg=ET.fromstring(z.read(name))
+  assert svg.attrib['width']=='100' and svg.attrib['height']=='100'
+  assert [child.tag for child in svg]==['{http://www.w3.org/2000/svg}image']
+  image=svg[0].attrib['{http://www.w3.org/1999/xlink}href']
+  assert image.startswith('data:image/png;base64,')
+  assert base64.b64decode(image.split(',',1)[1])==(m.ROOT/'assets/app-icons/fluxion-mark.png').read_bytes()
+`);
+});

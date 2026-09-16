@@ -37,6 +37,10 @@
       }
     },
     "browser/omni.ja": {
+      "chrome/browser/skin/classic/browser/addons/extensions-panel-empty-illustration.svg": {
+        "sha256": "df233112dc63cd14a04e235ba97959d4b07aaea756b034f7b700d669b91c498b",
+        "kind": "normal"
+      },
       "chrome/browser/builtin-addons/newtab/data/data/content/assets/firefox-mascot-prop-heart-dark-narrow.svg": {
         "sha256": "5b82a09d32977d59f0ad8eb8f05f8524b68c701639d9470a0923f82916c46c2d",
         "kind": "normal"

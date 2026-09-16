@@ -72,6 +72,41 @@ on run arguments
 end run
 APPLESCRIPT
 }
+native_application_menu() {
+  owned || { printf 'Branding menu driver lost its exact owned browser process.\n' >&2; return 1; }
+  osascript - "$process_id" > "$artifact_dir/application-menu-labels.txt" <<'APPLESCRIPT'
+on run arguments
+  set browserPID to (item 1 of arguments) as integer
+  with timeout of 10 seconds
+    tell application "System Events"
+      set ownedProcess to first application process whose unix id is browserPID
+      if (unix id of first application process whose frontmost is true) is not browserPID then error "Wrong foreground process"
+      tell ownedProcess
+        set appItem to menu bar item 2 of menu bar 1
+        click appItem
+        repeat 50 times
+          if exists menu 1 of appItem then exit repeat
+          delay 0.05
+        end repeat
+        set labels to {name of appItem}
+        repeat with menuItem in menu items of menu 1 of appItem
+          set itemName to name of menuItem
+          if itemName is not missing value and itemName is not "" then set end of labels to itemName
+        end repeat
+        set AppleScript's text item delimiters to linefeed
+        return labels as text
+      end tell
+    end tell
+  end timeout
+end run
+APPLESCRIPT
+  owned || return 1
+  screencapture -x "$artifact_dir/capture-branding-application-menu.png"
+  [[ -s "$artifact_dir/capture-branding-application-menu.png" ]] || return 1
+  # Escape dismisses this menu; none of its product/default/quit commands run.
+  native_key branding-location-escape
+  cp "$artifact_dir/application-menu-labels.txt" "$check_root/branding-application-menu.txt"
+}
 mkdir -p "$artifact_dir"
 FLUXION_PROFILE="$profile" FLUXION_VERIFY_BRANDING=1 FLUXION_BRANDING_DRIVER_DIR="$check_root" \
   "$launcher" about:blank >"$check_root/branding.log" 2>&1 &
@@ -82,13 +117,17 @@ for ((attempt=0; attempt<600; attempt++)); do
     foreground
     touch "$check_root/branding-foreground.sent"
   fi
+  if [[ -f "$check_root/branding-application-menu.ready" && ! -f "$check_root/branding-application-menu.sent" ]]; then
+    native_application_menu
+    touch "$check_root/branding-application-menu.sent"
+  fi
   for action in branding-location branding-location-escape branding-location-revert; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_key "$action"
       touch "$check_root/$action.sent"
     fi
   done
-  for capture in capture-branding-default-browser capture-branding-security; do
+  for capture in capture-branding-default-browser capture-branding-security capture-branding-extensions; do
     if [[ -f "$check_root/$capture.ready" && ! -f "$check_root/$capture.sent" ]]; then
       owned || exit 1
       # The native popup may already be open. Refocusing changes Cocoa popup ordering.

@@ -12,6 +12,61 @@ function helper(start, end, extra = {}) {
   vm.runInContext(source.slice(first, last), sandbox);
   return sandbox;
 }
+test("native application-menu evidence checks every product action without rewriting Mozilla legal text", () => {
+  const h = helper("  function validateApplicationMenu(", "  async function applicationMenu(");
+  const labels = ["Fluxion", "About Fluxion", "Settings…", "Set Fluxion as Default Browser", "Services", "Hide Fluxion", "Hide Others", "Show All", "Quit Fluxion"];
+  assert.equal(h.validateApplicationMenu(labels).length, 4);
+  for (const label of ["About Fluxion", "Set Fluxion as Default Browser", "Hide Fluxion", "Quit Fluxion"]) {
+    assert.throws(() => h.validateApplicationMenu(labels.map(value => value === label ? value.replace("Fluxion", "Firefox") : value)), /missing/);
+    assert.throws(() => h.validateApplicationMenu(labels.filter(value => value !== label)), /missing/);
+  }
+  assert.throws(() => h.validateApplicationMenu(["Firefox", ...labels.slice(1)]), /not named Fluxion/);
+  assert.throws(() => h.validateApplicationMenu([...labels, "Share Firefox"]), /retains Firefox/);
+});
+test("application-menu verifier retains actual OS evidence and both native window labels without forcing localization", async () => {
+  const labels = ["Fluxion", "About Fluxion", "Set Fluxion as Default Browser", "Hide Fluxion", "Quit Fluxion"];
+  const report = { checks: [], captures: [] }, writes = [];
+  const document = { getElementById: id => ({ getAttribute: name => `${id}:${name}` }) };
+  const h = helper("  function validateApplicationMenu(", "  async function strings(", {
+    report, window: { document }, Services: { appShell: { hiddenDOMWindow: { document } } },
+    driver: "/owned", PathUtils: { join: (...parts) => parts.join("/") }, plain: String,
+    IOUtils: { writeUTF8: async (...args) => writes.push(args), exists: async () => true, readUTF8: async () => labels.join("\n") },
+    wait: async condition => assert.equal(await condition(), true),
+  });
+  await h.applicationMenu();
+  assert.equal(writes[0][0], "/owned/branding-application-menu.ready");
+  assert.deepEqual(Array.from(report.applicationMenu.nativeLabels), labels);
+  assert.equal(report.applicationMenu.windows.hidden.menu_FileQuitItem, "menu_FileQuitItem:label");
+  assert.equal(report.applicationMenu.windows.browser.aboutName, "aboutName:label");
+});
+test("Extensions branding gate opens the native widget, preserves content and closes even after a bad illustration", async () => {
+  for (const scenario of ["valid", "wrong-image", "missing-action", "missing-description"]) {
+    const events = [], report = { checks: [] }, captures = [];
+    const button = { getBoundingClientRect: () => ({ left: 20, top: 10, width: 28, height: 28 }), contains: value => value === button };
+    const image = { complete: true, naturalWidth: 100, naturalHeight: 100,
+      src: scenario === "wrong-image" ? "chrome://old/fox.svg" : "chrome://browser/skin/addons/extensions-panel-empty-illustration.svg" };
+    const heading = { textContent: "A few extensions go a long way" }, description = { textContent: scenario === "missing-description" ? "" : "Native extension explanation" };
+    const action = { id: "unified-extensions-discover-extensions", disabled: false };
+    const panel = { state: "closed", querySelectorAll: () => scenario === "missing-action" ? [] : [action] };
+    const empty = { querySelector: selector => ({ img: image, h2: heading, description })[selector] };
+    const document = { getElementById: id => ({ "unified-extensions-button": button,
+      "unified-extensions-panel": panel, "unified-extensions-empty-state": empty })[id], elementFromPoint: () => button };
+    const window = { windowUtils: { DEFAULT_MOUSE_POINTER_ID: 0 }, MouseEvent: { MOZ_SOURCE_MOUSE: 1 },
+      synthesizeMouseEvent(type) { events.push(type); if (type === "mouseup") panel.state = "open"; },
+      PanelMultiView: { hidePopup(value) { assert.equal(value, panel); panel.state = "closed"; } } };
+    const h = helper("  async function extensionsPanel(", "  function validateSecurityAnchor(", {
+      report, document, window, painted: Boolean, plain: String,
+      wait: async (condition, message) => { assert.ok(await condition(), message); }, capture: async name => captures.push(name),
+    });
+    if (scenario === "valid") {
+      await h.extensionsPanel();
+      assert.equal(report.extensions.action, "unified-extensions-discover-extensions");
+      assert.deepEqual(captures, ["capture-branding-extensions"]);
+    } else await assert.rejects(h.extensionsPanel(), /illustration|action|explanation/);
+    assert.deepEqual(events, ["mousemove", "mousedown", "mouseup"]);
+    assert.equal(panel.state, "closed");
+  }
+});
 test("native branding evidence requires exact resolved product and safety wording, allowing Fluent isolation", () => {
   const report = { strings: {} }, h = helper("  function requireProductString(", "  const painted", {
     report, plain: value => String(value).replace(/[\u2066-\u2069]/g, ""),

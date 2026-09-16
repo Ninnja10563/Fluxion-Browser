@@ -38,6 +38,31 @@
     await IOUtils.writeUTF8(PathUtils.join(driver, `${name}.ready`), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Branding key not acknowledged: ${name}`, 20000);
   }
+  function validateApplicationMenu(labels) {
+    const required = ["About Fluxion", "Set Fluxion as Default Browser", "Hide Fluxion", "Quit Fluxion"];
+    assert(Array.isArray(labels) && labels[0] === "Fluxion", "Native application menu is not named Fluxion");
+    for (const label of required) assert(labels.includes(label), `Native application menu is missing: ${label}`);
+    assert(!labels.some(label => /\bFirefox\b/.test(label)), "Native application menu retains Firefox product branding");
+    return required;
+  }
+  async function applicationMenu() {
+    // Observe the already-created native menu before asking Fluent to resolve
+    // any new labels: translating it here could conceal an early-startup bug.
+    await IOUtils.writeUTF8(PathUtils.join(driver, "branding-application-menu.ready"), "ready");
+    await wait(() => IOUtils.exists(PathUtils.join(driver, "branding-application-menu.sent")),
+      "Native application menu was not inspected", 20000);
+    const labels = (await IOUtils.readUTF8(PathUtils.join(driver, "branding-application-menu.txt"))).trim().split(/\r?\n/);
+    report.applicationMenu = { nativeLabels: labels, windows: {} };
+    for (const [name, menuWindow] of [["browser", window], ["hidden", Services.appShell.hiddenDOMWindow]]) {
+      report.applicationMenu.windows[name] = Object.fromEntries(
+        ["aboutName", "menu_setAsDefault", "menu_mac_hide_app", "menu_FileQuitItem"].map(id =>
+          [id, plain(menuWindow.document.getElementById(id)?.getAttribute("label") || "")])
+      );
+    }
+    validateApplicationMenu(labels);
+    report.captures.push("capture-branding-application-menu");
+    report.checks.push("actual-macos-accessibility-application-menu-labels-use-fluxion-without-invoking-actions");
+  }
   async function strings() {
     const brand = Services.strings.createBundle("chrome://branding/locale/brand.properties");
     for (const id of ["brandShorterName", "brandShortName", "brandFullName"]) {
@@ -111,6 +136,7 @@
     report.mark = validateMarkPixels(context.getImageData(0, 0, canvas.width, canvas.height).data, canvas.width, canvas.height);
     const art = new Map();
     for (const resource of ["chrome://branding/content/about-logo.svg",
+      "chrome://browser/skin/addons/extensions-panel-empty-illustration.svg",
       ...["enabled", "warning", "disabled"].map(state => `chrome://browser/skin/trustpanel-graphic-${state}.svg`)]) {
       const raw = await bytes(resource), svg = new window.TextDecoder().decode(raw);
       validateNativeArt(resource, svg, encoded);
@@ -129,6 +155,42 @@
       return icon?.src === uri && icon.complete && icon.naturalWidth > 0;
     }, "New Tab did not paint the transparent Fluxion mark");
     report.checks.push("new-tab-flow-row-paints-transparent-mark");
+  }
+  async function extensionsPanel() {
+    const button = document.getElementById("unified-extensions-button");
+    assert(painted(button), "Native Extensions toolbar button is not painted");
+    const box = button.getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2;
+    assert(button.contains(document.elementFromPoint(x, y)), "Native Extensions button is obscured");
+    for (const [type, buttons] of [["mousemove", 0], ["mousedown", 1], ["mouseup", 0]]) {
+      window.synthesizeMouseEvent(type, x, y, { identifier: window.windowUtils.DEFAULT_MOUSE_POINTER_ID,
+        button: 0, buttons, clickCount: type === "mousemove" ? 0 : 1, modifiers: 0,
+        inputSource: window.MouseEvent.MOZ_SOURCE_MOUSE },
+      { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+    }
+    await wait(() => document.getElementById("unified-extensions-panel")?.state === "open",
+      "Native Extensions toolbar action did not open its panel");
+    const panel = document.getElementById("unified-extensions-panel");
+    try {
+      const empty = document.getElementById("unified-extensions-empty-state"), image = empty?.querySelector("img");
+      await wait(() => painted(empty) && painted(image) && image.complete && image.naturalWidth > 0,
+        "Fresh-profile Extensions illustration did not load");
+      assert(image.src === "chrome://browser/skin/addons/extensions-panel-empty-illustration.svg",
+        "Extensions panel no longer uses the verified packaged illustration");
+      const heading = empty.querySelector("h2"), description = empty.querySelector("description");
+      assert(painted(heading) && plain(heading.textContent).trim(), "Native Extensions empty-state heading was lost");
+      assert(painted(description) && plain(description.textContent).trim(), "Native Extensions empty-state explanation was lost");
+      const action = [...panel.querySelectorAll("#unified-extensions-manage-extensions, #unified-extensions-discover-extensions")]
+        .find(node => painted(node) && !node.disabled);
+      assert(action, "Native Extensions management/discovery action was lost");
+      report.extensions = { image: image.src, width: image.naturalWidth, height: image.naturalHeight,
+        heading: plain(heading.textContent).trim(), description: plain(description.textContent).trim(),
+        action: action.id || action.className };
+      await capture("capture-branding-extensions");
+      report.checks.push("widget-routed-native-extensions-empty-panel-paints-supplied-mark-and-retains-native-content");
+    } finally {
+      window.PanelMultiView.hidePopup(panel);
+      await wait(() => panel.state === "closed", "Native Extensions panel did not close");
+    }
   }
   function validateSecurityAnchor(anchor, panel) {
     assert(anchor.width > 0 && anchor.height > 0 && panel.width > 0 && panel.height > 0,
@@ -377,11 +439,13 @@
     await SessionStore.promiseAllWindowsRestored;
     await wait(() => window.FluxionUI && window.gBrowserInit.delayedStartupFinished, "Browser startup did not finish");
     window.FluxionUI.setSidebarState("expanded");
-    await strings();
-    await artwork();
     await IOUtils.writeUTF8(PathUtils.join(driver, "branding-foreground.ready"), "ready");
     await wait(() => IOUtils.exists(PathUtils.join(driver, "branding-foreground.sent")) &&
       Services.focus.activeWindow === window, "Branding driver did not foreground its owned browser", 20000);
+    await applicationMenu();
+    await strings();
+    await artwork();
+    await extensionsPanel();
     await defaultBrowserControl();
     await securityPanel();
     Services.prefs.setStringPref(`${prefix}.health`, "native-branding-and-security-preservation-verified");
