@@ -1,0 +1,9 @@
+{
+  "version": "2.10.0",
+  "url": "https://github.com/sparkle-project/Sparkle/releases/download/2.10.0/Sparkle-2.10.0.tar.xz",
+  "size": 16319840,
+  "sha256": "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c",
+  "minimumMacOS": "12.0",
+  "publicKey": "gG973RaE3suerMDAStvYEOGYnRlalJZRy3o9nA6m9Fg=",
+  "feedURL": "https://raw.githubusercontent.com/Ninnja10563/Fluxion-Browser/update-channel/appcast.xml"
+}

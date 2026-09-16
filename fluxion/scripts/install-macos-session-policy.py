@@ -103,24 +103,29 @@ SAVER_REPLACEMENTS = [
 ]
 
 TAB_REPLACEMENTS = [
+    ('''        this.tabs.length == tabs.length &&
+        Services.prefs.getBoolPref("browser.tabs.closeWindowWithLastTab")''', '''        this.tabs.length == tabs.length &&
+        !window.toolbar.visible &&
+        Services.prefs.getBoolPref("browser.tabs.closeWindowWithLastTab")'''),
+    ('''      return (
+        !window.toolbar.visible ||
+        Services.prefs.getBoolPref("browser.tabs.closeWindowWithLastTab")
+      );''', '''      // Fluxion keeps a normal browser window available after its final tab
+      // closes. Popup teardown remains native; explicit window-close and Quit
+      // do not use this tab-removal decision.
+      return !window.toolbar.visible;'''),
     ('''        closeWindow =
           closeWindowWithLastTab ?? this.#shouldCloseWindowWithLastTab;
 
         if (closeWindow) {''', '''        closeWindow =
           closeWindowWithLastTab ?? this.#shouldCloseWindowWithLastTab;
 
-        // Fluxion hides other workspaces, not closed or disposable tabs.
-        // Keep Gecko's empty-tab replacement when another workspace survives;
-        // explicit window closure and the actual final tab remain unchanged.
-        if (closeWindow && window.FluxionUI) {
-          const workspace = aTab.getAttribute("fluxion-workspace");
-          const ids = window.FluxionUI.workspaces().map(item => item.id);
-          if (ids.includes(workspace) && this.tabs.some(other =>
-            other !== aTab && other.isOpen && other.hidden &&
-            other.getAttribute("fluxion-workspace") !== workspace &&
-            ids.includes(other.getAttribute("fluxion-workspace")))) {
-            closeWindow = false;
-          }
+        // This archive belongs to Fluxion: the policy must also hold before
+        // its sidebar initializes and while workspace metadata is restoring.
+        // Preserve explicit cross-window adoption teardown, not ordinary tab
+        // closing. Beforeunload has already run through Gecko above this point.
+        if (closeWindow && !adoptedByTab && window.toolbar.visible) {
+          closeWindow = false;
         }
 
         if (closeWindow) {'''),

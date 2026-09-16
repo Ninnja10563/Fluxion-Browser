@@ -8,7 +8,7 @@ const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-last-wind
 
 test("native last-window gate closes immediately without a test-only preclose state flush or delay", async () => {
   const calls = [], win = { closed: false, BrowserCommands: { tryToCloseWindow() { calls.push("close"); win.closed = true; } } };
-  const start = source.indexOf("  async function close(win)"), end = source.indexOf("  async function closedNormal", start);
+  const start = source.indexOf("  async function close(win,"), end = source.indexOf("  async function closedNormal", start);
   const context = vm.createContext({ mode: "seed", closeNumber: 0, recordLifecycle: stage => calls.push(stage),
     wait: async () => calls.push("postclose-wait"), until: async predicate => assert.equal(predicate(), true) });
   vm.runInContext(source.slice(start, end), context);
@@ -18,13 +18,89 @@ test("native last-window gate closes immediately without a test-only preclose st
 
 test("stored restore preference close does not collect the live window state for diagnostics", async () => {
   const calls = [], win = { closed: false, BrowserCommands: { tryToCloseWindow() { calls.push("close"); win.closed = true; } } };
-  const start = source.indexOf("  async function close(win)"), end = source.indexOf("  async function closedNormal", start);
+  const start = source.indexOf("  async function close(win,"), end = source.indexOf("  async function closedNormal", start);
   const context = vm.createContext({ mode: "existing", closeNumber: 0,
     recordLifecycle(stage, liveWindow) { assert.ok(!liveWindow, "diagnostics must not collect live session state"); calls.push(stage); },
     wait: async () => calls.push("postclose-wait"), until: async predicate => assert.equal(predicate(), true) });
   vm.runInContext(source.slice(start, end), context);
   await context.close(win);
   assert.deepEqual(calls, ["close-1-without-test-flush", "close", "close-1-closed", "postclose-wait", "close-1-settled"]);
+});
+
+test("native window-button close delegates only to its driver without a fallback tab/window command", async () => {
+  const calls = [], win = { closed: false, BrowserCommands: { tryToCloseWindow() { throw Error("Fallback command bypassed native control"); } } };
+  const start = source.indexOf("  async function close(win,"), end = source.indexOf("  async function closedNormal", start);
+  const context = vm.createContext({ mode: "existing", closeNumber: 0, recordLifecycle: () => {},
+    requestNativeClose: async (target, ordinal) => { assert.equal(target, win); assert.equal(ordinal, 1); calls.push("AXPress"); win.closed = true; },
+    wait: async () => {}, until: async predicate => assert.equal(predicate(), true) });
+  vm.runInContext(source.slice(start, end), context);
+  await context.close(win, { nativeButton: true });
+  assert.deepEqual(calls, ["AXPress"]);
+});
+
+test("native close driver request is scoped to one non-private normal window and records no test-forced save", async () => {
+  const requests = [], evidence = { checks: [] }, win = { toolbar: { visible: true } };
+  let current = [win], privateWindow = false;
+  const context = vm.createContext({ mode: "existing", root: "/isolated", evidence,
+    windows: () => current, PrivateBrowsingUtils: { isWindowPrivate: () => privateWindow },
+    Services: { appinfo: { processID: 2468 } }, PathUtils: { join: (...parts) => parts.join("/") },
+    IOUtils: { writeUTF8: async (...args) => requests.push(args), exists: async candidate => candidate === "/isolated/existing-close-4.sent" },
+    ensure: (ok, message) => { if (!ok) throw Error(message); }, wait: async () => {} });
+  const start = source.indexOf("  async function requestNativeClose("), end = source.indexOf("  async function close(win,", start);
+  vm.runInContext(source.slice(start, end), context);
+  await context.requestNativeClose(win, 4);
+  assert.deepEqual(requests, [["/isolated/existing-close-4.ready", "2468"]]);
+  assert.equal(evidence.checks[0].testTriggeredSave, false);
+  current = [win, {}]; await assert.rejects(context.requestNativeClose(win, 4), /exactly one normal/);
+  current = [win]; privateWindow = true; await assert.rejects(context.requestNativeClose(win, 4), /exactly one normal/);
+  privateWindow = false; win.toolbar.visible = false; await assert.rejects(context.requestNativeClose(win, 4), /exactly one normal/);
+  assert.equal(requests.length, 1);
+});
+
+function emptyWindowFixture({ closesWindow = false, duplicateReplacement = false, isPrivate = false } = {}) {
+  const checks = [], inputs = [], loaded = [];
+  const browser = { tabs: [], selectedTab: null, get selectedBrowser() { return this.selectedTab.linkedBrowser; } };
+  const newTab = () => {
+    const tab = { parentNode: {}, workspace: "focus", hasAttribute: () => false,
+      linkedBrowser: { currentURI: { spec: "about:blank" }, loadURI(uri) { this.currentURI = uri; loaded.push(uri.spec); } } };
+    browser.tabs.push(tab); browser.selectedTab = tab; return tab;
+  };
+  newTab();
+  const win = { closed: false, gBrowser: browser, FluxionUI: {
+    setSidebarState: () => {}, currentWorkspace: () => "focus", tabWorkspace: tab => tab.workspace, newTab,
+  } };
+  const remove = tabs => {
+    if (closesWindow) { win.closed = true; return; }
+    for (const tab of tabs) tab.parentNode = null;
+    browser.tabs = browser.tabs.filter(tab => !tabs.includes(tab));
+    newTab(); if (duplicateReplacement) newTab();
+  };
+  browser.removeTabs = tabs => { inputs.push("bulk"); remove(tabs); };
+  const context = vm.createContext({ evidence: { checks }, marker: value => `data:${value}`,
+    Services: { io: { newURI: spec => ({ spec }) }, scriptSecurityManager: { getSystemPrincipal: () => ({}) } },
+    PrivateBrowsingUtils: { isWindowPrivate: () => isPrivate },
+    closeTabWithInput: async (target, tab, input) => { assert.equal(target, win); inputs.push(input); remove([tab]); },
+    until: async (predicate, message) => { if (!predicate()) throw Error(message); },
+    ensure: (ok, message) => { if (!ok) throw Error(message); } });
+  const start = source.indexOf("  async function verifyEmptyWindowTab("), end = source.indexOf("  async function verifyLastWorkspaceTab(", start);
+  vm.runInContext(source.slice(start, end), context);
+  return { checks, inputs, loaded, run: () => context.verifyEmptyWindowTab(win) };
+}
+
+test("final-tab native gate exercises both single-tab inputs and actual bulk removal with one replacement", async () => {
+  for (const isPrivate of [false, true]) {
+    const f = emptyWindowFixture({ isPrivate }); await f.run();
+    assert.deepEqual(f.inputs, ["native-cmd-w-handler", "flow-widget-close-button", "bulk"]);
+    assert.equal(f.checks.length, 3);
+    assert.ok(f.checks.every(check => check.replacementTabCount === 1 && check.private === isPrivate));
+    assert.equal(f.loaded.length, 3);
+    assert.ok(f.loaded.every(url => url.includes("private-never-persist") === isPrivate));
+  }
+});
+
+test("final-tab gate fails if the window closes or multiple replacements remain", async () => {
+  await assert.rejects(emptyWindowFixture({ closesWindow: true }).run(), /final tab closed the normal browser window/);
+  await assert.rejects(emptyWindowFixture({ duplicateReplacement: true }).run(), /empty replacement tab did not settle/);
 });
 
 function checkpointFixture(mode) {

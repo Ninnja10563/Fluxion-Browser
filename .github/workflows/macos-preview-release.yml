@@ -6,11 +6,11 @@ on:
       version:
         description: Release version without the leading v
         required: true
-        default: 0.70.0-preview.1
+        default: 0.70.1-preview.1
       tag:
         description: Git tag for the release
         required: true
-        default: v0.70.0-preview.1
+        default: v0.70.1-preview.1
       publish:
         description: Publish assets to GitHub Releases after verification
         required: true
@@ -24,7 +24,7 @@ jobs:
   package:
     name: Build universal Fluxion DMG
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Check out source
@@ -62,6 +62,21 @@ jobs:
         run: |
           export FLUXION_APP_VERSION="${RELEASE_VERSION%%-*}"
           ./fluxion/scripts/build-macos.sh --clean
+
+      - name: Verify native signed-update policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          frameworks="$GITHUB_WORKSPACE/.runtime/Fluxion.app/Contents/Frameworks"
+          xcrun clang -mmacosx-version-min=12.0 -fobjc-arc -O2 -Wall -Wextra -Wno-unused-parameter -Werror \
+            -F "$frameworks" -framework AppKit -framework Sparkle -Wl,-rpath,"$frameworks" \
+            fluxion/packaging/macos/updater/BridgePolicyTests.m -o "$RUNNER_TEMP/fluxion-updater-policy"
+          "$RUNNER_TEMP/fluxion-updater-policy"
+          for binary in "$frameworks/libFluxionUpdater.dylib" "$frameworks/Sparkle.framework/Sparkle"; do
+            architectures="$(lipo -archs "$binary")"
+            [[ " $architectures " == *' arm64 '* && " $architectures " == *' x86_64 '* ]]
+          done
+          ! strings "$frameworks/libFluxionUpdater.dylib" | grep -F '127.0.0.1:38473'
 
       - name: Verify complete native browser integration
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
@@ -410,6 +425,20 @@ jobs:
         with:
           name: Fluxion-${{ inputs.version }}-library-inspection
           path: ${{ runner.temp }}/fluxion-library.png
+          if-no-files-found: warn
+
+      - name: Verify real signed replacement, canceled quit, and session-preserving relaunch
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_NATIVE_UPDATER_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-native-updater-evidence
+        run: bash ./fluxion/scripts/verify-macos-native-updater.sh '.runtime/Fluxion.app'
+
+      - name: Preserve native installer evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-native-updater-evidence
+          path: ${{ runner.temp }}/fluxion-native-updater-evidence
           if-no-files-found: warn
 
       - name: Package DMG and checksum

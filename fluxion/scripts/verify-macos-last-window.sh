@@ -25,7 +25,8 @@ cleanup() {
     wait "$process_id" 2>/dev/null || true
   fi
   mkdir -p "$artifact_dir"
-  for mode in seed restore existing existing-restore choice0 choice1; do
+  [[ ! -f "$check_root/close-driver.log" ]] || cp "$check_root/close-driver.log" "$artifact_dir/close-driver.log"
+  for mode in seed restore existing existing-restore existing-quit-restore choice0 choice1; do
     for extension in log json; do
       [[ ! -f "$check_root/$mode.$extension" ]] || cp "$check_root/$mode.$extension" "$artifact_dir/$mode.$extension"
     done
@@ -38,7 +39,8 @@ cleanup() {
   printf 'Last-window fixture retained at %s\n' "$check_root" >&2
 }
 trap cleanup EXIT
-for mode in seed restore existing existing-restore choice0 choice1; do
+/usr/bin/osacompile -o "$check_root/close-driver.scpt" "$fluxion_root/packaging/macos/last-window-close-driver.applescript"
+for mode in seed restore existing existing-restore existing-quit-restore choice0 choice1; do
   if [[ "$mode" == existing* ]]; then profile="$check_root/existing"; fi
   if [[ "$mode" == choice* ]]; then profile="$check_root/$mode"; fi
   printf 'Verifying native last-window stage %s...\n' "$mode" >&2
@@ -47,6 +49,19 @@ for mode in seed restore existing existing-restore choice0 choice1; do
   process_id=$!
   for ((attempt=0; attempt<720; attempt++)); do
     kill -0 "$process_id" 2>/dev/null || break
+    for ordinal in 1 2 3 4; do
+      action="$mode-close-$ordinal"
+      if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
+        owned || { printf 'Native close driver lost its isolated browser process.\n' >&2; exit 1; }
+        [[ "$(<"$check_root/$action.ready")" == "$process_id" ]] || { printf 'Native close request PID mismatch.\n' >&2; exit 1; }
+        /usr/bin/osascript "$check_root/close-driver.scpt" "$process_id" >> "$check_root/close-driver.log" 2>&1 || {
+          printf 'Owned native close-button action failed.\n' >&2
+          sed -n '1,100p' "$check_root/close-driver.log" >&2
+          exit 1
+        }
+        touch "$check_root/$action.sent"
+      fi
+    done
     sleep 0.25
   done
   if kill -0 "$process_id" 2>/dev/null; then

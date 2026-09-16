@@ -217,6 +217,7 @@ stamp="$runtime_parent/.fluxion-macos-stamp"
 signature="$target_arch|$(runtime_product_identity "$fluxion_root/package.json" "$app_version")|$requested|$upstream_identity|$(runtime_file_digest "${BASH_SOURCE[0]}")|$(runtime_file_digest "$fluxion_root/scripts/install-update-policy.py")|$(runtime_file_digest "$fluxion_root/scripts/install-default-bookmarks.py")|$(runtime_file_digest "$fluxion_root/scripts/install-macos-session-policy.py")|$(runtime_file_digest "$fluxion_root/scripts/install-branding.py")|$(find "$fluxion_root/chrome" "$fluxion_root/actors" "$fluxion_root/modules" "$fluxion_root/runtime" "$fluxion_root/newtab" "$fluxion_root/assets" "$fluxion_root/branding" "$fluxion_root/packaging/macos" -type f -exec stat -f '%N:%m:%z' {} + | sort | shasum -a 256)"
 
 signature+="|$(runtime_file_digest "$fluxion_root/scripts/install-migration-policy.py")"
+signature+="|$(runtime_file_digest "$fluxion_root/scripts/install-sparkle.sh")|$(runtime_file_digest "$fluxion_root/scripts/download-sparkle.mjs")"
 if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp")" != "$signature" ]]; then
   case "$runtime_app" in
     "$fluxion_root"/../.runtime/Fluxion.app) ;;
@@ -339,6 +340,8 @@ if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp
     exit 1
   fi
   rm -rf -- "$icon_work"
+
+  bash "$fluxion_root/scripts/install-sparkle.sh" "$runtime_app" "$target_arch"
 
   printf 'Signing the local Fluxion development application...\n' >&2
   # Firefox's main Mach-O signature seals the enclosing Info.plist. Re-sign it

@@ -704,6 +704,18 @@
       tab.linkedBrowser.currentURI.spec === "https://example.org/", "Fullscreen HTTPS fixture did not finish loading", 35000);
     const toolbox = document.getElementById("navigator-toolbox"), browser = tab.linkedBrowser;
     const moveToPage = () => { const box = rect(browser); routePointer(box.right - 60, box.top + Math.min(160, box.height / 2)); };
+    const verifyPersistentNavigation = async mode => {
+      ui.setSidebarState(mode); browser.focus();
+      await wait(() => !window.FullScreen.navToolboxHidden && rect(toolbox).top >= -1,
+        `Fullscreen ${mode} navigation did not remain visible`);
+      const before = rect(toolbox);
+      routePointer(before.left + before.width / 2, 0);
+      moveToPage(); await delay(350);
+      assert(!window.FullScreen.navToolboxHidden && near(rect(toolbox).top, before.top) &&
+        rect(toolbox).height > 0 && !window.FluxionFocusMode.state().enabled,
+      `Fullscreen ${mode} navigation retracted after real pointer departure`);
+      evidence.geometry.push({ label: `browser-fullscreen-${mode}-persistent`, toolbox: rect(toolbox) });
+    };
     const key = event => {
       if ((event.metaKey && event.key.toLowerCase() === "l") || event.key === "Escape")
         evidence.keys.push({ key: event.key, trusted: event.isTrusted, meta: event.metaKey });
@@ -721,11 +733,14 @@
       report.checks.push("collapse-releases-inherited-address-focus-without-blocking-later-native-cmd-l");
       ui.setSidebarState("expanded");
       await wait(() => !window.FluxionFocusMode.state().enabled, "Expanded frame did not recover before fullscreen");
-      window.gURLBar.focus();
+      browser.focus();
       window.fullScreen = true;
       await wait(() => window.fullScreen && root.hasAttribute("inFullscreen") && root.hasAttribute("macOSNativeFullscreen"),
         "Actual macOS browser fullscreen did not enter", 25000);
       evidence.entryPresentation = await settleFullscreenPresentation(true);
+      await verifyPersistentNavigation("expanded");
+      await verifyPersistentNavigation("compact");
+      window.gURLBar.focus();
       ui.setSidebarState("focus");
       await wait(() => !window.FluxionFocusMode.state().enabled && document.activeElement !== window.gURLBar.inputField &&
         window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
@@ -749,7 +764,7 @@
         "Native fullscreen top-edge hover did not reach its real target and reveal navigation");
       } finally { toggler.removeEventListener("mouseover", observed, true); }
       await action("capture-fullscreen-focus-revealed");
-      moveToPage(); window.FullScreen.hideNavToolbox(false);
+      moveToPage();
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
       await action("fullscreen-location");
       await wait(() => evidence.keys.some(item => item.trusted && item.meta && item.key.toLowerCase() === "l") &&
@@ -759,10 +774,13 @@
       await action("fullscreen-location-escape");
       await wait(() => evidence.keys.some(item => item.trusted && item.key === "Escape") && !window.gURLBar.view.isOpen,
         "Native fullscreen Escape did not dismiss location suggestions");
-      browser.focus(); moveToPage(); window.FullScreen.hideNavToolbox(false);
+      browser.focus(); moveToPage();
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen did not hide after page refocus");
+      await verifyPersistentNavigation("expanded");
+      await verifyPersistentNavigation("compact");
       report.fullscreenTested = true;
       report.checks.push("real-macos-browser-fullscreen-delegates-hover-and-cmd-l-with-eight-pixel-page-corners");
+      report.checks.push("fullscreen-expanded-and-compact-navigation-stay-visible-focus-alone-retracts-on-native-pointer-leave");
     } finally {
       window.removeEventListener("keydown", key, true);
       window.fullScreen = false;

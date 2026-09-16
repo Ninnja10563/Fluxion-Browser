@@ -80,6 +80,20 @@
       }
     }, 180);
   }
+  function keepNativeNavigationVisible() {
+    if (disposed || !window.fullScreen || document.fullscreenElement ||
+        root.hasAttribute("inDOMFullscreen") || flow.dataset.state === "focus") return;
+    if (window.FullScreen?.navToolboxHidden) window.FullScreen.showNavToolbox(false);
+  }
+  const fullscreenObserver = {
+    observe(subject, topic, state) {
+      // Gecko finishes its collapsed state before this synchronous notification.
+      // Restore through the native controller before paint, without changing a
+      // profile-wide preference or overriding its keyboard/popup bookkeeping.
+      if (subject === toolbox && state === "hidden") keepNativeNavigationVisible();
+    },
+  };
+  Services.obs.addObserver(fullscreenObserver, "fullscreen-nav-toolbox");
   function refresh() {
     if (disposed) return;
     const enteringFocus = flow.dataset.state === "focus" && sidebarState !== "focus";
@@ -106,6 +120,7 @@
       paint(enabled && keepOpen());
       window.FluxionChromeLayout?.refresh();
     }
+    keepNativeNavigationVisible();
   }
   const trustedChrome = event => event.isTrusted === true &&
     event.target?.ownerDocument === document && event.target?.nodePrincipal?.isSystemPrincipal === true;
@@ -147,6 +162,7 @@
   if (urlbar) addressObserver.observe(urlbar, { attributes: true, attributeFilter: ["open", "focused"] });
   on(window, "unload", () => {
     disposed = true; cancel(); observer.disconnect(); addressObserver.disconnect(); cleanups.splice(0).forEach(fn => fn());
+    Services.obs.removeObserver(fullscreenObserver, "fullscreen-nav-toolbox");
     popups.clear(); edge.remove(); style.remove();
     for (const name of ["data-fluxion-focus-mode", "data-fluxion-navigation-revealed", "data-fluxion-navigation-pinned"])
       root.removeAttribute(name);

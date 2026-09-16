@@ -7,30 +7,41 @@ const helper = path.resolve(__dirname, "../scripts/install-macos-session-policy.
 const loaded = spawnSync("python3", ["-c", `import importlib.util,json
 s=importlib.util.spec_from_file_location("policy",${JSON.stringify(helper)})
 m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
-print(json.dumps(m.TAB_REPLACEMENTS[0][1]))`], { encoding: "utf8" });
+print(json.dumps(m.TAB_REPLACEMENTS))`], { encoding: "utf8" });
 assert.equal(loaded.status, 0, loaded.stderr);
-const patched = JSON.parse(loaded.stdout);
-const start = patched.indexOf("        if (closeWindow && window.FluxionUI)"), end = patched.lastIndexOf("        if (closeWindow) {");
-const decision = new Function("window", "aTab", "closeWindow", `${patched.slice(start, end)}return closeWindow;`);
-const tab = (workspace, fields = {}) => ({ isOpen: true, hidden: false, getAttribute: () => workspace, ...fields });
-const window = { FluxionUI: { workspaces: () => [{ id: "first" }, { id: "second" }] } };
+const replacements = JSON.parse(loaded.stdout);
+const single = replacements.find(([, after]) => after.includes("!adoptedByTab"))[1];
+const start = single.indexOf("        if (closeWindow && !adoptedByTab"), end = single.lastIndexOf("        if (closeWindow) {");
+assert.ok(start >= 0 && end > start);
+const decision = new Function("window", "adoptedByTab", "closeWindow", `${single.slice(start, end)}return closeWindow;`);
+const bulk = replacements.find(([before]) => before.includes("this.tabs.length == tabs.length"))[1];
+const bulkDecision = new Function("window", "Services", "tabs", `return (${bulk});`);
+const getter = replacements.find(([before]) => before.includes("!window.toolbar.visible ||"))[1];
+const shouldClose = new Function("window", getter);
 
-test("last visible workspace tab retains a window with live hidden tabs in another defined workspace", () => {
-  const closing = tab("first"), survivor = tab("second", { hidden: true });
-  for (const fields of [{}, { pending: true }, { private: true }]) {
-    const tabs = [closing, { ...survivor, ...fields }];
-    assert.equal(decision.call({ tabs }, window, closing, true), false);
-    assert.equal(decision.call({ tabs }, window, closing, false), false);
+test("ordinary last-tab closure retains every normal window without requiring sidebar or workspace metadata", () => {
+  for (const fields of [{}, { FluxionUI: {} }, { private: true }, { restoring: true }]) {
+    const window = { toolbar: { visible: true }, ...fields };
+    assert.equal(shouldClose(window), false);
+    assert.equal(decision(window, undefined, true), false);
+    assert.equal(decision(window, undefined, false), false);
   }
 });
 
-test("actual last-tab policy, ordinary Firefox, closing survivors and unrelated hidden tabs remain native", () => {
-  const closing = tab("first");
-  for (const others of [[], [tab("second")], [tab("second", { hidden: true, isOpen: false })],
-    [tab("first", { hidden: true })], [tab("deleted", { hidden: true })], [tab("", { hidden: true })]]) {
-    assert.equal(decision.call({ tabs: [closing, ...others] }, window, closing, true), true);
-  }
-  assert.equal(decision.call({ tabs: [closing, tab("second", { hidden: true })] }, {}, closing, true), true);
-  const unknown = tab("deleted");
-  assert.equal(decision.call({ tabs: [unknown, tab("second", { hidden: true })] }, window, unknown, true), true);
+test("native popup closure and explicit cross-window adoption teardown remain unchanged", () => {
+  const popup = { toolbar: { visible: false } }, normal = { toolbar: { visible: true } };
+  assert.equal(shouldClose(popup), true);
+  assert.equal(decision(popup, undefined, true), true);
+  assert.equal(decision(popup, undefined, false), false);
+  assert.equal(decision(normal, { adopted: true }, true), true);
+  assert.equal(decision(normal, { adopted: true }, false), false);
+});
+
+test("bulk all-tab close cannot bypass empty-tab replacement in a normal window", () => {
+  const tabs = [{}, {}], Services = { prefs: { getBoolPref: () => true } };
+  assert.equal(bulkDecision.call({ tabs }, { toolbar: { visible: true } }, Services, tabs), false);
+  assert.equal(bulkDecision.call({ tabs }, { toolbar: { visible: false } }, Services, tabs), true);
+  assert.equal(bulkDecision.call({ tabs }, { toolbar: { visible: false } }, Services, [tabs[0]]), false);
+  Services.prefs.getBoolPref = () => false;
+  assert.equal(bulkDecision.call({ tabs }, { toolbar: { visible: false } }, Services, tabs), false);
 });

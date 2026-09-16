@@ -19,6 +19,7 @@ bash -n \
   scripts/verify-macos-memory-policy.sh \
   scripts/verify-macos-memory-corruption.sh \
   scripts/verify-macos-updates.sh \
+  scripts/verify-macos-native-updater.sh \
   scripts/verify-macos-external-open.sh \
   scripts/verify-macos-settings-accessibility.sh \
   scripts/verify-macos-ai-privacy.sh \
@@ -43,6 +44,8 @@ bash -n \
   scripts/verify-macos-last-window.sh
 node --check < runtime/fluxion.cfg
 node --check scripts/download-gecko.mjs
+node --check scripts/updater-fixture.mjs
+node --check chrome/fluxion-native-updater-verification.js
 node --check scripts/benchmark-tab-search.cjs
 node --check scripts/browsing-fixture.mjs
 node --check chrome/core/url.js
@@ -137,6 +140,7 @@ node --check chrome/fluxion-permissions.js
 node --check chrome/fluxion-session-recovery.js
 node --check chrome/fluxion-peek.js
 node --check chrome/fluxion-settings.js
+node --check chrome/fluxion-updates-ui.js
 node --check chrome/fluxion-tab-sleeping.js
 node --check chrome/fluxion-palette.js
 node --check actors/FluxionMemoryPageChild.sys.mjs
@@ -160,6 +164,12 @@ node --check modules/FluxionReleaseFeed.sys.mjs
 node --check scripts/build-release-feed.mjs
 node --check scripts/publish-release-feed.mjs
 node --check modules/FluxionUpdates.sys.mjs
+node --check modules/FluxionUpdateCoordinatorCore.sys.mjs
+node --check modules/FluxionUpdateCoordinator.sys.mjs
+node --check modules/FluxionNativeUpdater.sys.mjs
+node --check scripts/download-sparkle.mjs
+node --check scripts/provision-update-key.mjs
+bash -n scripts/install-sparkle.sh
 node --check modules/FluxionAIControl.sys.mjs
 node --test tests/*.test.js
 python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-stub.py").read_text(encoding="utf-8"))'

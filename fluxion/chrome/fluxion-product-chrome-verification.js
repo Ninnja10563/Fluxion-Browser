@@ -542,6 +542,24 @@
     assert(controls.some(node => ["reload-button", "stop-button"].includes(node.id)), "Native reload/stop control is missing");
     return inputBox;
   }
+  async function updateIndicatorGeometry(label) {
+    const indicator = document.getElementById("fluxion-update-indicator");
+    assert(indicator, "Packaged update indicator did not initialize");
+    const hidden = indicator.hidden;
+    try {
+      // Geometry fixture only: expose the real control without manufacturing
+      // an available offer, contacting an update server or requesting install.
+      indicator.hidden = false;
+      await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+      assert(painted(indicator), "Update indicator is not painted when explicitly shown");
+      geometry(`${label}-update-indicator-geometry-only`);
+      (report.updateIndicatorGeometry ||= []).push({ label, button: rect(indicator),
+        state: indicator.getAttribute("data-state"), fixture: "visibility only; no update offer or installation exercised" });
+    } finally {
+      indicator.hidden = hidden;
+      await new Promise(resolve => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+    }
+  }
   async function run() {
     assert(/\/fluxion-product-chrome-check\.[^/]+\/profile\/?$/.test(PathUtils.profileDir), "Product chrome gate requires its isolated profile");
     assert(driver === PathUtils.parent(PathUtils.profileDir), "Product chrome driver must own the isolated profile");
@@ -638,6 +656,7 @@
       await delay(350);
       geometry(`${width}-normal`);
       await capture(`capture-product-chrome-${width}`);
+      await updateIndicatorGeometry(String(width));
       // The owned macOS driver sends Cmd-L and the fixed bookmark restriction
       // as actual key input. Do not refocus or call programmatic search before
       // capturing the first popup that this real interaction opens.
@@ -681,6 +700,7 @@
       gBrowser.selectedBrowser.focus();
     }
     report.checks.push("normal-and-focused-address-field-balanced-at-1280-and-800", "visible-toolbar-controls-contained-with-no-pairwise-overlap", "expanded-workspace-tab-and-new-tab-labels-share-one-column", "native-places-suggestions-retain-address-field-anchor", "native-suggestion-group-branding-disabled-without-duplicate-inner-frame");
+    report.checks.push("real-update-indicator-geometry-only-contained-without-toolbar-overlap-at-1280-and-800");
     await workspaceHeading();
     await workspaceTheme();
   }

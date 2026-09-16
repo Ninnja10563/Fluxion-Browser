@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updates, ai, sidebarWidth, colors, permissions, prompt, shellService, policies } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updateCoordinator, ai, sidebarWidth, colors, permissions, prompt, shellService, policies } = {}) {
   const preferences = new Map(saved);
   const timers = new Map(); let timerId = 0;
   const elements = [];
@@ -87,9 +87,13 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     setWidth: value => prefs.setIntPref?.("fluxion.sidebar.width", value),
     resetWidth: () => prefs.setIntPref?.("fluxion.sidebar.width", 232),
   };
+  updateCoordinator ||= {
+    getState: () => ({ state: "idle", installed: require("../package.json").version, automatic: false, canCheck: true }),
+    watch: () => () => {}, check() {}, install() {}, cancel() {}, retry() {}, setAutomatic() {},
+  };
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,
-    ChromeUtils: { importESModule: name => name.includes("FluxionUpdates") ? { FluxionUpdates: updates }
+    ChromeUtils: { importESModule: name => name.includes("FluxionUpdateCoordinator") ? { FluxionUpdateCoordinator: updateCoordinator }
       : name.includes("ShellService.sys.mjs") ? { ShellService: shellService }
       : { SearchService: { init: async () => {}, getVisibleEngines: async () => [] } } },
     Services: { prefs, prompt, policies, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },

@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.70.0";
-  const PRODUCT_RELEASE = "0.70.0-preview.1";
+  const PRODUCT_VERSION = "0.70.1";
+  const PRODUCT_RELEASE = "0.70.1-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -1554,88 +1554,118 @@
   releases.id = "fluxion-update-releases";
   releases.type = "button";
   releases.setAttribute("aria-label", "Open Fluxion releases");
-  let availableUpdate = null;
+  const { FluxionUpdateCoordinator: updateCoordinator } = ChromeUtils.importESModule(
+    "resource://fluxion/modules/FluxionUpdateCoordinator.sys.mjs",
+  );
+  let updateState = updateCoordinator.getState();
   let updateDisposed = false;
-  releases.addEventListener("click", () => openAboutDestination(
-    availableUpdate?.releaseURL || "https://github.com/Ninnja10563/Fluxion-Browser/releases",
-  ));
+  releases.addEventListener("click", () => {
+    if (!updateDisposed) openAboutDestination(updateState.releaseURL || "https://github.com/Ninnja10563/Fluxion-Browser/releases");
+  });
   const updateControls = create("div");
   const updateActions = create("div", "fluxion-settings-actions");
   const checkUpdate = create("button", "fluxion-settings-button", "Check now");
   checkUpdate.id = "fluxion-update-check";
   checkUpdate.type = "button";
   checkUpdate.setAttribute("aria-label", "Check for Fluxion updates");
-  const downloadUpdate = create("button", "fluxion-settings-button", "Download macOS DMG");
+  const downloadUpdate = create("button", "fluxion-settings-button", "Download DMG · install manually");
   downloadUpdate.id = "fluxion-update-download";
   downloadUpdate.type = "button";
   downloadUpdate.hidden = true;
   downloadUpdate.addEventListener("click", () => {
-    if (availableUpdate?.state === "available") openAboutDestination(availableUpdate.downloadURL);
+    if (!updateDisposed && !downloadUpdate.hidden && updateState.downloadURL) openAboutDestination(updateState.downloadURL);
   });
+  const installUpdate = create("button", "fluxion-settings-button", "Update and restart");
+  installUpdate.id = "fluxion-update-install";
+  installUpdate.type = "button";
+  const cancelUpdate = create("button", "fluxion-settings-button", "Cancel update");
+  cancelUpdate.id = "fluxion-update-cancel";
+  cancelUpdate.type = "button";
+  const retryUpdate = create("button", "fluxion-settings-button", "Retry update");
+  retryUpdate.id = "fluxion-update-retry";
+  retryUpdate.type = "button";
+  const updateProgress = create("progress");
+  updateProgress.id = "fluxion-update-progress";
+  updateProgress.max = 1;
+  updateProgress.setAttribute("aria-label", "Fluxion update progress");
+  updateProgress.setAttribute("style", "width: 100%; height: 4px; margin-block: 6px; accent-color: var(--fluxion-accent);");
   const updateStatus = create("p", "fluxion-settings-note", `Installed ${PRODUCT_RELEASE}. Not checked.`);
   updateStatus.id = "fluxion-update-status";
   updateStatus.setAttribute("role", "status");
   updateStatus.dataset.state = "idle";
   updateStatus.dataset.installed = PRODUCT_RELEASE;
-  checkUpdate.addEventListener("click", async () => {
-    if (checkUpdate.disabled || updateDisposed) return;
-    checkUpdate.disabled = true;
-    availableUpdate = null;
-    releases.textContent = "All releases";
-    releases.setAttribute("aria-label", "Open Fluxion releases");
-    downloadUpdate.hidden = true;
-    updateStatus.dataset.state = "checking";
-    delete updateStatus.dataset.latest;
-    delete updateStatus.dataset.reason;
-    delete updateStatus.dataset.retryAt;
-    delete updateStatus.dataset.releaseEvidence;
-    updateStatus.textContent = "Checking Fluxion's verified release feed…";
-    try {
-      const { FluxionUpdates } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionUpdates.sys.mjs");
-      const result = await FluxionUpdates.check(PRODUCT_RELEASE, Services.appinfo.OS);
-      if (updateDisposed) return;
-      updateStatus.dataset.state = result.state;
-      if (result.latest) updateStatus.dataset.latest = result.latest;
-      if (result.evidence) updateStatus.dataset.releaseEvidence = JSON.stringify(result.evidence);
-      if (result.reason) {
-        updateStatus.dataset.state = "error";
-        updateStatus.dataset.reason = result.reason;
-        const messages = {
-          "rate-limit": "GitHub's request limit was reached. Try again later.",
-          timeout: "The update check timed out. Try again when the connection is available.",
-          "invalid-feed": "The release feed is expired or could not be verified. Try again later or open Fluxion releases.",
-          "too-large": "The release list exceeded the safe response size. Open Fluxion releases to check manually.",
-        };
-        updateStatus.textContent = messages[result.reason] || "The release list could not be retrieved safely. Try again later or open Fluxion releases.";
-        if (result.reason === "rate-limit" && Number.isFinite(result.retryAt)) {
-          updateStatus.dataset.retryAt = String(result.retryAt);
-          const refusal = result.status === 403 ? "GitHub temporarily refused this update check." : "GitHub's request limit was reached.";
-          updateStatus.textContent = `${refusal} Check again after ${new Date(result.retryAt).toLocaleString()}. You can still open Fluxion releases.`;
-        }
-      } else if (result.state === "available") {
-        availableUpdate = result;
-        releases.textContent = "Release notes";
-        releases.setAttribute("aria-label", `Open Fluxion ${result.latest} release notes`);
-        downloadUpdate.hidden = false;
-        updateStatus.textContent = `${result.latest} is available. Installed ${PRODUCT_RELEASE}. Download and installation require your action.`;
-      } else if (result.state === "current") {
-        updateStatus.textContent = `No newer compatible release found. Installed ${PRODUCT_RELEASE}; newest downloadable release ${result.latest}.`;
-      } else if (result.state === "unsupported") {
-        updateStatus.textContent = "Packaged update downloads are currently available for macOS only. You can still view Fluxion releases.";
-      } else {
-        updateStatus.textContent = "No compatible downloadable release was found in the recent release list. You can inspect Fluxion releases manually.";
-      }
-    } catch (error) {
-      if (updateDisposed) return;
-      updateStatus.dataset.state = "error";
-      updateStatus.textContent = `Could not check for updates: ${error.message}. Try again later or open Fluxion releases.`;
+  const updateActionsPending = new Set();
+  const runUpdateAction = async (button, permission, action) => {
+    if (updateDisposed || button.disabled || updateActionsPending.has(action) || !updateState[permission]) return;
+    updateActionsPending.add(action);
+    button.disabled = true;
+    let failure = null;
+    try { await updateCoordinator[action](); }
+    catch (error) {
+      failure = error;
+      Cu.reportError(error);
     } finally {
-      if (!updateDisposed) checkUpdate.disabled = false;
+      updateActionsPending.delete(action);
+      if (!updateDisposed) {
+        projectUpdate(updateCoordinator.getState());
+        if (failure) updateStatus.textContent = `Update action failed: ${failure.message}. You can retry or install manually.`;
+      }
     }
+  };
+  checkUpdate.addEventListener("click", () => runUpdateAction(checkUpdate, "canCheck", "check"));
+  installUpdate.addEventListener("click", () => runUpdateAction(installUpdate, "canInstall", "install"));
+  cancelUpdate.addEventListener("click", () => runUpdateAction(cancelUpdate, "canCancel", "cancel"));
+  retryUpdate.addEventListener("click", () => runUpdateAction(retryUpdate, "canRetry", "retry"));
+  const automaticUpdates = toggle("Enabled", updateState.automatic, checked => {
+    if (updateDisposed) return;
+    try { updateCoordinator.setAutomatic(checked); }
+    catch (error) { setNote(`Automatic checks could not be changed: ${error.message}`, "about"); }
+    projectUpdate(updateCoordinator.getState());
   });
-  updateActions.append(checkUpdate, releases);
-  updateControls.append(updateActions, updateStatus, downloadUpdate);
-  row(about, "Updates", "Checks the verified public release feed only when requested. No automatic downloads or installation.", updateControls);
+  automaticUpdates.querySelector("input").id = "fluxion-update-automatic";
+  function projectUpdate(state) {
+    if (updateDisposed) return;
+    updateState = state;
+    updateStatus.dataset.state = state.state;
+    updateStatus.dataset.installed = state.installed || PRODUCT_RELEASE;
+    for (const [key, value] of Object.entries({ latest: state.latest, reason: state.reason,
+      retryAt: state.retryAt, releaseEvidence: state.evidence ? JSON.stringify(state.evidence) : null })) {
+      if (value !== undefined && value !== null && value !== "") updateStatus.dataset[key] = String(value);
+      else delete updateStatus.dataset[key];
+    }
+    const fallback = {
+      idle: `Installed ${state.installed || PRODUCT_RELEASE}. Not checked.`,
+      checking: "Checking Fluxion's verified release feed…",
+      "checking-install": "Verifying the signed update offer…",
+      current: `No newer compatible release found. Installed ${state.installed || PRODUCT_RELEASE}.`,
+      available: `${state.latest} is available. Updates install only when you choose Update and restart.`,
+      downloading: "Downloading the verified update…", extracting: "Preparing the update…",
+      installing: "Installing the update. Fluxion will restart when it is ready.",
+      retry: "The update needs another attempt. Your installed app is unchanged.",
+      error: "The update could not be completed. Try again or install manually.",
+      canceled: "Update canceled. Your installed app is unchanged.",
+      unsupported: "Automatic installation is unavailable here. You can install a release manually.",
+    };
+    updateStatus.textContent = state.detail || fallback[state.state] || "No compatible downloadable release was found.";
+    checkUpdate.disabled = !state.canCheck || updateActionsPending.has("check");
+    installUpdate.hidden = !state.canInstall; installUpdate.disabled = !state.canInstall || updateActionsPending.has("install");
+    cancelUpdate.hidden = !state.canCancel; cancelUpdate.disabled = !state.canCancel || updateActionsPending.has("cancel");
+    retryUpdate.hidden = !state.canRetry; retryUpdate.disabled = !state.canRetry || updateActionsPending.has("retry");
+    downloadUpdate.hidden = !state.downloadURL || ["checking", "checking-install", "downloading", "extracting", "installing"].includes(state.state);
+    releases.textContent = state.releaseURL ? "Release notes" : "All releases";
+    releases.setAttribute("aria-label", state.releaseURL ? `Open Fluxion ${state.latest} release notes` : "Open Fluxion releases");
+    automaticUpdates.querySelector("input").checked = Boolean(state.automatic);
+    const hasProgress = typeof state.progress === "number" && Number.isFinite(state.progress);
+    updateProgress.hidden = !hasProgress || !["downloading", "extracting", "installing"].includes(state.state);
+    if (hasProgress) updateProgress.value = Math.max(0, Math.min(1, state.progress));
+    else updateProgress.removeAttribute("value");
+  }
+  updateActions.append(checkUpdate, releases, installUpdate, cancelUpdate, retryUpdate);
+  updateControls.append(updateActions, updateProgress, updateStatus, downloadUpdate);
+  row(about, "Updates", "Install a verified update and restart Fluxion. Your profile is retained. Manual installation is also available.", updateControls);
+  row(about, "Automatic update checks", "Check the verified release feed periodically. Downloads and installation still require your action.", automaticUpdates);
+  const stopUpdateWatch = updateCoordinator.watch(window, projectUpdate);
+  projectUpdate(updateCoordinator.getState());
   const licenses = create("button", "fluxion-settings-button", "Open third-party licenses");
   licenses.type = "button";
   licenses.addEventListener("click", () => openAboutDestination("about:license"));
@@ -1698,6 +1728,7 @@
     aiDisposed = true;
     Services.prefs.removeObserver("fluxion.ai.", aiPreferenceObserver);
     updateDisposed = true;
+    stopUpdateWatch();
     gBrowser.removeTabsProgressListener(progressListener);
     gBrowser.tabContainer.removeEventListener("TabSelect", syncVisibility);
     root.remove();

@@ -2,7 +2,7 @@
 (function verifyLastWindow(window) {
   "use strict";
   const mode = Services.env.get("FLUXION_LAST_WINDOW_TEST");
-  if (!["seed", "restore", "existing", "existing-restore", "choice0", "choice1"].includes(mode)) return;
+  if (!["seed", "restore", "existing", "existing-restore", "existing-quit-restore", "choice0", "choice1"].includes(mode)) return;
   const hidden = Services.appShell.hiddenDOMWindow;
   if (window !== hidden) {
     if (!hidden.__fluxionLastWindowVerification) {
@@ -92,12 +92,25 @@
     return win;
   }
   async function open(options = {}) { return ready(BrowserWindowTracker.openWindow(options)); }
-  async function close(win) {
+  async function requestNativeClose(win, ordinal) {
+    ensure(windows().length === 1 && windows()[0] === win && win.toolbar.visible &&
+      !PrivateBrowsingUtils.isWindowPrivate(win), "Native close button requires exactly one normal browser window");
+    const action = `${mode}-close-${ordinal}`;
+    await IOUtils.writeUTF8(PathUtils.join(root, `${action}.ready`), String(Services.appinfo.processID));
+    const deadline = Date.now() + 20000;
+    while (!await IOUtils.exists(PathUtils.join(root, `${action}.sent`))) {
+      ensure(Date.now() < deadline, "Owned native close-button driver did not acknowledge AXPress");
+      await wait(80);
+    }
+    evidence.checks.push({ label: "owned-macos-window-close-button", ordinal, nativeAction: "AXPress", testTriggeredSave: false });
+  }
+  async function close(win, { nativeButton = false } = {}) {
     const ordinal = ++closeNumber;
     // Do not pre-flush or wait for a save: users close windows directly.
     // Gecko must collect its own final tab state through the normal close path.
     recordLifecycle(`close-${ordinal}-without-test-flush`, mode === "existing" ? null : win);
-    win.BrowserCommands.tryToCloseWindow();
+    if (nativeButton) await requestNativeClose(win, ordinal);
+    else win.BrowserCommands.tryToCloseWindow();
     await until(() => win.closed, "native close-window command failed");
     recordLifecycle(`close-${ordinal}-closed`);
     await wait(450);
@@ -135,6 +148,46 @@
     await until(() => urls.every(url => stateURLs(stateOf(win)).includes(url)), "seed pages did not load");
     verifyTabs(win, "seed");
   }
+  async function closeTabWithInput(win, closing, input) {
+    if (input === "native-cmd-w-handler") {
+      win.BrowserCommands.closeTabOrWindow({ metaKey: true });
+      return;
+    }
+    const button = await until(() => [...win.document.querySelectorAll("#fluxion-flow .fluxion-tab")]
+      .find(row => row._fluxionTab === closing)?.querySelector(".fluxion-close"), "Flow last-tab close control missing");
+    Services.focus.focusedWindow = win;
+    const box = button.getBoundingClientRect();
+    ensure(box.width >= 16 && box.height >= 16, "Flow close control has no clickable geometry");
+    for (const type of ["mousemove", "mousedown", "mouseup"]) win.synthesizeMouseEvent(type,
+      box.x + box.width / 2, box.y + box.height / 2, {
+        identifier: win.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons: type === "mousedown" ? 1 : 0,
+        clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: win.MouseEvent.MOZ_SOURCE_MOUSE,
+      }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
+  }
+  async function verifyEmptyWindowTab(win) {
+    const ui = win.FluxionUI;
+    ui.setSidebarState("expanded");
+    ensure(win.gBrowser.tabs.length === 1, "Final-window-tab fixture must start with exactly one tab");
+    for (const input of ["native-cmd-w-handler", "flow-widget-close-button", "native-bulk-close-handler"]) {
+      const workspace = ui.currentWorkspace();
+      if (input === "native-bulk-close-handler") ui.newTab();
+      const browser = win.gBrowser.selectedBrowser;
+      const url = marker(`${PrivateBrowsingUtils.isWindowPrivate(win) ? "private-never-persist-" : ""}last-window-tab-${input}`);
+      browser.loadURI(Services.io.newURI(url), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
+      await until(() => browser.currentURI.spec === url && !win.gBrowser.selectedTab.hasAttribute("busy"),
+        `${input}: final-window-tab page did not load`);
+      const closing = [...win.gBrowser.tabs];
+      if (input === "native-bulk-close-handler") win.gBrowser.removeTabs(closing, { animate: false });
+      else await closeTabWithInput(win, closing[0], input);
+      await until(() => win.closed || closing.every(tab => !tab.parentNode), `${input}: last window tab did not close`);
+      ensure(!win.closed, `${input}: final tab closed the normal browser window`);
+      await until(() => win.gBrowser.tabs.length === 1 && !closing.includes(win.gBrowser.selectedTab) &&
+        ui.tabWorkspace(win.gBrowser.selectedTab) === workspace, `${input}: empty replacement tab did not settle`);
+      ensure(ui.currentWorkspace() === workspace, `${input}: empty replacement changed workspace`);
+      evidence.checks.push({ label: `empty-window-${input}`, windowRetained: true, replacementTabCount: 1,
+        workspaceRetained: true, private: PrivateBrowsingUtils.isWindowPrivate(win) });
+    }
+  }
   async function verifyLastWorkspaceTab(win) {
     const ui = win.FluxionUI;
     ui.setSidebarState("expanded");
@@ -150,20 +203,7 @@
       const closing = win.gBrowser.selectedTab;
       ensure(win.gBrowser.visibleTabs.length === 1 && ui.tabWorkspace(closing) === other.id,
         `${input}: fixture is not the workspace's final visible tab`);
-      if (input === "native-cmd-w-handler") {
-        win.BrowserCommands.closeTabOrWindow({ metaKey: true });
-      } else {
-        const button = await until(() => [...win.document.querySelectorAll("#fluxion-flow .fluxion-tab")]
-          .find(row => row._fluxionTab === closing)?.querySelector(".fluxion-close"), "Flow last-tab close control missing");
-        Services.focus.focusedWindow = win;
-        const box = button.getBoundingClientRect();
-        ensure(box.width >= 16 && box.height >= 16, "Flow close control has no clickable geometry");
-        for (const type of ["mousemove", "mousedown", "mouseup"]) win.synthesizeMouseEvent(type,
-          box.x + box.width / 2, box.y + box.height / 2, {
-            identifier: win.windowUtils.DEFAULT_MOUSE_POINTER_ID, button: 0, buttons: type === "mousedown" ? 1 : 0,
-            clickCount: type === "mousemove" ? 0 : 1, modifiers: 0, inputSource: win.MouseEvent.MOZ_SOURCE_MOUSE,
-          }, { isDOMEventSynthesized: true, isWidgetEventSynthesized: false, isAsyncEnabled: false, toWindow: true });
-      }
+      await closeTabWithInput(win, closing, input);
       await until(() => win.closed || !closing.parentNode, `${input}: final workspace tab did not close`);
       ensure(!win.closed, `${input}: closing one workspace destroyed the entire browser window`);
       await until(() => win.gBrowser.tabs.length === 2 && win.gBrowser.selectedTab !== closing, `${input}: native replacement tab did not settle`);
@@ -217,14 +257,15 @@
     const first = await until(() => windows().find(win => win.FluxionUI && !PrivateBrowsingUtils.isWindowPrivate(win)), "initial normal window missing");
     await ready(first);
     await SessionStore.promiseAllWindowsRestored;
-    if (mode === "restore" || mode === "existing-restore") {
+    if (mode === "restore" || mode === "existing-restore" || mode === "existing-quit-restore") {
       await until(() => urls.every(url => stateURLs(stateOf(first)).includes(url)), "closed-last-window session did not restore on relaunch");
-      verifyTabs(first, "actual-relaunch");
+      verifyTabs(first, mode === "existing-quit-restore" ? "after-full-quit-with-window-open" : "actual-relaunch");
       verifyStartupChoice("relaunch-startup-choice");
     } else {
       if (mode.startsWith("choice")) Services.prefs.setIntPref("browser.startup.page", Number(mode.slice(-1)));
       else if (mode === "existing") selectExplicitRestore();
       else verifyStartupChoice("fresh-startup-choice");
+      await verifyEmptyWindowTab(first);
       await verifyLastWorkspaceTab(first);
       await seed(first);
       await close(first);
@@ -241,10 +282,11 @@
         let reopened = await open();
         await until(() => urls.every(url => stateURLs(stateOf(reopened)).includes(url)), "same-process reopen failed");
         verifyTabs(reopened, "same-process-reopen");
-        await close(reopened);
+        await close(reopened, { nativeButton: true });
         await closedNormal();
         const privateWindow = await open({ private: true });
         ensure(PrivateBrowsingUtils.isWindowPrivate(privateWindow), "private fixture did not open privately");
+        await verifyEmptyWindowTab(privateWindow);
         ensure(!urls.some(url => stateURLs(stateOf(privateWindow)).includes(url)), "normal session restored into private window");
         privateWindow.gBrowser.selectedTab = privateWindow.gBrowser.addTrustedTab(privateURL);
         await until(() => stateURLs(stateOf(privateWindow)).includes(privateURL), "private marker did not load");
@@ -258,11 +300,15 @@
         for (const tab of reopened.gBrowser.tabs) {
           if (tab.linkedBrowser.currentURI.spec === externalURL) reopened.gBrowser.removeTab(tab, { animate: false });
         }
-        await close(reopened);
+        await close(reopened, { nativeButton: true });
         const closed = await closedNormal();
         ensure(closed._shouldRestore === true, "last regular window was not marked for next launch");
         await verifyFinalCheckpoint();
       }
+    }
+    if (mode === "existing-restore") {
+      ensure(windows().length === 1 && windows()[0] === first, "Full-quit fixture must keep its restored window open until Quit");
+      evidence.checks.push({ label: "normal-application-quit-with-window-open", openWindowCount: 1, testTriggeredSave: false });
     }
     write("health", "native-last-window-policy-verified");
     await IOUtils.writeUTF8(PathUtils.join(root, `${mode}.json`), JSON.stringify(evidence, null, 2));
