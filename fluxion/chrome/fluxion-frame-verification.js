@@ -119,6 +119,14 @@
     assert(box.width >= 24 && box.height >= 24 && node.contains(document.elementFromPoint(x, y)), "Routed control is clipped or obscured");
     routePointer(x, y); routePointer(x, y, "mousedown", 1); routePointer(x, y, "mouseup", 0);
   };
+  function clickNativePage(browser) {
+    const box = rect(browser), x = box.right - 60, y = box.top + Math.min(160, box.height / 2);
+    const hit = document.elementFromPoint(x, y);
+    assert(box.width > 120 && box.height > 0 && (hit === browser || browser.contains(hit)),
+      "Native page focus-transfer target is obscured");
+    routePointer(x, y); routePointer(x, y, "mousedown", 1); routePointer(x, y, "mouseup", 0);
+    return { x, y, hit: hit?.id || hit?.localName };
+  }
   const rows = () => [...document.querySelectorAll(".fluxion-tab")];
   const rowFor = tab => rows().find(row => row._fluxionTab === tab);
   const liveTabs = () => [...gBrowser.tabs].filter(tab => !tab.closing);
@@ -771,11 +779,21 @@
         document.activeElement === window.gURLBar.inputField && !window.FullScreen.navToolboxHidden,
       "Native Cmd-L failed after fullscreen Focus collapse");
       assert(rect(window.gURLBar.inputField).height > 0, "Native fullscreen location input is not painted");
+      moveToPage(); await delay(250);
+      assert(!window.FullScreen.navToolboxHidden && document.activeElement === window.gURLBar.inputField,
+        "Fullscreen pointer departure hid genuine keyboard-owned location input");
+      evidence.keyboardFocusRetainedOnPointerLeave = true;
       await action("fullscreen-location-escape");
       await wait(() => evidence.keys.some(item => item.trusted && item.key === "Escape") && !window.gURLBar.view.isOpen,
         "Native fullscreen Escape did not dismiss location suggestions");
-      browser.focus(); moveToPage();
-      await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen did not hide after page refocus");
+      // Gecko intentionally retries keyboard-owned toolbar collapse on a real
+      // click/keydown, not blur: moving chrome during mousedown can split a
+      // click into two ineffective halves. Use the user's actual page click.
+      evidence.pageClick = clickNativePage(browser);
+      await wait(() => document.activeElement !== window.gURLBar.inputField && window.FullScreen.navToolboxHidden,
+        "Native fullscreen did not hide after actual page click");
+      evidence.pageClick.focusTransferred = true;
+      evidence.pageClick.navigationHidden = true;
       await verifyPersistentNavigation("expanded");
       await verifyPersistentNavigation("compact");
       report.fullscreenTested = true;
