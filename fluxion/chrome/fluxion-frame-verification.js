@@ -149,21 +149,50 @@
   }
   function floatingSidebarEvidence(flow, surface, revealed) {
     const rail = rect(flow), box = rect(surface), style = window.getComputedStyle(surface);
+    const viewport = { top: 0, bottom: window.innerHeight };
     const rtl = window.getComputedStyle(flow).direction === "rtl";
     if (revealed) {
       assert(style.visibility === "visible" && !surface.inert && style.pointerEvents !== "none",
         "Floating sidebar is not visible and interactive after reveal");
       const inlineInset = rtl ? rail.right - box.right : box.left - rail.left;
-      assert(near(inlineInset, 6) && near(box.top - rail.top, 6) && near(rail.bottom - box.bottom, 6),
-        `Floating sidebar does not retain six-pixel side/top/bottom clearance: ${JSON.stringify({ rail, box, inlineInset })}`);
+      assert(near(inlineInset, 6) && near(box.top - viewport.top, 6) && near(viewport.bottom - box.bottom, 6),
+        `Floating sidebar does not retain six-pixel viewport side/top/bottom clearance: ${JSON.stringify({ rail, box, viewport, inlineInset })}`);
+      const heading = surface.querySelector(".fluxion-workspace-heading");
+      assert(heading && near(rect(heading).top - box.top, 6), "Floating sidebar heading does not have six-pixel top padding");
     } else {
       assert(style.visibility === "hidden" && surface.inert && style.pointerEvents === "none",
         "Hidden sidebar retains a painted or interactive rounded-corner sliver");
       assert(rtl ? box.left >= rail.right - 1 : box.right <= rail.left + 1,
         `Hidden sidebar has not moved fully beyond the window edge: ${JSON.stringify({ rail, box })}`);
     }
-    return { mode: revealed ? "floating-revealed-insets" : "floating-hidden-offscreen", rail, box,
+    return { mode: revealed ? "floating-revealed-insets" : "floating-hidden-offscreen", rail, box, viewport,
+      heading: revealed ? rect(surface.querySelector(".fluxion-workspace-heading")) : null,
       visibility: style.visibility, pointerEvents: style.pointerEvents, inert: surface.inert };
+  }
+  async function withSavedAutohideDisabled(check) {
+    const name = "browser.fullscreen.autohide", prefs = Services.prefs;
+    const hadUserValue = prefs.prefHasUserValue(name), original = prefs.getBoolPref(name);
+    prefs.setBoolPref(name, false); prefs.savePrefFile(null);
+    let changes = 0;
+    const observer = { observe() { changes++; } };
+    prefs.addObserver(name, observer);
+    try {
+      await check();
+      assert(!prefs.getBoolPref(name) && prefs.prefHasUserValue(name) && changes === 0,
+        "Fullscreen sidebar policy changed the user's saved autohide=false preference");
+      return { value: false, hasUserValue: true, observedProductWrites: changes };
+    } finally {
+      prefs.removeObserver(name, observer);
+      if (hadUserValue) prefs.setBoolPref(name, original);
+      else prefs.clearUserPref(name);
+      prefs.savePrefFile(null);
+    }
+  }
+  function navigationControlHitEvidence(control) {
+    const box = rect(control), hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    assert(box.width >= 24 && box.height >= 24 && control.contains(hit),
+      `Native navigation control is obscured by floating chrome: ${control.id}`);
+    return { id: control.id, box, hit: hit?.id || hit?.localName };
   }
   function newTabGeometryEvidence(density, row, button, before) {
     const tab = rect(row), after = rect(button), style = window.getComputedStyle(button), tabStyle = window.getComputedStyle(row);
@@ -724,6 +753,64 @@
       `Fullscreen ${mode} navigation retracted after real pointer departure`);
       evidence.geometry.push({ label: `browser-fullscreen-${mode}-persistent`, toolbox: rect(toolbox) });
     };
+    const revealNativeNavigation = async label => {
+      const toggler = document.getElementById("fullscr-toggler"), edge = rect(toggler);
+      assert(!toggler.hidden && edge.height >= 1, `${label}: native fullscreen edge is unavailable`);
+      const point = nativeFullscreenEdgePoint(edge, window.devicePixelRatio);
+      assert(toggler.contains(document.elementFromPoint(point.x, point.y)), `${label}: native fullscreen edge is obscured`);
+      routePointer(point.x, point.y);
+      await wait(() => !window.FullScreen.navToolboxHidden && rect(toolbox).top >= -1,
+        `${label}: native top-edge hover did not reveal navigation`);
+    };
+    const verifyFocusSurfaceRetraction = async label => {
+      ui.setSidebarState("focus");
+      await wait(() => root.hasAttribute("data-fluxion-native-focus") && window.FullScreen.navToolboxHidden,
+        `${label}: per-window fullscreen Focus did not hide navigation`);
+      const settingsTab = gBrowser.addTrustedTab("about:preferences?fluxion=general", { skipAnimation: true });
+      ui.setTabWorkspace(settingsTab, ui.currentWorkspace()); ui.selectTab(settingsTab);
+      const settings = document.getElementById("fluxion-settings");
+      let input;
+      try {
+        await wait(() => {
+          if (settings.hidden) return false;
+          input = [...settings.querySelectorAll('input[type="text"]')].find(node => {
+            const box = rect(node);
+            return !node.disabled && box.width >= 24 && box.height >= 24 &&
+              node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2));
+          });
+          return input;
+        }, `${label}: Settings has no usable native text input`);
+        clickControl(input);
+        await wait(() => document.activeElement === input, `${label}: routed Settings input click did not focus`);
+        await revealNativeNavigation(`${label}-settings-hover`);
+        const box = rect(input);
+        routePointer(box.left + box.width / 2, box.top + box.height / 2);
+        await wait(() => window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
+          `${label}: focused Settings input prevented fullscreen navigation retraction`);
+        assert(document.activeElement === input, `${label}: retraction stole Settings input focus`);
+        evidence.geometry.push({ label: `${label}-settings-input-retraction`, toolbox: rect(toolbox), input: rect(input),
+          focusRetained: true, nativeFocus: root.hasAttribute("data-fluxion-native-focus") });
+
+        await revealNativeNavigation(`${label}-sidebar-hover`);
+        const flow = document.getElementById("fluxion-flow"), surface = flow.querySelector(".fluxion-surface");
+        flow.querySelector(".fluxion-tab-scroll").scrollTop = 0;
+        const edge = rect(flow);
+        routePointer(edge.left + edge.width / 2, edge.top + Math.min(140, edge.height / 2));
+        await wait(() => flow.dataset.revealed === "true" && !surface.inert && window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
+          `${label}: entering the revealed sidebar did not retract fullscreen navigation`);
+        await delay(200);
+        evidence.geometry.push({ label: `${label}-sidebar-retraction`, ...floatingSidebarEvidence(flow, surface, true), toolbox: rect(toolbox) });
+        const outside = rect(settings);
+        routePointer(outside.right - 40, outside.top + Math.min(160, outside.height / 2));
+        await wait(() => flow.dataset.revealed === "false" && surface.inert, `${label}: leaving floating sidebar did not retract it`);
+        await delay(200);
+        evidence.geometry.push({ label: `${label}-sidebar-hidden`, ...floatingSidebarEvidence(flow, surface, false) });
+      } finally {
+        ui.selectTab(tab);
+        gBrowser.removeTab(settingsTab, { animate: false });
+        browser.focus(); moveToPage();
+      }
+    };
     const key = event => {
       if ((event.metaKey && event.key.toLowerCase() === "l") || event.key === "Escape")
         evidence.keys.push({ key: event.key, trusted: event.isTrusted, meta: event.metaKey });
@@ -779,6 +866,19 @@
         document.activeElement === window.gURLBar.inputField && !window.FullScreen.navToolboxHidden,
       "Native Cmd-L failed after fullscreen Focus collapse");
       assert(rect(window.gURLBar.inputField).height > 0, "Native fullscreen location input is not painted");
+      const focusFlow = document.getElementById("fluxion-flow"), focusSurface = focusFlow.querySelector(".fluxion-surface");
+      focusFlow.querySelector(".fluxion-tab-scroll").scrollTop = 0;
+      const focusEdge = rect(focusFlow);
+      routePointer(focusEdge.left + focusEdge.width / 2, focusEdge.top + Math.min(140, focusEdge.height / 2));
+      await wait(() => focusFlow.dataset.revealed === "true" && !focusSurface.inert, "Keyboard-held navigation prevented sidebar reveal");
+      await delay(200);
+      assert(!window.FullScreen.navToolboxHidden && document.activeElement === window.gURLBar.inputField,
+        "Sidebar hover stole keyboard-owned native address focus");
+      evidence.geometry.push({ label: "fullscreen-sidebar-with-keyboard-held-toolbar", ...floatingSidebarEvidence(focusFlow, focusSurface, true), toolbox: rect(toolbox) });
+      evidence.floatingToolbarHitTargets = ["back-button", "forward-button", "reload-button"]
+        .map(id => document.getElementById(id)).filter(node => node && rect(node).width > 0)
+        .map(navigationControlHitEvidence);
+      assert(evidence.floatingToolbarHitTargets.length >= 2, "Fullscreen floating-sidebar fixture lacks native left navigation controls");
       moveToPage(); await delay(250);
       assert(!window.FullScreen.navToolboxHidden && document.activeElement === window.gURLBar.inputField,
         "Fullscreen pointer departure hid genuine keyboard-owned location input");
@@ -796,9 +896,19 @@
       evidence.pageClick.navigationHidden = true;
       await verifyPersistentNavigation("expanded");
       await verifyPersistentNavigation("compact");
+      await verifyFocusSurfaceRetraction("default-autohide");
+      evidence.savedAutohideFalse = await withSavedAutohideDisabled(async () => {
+        await verifyPersistentNavigation("expanded");
+        await verifyPersistentNavigation("compact");
+        await verifyFocusSurfaceRetraction("saved-autohide-false");
+      });
+      assert(Services.prefs.getBoolPref("browser.fullscreen.autohide") &&
+        !Services.prefs.prefHasUserValue("browser.fullscreen.autohide"), "Fixture did not restore original fullscreen preference provenance");
       report.fullscreenTested = true;
       report.checks.push("real-macos-browser-fullscreen-delegates-hover-and-cmd-l-with-eight-pixel-page-corners");
       report.checks.push("fullscreen-expanded-and-compact-navigation-stay-visible-focus-alone-retracts-on-native-pointer-leave");
+      report.checks.push("fullscreen-focus-retracts-over-settings-and-floating-sidebar-with-saved-autohide-false-unchanged",
+        "floating-sidebar-has-viewport-six-pixel-insets-and-heading-padding-even-with-toolbar-visible");
     } finally {
       window.removeEventListener("keydown", key, true);
       window.fullScreen = false;

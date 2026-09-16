@@ -7,15 +7,23 @@ const source = fs.readFileSync(require.resolve("../chrome/fluxion-frame-verifica
 const start = source.indexOf("  function floatingSidebarEvidence("), end = source.indexOf("  async function focusNavigation(", start);
 assert.ok(start > 0 && end > start);
 let hit = null;
-const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence })`, {
+const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence, navigationControlHitEvidence })`, {
   document: { elementFromPoint: () => hit },
-  window: { getComputedStyle: node => node.style }, rect: node => node.box,
+  window: { innerHeight: 800, getComputedStyle: node => node.style }, rect: node => node.box,
   near: (a, b) => Math.abs(a - b) < 1.5,
   assert(value, message) { if (!value) throw new Error(message); },
+});
+test("native left navigation hit targets reject sidebar coverage even when their layout is unchanged", () => {
+  const control = { id: "back-button", box: { left: 6, top: 6, width: 32, height: 32 }, contains: node => node === control };
+  hit = control;
+  assert.equal(api.navigationControlHitEvidence(control).hit, "back-button");
+  hit = { id: "floating-workspace-heading" };
+  assert.throws(() => api.navigationControlHitEvidence(control), /obscured by floating chrome/);
 });
 const flow = { box: { left: 0, right: 3, top: 0, bottom: 800 }, style: { direction: "ltr" } };
 const surface = (revealed = true) => ({ inert: !revealed,
   box: { left: revealed ? 6 : -232, right: revealed ? 238 : 0, top: 6, bottom: 794 },
+  heading: { box: { top: 12 } }, querySelector() { return this.heading; },
   style: { visibility: revealed ? "visible" : "hidden", pointerEvents: revealed ? "auto" : "none" },
 });
 test("native floating-sidebar gate checks real six-pixel clearances and complete offscreen hiding", () => {
@@ -26,6 +34,9 @@ test("native floating-sidebar gate checks real six-pixel clearances and complete
   api.floatingSidebarEvidence(rtl, shown, true);
   const hidden = surface(false); hidden.box.left = 1000; hidden.box.right = 1232;
   api.floatingSidebarEvidence(rtl, hidden, false);
+  const toolbarReservedRail = { ...flow, box: { ...flow.box, top: 88 } };
+  assert.equal(api.floatingSidebarEvidence(toolbarReservedRail, surface(), true).box.top, 6,
+    "floating surface is anchored to viewport, not the rail below native navigation");
 });
 test("native floating-sidebar gate rejects corner slivers, missing spacing and inert visible controls", () => {
   const mutations = [
@@ -35,6 +46,8 @@ test("native floating-sidebar gate rejects corner slivers, missing spacing and i
     [true, node => { node.box.left = 0; }],
     [true, node => { node.box.top = 0; }],
     [true, node => { node.box.bottom = 800; }],
+    [true, node => { node.box.top = 94; node.heading.box.top = 100; }],
+    [true, node => { node.heading.box.top = 18; }],
     [true, node => { node.inert = true; }],
   ];
   for (const [revealed, mutate] of mutations) {

@@ -7,7 +7,7 @@
   if (!toolbox || !flow || window.FluxionFocusMode) return;
   const cleanups = [], popups = new Set();
   let enabled = false, revealed = false, pointerInside = false, timer = 0, disposed = false;
-  let sidebarState = null;
+  let sidebarState = null, nativeFocus = false;
   const edge = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
   edge.id = "fluxion-navigation-edge";
   edge.setAttribute("aria-hidden", "true");
@@ -15,6 +15,7 @@
   style.id = "fluxion-focus-navigation-style";
   style.textContent = `
     #fluxion-navigation-edge { display: none; }
+    :root[data-fluxion-native-focus] #navigator-toolbox { z-index: 19 !important; }
     :root[data-fluxion-focus-mode] #fluxion-navigation-edge {
       display: block; position: fixed; inset: 0 0 auto; height: 4px;
       z-index: 20; background: transparent;
@@ -71,12 +72,13 @@
   }
   function scheduleHide() {
     cancel();
-    if (!enabled || disposed) return;
+    if ((!enabled && !nativeFocus) || disposed) return;
     timer = window.setTimeout(() => {
       timer = 0;
       if (!keepOpen()) {
         root.removeAttribute("data-fluxion-navigation-pinned");
-        paint(false);
+        if (nativeFocus) window.FullScreen.hideNavToolbox(true);
+        else paint(false);
       }
     }, 180);
   }
@@ -91,6 +93,9 @@
       // Restore through the native controller before paint, without changing a
       // profile-wide preference or overriding its keyboard/popup bookkeeping.
       if (subject === toolbox && state === "hidden") keepNativeNavigationVisible();
+      // Native tracking only covers tabpanels. Settings and the floating Flow
+      // surface are chrome siblings, so also own pointer departure explicitly.
+      if (subject === toolbox && state === "shown" && nativeFocus) scheduleHide();
     },
   };
   Services.obs.addObserver(fullscreenObserver, "fullscreen-nav-toolbox");
@@ -98,6 +103,9 @@
     if (disposed) return;
     const enteringFocus = flow.dataset.state === "focus" && sidebarState !== "focus";
     sidebarState = flow.dataset.state;
+    nativeFocus = Boolean(window.fullScreen && sidebarState === "focus" &&
+      !document.fullscreenElement && !root.hasAttribute("inDOMFullscreen") && !root.hasAttribute("customizing"));
+    root.toggleAttribute("data-fluxion-native-focus", nativeFocus);
     // New Tab automatically focuses the location field. An explicit collapse
     // must not inherit that focus as a request to pin the navigation open.
     // Keep its typed value; a later native Cmd-L still follows normal focusin.
@@ -106,7 +114,7 @@
       window.gURLBar.view?.close();
       window.gBrowser.selectedBrowser.focus();
     }
-    if (enteringFocus && window.fullScreen && !root.hasAttribute("inDOMFullscreen") && popups.size === 0) {
+    if (enteringFocus && nativeFocus && popups.size === 0) {
       // Browser fullscreen owns its native negative-margin/menu-bar reveal.
       // Releasing implicit address focus lets that controller hide normally.
       window.FullScreen.hideNavToolbox(false);
@@ -121,6 +129,7 @@
       window.FluxionChromeLayout?.refresh();
     }
     keepNativeNavigationVisible();
+    if (nativeFocus) scheduleHide();
   }
   const trustedChrome = event => event.isTrusted === true &&
     event.target?.ownerDocument === document && event.target?.nodePrincipal?.isSystemPrincipal === true;
@@ -164,7 +173,7 @@
     disposed = true; cancel(); observer.disconnect(); addressObserver.disconnect(); cleanups.splice(0).forEach(fn => fn());
     Services.obs.removeObserver(fullscreenObserver, "fullscreen-nav-toolbox");
     popups.clear(); edge.remove(); style.remove();
-    for (const name of ["data-fluxion-focus-mode", "data-fluxion-navigation-revealed", "data-fluxion-navigation-pinned"])
+    for (const name of ["data-fluxion-focus-mode", "data-fluxion-native-focus", "data-fluxion-navigation-revealed", "data-fluxion-navigation-pinned"])
       root.removeAttribute(name);
   }, { once: true });
   window.FluxionFocusMode = Object.freeze({ refresh, reveal, state: () => ({ enabled, revealed }) });

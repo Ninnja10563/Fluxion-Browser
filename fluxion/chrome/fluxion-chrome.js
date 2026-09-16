@@ -295,7 +295,7 @@
       background: transparent;
     }
     #fluxion-flow[data-state="focus"]::before {
-      content: ""; position: absolute; inset-block: 0; inset-inline-start: 0;
+      content: ""; position: fixed; inset-block: 0; inset-inline-start: 0;
       width: calc(6px + var(--fluxion-page-inset));
     }
     #fluxion-flow[data-state="focus"]:hover,
@@ -304,8 +304,8 @@
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
     #fluxion-flow[data-state="focus"] > .fluxion-surface {
-      position: absolute; inset-block: 6px; inset-inline-start: 6px;
-      height: calc(100% - 12px); width: var(--fluxion-sidebar-width);
+      position: fixed; inset-block: 6px; inset-inline-start: 6px;
+      height: auto; width: var(--fluxion-sidebar-width);
       border-radius: 8px;
       visibility: hidden; opacity: 0; pointer-events: none;
       transform: translateX(calc(-100% - 6px)); box-shadow: none;

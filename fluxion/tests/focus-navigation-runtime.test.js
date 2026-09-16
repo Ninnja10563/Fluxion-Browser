@@ -112,6 +112,42 @@ test("native address focus reveals immediately, suggestions and focus retain it 
   f.window.gURLBar.view.isOpen = false; f.emit(f.toolbox, "focusout", f.input); f.flush();
   assert.equal(f.window.FluxionFocusMode.state().revealed, false);
 });
+test("fullscreen Focus retracts over Settings and the sidebar without a native page-area mouse tracker", () => {
+  const f = fixture(), calls = [];
+  f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+  f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+  f.enterFocus(); f.flush(); calls.length = 0;
+  assert.equal(f.root.hasAttribute("data-fluxion-native-focus"), true);
+  f.emit(f.toolbox, "pointerenter");
+  f.Services.obs.notifyObservers(f.toolbox, "fullscreen-nav-toolbox", "shown");
+  f.flush(); assert.equal(calls.length, 0, "pointer still over navigation retains it");
+  const settingsInput = f.node("settings-input", f.root, "input");
+  f.document.activeElement = settingsInput;
+  f.emit(f.toolbox, "pointerleave"); f.flush();
+  assert.deepEqual(calls, [true], "Settings input is not navigation ownership");
+  f.emit(f.toolbox, "pointerenter"); f.document.activeElement = f.flow;
+  f.emit(f.toolbox, "pointerleave"); f.flush();
+  assert.deepEqual(calls, [true, true], "the floating sidebar does not pin navigation either");
+  f.flow.dataset.state = "expanded"; f.window.FluxionFocusMode.refresh();
+  assert.equal(f.root.hasAttribute("data-fluxion-native-focus"), false);
+  f.emit(f.toolbox, "pointerleave"); f.flush(); assert.equal(calls.length, 2);
+});
+test("fullscreen departure protects actual address and popup ownership and releases it on dismissal", () => {
+  const f = fixture(), calls = [];
+  f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+  f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+  f.enterFocus(); f.flush(); calls.length = 0;
+  f.document.activeElement = f.input;
+  f.emit(f.toolbox, "pointerleave"); f.flush(); assert.equal(calls.length, 0);
+  const popup = f.node("identity-popup", null, "panel");
+  f.emit(f.document, "popupshowing", popup); f.document.activeElement = f.page;
+  f.emit(f.toolbox, "focusout"); f.flush(); assert.equal(calls.length, 0);
+  f.emit(f.document, "popuphidden", popup); f.flush(); assert.deepEqual(calls, [true]);
+  f.root.setAttribute("inDOMFullscreen", "true"); f.window.FluxionFocusMode.refresh();
+  assert.equal(f.root.hasAttribute("data-fluxion-native-focus"), false);
+  f.emit(f.toolbox, "pointerleave"); f.flush(); assert.equal(calls.length, 1);
+  f.emit(f.window, "unload"); assert.equal(f.root.hasAttribute("data-fluxion-native-focus"), false);
+});
 test("entering Focus releases inherited New Tab address focus once without losing typed value or later Cmd-L focus", () => {
   const f = fixture(); f.document.activeElement = f.input;
   f.window.gURLBar.view.isOpen = true; f.window.gURLBar.value = "unfinished.example";
