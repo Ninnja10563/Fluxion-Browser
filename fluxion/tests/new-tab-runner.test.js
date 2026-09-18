@@ -104,7 +104,7 @@ test("native new tab fixture supplies actual POST OpenSearch and records bounded
   try {
     const engine = await (await fetch(`${origin}/engine.xml`)).text();
     assert.match(engine, /method="POST"/);
-    assert.ok(engine.includes(`template="${origin}/search"`));
+    assert.ok(engine.includes(`template="http://fluxion-new-tab.example.com:${new URL(origin).port}/search"`));
     assert.match(engine, /name="q" value="\{searchTerms\}"/);
     assert.equal((await fetch(`${origin}/page?case=source`)).status, 200);
     assert.equal((await fetch(`${origin}/search`, { method: "POST", body: "q=fluxion+native+post+proof" })).status, 200);
@@ -115,12 +115,15 @@ test("native new tab fixture supplies actual POST OpenSearch and records bounded
     assert.equal((await fetch(`${origin}/search`)).status, 405);
     assert.equal((await fetch(`${origin}/search`, { method: "POST", body: "x".repeat(2049) })).status, 413);
     assert.equal((await fetch(`${origin}/page`, { method: "POST" })).status, 405);
-    const foreignStatus = await new Promise((resolve, reject) => {
-      require("node:http").get(`${origin}/engine.xml`, { headers: { Host: "foreign.invalid" } }, response => {
+    const requestHost = host => new Promise((resolve, reject) => {
+      require("node:http").get(`${origin}/engine.xml`, { headers: { Host: host } }, response => {
         response.resume(); resolve(response.statusCode);
       }).on("error", reject);
     });
-    assert.equal(foreignStatus, 400);
+    assert.equal(await requestHost("foreign.invalid"), 400);
+    assert.equal(await requestHost(`fluxion-new-tab.example.com:${new URL(origin).port}`), 200);
+    assert.equal(await requestHost("fluxion-new-tab.example.com:1"), 400);
+    assert.equal(await requestHost(`other.example.com:${new URL(origin).port}`), 400);
     assert.equal((await (await fetch(`${origin}/state`)).json()).requests.length, 2, "Rejected requests must not pollute evidence");
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });

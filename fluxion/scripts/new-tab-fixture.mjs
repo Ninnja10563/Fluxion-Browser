@@ -5,8 +5,9 @@ export async function startFixture(port = 0) {
   const requests = [];
   const server = http.createServer((request, response) => {
     const origin = `http://127.0.0.1:${server.address().port}`;
+    const searchOrigin = `http://fluxion-new-tab.example.com:${server.address().port}`;
     response.setHeader("Cache-Control", "no-store");
-    if (request.headers.host !== new URL(origin).host) { response.writeHead(400).end(); return; }
+    if (![new URL(origin).host, new URL(searchOrigin).host].includes(request.headers.host)) { response.writeHead(400).end(); return; }
     const url = new URL(request.url, origin);
     if (request.method === "GET" && url.pathname === "/state") {
       response.writeHead(200, { "Content-Type": "application/json" }).end(JSON.stringify({ requests })); return;
@@ -15,7 +16,7 @@ export async function startFixture(port = 0) {
       response.writeHead(200, { "Content-Type": "application/opensearchdescription+xml" }).end(`<?xml version="1.0"?>
 <OpenSearchDescription xmlns="http://a9.com/-/spec/opensearch/1.1/">
 <ShortName>Fluxion local POST fixture</ShortName><Description>Isolated native new tab verification</Description>
-<InputEncoding>UTF-8</InputEncoding><Url type="text/html" method="POST" template="${origin}/search"><Param name="q" value="{searchTerms}"/></Url>
+<InputEncoding>UTF-8</InputEncoding><Url type="text/html" method="POST" template="${searchOrigin}/search"><Param name="q" value="{searchTerms}"/></Url>
 </OpenSearchDescription>`); return;
     }
     if ((url.pathname !== "/page" || request.method !== "GET") &&

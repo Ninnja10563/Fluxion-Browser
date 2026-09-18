@@ -1,4 +1,4 @@
-/* global Services, SessionStore, IOUtils, PathUtils, ChromeUtils, Cu */
+/* global Services, SessionStore, IOUtils, PathUtils, ChromeUtils, Cu, Ci, Components */
 (function verifyDeferredNewTab(window) {
   "use strict";
   if (Services.env.get("FLUXION_NEW_TAB_TEST") !== "1") return;
@@ -119,6 +119,27 @@
     await SessionStore.promiseAllWindowsRestored;
     await wait(() => window.FluxionNewTab && window.FluxionUI, "Deferred New Tab did not initialize");
     Services.prefs.setBoolPref("browser.search.suggest.enabled", false);
+    // Gecko's engine-domain matcher expects a public suffix, and throws for an
+    // IP-address engine URL. Map a reserved example hostname inside this owned
+    // test profile, leaving the product's search/DNS/security policies intact.
+    const engineHost = "fluxion-new-tab.example.com";
+    const searchOrigin = `http://${engineHost}:${new URL(origin).port}`;
+    Services.prefs.setStringPref("network.dns.localDomains", engineHost);
+    const bypass = Services.prefs.getStringPref("network.proxy.no_proxies_on", "");
+    Services.prefs.setStringPref("network.proxy.no_proxies_on", [bypass, engineHost].filter(Boolean).join(","));
+    const addresses = await new Promise((resolve, reject) => {
+      Services.dns.asyncResolve(engineHost, Ci.nsIDNSService.RESOLVE_TYPE_DEFAULT,
+        Ci.nsIDNSService.RESOLVE_DISABLE_IPV6 | Ci.nsIDNSService.RESOLVE_DISABLE_TRR | Ci.nsIDNSService.RESOLVE_BYPASS_CACHE,
+        null, { onLookupComplete(_request, record, status) {
+          if (!Components.isSuccessCode(status)) { reject(Error(`Fixture DNS failed: ${status}`)); return; }
+          const result = [];
+          const addresses = record.QueryInterface(Ci.nsIDNSAddrRecord);
+          while (addresses.hasMore()) result.push(addresses.getNextAddrAsString());
+          resolve(result);
+        } }, null, {});
+    });
+    assert(addresses.length > 0 && addresses.every(address => address === "127.0.0.1"), "Fixture engine hostname did not resolve exclusively to loopback");
+    report.engineFixture = { origin: searchOrigin, addresses };
     const { SearchService } = ChromeUtils.importESModule("moz-src:///toolkit/components/search/SearchService.sys.mjs");
     const { PrivateBrowsingUtils } = ChromeUtils.importESModule("resource://gre/modules/PrivateBrowsingUtils.sys.mjs");
     await SearchService.init();
@@ -170,7 +191,7 @@
     report.checks.push("native-url-submission-creates-one-tab-preserves-source-workspace-and-container");
     stage("native-post-search");
     const searchSource = snapshot(window);
-    await commit(window, searchSource, "fluxion native post proof", `${origin}/search`);
+    await commit(window, searchSource, "fluxion native post proof", `${searchOrigin}/search`);
     const state = await (await window.fetch(`${origin}/state`, { cache: "no-store" })).json();
     const searches = state.requests.filter(request => request.path === "/search");
     assert(searches.length === 1 && searches[0].method === "POST" && new URLSearchParams(searches[0].body).get("q") === "fluxion native post proof",

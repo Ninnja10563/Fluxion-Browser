@@ -81,7 +81,7 @@
     fields.set(part, { color, hex });
   }
   colorsPage.append(make("p", { class: "fluxion-workspace-theme-note" },
-    "The accent colors focus rings and Fluxion Settings checkboxes. Webpages and macOS dialogs keep their own colors."));
+    "Colors focus rings and Fluxion Settings checkboxes. Low-contrast choices are adjusted for visibility. Webpages and macOS dialogs keep their own colors."));
   const pickerPage = make("div", { id: "fluxion-workspace-theme-picker" });
   const planeWrap = make("div", { class: "fluxion-workspace-theme-plane" });
   const plane = make("canvas", { id: "fluxion-workspace-theme-plane", width: "264", height: "132", tabindex: "0", role: "group",
