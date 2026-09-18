@@ -82,7 +82,7 @@ wait_for_owned_browser || exit 1
 sequence=1
 for ((attempt=0; attempt<1000; attempt++)); do
   owned || break
-  for capture in capture-duplicate-menu capture-duplicate-confirmation; do
+  for capture in capture-duplicate-menu capture-duplicate-confirmation capture-duplicate-failure; do
     if [[ -f "$driver/$capture.ready" && ! -f "$driver/$capture.sent" ]]; then
       /usr/bin/osascript - "$browser_pid" <<'APPLESCRIPT'
 on run arguments

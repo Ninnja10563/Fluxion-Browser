@@ -85,6 +85,20 @@ jobs:
           FLUXION_CAPTURE_PATH: ${{ runner.temp }}/fluxion-chrome.png
         run: ./fluxion/scripts/verify-macos-app.sh '.runtime/Fluxion.app'
 
+      - name: Verify workspace duplicate cleanup with native consent and recovery
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_DUPLICATE_TABS_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-duplicate-tabs-evidence
+        run: bash ./fluxion/scripts/verify-macos-duplicate-tabs.sh '.runtime/Fluxion.app'
+
+      - name: Preserve duplicate cleanup evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-duplicate-tabs-evidence
+          path: ${{ runner.temp }}/fluxion-duplicate-tabs-evidence
+          if-no-files-found: warn
+
       - name: Verify signed-feed interoperability with the shipped Sparkle verifier
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: node fluxion/scripts/verify-sparkle-signing-interop.mjs .runtime/sparkle-2.10.0/current/bin/sign_update
@@ -210,20 +224,6 @@ jobs:
         with:
           name: Fluxion-${{ inputs.version }}-tab-links-evidence
           path: ${{ runner.temp }}/fluxion-tab-links-evidence
-          if-no-files-found: warn
-
-      - name: Verify workspace duplicate cleanup with native consent and recovery
-        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
-        env:
-          FLUXION_DUPLICATE_TABS_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-duplicate-tabs-evidence
-        run: bash ./fluxion/scripts/verify-macos-duplicate-tabs.sh '.runtime/Fluxion.app'
-
-      - name: Preserve duplicate cleanup evidence
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v7
-        with:
-          name: Fluxion-${{ inputs.version }}-duplicate-tabs-evidence
-          path: ${{ runner.temp }}/fluxion-duplicate-tabs-evidence
           if-no-files-found: warn
 
       - name: Verify stable Flow selection in large sessions

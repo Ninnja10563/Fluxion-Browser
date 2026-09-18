@@ -8,7 +8,7 @@
   const { document, gBrowser } = window;
   const driver = Services.env.get("FLUXION_DUPLICATE_TABS_DRIVER_DIR");
   const origin = Services.env.get("FLUXION_DUPLICATE_TABS_ORIGIN");
-  const report = { input: "System Events native context menu and reopen; Gecko widget prompt controls", checks: [], prompts: [], menuEvents: [] };
+  const report = { input: "System Events native context menu and reopen; Gecko widget prompt controls", checks: [], prompts: [], menuEvents: [], readiness: [], keys: [] };
   const assert = (condition, message) => { if (!condition) throw Error(message); };
   const stage = value => { Services.prefs.setStringPref(`${prefix}.stage`, value); Services.prefs.savePrefFile(null); };
   const wait = async (check, message, timeout = 20000) => {
@@ -18,6 +18,9 @@
   };
   let sequence = 0;
   async function key(action) {
+    if (!["activate", "return"].includes(action)) {
+      assert(Services.focus.activeWindow === window, "Native duplicate key lost the owned foreground window");
+    }
     assert(["activate", "open", "down", "return", "escape", "reopen"].includes(action) && ++sequence <= 160,
       "Unbounded or unknown native keyboard request");
     const name = `${sequence}-${action}`;
@@ -98,6 +101,15 @@
     const popup = document.getElementById("fluxion-tab-context"), item = document.getElementById("fluxion-close-duplicate-tabs");
     assert(item?.parentNode === popup, "Duplicate cleanup must be a native top-level tab action");
     let active = null, commands = 0;
+    const describe = node => node ? { id: node.id || "", name: node.localName,
+      className: typeof node.className === "string" ? node.className : "",
+      tabIndex: node._fluxionTab ? [...gBrowser.tabs].indexOf(node._fluxionTab) : null } : null;
+    document.addEventListener("keydown", event => {
+      if (report.keys.length < 200 && event.isTrusted && ["F10", "ArrowDown", "Enter", "Escape", "T", "t"].includes(event.key)) {
+        report.keys.push({ key: event.key, shift: event.shiftKey, command: event.metaKey,
+          target: describe(event.target), focused: describe(document.activeElement), popup: popup.state });
+      }
+    }, true);
     popup.addEventListener("DOMMenuItemActive", event => {
       if (event.isTrusted && event.target.parentNode === popup) {
         active = event.target; report.menuEvents.push({ label: active.getAttribute("label"), trusted: true });
@@ -114,10 +126,28 @@
     };
     const invoke = async (tab, expectedCount, options = {}) => {
       stage(options.beforeUnload ? "beforeunload" : options.mutate ? "stale-modal" : options.cancel ? "cancel" : "close");
+      // Selecting a native page queues Flow's projection and Gecko focus work.
+      // Wait for the actual selected-row state and frame boundary before
+      // choosing the keyboard anchor; an existing row alone is not readiness.
+      let frames = 0;
+      const frame = () => { if (++frames < 2) window.requestAnimationFrame(frame); };
+      window.requestAnimationFrame(frame);
+      await wait(() => frames >= 2 && [...document.querySelectorAll(".fluxion-tab")].some(node =>
+        node._fluxionTab === gBrowser.selectedTab && node.dataset.active === "true"), "Selected Flow projection did not settle");
       const row = await wait(() => [...document.querySelectorAll(".fluxion-tab")].find(node => node._fluxionTab === tab), "Missing duplicate context row");
       row.scrollIntoView({ block: "nearest", behavior: "instant" }); row.focus({ preventScroll: true });
+      const readiness = { before: null, after: null };
+      const state = () => ({ focused: describe(document.activeElement), expected: describe(row), connected: row.isConnected,
+        rect: row.getBoundingClientRect().toJSON(), sidebar: document.getElementById("fluxion-flow")?.dataset.state,
+        documentFocus: document.hasFocus(), ownedActiveWindow: Services.focus.activeWindow === window,
+        popup: popup.state, selectedTabIndex: [...gBrowser.tabs].indexOf(gBrowser.selectedTab) });
+      report.readiness.push(readiness);
+      readiness.before = state();
+      assert(row.isConnected && document.activeElement === row && document.hasFocus() && Services.focus.activeWindow === window,
+        "Context row did not receive foreground keyboard focus");
       active = null; await key("open");
-      await wait(() => popup.state === "open", "Native duplicate menu did not open");
+      try { await wait(() => popup.state === "open", "Native duplicate menu did not open"); }
+      finally { readiness.after = state(); }
       assert(popup.isNativeMenu, "Duplicate gate requires actual macOS native menu");
       assert(!item.disabled && item.getAttribute("label") === `Close ${expectedCount} Duplicate Tab${expectedCount === 1 ? "" : "s"}…`,
         `Unexpected cleanup count: ${item.getAttribute("label")}`);
@@ -196,6 +226,11 @@
     assert(live(stale), "Unrelated stale-group survivor vanished");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-duplicate-cleanup-verified"))
-    .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack || ""}`); Cu.reportError(error); })
+    .catch(async error => {
+      stage("failure-capture");
+      try { await capture("capture-duplicate-failure"); }
+      catch (captureError) { report.captureError = String(captureError); }
+      Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack || ""}`); Cu.reportError(error);
+    })
     .finally(() => { Services.prefs.setStringPref(`${prefix}.report`, JSON.stringify(report)); Services.prefs.savePrefFile(null); });
 })(window);
