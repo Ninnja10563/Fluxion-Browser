@@ -7,6 +7,7 @@
   const XUL = "http://www.mozilla.org/keymaster/gatekeeper/there.is.only.xul";
   const PEEK = FluxionPeekPolicy.ATTRIBUTE;
   const sources = new WeakMap();
+  const closing = new WeakSet();
   let activePeek = null;
   let retaining = false;
 
@@ -56,13 +57,30 @@
     return true;
   }
 
-  function close(tab = activePeek, { returnToSource = true } = {}) {
-    if (!tab?.parentNode || !tab.hasAttribute(PEEK)) return false;
-    const source = sources.get(tab);
+  function forget(tab) {
     sources.delete(tab);
     if (activePeek === tab) activePeek = null;
-    if (returnToSource && source?.parentNode) gBrowser.selectedTab = source;
-    gBrowser.removeTab(tab, { animate: false, skipSessionStore: true });
+  }
+
+  function close(tab = activePeek, { returnToSource = true } = {}) {
+    if (!tab?.parentNode || !tab.hasAttribute(PEEK)) return false;
+    // true means this is a handled Peek attempt, not proof that it closed.
+    // Ordinary close callers must not retry a canceled Peek as a regular tab.
+    if (closing.has(tab)) return true;
+    const source = sources.get(tab);
+    closing.add(tab);
+    try {
+      // permitUnload spins Gecko's event loop. A nested TabSelect must neither
+      // issue a second close nor forget a Peek whose user cancels the prompt.
+      gBrowser.removeTab(tab, { animate: false, skipSessionStore: true });
+      if (tab.closing || !tab.parentNode) {
+        forget(tab);
+        if (returnToSource && !activePeek && source?.parentNode && !source.closing && source.linkedBrowser &&
+            gBrowser.getTabForBrowser(source.linkedBrowser) === source) gBrowser.selectedTab = source;
+      }
+    } finally {
+      closing.delete(tab);
+    }
     return true;
   }
 
@@ -91,13 +109,21 @@
     });
   }
 
-  gBrowser.tabContainer.addEventListener("TabSelect", event => {
+  const onSelect = event => {
     const selected = event.target;
     const previous = activePeek;
     if (selected?.hasAttribute(PEEK)) activePeek = selected;
     else if (previous?.parentNode && !retaining) close(previous, { returnToSource: false });
-  });
-  window.addEventListener("unload", () => peekItem?.remove(), { once: true });
+  };
+  const onClose = event => forget(event.target);
+  gBrowser.tabContainer.addEventListener("TabSelect", onSelect);
+  gBrowser.tabContainer.addEventListener("TabClose", onClose);
+  window.addEventListener("unload", () => {
+    gBrowser.tabContainer.removeEventListener("TabSelect", onSelect);
+    gBrowser.tabContainer.removeEventListener("TabClose", onClose);
+    activePeek = null;
+    peekItem?.remove();
+  }, { once: true });
   window.FluxionPeek = Object.freeze({ close, isPeek: tab => tab?.hasAttribute(PEEK), openBeside, openContextLink, promote });
   Services.prefs.setStringPref("fluxion.peek.health", "secure-context-link-peek-loaded");
   Services.prefs.savePrefFile(null);
