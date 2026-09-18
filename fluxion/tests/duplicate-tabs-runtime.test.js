@@ -81,7 +81,7 @@ test("ended Gecko capture grace records do not indefinitely protect ordinary dup
 test("private-window cleanup is explicit and has no history, persistence or network dependency", () => {
   const f = fixture(); f.window.isPrivate = true; invoke(f);
   assert.equal(f.attempts.length, 3);
-  assert.doesNotMatch(source, /Services\.prefs|PlacesUtils|fetch\(|localStorage|IOUtils|SessionStore\./);
+  assert.doesNotMatch(source, /Services\.prefs|PlacesUtils|fetch\(|localStorage|IOUtils|SessionStore\.\w/);
 });
 
 test("exact identity isolates URL fragments, queries, containers, workspaces and privileged pages", () => {
