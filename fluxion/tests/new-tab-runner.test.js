@@ -3,6 +3,43 @@ const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), { spawnSync } = require("node:child_process");
 const source = fs.readFileSync(require.resolve("../scripts/verify-macos-new-tab.sh"), "utf8");
 const functions = source.slice(source.indexOf("owned() {"), source.indexOf("cleanup() {"));
+const verifier = fs.readFileSync(require.resolve("../chrome/fluxion-new-tab-verification.js"), "utf8");
+const queryHelper = verifier.slice(verifier.indexOf("  function createQueryTracker() {"), verifier.indexOf("  async function typeAndSettle("));
+const createQueryTracker = require("node:vm").runInNewContext(`${queryHelper}\ncreateQueryTracker`);
+const deferred = () => {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+};
+
+test("native query tracking discards already-rejected predecessor state on replacement", async () => {
+  const tracker = createQueryTracker(), old = deferred(), current = deferred();
+  tracker.observe(old.promise);
+  old.reject(Error("old query cancelled"));
+  await Promise.resolve();
+  assert.equal(tracker.observe(old.promise).status, "rejected");
+  assert.equal(tracker.observe(current.promise).status, "pending");
+  current.resolve({ searchString: "new input" });
+  await Promise.resolve();
+  const state = tracker.observe(current.promise);
+  assert.equal(state.status, "resolved");
+  assert.equal(state.context.searchString, "new input");
+  assert.equal(state.promise, current.promise);
+});
+
+test("native query tracking ignores late predecessor rejection but preserves actual current failure", async () => {
+  const tracker = createQueryTracker(), old = deferred(), current = deferred();
+  tracker.observe(old.promise);
+  tracker.observe(current.promise);
+  old.reject(Error("late old cancellation"));
+  await Promise.resolve();
+  assert.equal(tracker.observe(current.promise).status, "pending");
+  const failure = Error("real current query error");
+  current.reject(failure);
+  await Promise.resolve();
+  assert.equal(tracker.observe(current.promise).status, "rejected");
+  assert.equal(tracker.observe(current.promise).error, failure);
+});
 
 function run(body) {
   const result = spawnSync("bash", ["-c", `set -euo pipefail

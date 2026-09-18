@@ -10,6 +10,9 @@ Status: candidate under verification. Not yet published.
   below navigation, with caption controls and narrow-window fallback retained.
 - The collapsed sidebar's invisible hover edge no longer paints a full-height
   focus outline. Keyboard users retain focus feedback on the revealed surface.
+- Workspace accent colors reach checked controls in Fluxion Settings through
+  Gecko's own accent-aware renderer. Forced colors, websites and macOS dialogs
+  retain their own policy; the picker label now states its scope.
 - A packaged chrome fingerprint asks Gecko to invalidate its startup caches
   once after a changed build. Warm launches keep caching; browsing data is not
   cleared. This addresses the same-Gecko-build upgrade path separately from

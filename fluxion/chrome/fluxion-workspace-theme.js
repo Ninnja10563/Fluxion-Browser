@@ -72,7 +72,7 @@
   mode.append(make("option", { value: "light" }, "Light colors"), make("option", { value: "dark" }, "Dark colors"));
   colorsPage.append(make("label", { for: mode.id }, "Editing palette"), mode);
   const fields = new Map();
-  for (const [part, label, inputId, colorId] of [["base", "Browser color", "hex", "color"], ["accent", "Focus and selection accent", "accent-hex", "accent-color"]]) {
+  for (const [part, label, inputId, colorId] of [["base", "Browser color", "hex", "color"], ["accent", "Focus and control color", "accent-hex", "accent-color"]]) {
     const color = make("button", { type: "button", class: "fluxion-workspace-theme-swatch", id: `fluxion-workspace-theme-${colorId}`, "aria-label": `Choose ${label.toLowerCase()}` });
     const hex = make("input", { type: "text", id: `fluxion-workspace-theme-${inputId}`, spellcheck: "false", maxlength: "7",
       "aria-describedby": "fluxion-workspace-theme-error", placeholder: "#1c1e20" });
@@ -80,6 +80,8 @@
     colorsPage.append(make("label", { for: hex.id }, label), row);
     fields.set(part, { color, hex });
   }
+  colorsPage.append(make("p", { class: "fluxion-workspace-theme-note" },
+    "The accent colors focus rings and Fluxion Settings checkboxes. Webpages and macOS dialogs keep their own colors."));
   const pickerPage = make("div", { id: "fluxion-workspace-theme-picker" });
   const planeWrap = make("div", { class: "fluxion-workspace-theme-plane" });
   const plane = make("canvas", { id: "fluxion-workspace-theme-plane", width: "264", height: "132", tabindex: "0", role: "group",
@@ -167,7 +169,7 @@
     session.page = page;
     overview.hidden = page !== "appearance"; colorsPage.hidden = page !== "colors"; pickerPage.hidden = page !== "picker"; back.hidden = page === "appearance";
     back.setAttribute("aria-label", page === "picker" ? "Back to workspace colors" : "Back to workspace appearance");
-    title.textContent = page === "picker" ? (session.pickerPart === "accent" ? "Selection accent" : "Browser color") :
+    title.textContent = page === "picker" ? (session.pickerPart === "accent" ? "Focus and control color" : "Browser color") :
       page === "colors" ? "Workspace colors" : `${workspace(session.id)?.name || "Workspace"} appearance`;
     if (page === "colors") showMode(); else preview();
     if (moveFocus) (page === "picker" ? ranges.get("hue") : page === "colors" ? fields.get("base").hex : colorsButton).focus();

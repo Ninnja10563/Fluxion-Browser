@@ -90,14 +90,23 @@
     .fluxion-settings-button:hover { background: var(--fluxion-hover); }
     .fluxion-settings-button.danger { color: light-dark(#8e2f2b, #ef9690); }
     .fluxion-switch { justify-self: end; display: inline-flex; align-items: center; gap: 8px; color: var(--fluxion-muted); }
-    .fluxion-switch input { width: 15px; height: 15px; accent-color: var(--fluxion-accent); }
+    .fluxion-switch input { width: 15px; height: 15px; }
+    #fluxion-settings input[type="checkbox"] { appearance: auto; accent-color: auto; }
+    /* Settings lives in browser chrome, where macOS widget theming can ignore
+       accent-color. Use Gecko's own in-content checkbox renderer: it retains
+       native input behavior and chooses the contrasting checkmark itself. */
+    @media not (forced-colors: active) {
+      #fluxion-settings input[type="checkbox"] {
+        -moz-theme: non-native; accent-color: var(--fluxion-accent);
+      }
+    }
     .fluxion-memory-lists { min-width: 0; border-top: 1px solid var(--fluxion-line); padding-top: 14px; }
     .fluxion-memory-list { border-bottom: 1px solid var(--fluxion-line); padding: 10px 0; }
     .fluxion-memory-list summary { cursor: pointer; font-weight: 550; overflow-wrap: anywhere; }
     .fluxion-memory-list-fields { display: grid; gap: 10px; padding-top: 12px; }
     .fluxion-memory-list-fields label { display: grid; gap: 5px; min-width: 0; }
     .fluxion-memory-list-fields input:not([type=checkbox]), .fluxion-memory-list-fields textarea { box-sizing: border-box; width: 100%; min-width: 0; }
-    .fluxion-memory-list-fields input[type=checkbox] { justify-self: start; width: 15px; height: 15px; accent-color: var(--fluxion-accent); }
+    .fluxion-memory-list-fields input[type=checkbox] { justify-self: start; width: 15px; height: 15px; }
     .fluxion-memory-list-fields textarea { resize: vertical; min-height: 70px; font: inherit; color: inherit; background: var(--fluxion-bg); border: 1px solid var(--fluxion-line); padding: 7px; }
     .fluxion-memory-list-actions { display: flex; flex-wrap: wrap; gap: 8px; }
     .fluxion-memory-list-actions button { width: auto; max-width: 100%; overflow-wrap: anywhere; }

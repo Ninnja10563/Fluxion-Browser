@@ -29,6 +29,20 @@
     return target.getComputedStyle(node)[property];
   };
   const inline = target => target.document.documentElement.style.getPropertyValue("--fluxion-bg");
+  function checkboxEvidence(target, palette, label) {
+    const node = target.document.getElementById("fluxion-colors-enabled");
+    assert(node?.checked && !node.disabled, `${label}: checked Settings control is unavailable`);
+    const style = target.getComputedStyle(node), box = node.getBoundingClientRect();
+    assert(style.appearance === "auto" && style.getPropertyValue("-moz-theme") === "non-native",
+      `${label}: Settings checkbox is not using Gecko's accent-aware native input renderer`);
+    const accent = FluxionColorsCore.palette(palette).accent;
+    assert(style.accentColor === rgb(accent), `${label}: Settings checkbox did not receive its projected workspace/control accent`);
+    const hit = target.document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+    assert(box.width > 0 && box.height > 0 && hit === node, `${label}: Settings checkbox is not visibly hit-testable`);
+    return { label, checked: node.checked, disabled: node.disabled, appearance: style.appearance,
+      renderer: style.getPropertyValue("-moz-theme"), accentColor: style.accentColor, projectedAccent: accent,
+      box: { left: box.left, top: box.top, width: box.width, height: box.height } };
+  }
   let companion = null;
   const stage = value => { Services.prefs.setStringPref(`${prefix}.stage`, value); Services.prefs.savePrefFile(null); };
   async function snapshot(tab) {
@@ -153,8 +167,24 @@
     await delay(300);
     await capture("capture-colors-dark");
     await settings(window);
+    window.document.getElementById("fluxion-colors-enabled").scrollIntoView({ block: "center" });
     await delay(300);
+    report.checkboxes = [checkboxEvidence(window, expected.dark, "saved-dark-palette")];
     await capture("capture-colors-settings");
+    const workspacePalette = { base: expected.dark.base, accent: "#ff6bb5" };
+    const preview = window.FluxionColors.beginWorkspacePreview(window.FluxionUI.currentWorkspace());
+    try {
+      preview.update({ light: expected.light.base, dark: expected.dark.base,
+        lightAccent: expected.light.accent, darkAccent: workspacePalette.accent, mode: "dark" }, "dark");
+      await wait(() => computed(window, "fluxion-colors-enabled", "accentColor") === rgb(FluxionColorsCore.palette(workspacePalette).accent),
+        "Workspace accent preview did not reach the actual checked Settings control");
+      report.checkboxes.push(checkboxEvidence(window, workspacePalette, "workspace-accent-preview"));
+      await capture("capture-colors-workspace-settings");
+    } finally { preview.clear(); }
+    await wait(() => computed(window, "fluxion-colors-enabled", "accentColor") === rgb(FluxionColorsCore.palette(expected.dark).accent),
+      "Canceling workspace accent preview did not restore the Settings checkbox color");
+    report.checkboxes.push(checkboxEvidence(window, expected.dark, "workspace-preview-cancelled"));
+    report.checks.push("checked-settings-control-uses-gecko-accent-renderer-and-workspace-preview-cancels-with-native-captures");
     assert(JSON.stringify(window.FluxionColors.current()) === JSON.stringify(expected), "Seed did not retain the exact palettes for relaunch");
     report.checks.push("cross-window-reset-restores-original-chrome", "both-native-gecko-themes-use-independent-custom-palettes");
   }

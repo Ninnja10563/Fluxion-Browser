@@ -4165,12 +4165,17 @@
         backRect?.width >= 24 && backRect?.height >= 24;
       const tabsBefore = new Set(gBrowser.tabs);
       const before = tabsBefore.size;
+      const sourceTab = gBrowser.selectedTab, sourceURL = sourceTab.linkedBrowser.currentURI.spec;
       toolbarNewTabItem.dispatchEvent(new window.CustomEvent("command", { bubbles: true }));
       const created = gBrowser.selectedTab;
-      const commandWorked = gBrowser.tabs.length === before + 1 &&
+      const commandWorked = window.FluxionNewTab ?
+        window.FluxionNewTab.pending && window.gURLBar.focused && gBrowser.tabs.length === before &&
+          created === sourceTab && sourceTab.linkedBrowser.currentURI.spec === sourceURL :
+        gBrowser.tabs.length === before + 1 &&
         !tabsBefore.has(created) && gBrowser.tabs.includes(created) &&
         Boolean(created.linkedBrowser) && tabWorkspace(created) === currentWorkspace;
-      if (commandWorked) gBrowser.removeTab(created, { animate: false });
+      if (window.FluxionNewTab) window.FluxionNewTab.cancel({ focusPage: true });
+      else if (commandWorked) gBrowser.removeTab(created, { animate: false });
       if (inheritedHidden && mounted && navigationVisible && commandWorked) {
         Services.prefs.setStringPref(
           "fluxion.toolbarMenu.health",

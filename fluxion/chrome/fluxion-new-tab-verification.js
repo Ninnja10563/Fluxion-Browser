@@ -66,6 +66,23 @@
       "Native Cmd-T did not open a deferred address draft");
     assert(owner.gBrowser.tabs.length === count, "Cmd-T created a tab before submission");
   }
+  function createQueryTracker() {
+    let watched = null, outcome = { status: "pending" };
+    return {
+      observe(current) {
+        if (current && current !== watched) {
+          watched = current;
+          outcome = { status: "pending" };
+          current.then(context => {
+            if (watched === current) outcome = { status: "resolved", context };
+          }, error => {
+            if (watched === current) outcome = { status: "rejected", error };
+          });
+        }
+        return { ...outcome, promise: watched };
+      },
+    };
+  }
   async function typeAndSettle(owner, value) {
     assert(owner.document.activeElement === owner.gURLBar.inputField, "Address field not focused before native typing");
     await key(owner, "type", value);
@@ -73,15 +90,12 @@
     // A key acknowledgement precedes asynchronous suggestion completion. Wait
     // for the current query, following replacement queries without starting or
     // cancelling one in the verifier, before testing Escape or Return.
-    let watched = null, settled = false, rejected = false;
+    const tracker = createQueryTracker();
     await wait(() => {
       const current = owner.gURLBar.lastQueryContextPromise;
-      if (current && current !== watched) {
-        watched = current; settled = false;
-        current.then(() => { if (watched === current) settled = true; }, () => { if (watched === current) rejected = true; });
-      }
-      assert(!rejected, "Native address query rejected");
-      return settled && watched === owner.gURLBar.lastQueryContextPromise && owner.gURLBar.value === value;
+      const state = tracker.observe(current);
+      assert(state.status !== "rejected", `Native address query rejected: ${String(state.error)}\n${state.error?.stack || ""}`);
+      return state.status === "resolved" && state.promise === owner.gURLBar.lastQueryContextPromise && owner.gURLBar.value === value;
     }, "Native address query did not finish");
   }
   async function commit(owner, source, value, expectedURL) {

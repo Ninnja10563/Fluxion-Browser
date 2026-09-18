@@ -401,6 +401,17 @@ test("Appearance switches live Gecko themes and stays searchable from the palett
   assert.match(macVerifier, /library-nav-and-content-clear-flow/);
 });
 
+test("owned Settings checkboxes use Gecko accent-aware painting without replacing native behavior or forced colors", () => {
+  assert.match(settings, /#fluxion-settings input\[type="checkbox"\] \{ appearance: auto; accent-color: auto; \}/);
+  assert.match(settings, /@media not \(forced-colors: active\) \{\s*#fluxion-settings input\[type="checkbox"\] \{\s*-moz-theme: non-native; accent-color: var\(--fluxion-accent\);/);
+  const blocks = [...settings.matchAll(/([^{}]+)\{([^{}]*-moz-theme:\s*non-native[^{}]*)\}/g)];
+  assert.equal(blocks.length, 1, "theme renderer override stays limited to the owned checkbox selector");
+  assert.equal(blocks[0][1].trim(), '#fluxion-settings input[type="checkbox"]');
+  assert.doesNotMatch(blocks[0][2], /appearance:\s*none|background|border|color:\s*(?:white|black|#)/,
+    "Gecko, not a custom checked-state drawing, supplies the checkmark and contrast");
+  assert.doesNotMatch(settings, /forced-color-adjust:\s*none|--checkbox-checked-bgcolor/);
+});
+
 test("hidden horizontal tabs preserve Gecko's native titlebar controls", () => {
   assert.match(
     chrome,

@@ -4,6 +4,10 @@ set -euo pipefail
 fluxion_root="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 candidate="$(CDPATH= cd -- "${1:-$fluxion_root/../.runtime/Fluxion.app}" && pwd)"
 check_root="$(mktemp -d "${TMPDIR:-/tmp}/fluxion-branding-upgrade.XXXXXX")"
+# The launcher resolves its own bundle with realpath. macOS TMPDIR commonly
+# uses /var (a /private/var alias) and a trailing slash; normalize before every
+# PID ownership check so direct-runtime and launcher phases name one app.
+check_root="$(CDPATH= cd -P -- "$check_root" && pwd -P)"
 app="$check_root/Fluxion.app"
 profile="$check_root/profile"
 artifact_dir="${FLUXION_BRANDING_UPGRADE_ARTIFACT_DIR:-$check_root/evidence}"

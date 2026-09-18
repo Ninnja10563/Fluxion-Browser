@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const path = require("node:path");
 const vm = require("node:vm");
 const { spawnSync } = require("node:child_process");
+const os = require("node:os");
 const source = fs.readFileSync(path.join(__dirname, "../modules/FluxionChromeCache.sys.mjs"), "utf8");
 function fixture({ pending = "1", id = "a".repeat(64), failure = false } = {}) {
   const writes = [];
@@ -68,4 +69,20 @@ with tempfile.TemporaryDirectory(prefix='fluxion-branding-upgrade.') as root:
  else:raise AssertionError('unowned path accepted')
 `], { encoding: "utf8" });
   assert.equal(result.status, 0, result.stderr);
+});
+
+test("upgrade runner canonicalizes temporary aliases before computing app and profile ownership", t => {
+  const source = fs.readFileSync(path.join(__dirname, "../scripts/verify-macos-branding-upgrade.sh"), "utf8");
+  const normalize = source.match(/^check_root="\$\(CDPATH= cd -P -- "\$check_root" && pwd -P\)"$/m)?.[0];
+  assert.ok(normalize);
+  assert.ok(source.indexOf(normalize) < source.indexOf('app="$check_root/Fluxion.app"'));
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "fluxion-owned-path-"));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, "actual"));
+  fs.symlinkSync(path.join(root, "actual"), path.join(root, "alias"));
+  const result = spawnSync("bash", ["-c", `${normalize}\nprintf '%s' "$check_root"`], {
+    encoding: "utf8", env: { ...process.env, check_root: `${root}/alias//` },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, fs.realpathSync(path.join(root, "actual")));
 });

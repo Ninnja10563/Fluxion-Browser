@@ -57,7 +57,7 @@ for phase in seed restore; do
   process_id=$!
   for ((attempt=0; attempt<600; attempt++)); do
     kill -0 "$process_id" 2>/dev/null || break
-    for action in capture-colors-light capture-colors-dark capture-colors-settings; do
+    for action in capture-colors-light capture-colors-dark capture-colors-settings capture-colors-workspace-settings; do
       if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
         foreground
         owned || exit 1
