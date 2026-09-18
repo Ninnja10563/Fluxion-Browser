@@ -29,6 +29,7 @@ bash -n \
   scripts/verify-macos-tab-transfer.sh \
   scripts/verify-macos-tab-links.sh \
   scripts/verify-macos-duplicate-tabs.sh \
+  scripts/verify-macos-new-tab.sh \
   scripts/verify-macos-shortcuts.sh \
   scripts/verify-macos-sidebar-width.sh \
   scripts/verify-macos-selection.sh \
@@ -36,6 +37,7 @@ bash -n \
   scripts/verify-macos-frame.sh \
   scripts/verify-macos-product-chrome.sh \
   scripts/verify-macos-branding.sh \
+  scripts/verify-macos-branding-upgrade.sh \
   scripts/verify-macos-migration.sh \
   scripts/verify-macos-workspace-gestures.sh \
   scripts/verify-macos-colors.sh \
@@ -80,6 +82,11 @@ node --check chrome/fluxion-tab-links-verification.js
 node --check chrome/core/duplicate-tabs.js
 node --check chrome/fluxion-duplicate-tabs.js
 node --check chrome/fluxion-duplicate-tabs-verification.js
+node --check chrome/fluxion-new-tab.js
+node --check chrome/fluxion-new-tab-verification.js
+node --check scripts/new-tab-fixture.mjs
+node --check chrome/fluxion-branding-upgrade-verification.js
+node --check modules/FluxionChromeCache.sys.mjs
 node --check scripts/duplicate-tabs-fixture.mjs
 node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js
@@ -191,9 +198,11 @@ python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-s
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   xcrun clang -arch "$(uname -m)" -fsyntax-only -Wall -Wextra -Werror \
+    '-DFLUXION_CHROME_CACHE_ID="0000000000000000000000000000000000000000000000000000000000000000"' \
     packaging/macos/launcher.c
 elif command -v cc >/dev/null 2>&1; then
   cc -fsyntax-only -Wall -Wextra -Werror -I tests/macos-stubs \
+    '-DFLUXION_CHROME_CACHE_ID="0000000000000000000000000000000000000000000000000000000000000000"' \
     packaging/macos/launcher.c
 fi
 

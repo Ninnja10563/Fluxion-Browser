@@ -252,6 +252,8 @@ test("Focus Flow is an inert, keyboard-revealable overlay that preserves page ge
   assert.match(chrome, /\.fluxion-surface/);
   assert.match(chrome, /translateX\(calc\(-100% - 6px\)\)/);
   assert.match(chrome, /inset-block: 6px; inset-inline-start: 6px/);
+  assert.match(chrome, /#fluxion-flow\[data-state="focus"\]:focus \{ outline: none; \}/);
+  assert.match(chrome, /#fluxion-flow\[data-state="focus"\]\[data-revealed="true"\]:focus-visible > \.fluxion-surface \{\s*outline: 2px solid var\(--fluxion-accent\)/);
   assert.match(chrome, /surface\.inert = !surfaceVisible/);
   assert.match(chrome, /\["Enter", " ", "ArrowRight"\]/);
   assert.match(chrome, /event\.key === "Escape"/);

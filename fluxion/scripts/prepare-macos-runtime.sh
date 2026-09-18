@@ -280,7 +280,15 @@ if [[ ! -x "$runtime_app/Contents/MacOS/Fluxion" || ! -f "$stamp" || "$(<"$stamp
   if [[ "$target_arch" == "universal2" ]]; then
     launcher_arch_flags=(-arch arm64 -arch x86_64)
   fi
+  chrome_cache_identity="$(
+    cd "$resources"
+    { shasum -a 256 omni.ja browser/omni.ja fluxion.cfg;
+      find fluxion -type f -exec shasum -a 256 {} + | LC_ALL=C sort;
+    } | shasum -a 256 | awk '{print $1}'
+  )"
+  [[ "$chrome_cache_identity" =~ ^[a-f0-9]{64}$ ]] || exit 69
   xcrun clang "${launcher_arch_flags[@]}" -Os -Wall -Wextra -Werror \
+    "-DFLUXION_CHROME_CACHE_ID=\"$chrome_cache_identity\"" \
     "$fluxion_root/packaging/macos/launcher.c" \
     -o "$macos/Fluxion"
 

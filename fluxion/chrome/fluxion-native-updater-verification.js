@@ -87,7 +87,10 @@
     const ui = window.FluxionUI, firstWorkspace = ui.currentWorkspace(), tabs = [];
     for (let index = 0; index < urls.length; index++) {
       if (index === 2) ui.createWorkspace("Updater other");
-      const tab = ui.newTab(); tabs.push(tab);
+      // Fixture setup creates documents directly; the user New Tab action is
+      // now a cancellable address-bar draft, not an immediate blank tab.
+      const tab = window.gBrowser.addTrustedTab("about:blank"); tabs.push(tab);
+      ui.setTabWorkspace(tab, ui.currentWorkspace()); window.gBrowser.selectedTab = tab;
       tab.linkedBrowser.loadURI(Services.io.newURI(urls[index]), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
       await until(() => tab.linkedBrowser.currentURI.spec === urls[index] && !tab.hasAttribute("busy"), "Updater seed page failed to load");
       SessionStore.setCustomTabValue(tab, "fluxion-updater-fixture-tab", String(index));

@@ -88,12 +88,13 @@ function persistentFixture() {
   const node = (box, style = {}) => ({ box, style, contains: hit => hit === null });
   const root = { hasAttribute: () => false };
   const captions = [node({ left: 8, right: 78, top: 12, bottom: 28, width: 70, height: 16 })];
-  const heading = node({ left: 7, right: 225, top: 40, bottom: 80, width: 218, height: 40 });
-  const surface = node({ left: 0, right: 232, top: 34, bottom: 800, width: 232 });
+  const heading = node({ left: 7, right: 225, top: 50, bottom: 90, width: 218, height: 40 });
+  const surface = node({ left: 0, right: 232, top: 44, bottom: 800, width: 232 });
   surface.querySelector = () => heading;
   const flow = node({ left: 0, right: 232, top: 72, bottom: 800, width: 232 });
   flow.dataset = { state: "expanded" }; flow.querySelector = () => surface;
-  const nodes = { "navigator-toolbox": node({ bottom: 72 }), "nav-bar-customization-target": { get box() { return target; } } };
+  const nodes = { "navigator-toolbox": node({ bottom: 72 }), "nav-bar": node({ bottom: 44 }),
+    "nav-bar-customization-target": { get box() { return target; } } };
   const a = source.indexOf("  function persistentSidebarEvidence("), b = source.indexOf("  function sidebarMotionEvidence(", a);
   const verify = vm.runInNewContext(`${source.slice(a, b)}; persistentSidebarEvidence`, {
     document: { documentElement: root, querySelectorAll: () => captions,
@@ -106,17 +107,20 @@ function persistentFixture() {
   return { verify: () => verify(flow, "fixture"), flow, surface, heading, captions,
     cover() { hitOverride = {}; }, target(value) { target = value; }, direction(value) { direction = value; } };
 }
-test("expanded native geometry gate validates caption-only inset and rejects old gap or covered headings", () => {
+test("expanded native geometry gate validates heading below navigation and rejects toolbox gap or covered headings", () => {
   const f = persistentFixture();
-  assert.equal(f.verify().surface.top, 34);
+  assert.equal(f.verify().surface.top, 44);
   f.surface.box.top = 72; f.heading.box.top = 78;
-  assert.throws(f.verify, /navigation-sized gap/);
-  f.surface.box.top = 34; f.heading.box.top = 42;
+  assert.throws(f.verify, /directly below navigation/);
+  f.surface.box.top = 44; f.heading.box.top = 52;
   assert.throws(f.verify, /six-pixel/);
-  f.heading.box.top = 40; f.captions.length = 0;
-  f.surface.box.top = 6; f.heading.box.top = 12;
+  f.captions.length = 0;
+  f.surface.box.top = 44; f.heading.box.top = 50;
   f.captions.push({ box: { left: 8, right: 78, bottom: 28, width: 70, height: 16 }, style: { visibility: "collapse" } });
-  assert.equal(f.verify().surface.top, 6);
+  assert.equal(f.verify().surface.top, 44);
+  f.surface.box.top = 6; f.heading.box.top = 12;
+  assert.throws(f.verify, /directly below navigation/, "heading must not collide with navigation at viewport top");
+  f.surface.box.top = 44; f.heading.box.top = 50;
   f.cover(); assert.throws(f.verify, /heading is covered/);
 });
 test("expanded native geometry gate enforces narrow fallback and RTL column alignment", () => {
@@ -126,8 +130,8 @@ test("expanded native geometry gate enforces narrow fallback and RTL column alig
   assert.equal(f.verify().fallback, true);
   f.direction("rtl"); f.target({ left: 0, right: 1118, width: 1118 });
   f.flow.box.left = 968; f.flow.box.right = 1200;
-  f.surface.box.left = 968; f.surface.box.right = 1200; f.surface.box.top = 6;
-  f.heading.box.top = 12;
+  f.surface.box.left = 968; f.surface.box.right = 1200; f.surface.box.top = 44;
+  f.heading.box.top = 50;
   assert.equal(f.verify().direction, "rtl");
   f.surface.box.right = 1190; assert.throws(f.verify, /page-column alignment/);
 });
@@ -138,7 +142,7 @@ test("native left navigation hit targets reject sidebar coverage even when their
   hit = { id: "floating-workspace-heading" };
   assert.throws(() => api.navigationControlHitEvidence(control), /obscured by floating chrome/);
 });
-const flow = { box: { left: 0, right: 3, top: 0, bottom: 800 }, style: { direction: "ltr" } };
+const flow = { box: { left: 0, right: 3, top: 0, bottom: 800 }, style: { direction: "ltr", outlineStyle: "none", outlineWidth: "0px" } };
 const surface = (revealed = true) => ({ inert: !revealed,
   box: { left: revealed ? 6 : -232, right: revealed ? 238 : 0, top: 6, bottom: 794 },
   heading: { box: { top: 12 } }, querySelector() { return this.heading; },
@@ -147,7 +151,7 @@ const surface = (revealed = true) => ({ inert: !revealed,
 test("native floating-sidebar gate checks real six-pixel clearances and complete offscreen hiding", () => {
   assert.equal(api.floatingSidebarEvidence(flow, surface(), true).mode, "floating-revealed-insets");
   assert.equal(api.floatingSidebarEvidence(flow, surface(false), false).visibility, "hidden");
-  const rtl = { box: { left: 997, right: 1000, top: 0, bottom: 800 }, style: { direction: "rtl" } };
+  const rtl = { box: { left: 997, right: 1000, top: 0, bottom: 800 }, style: { ...flow.style, direction: "rtl" } };
   const shown = surface(); shown.box.left = 762; shown.box.right = 994;
   api.floatingSidebarEvidence(rtl, shown, true);
   const hidden = surface(false); hidden.box.left = 1000; hidden.box.right = 1232;
@@ -155,6 +159,11 @@ test("native floating-sidebar gate checks real six-pixel clearances and complete
   const toolbarReservedRail = { ...flow, box: { ...flow.box, top: 88 } };
   assert.equal(api.floatingSidebarEvidence(toolbarReservedRail, surface(), true).box.top, 6,
     "floating surface is anchored to viewport, not the rail below native navigation");
+});
+test("native floating-sidebar gate rejects a focus ring on the narrow hidden edge", () => {
+  const focused = { ...flow, style: { ...flow.style, outlineStyle: "solid", outlineWidth: "2px" } };
+  assert.throws(() => api.floatingSidebarEvidence(focused, surface(false), false), /full-height focus outline/);
+  assert.throws(() => api.floatingSidebarEvidence(focused, surface(), true), /full-height focus outline/);
 });
 test("native floating-sidebar gate rejects corner slivers, missing spacing and inert visible controls", () => {
   const mutations = [

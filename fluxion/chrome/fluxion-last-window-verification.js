@@ -147,7 +147,8 @@
     ui.switchWorkspace(firstWorkspace);
     const tabs = [];
     const openPage = async url => {
-      const tab = ui.newTab();
+      const tab = win.gBrowser.addTrustedTab("about:blank");
+      ui.setTabWorkspace(tab, ui.currentWorkspace()); win.gBrowser.selectedTab = tab;
       tab.linkedBrowser.loadURI(Services.io.newURI(url), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
       await until(() => !tab.hasAttribute("busy") && tab.linkedBrowser.currentURI.spec === url, "Flow-created page did not load");
       tabs.push(tab);
@@ -188,7 +189,10 @@
     ensure(win.gBrowser.tabs.length === 1, "Final-window-tab fixture must start with exactly one tab");
     for (const input of ["native-cmd-w-handler", "flow-widget-close-button", "native-bulk-close-handler"]) {
       const workspace = ui.currentWorkspace();
-      if (input === "native-bulk-close-handler") ui.newTab();
+      if (input === "native-bulk-close-handler") {
+        const extra = win.gBrowser.addTrustedTab("about:blank");
+        ui.setTabWorkspace(extra, ui.currentWorkspace()); win.gBrowser.selectedTab = extra;
+      }
       const browser = win.gBrowser.selectedBrowser;
       const url = marker(`${PrivateBrowsingUtils.isWindowPrivate(win) ? "private-never-persist-" : ""}last-window-tab-${input}`);
       browser.loadURI(Services.io.newURI(url), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
@@ -209,7 +213,8 @@
   async function verifyLastWorkspaceTab(win) {
     const ui = win.FluxionUI;
     ui.setSidebarState("expanded");
-    const retained = ui.newTab(), retainedWorkspace = ui.currentWorkspace();
+    const retainedWorkspace = ui.currentWorkspace(), retained = win.gBrowser.addTrustedTab("about:blank");
+    ui.setTabWorkspace(retained, retainedWorkspace); win.gBrowser.selectedTab = retained;
     const retainedURL = marker("hidden-workspace-must-survive");
     retained.linkedBrowser.loadURI(Services.io.newURI(retainedURL), { triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal() });
     await until(() => !retained.hasAttribute("busy") && retained.linkedBrowser.currentURI.spec === retainedURL, "Hidden workspace fixture did not load");

@@ -10,13 +10,14 @@ const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-chrome-la
 
 function fixture({ rail = { left: 0, right: 232, width: 232 },
   controls = { left: 82, right: 1200, width: 1118 }, direction = "ltr", missing = null,
-  captions = [], toolboxBottom = 72 } = {}) {
+  captions = [], toolboxBottom = 72, navigationBottom = 44 } = {}) {
   const writes = [], frames = new Map(), listeners = new Map(), observers = [];
   let sequence = 0, reads = 0;
   const element = name => ({ style: { values: new Map(), setProperty(key, value) {
     this.values.set(key, value); writes.push([name, key, value]);
   } } });
   const root = element("root"), nav = element("nav"), attributes = new Set();
+  nav.getBoundingClientRect = () => ({ bottom: navigationBottom });
   root.hasAttribute = name => attributes.has(name);
   const toolbox = { getBoundingClientRect: () => ({ bottom: toolboxBottom }) };
   const flow = { getBoundingClientRect() { reads++; return { ...rail }; } };
@@ -48,6 +49,7 @@ function fixture({ rail = { left: 0, right: 232, width: 232 },
     top: () => root.style.values.get("--fluxion-persistent-sidebar-top"),
     captions(value) { captions = value; },
     toolboxBottom(value) { toolboxBottom = value; },
+    navigationBottom(value) { navigationBottom = value; },
     geometry(nextRail, nextControls = controls) { rail = nextRail; controls = nextControls; },
     direction(value) { direction = value; },
     flush() { const pending = [...frames.values()]; frames.clear(); pending.forEach(callback => callback()); },
@@ -147,21 +149,23 @@ test("unload cancels pending alignment, disconnects observers and makes stale ca
 });
 
 function caption(box, style = {}) { return { getBoundingClientRect: () => box, style }; }
-test("persistent sidebar reserves only overlapping visible native caption controls, not navigation/bookmarks", () => {
+test("persistent heading follows navigation, not bookmarks, and respects overlapping native captions", () => {
   const buttons = caption({ left: 8, right: 78, top: 12, bottom: 28, width: 70, height: 16 });
   const f = fixture({ captions: [buttons] });
-  assert.equal(f.top(), "34px");
+  assert.equal(f.top(), "44px");
   f.toolboxBottom(104); f.window.FluxionChromeLayout.refresh(); f.flush();
-  assert.equal(f.top(), "34px", "extra bookmark rows do not push the heading down");
+  assert.equal(f.top(), "44px", "extra bookmark rows do not push the heading down");
+  f.navigationBottom(24); f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "34px", "caption safety takes precedence when controls extend below navigation");
   f.captions([caption(buttons.getBoundingClientRect(), { display: "none" })]);
   f.window.FluxionChromeLayout.refresh(); f.flush();
-  assert.equal(f.top(), "6px", "fullscreen without painted caption controls reclaims the complete gap");
+  assert.equal(f.top(), "24px", "fullscreen without painted captions aligns directly below navigation");
   f.captions([caption(buttons.getBoundingClientRect(), { visibility: "collapse" })]);
   f.window.FluxionChromeLayout.refresh(); f.flush();
-  assert.equal(f.top(), "6px", "collapsed XUL caption boxes cannot reserve a phantom gap");
+  assert.equal(f.top(), "24px", "collapsed XUL caption boxes cannot reserve a phantom gap");
   f.captions([caption({ left: 1120, right: 1190, bottom: 28, width: 70, height: 16 })]);
   f.window.FluxionChromeLayout.refresh(); f.flush();
-  assert.equal(f.top(), "6px", "opposite-edge caption controls do not reserve empty sidebar space");
+  assert.equal(f.top(), "24px", "opposite-edge caption controls do not reserve empty sidebar space");
   f.direction("rtl");
   f.geometry({ left: 968, right: 1200, width: 232 }, { left: 0, right: 1118, width: 1118 });
   f.window.FluxionChromeLayout.refresh(); f.flush();
@@ -175,11 +179,22 @@ test("narrow windows and customization fall back below the actual toolbox, then 
   assert.equal(f.top(), "104px");
   f.geometry({ left: 0, right: 232, width: 232 }, { left: 82, right: 1200, width: 1118 });
   f.window.FluxionChromeLayout.refresh(); f.flush();
-  assert.equal(f.top(), "6px");
+  assert.equal(f.top(), "44px");
   f.attributes.add("customizing"); f.window.FluxionChromeLayout.refresh(); f.flush();
   assert.equal(f.top(), "104px");
   f.attributes.clear(); f.window.FluxionChromeLayout.refresh(); f.flush();
-  assert.equal(f.top(), "6px");
+  assert.equal(f.top(), "44px");
+});
+
+test("live navigation height follows toolbar customization without inheriting bookmarks height", () => {
+  const f = fixture();
+  f.navigationBottom(56); f.toolboxBottom(120);
+  f.observers.find(observer => observer.kind === "resize").callback(); f.flush();
+  assert.equal(f.top(), "56px");
+  const writes = f.writes.length;
+  f.toolboxBottom(150); f.window.FluxionChromeLayout.refresh(); f.flush();
+  assert.equal(f.top(), "56px");
+  assert.equal(f.writes.length, writes, "bookmarks-only expansion does not move the sidebar header");
 });
 
 test("missing chrome nodes and repeat initialization never register duplicate layout controllers", () => {

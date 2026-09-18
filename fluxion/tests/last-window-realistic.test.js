@@ -65,9 +65,11 @@ function emptyWindowFixture({ closesWindow = false, duplicateReplacement = false
       linkedBrowser: { currentURI: { spec: "about:blank" }, loadURI(uri) { this.currentURI = uri; loaded.push(uri.spec); } } };
     browser.tabs.push(tab); browser.selectedTab = tab; return tab;
   };
+  browser.addTrustedTab = newTab;
   newTab();
   const win = { closed: false, gBrowser: browser, FluxionUI: {
-    setSidebarState: () => {}, currentWorkspace: () => "focus", tabWorkspace: tab => tab.workspace, newTab,
+    setSidebarState: () => {}, currentWorkspace: () => "focus", tabWorkspace: tab => tab.workspace,
+    setTabWorkspace: (tab, workspace) => { tab.workspace = workspace; },
   } };
   const remove = tabs => {
     if (closesWindow) { win.closed = true; return; }

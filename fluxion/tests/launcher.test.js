@@ -3,7 +3,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
 const { spawnSync } = require("node:child_process");
-const { mkdtemp, mkdir, writeFile, realpath, stat, copyFile, rm } = require("node:fs/promises");
+const { mkdtemp, mkdir, writeFile, realpath, stat, copyFile, rm, symlink, readFile } = require("node:fs/promises");
 const { tmpdir } = require("node:os");
 const { join, resolve } = require("node:path");
 
@@ -17,7 +17,8 @@ test("compiled application launcher preserves native forwarding and isolates Flu
   await mkdir(macos, { recursive: true });
   const executable = join(macos, "Fluxion");
   const sources = [resolve(__dirname, "../packaging/macos/launcher.c")];
-  const flags = ["-Wall", "-Wextra", "-Werror"];
+  const fingerprint = "abcde12345".repeat(6) + "abcd";
+  const flags = ["-Wall", "-Wextra", "-Werror", `-DFLUXION_CHROME_CACHE_ID="${fingerprint}"`];
   if (process.platform === "linux") {
     // Only dyld path discovery is substituted; the actual shipped C main,
     // argument construction, environment setup, mkdir and execv all execute.
@@ -45,6 +46,8 @@ process.stdout.write(JSON.stringify({
   args: process.argv.slice(2),
   root: process.env.FLUXION_ROOT,
   remotingName: process.env.MOZ_APP_REMOTINGNAME,
+  cacheID: process.env.FLUXION_CHROME_CACHE_ID,
+  cachePending: process.env.FLUXION_CHROME_CACHE_PENDING,
   pid: process.pid
 }));
 `, { mode: 0o700 });
@@ -68,15 +71,43 @@ process.stdout.write(JSON.stringify({
     const profile = join(directory, "private profiles", "mémoire 流");
     const args = ["--private-window", "https://example.com/caf%C3%A9?q=one&next=two",
       "--new-tab", "file:///tmp/a%20file.html", "https://example.org/#part"];
-    assert.deepEqual(launch(args, { FLUXION_PROFILE: profile }).args, ["--profile", profile, ...args]);
+    assert.deepEqual(launch(args, { FLUXION_PROFILE: profile }).args, ["--profile", profile, "--purgecaches", ...args]);
     assert.equal((await stat(profile)).mode & 0o777, 0o700);
   });
 
   await t.test("normal launch creates only the dedicated default profile without remote-disabling flags", async () => {
     const userHome = join(directory, "user home é");
     const profile = join(userHome, "Library/Application Support/Fluxion/Profiles/default");
-    assert.deepEqual(launch([], { HOME: userHome, FLUXION_PROFILE: "" }).args, ["--profile", profile]);
+    assert.deepEqual(launch([], { HOME: userHome, FLUXION_PROFILE: "" }).args, ["--profile", profile, "--purgecaches"]);
     assert.equal((await stat(profile)).mode & 0o777, 0o700);
+  });
+
+  await t.test("only exact acknowledged chrome reuses caches, preserving the profile and user arguments", async () => {
+    const profile = join(directory, "existing profile");
+    await mkdir(profile);
+    const marker = join(profile, ".fluxion-chrome-cache");
+    const history = join(profile, "places.sqlite");
+    await writeFile(history, "do not touch existing data");
+    const cold = launch([], { FLUXION_PROFILE: profile, FLUXION_CHROME_CACHE_ID: "inherited", FLUXION_CHROME_CACHE_PENDING: "0" });
+    assert.equal(cold.cacheID, fingerprint);
+    assert.equal(cold.cachePending, "1");
+    await assert.rejects(stat(marker), { code: "ENOENT" }, "exec alone must not acknowledge invalidation");
+    await writeFile(marker, `${fingerprint}\n`);
+    const warm = launch(["https://example.org/"], { FLUXION_PROFILE: profile });
+    assert.equal(warm.cachePending, "0");
+    assert.deepEqual(warm.args, ["--profile", profile, "https://example.org/"]);
+    for (const stale of ["0".repeat(64) + "\n", fingerprint, fingerprint + "\nextra", "bad\n"]) {
+      await writeFile(marker, stale);
+      assert.equal(launch([], { FLUXION_PROFILE: profile }).cachePending, "1");
+      assert.equal(await readFile(marker, "utf8"), stale, "launcher never rewrites marker before Gecko accepts profile");
+    }
+    await rm(marker);
+    const outside = join(directory, "outside-marker");
+    await writeFile(outside, `${fingerprint}\n`);
+    await symlink(outside, marker);
+    assert.equal(launch([], { FLUXION_PROFILE: profile }).cachePending, "1", "do not follow profile stamp symlinks");
+    assert.equal(await readFile(outside, "utf8"), `${fingerprint}\n`);
+    assert.equal(await readFile(history, "utf8"), "do not touch existing data");
   });
 
   await t.test("an executable outside its bundle refuses to invoke a runtime", async () => {

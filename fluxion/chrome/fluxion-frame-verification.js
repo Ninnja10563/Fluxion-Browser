@@ -97,11 +97,12 @@
     const root = document.documentElement, surface = flow.querySelector(".fluxion-surface");
     const rail = rect(flow), box = rect(surface), toolbox = rect(document.getElementById("navigator-toolbox"));
     const target = rect(document.getElementById("nav-bar-customization-target"));
+    const navigationBar = rect(document.getElementById("nav-bar"));
     const rtl = window.getComputedStyle(flow).direction === "rtl";
     const wanted = Math.max(0, rtl ? target.right - rail.left : rail.right - target.left);
     const available = Math.max(0, target.width - 480);
     const fallback = available + 1 < wanted || root.hasAttribute("customizing");
-    let expectedTop = fallback ? Math.max(6, toolbox.bottom) : 6;
+    let expectedTop = fallback ? Math.max(6, toolbox.bottom) : Math.max(6, navigationBar.bottom);
     const captions = [];
     for (const buttons of document.querySelectorAll("#navigator-toolbox .titlebar-buttonbox")) {
       const caption = rect(buttons), style = window.getComputedStyle(buttons);
@@ -112,7 +113,7 @@
       if (!fallback && caption.right > rail.left && caption.left < rail.right) expectedTop = Math.max(expectedTop, caption.bottom + 6);
     }
     assert(near(box.top, Math.ceil(expectedTop)) && near(box.bottom, window.innerHeight),
-      `${label}: persistent sidebar retains a navigation-sized gap or incorrect bottom inset: ${JSON.stringify({ box, expectedTop })}`);
+      `${label}: persistent sidebar is not directly below navigation or has an incorrect bottom inset: ${JSON.stringify({ box, expectedTop, navigationBar, toolbox })}`);
     assert(near(box.width, rail.width) && near(rtl ? box.right : box.left, rtl ? rail.right : rail.left),
       `${label}: persistent sidebar lost its page-column alignment`);
     let heading = null;
@@ -123,7 +124,7 @@
       assert(hit === node || node.contains(hit), `${label}: expanded workspace heading is covered by native toolbar padding`);
     }
     const navigation = ["back-button", "forward-button", "reload-button"].map(id => navigationControlHitEvidence(document.getElementById(id)));
-    return { label, rail, surface: box, heading, captions, fallback, direction: rtl ? "rtl" : "ltr", navigation };
+    return { label, rail, surface: box, heading, captions, fallback, navigationBar, direction: rtl ? "rtl" : "ltr", navigation };
   }
 
   function sidebarMotionEvidence(surface, revealed) {
@@ -199,6 +200,9 @@
   }
   function floatingSidebarEvidence(flow, surface, revealed) {
     const rail = rect(flow), box = rect(surface), style = window.getComputedStyle(surface);
+    const railStyle = window.getComputedStyle(flow);
+    assert(railStyle.outlineStyle === "none" || Number.parseFloat(railStyle.outlineWidth) === 0,
+      "Focus sidebar edge paints a full-height focus outline over the page");
     const viewport = { top: 0, bottom: window.innerHeight };
     const rtl = window.getComputedStyle(flow).direction === "rtl";
     if (revealed) {
@@ -678,7 +682,7 @@
       ui.setSidebarState("focus"); window.FluxionChromeLayout.refresh();
     }
     await delay(250);
-    report.checks.push("persistent-sidebar-heading-reclaims-navigation-gap-with-caption-hit-areas-narrow-fallback-and-rtl-alignment");
+    report.checks.push("persistent-sidebar-heading-beside-bookmarks-below-navigation-with-caption-hit-areas-narrow-fallback-and-rtl-alignment");
     stage("routed-edge-hover-and-sidebar-toggle");
     report.hoverEvents = [];
     for (const type of ["pointerenter", "pointerleave"]) {
@@ -739,6 +743,8 @@
     clickControl(toggle);
     await wait(() => flow.dataset.state === "focus" && near(rect(flow).width, 3), "Primary collapse did not leave the hover edge");
     routePointer(outside.x, outside.y); await delay(250);
+    await wait(() => window.getComputedStyle(surface).visibility === "hidden", "Collapsed sidebar did not finish retracting");
+    report.geometry.push(floatingSidebarEvidence(flow, surface, false));
     const edge = rect(flow);
     routePointer(edge.left + edge.width / 2, edge.top + 100);
     await wait(() => flow.dataset.revealed === "true" && !surface.inert, "Collapsed sidebar did not return after a real edge approach");
@@ -803,15 +809,15 @@
     assert(newTab.contains(document.elementFromPoint(newTabRect.left + newTabRect.width / 2, newTabRect.top + newTabRect.height / 2)),
       "Inline new-tab control is obscured at the end of a long tab list");
     const beforeNewTab = liveTabs();
+    const beforeDraftTab = gBrowser.selectedTab;
     clickControl(newTab);
-    await wait(() => liveTabs().length === beforeNewTab.length + 1 && !beforeNewTab.includes(gBrowser.selectedTab) &&
-      rowFor(gBrowser.selectedTab)?.getAttribute("aria-selected") === "true",
-    "Inline New tab did not create and select a real tab in the visible workspace");
-    const createdTab = gBrowser.selectedTab;
+    await wait(() => window.FluxionNewTab?.pending && window.gURLBar.focused,
+      "Inline New tab did not open an address-bar draft");
+    assert(liveTabs().length === beforeNewTab.length && gBrowser.selectedTab === beforeDraftTab,
+      "Inline New tab created a blank tab before submission");
     await select(webpage);
-    gBrowser.removeTab(createdTab, { animate: false });
     gBrowser.removeTabs(overflowTabs, { animate: false });
-    await wait(() => !createdTab.parentNode && !rowFor(createdTab) && overflowTabs.every(tab => !tab.parentNode && !rowFor(tab)),
+    await wait(() => overflowTabs.every(tab => !tab.parentNode && !rowFor(tab)),
       "Dense-tab fixture cleanup left stale Flow rows");
     scrollArea.scrollTop = 0; await delay(200);
     stage("normal-size-new-tab-hover");

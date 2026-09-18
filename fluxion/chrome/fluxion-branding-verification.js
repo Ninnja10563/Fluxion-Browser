@@ -157,7 +157,8 @@
       "Security state illustrations became indistinguishable");
     report.checks.push("packaged-native-logo-and-trust-art-embed-exact-supplied-transparent-mark",
       "decoded-mark-has-transparent-corners-and-distinct-warning-off-art-retained");
-    const tab = window.FluxionUI.newTab();
+    const tab = window.gBrowser.addTrustedTab(Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab"));
+    window.FluxionUI.setTabWorkspace(tab, window.FluxionUI.currentWorkspace()); window.gBrowser.selectedTab = tab;
     await wait(() => {
       const row = [...document.querySelectorAll(".fluxion-tab")].find(item => item._fluxionTab === tab);
       const icon = row?.querySelector("img.fluxion-favicon");

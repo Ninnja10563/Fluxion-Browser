@@ -21,11 +21,12 @@
     const wanted = overlay ? 0 : rtl ? controls.right - rail.left : rail.right - controls.left;
     const offset = Math.round(Math.min(available, Math.max(0, wanted)));
     const width = overlay ? 0 : Math.round(rail.width);
-    // Lift the persistent rail above the bookmarks/navigation rows, reserving
-    // only actual native caption controls that overlap this side of the window.
+    // The heading starts beside bookmarks, directly below navigation. The
+    // scroll area already supplies its six-pixel inset; do not reserve the
+    // whole toolbox or add a second navigation-sized blank band.
     // Narrow windows retain the original below-toolbox layout: native toolbar
     // overflow and caption ownership take precedence over reclaiming this gap.
-    let top = 6;
+    let top = Math.max(6, nav.getBoundingClientRect().bottom);
     if (offset + 1 < Math.max(0, wanted) || root.hasAttribute("customizing")) {
       top = Math.max(6, toolbox?.getBoundingClientRect().bottom || rail.top || 0);
     } else {

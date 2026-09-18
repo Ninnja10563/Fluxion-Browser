@@ -309,7 +309,8 @@
     }
     #fluxion-flow[data-state="focus"]:hover,
     #fluxion-flow[data-state="focus"]:focus-visible { background: transparent; }
-    #fluxion-flow[data-state="focus"]:focus-visible {
+    #fluxion-flow[data-state="focus"]:focus { outline: none; }
+    #fluxion-flow[data-state="focus"][data-revealed="true"]:focus-visible > .fluxion-surface {
       outline: 2px solid var(--fluxion-accent); outline-offset: -2px;
     }
     #fluxion-flow[data-state="focus"] > .fluxion-surface {
@@ -1801,6 +1802,7 @@
   }
 
   function openWorkspaceTab() {
+    if (window.FluxionNewTab) return window.FluxionNewTab.begin();
     const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
     setTabWorkspace(tab, currentWorkspace);
     gBrowser.selectedTab = tab;

@@ -24,6 +24,22 @@ This is not an extension-only architecture. The browser-chrome layer has the
 privilege needed to manage native Firefox tabs and windows, while ordinary web
 pages retain Firefox's process, principal, and sandbox boundaries.
 
+### Chrome cache identity on macOS upgrades
+
+Gecko's upstream application/build identity is retained rather than rewritten
+to a Fluxion release number. Since two Fluxion releases can reuse the same
+Gecko build and installation path, that identity alone cannot invalidate cached
+browser chrome after a Fluxion-only change. The native launcher compares a
+SHA-256 fingerprint of the final patched archives and bundled chrome against
+a profile stamp. A mismatch adds Gecko's supported `--purgecaches` argument.
+Only `profile-after-change`, after Gecko accepts the profile, acknowledges the
+fingerprint with an atomic write. The launcher never deletes profile data or
+acknowledges a failed launch. Matching warm launches use the normal cache.
+
+This policy complements packaged-resource and fresh-profile branding checks.
+The upgrade fixture keeps one application path, profile and upstream build
+identity across launches and captures actual macOS application-menu labels.
+
 ## Reused Firefox/Gecko components
 
 ### Browser appearance boundary
@@ -31,7 +47,28 @@ pages retain Firefox's process, principal, and sandbox boundaries.
 `fluxion-chrome-layout.js` measures the sidebar and native toolbar origins to
 align navigation with the page column. It reserves a minimum navigation budget
 at narrow widths, coalesces observer updates per frame and leaves native window
-controls, URL input and toolbar overflow intact. Workspace wheel routing lives
+controls, URL input and toolbar overflow intact. The expanded workspace heading
+sits beside the bookmarks band, with its six-pixel inner inset measured from
+the bottom of navigation, rather than reserving the entire toolbox height.
+Visible overlapping caption controls remain a safety boundary; narrow windows
+and customization retain the below-toolbox fallback. Hidden-mode floating
+sidebar geometry remains independent and six pixels from the viewport edges.
+Its keyboard focus ring belongs to the revealed surface, not the invisible
+three-pixel hover edge, so dismissing it cannot leave a full-height page border.
+`fluxion-new-tab.js` treats ordinary New Tab as a temporary native address-bar
+draft. A native tab is allocated only at Gecko 155's public controller navigation
+boundary (`loadURL`, `openSERP` or `openSearchForm`), retaining native URL fixup,
+POST submissions, private browsing and security parameters. The draft captures
+the source workspace and container; it never intercepts arbitrary tab creation.
+Explicit URL/clipboard opens retain Gecko's New Tab command. Cancellation
+restores the public browser-local `searchModes` record synchronously instead of
+calling the asynchronous engine-mode setter; native `setURI` still owns URI
+exposure and page-proxy presentation. Fallback navigation carries a generation
+guard, including resolutions started before a draft, so stale async input cannot
+become a newer draft's submission. These integration points are runtime-gated
+and covered by the pinned macOS native verification, not assumed cross-version
+Gecko APIs.
+Workspace wheel routing lives
 in `fluxion-workspace-gestures.js`; its independent axis/momentum state machine
 is in `core/workspace-swipe.js`. Only trusted events inside the visible
 system-principal sidebar reach workspace commands. No content listener is used.

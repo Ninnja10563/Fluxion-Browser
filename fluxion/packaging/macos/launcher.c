@@ -1,11 +1,33 @@
 #include <mach-o/dyld.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <limits.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
 #include <unistd.h>
+
+#ifndef FLUXION_CHROME_CACHE_ID
+#error "The packaged chrome cache identity is required"
+#endif
+_Static_assert(sizeof(FLUXION_CHROME_CACHE_ID) == 65, "Chrome cache identity must be a SHA-256 digest");
+
+static int chrome_cache_matches(const char *profile) {
+  char path[PATH_MAX];
+  if (snprintf(path, sizeof(path), "%s/.fluxion-chrome-cache", profile) >=
+      (int)sizeof(path)) return 0;
+  int descriptor = open(path, O_RDONLY | O_NOFOLLOW | O_NONBLOCK);
+  if (descriptor < 0) return 0;
+  struct stat metadata;
+  char value[66];
+  ssize_t count = -1;
+  if (fstat(descriptor, &metadata) == 0 && S_ISREG(metadata.st_mode) &&
+      metadata.st_size == 65) count = read(descriptor, value, sizeof(value));
+  close(descriptor);
+  return count == 65 && value[64] == '\n' &&
+      memcmp(value, FLUXION_CHROME_CACHE_ID, 64) == 0;
+}
 
 static int make_directories(const char *path) {
   char copy[PATH_MAX];
@@ -81,15 +103,26 @@ int main(int argc, char **argv) {
     return 69;
   }
 
-  char **child_arguments = calloc((size_t)argc + 3, sizeof(char *));
+  // Gecko's compatibility identity does not change when only Fluxion chrome
+  // changes. Ask Gecko to invalidate its own startup caches once per shipped
+  // chrome build; never remove browser data or disable its warm-start cache.
+  int refresh_chrome = !chrome_cache_matches(profile);
+  if (setenv("FLUXION_CHROME_CACHE_ID", FLUXION_CHROME_CACHE_ID, 1) != 0 ||
+      setenv("FLUXION_CHROME_CACHE_PENDING", refresh_chrome ? "1" : "0", 1) != 0) {
+    perror("Fluxion chrome cache environment");
+    return 69;
+  }
+  char **child_arguments = calloc((size_t)argc + 4, sizeof(char *));
   if (!child_arguments) return 71;
   child_arguments[0] = firefox;
   child_arguments[1] = "--profile";
   child_arguments[2] = (char *)profile;
+  int offset = 3;
+  if (refresh_chrome) child_arguments[offset++] = "--purgecaches";
   for (int index = 1; index < argc; index++) {
-    child_arguments[index + 2] = argv[index];
+    child_arguments[offset++] = argv[index];
   }
-  child_arguments[argc + 2] = NULL;
+  child_arguments[offset] = NULL;
 
   execv(firefox, child_arguments);
   perror("Fluxion Firefox runtime");
