@@ -34,7 +34,9 @@
     assert(node?.checked && !node.disabled, `${label}: checked Settings control is unavailable`);
     const style = target.getComputedStyle(node), box = node.getBoundingClientRect();
     assert(style.appearance === "auto" && style.getPropertyValue("-moz-theme") === "non-native",
-      `${label}: Settings checkbox is not using Gecko's accent-aware native input renderer`);
+      `${label}: Settings checkbox is not using Gecko's accent-aware native input renderer: ${JSON.stringify({
+        appearance: style.appearance, renderer: style.getPropertyValue("-moz-theme"), accentColor: style.accentColor,
+      })}`);
     const accent = FluxionColorsCore.palette(palette).accent;
     assert(style.accentColor === rgb(accent), `${label}: Settings checkbox did not receive its projected workspace/control accent`);
     const hit = target.document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);
@@ -169,8 +171,8 @@
     await settings(window);
     window.document.getElementById("fluxion-colors-enabled").scrollIntoView({ block: "center" });
     await delay(300);
-    report.checkboxes = [checkboxEvidence(window, expected.dark, "saved-dark-palette")];
     await capture("capture-colors-settings");
+    report.checkboxes = [checkboxEvidence(window, expected.dark, "saved-dark-palette")];
     const workspacePalette = { base: expected.dark.base, accent: "#ff6bb5" };
     const preview = window.FluxionColors.beginWorkspacePreview(window.FluxionUI.currentWorkspace());
     try {

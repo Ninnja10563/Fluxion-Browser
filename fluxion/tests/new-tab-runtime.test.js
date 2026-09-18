@@ -14,7 +14,7 @@ function emitter(object = {}) {
     listenerCount() { return [...listeners.values()].reduce((count, handlers) => count + handlers.size, 0); },
   });
 }
-function fixture({ context = 0, privateWindow = false, missing = null } = {}) {
+function fixture({ context = 0, privateWindow = false, missing = null, os = "Darwin" } = {}) {
   const document = { activeElement: null }, calls = [], microtasks = [], tabs = [], states = new Map();
   const stateFor = browser => { if (!states.has(browser)) states.set(browser, {}); return states.get(browser); };
   const modes = { get: browser => stateFor(browser).searchModes?.confirmed || null,
@@ -79,7 +79,7 @@ function fixture({ context = 0, privateWindow = false, missing = null } = {}) {
   selected = makeTab("https://example.org/original", context);
   const original = selected, originals = { ...controller }, originalOpenTab = BrowserCommands.openTab;
   if (missing) delete controller[missing];
-  const contextVM = vm.createContext({ window });
+  const contextVM = vm.createContext({ window, Services: { appinfo: { OS: os } } });
   const run = () => vm.runInContext(source, contextVM);
   run();
   return { window, urlbar, controller, gBrowser, original, originals, BrowserCommands, originalOpenTab,
@@ -254,6 +254,30 @@ test("empty drafts do not create tabs, and Cmd-L returns to ordinary native addr
   f.controller.loadURL(details);
   assert.equal(f.calls.find(call => call.kind === "load").details, details);
   assert.equal(f.gBrowser.tabs.length, 1);
+});
+test("only the platform's unmodified location shortcut cancels a typed New Tab draft", () => {
+  for (const os of ["Darwin", "WINNT", "Linux"]) {
+    for (const modifiers of [
+      { metaKey: true }, { ctrlKey: true }, { metaKey: true, ctrlKey: true },
+      { metaKey: true, altKey: true }, { metaKey: true, shiftKey: true },
+      { ctrlKey: true, altKey: true }, { ctrlKey: true, shiftKey: true }, {},
+    ]) {
+      const f = fixture({ os });
+      f.api.begin(); f.urlbar.search("keep this unfinished query");
+      f.window.emit("keydown", { key: "l", isTrusted: true, ...modifiers,
+        preventDefault() { throw Error("Location handling must remain native"); },
+        stopImmediatePropagation() { throw Error("Location handling must remain native"); } });
+      const shouldCancel = os === "Darwin"
+        ? modifiers.metaKey && !modifiers.ctrlKey && !modifiers.altKey && !modifiers.shiftKey
+        : modifiers.ctrlKey && !modifiers.metaKey && !modifiers.altKey && !modifiers.shiftKey;
+      assert.equal(f.api.pending, !shouldCancel, `${os} ${JSON.stringify(modifiers)}`);
+      assert.equal(f.gBrowser.tabs.length, 1);
+      if (!shouldCancel) {
+        assert.equal(f.urlbar.value, "keep this unfinished query");
+        assert.equal(f.original.linkedBrowser.userTypedValue, "keep this unfinished query");
+      }
+    }
+  }
 });
 test("stale target browser and in-place page navigation cannot redirect a draft into another tab", () => {
   const f = fixture(); f.api.begin();

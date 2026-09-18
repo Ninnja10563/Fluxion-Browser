@@ -1,3 +1,4 @@
+/* global Services */
 (function initialiseDeferredNewTab(window) {
   "use strict";
   const { document, gBrowser, gURLBar: urlbar, FluxionUI: ui, BrowserCommands } = window;
@@ -162,7 +163,9 @@
   });
   on(window, "keydown", event => {
     if (!draft || !event.isTrusted || event.isComposing) return;
-    if (event.key?.toLowerCase() === "l" && (event.metaKey || event.ctrlKey) && !event.altKey && !event.shiftKey) {
+    const locationModifier = Services.appinfo.OS === "Darwin"
+      ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+    if (event.key?.toLowerCase() === "l" && locationModifier && !event.altKey && !event.shiftKey) {
       cancel(); return;
     }
     if (event.key !== "Escape") return;
