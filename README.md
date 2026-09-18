@@ -23,6 +23,16 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.74.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.74.0-preview.1)**
+makes New Tab an address-bar draft until submission, raises the workspace
+heading beside bookmarks, removes the hidden sidebar's blue focus edge, and
+applies workspace accents to Settings checkboxes. A one-time chrome-cache
+refresh repairs stale Firefox menu labels after upgrades without clearing
+browsing data. All 1,256 tests and mandatory native macOS gates passed, with
+actual checkbox and menu screenshots reviewed. See the
+[milestone](fluxion/docs/milestone-0.74.md) and
+[provenance](fluxion/release/provenance/v0.74.0-preview.1.md).
+
 **[0.73.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.73.0-preview.1)**
 adds **Close Duplicate Tabs…** to the native tab menu. Cleanup stays within the
 current workspace and account container, keeps protected tabs, defaults to

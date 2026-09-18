@@ -1,6 +1,6 @@
 # 0.74 — Address-bar drafts and cleaner chrome
 
-Status: candidate under verification. Not yet published.
+Status: published as `v0.74.0-preview.1`; see release provenance for public asset checks.
 
 ## Scope
 
@@ -18,13 +18,17 @@ Status: candidate under verification. Not yet published.
   cleared. This addresses the same-Gecko-build upgrade path separately from
   fresh-install branding checks.
 
-## Verification plan
+## Verification
 
-Local regression tests and mandatory native macOS gates must pass before
-publication. Dedicated gates exercise native address-bar input and a same-path
-branding upgrade; the existing frame gate checks measured heading alignment
-and outline-free collapsed geometry. Release provenance will record exact
-source, artifacts and results, including limitations or unreproduced reports.
+All 1,256 tests and mandatory native macOS gates passed in run `35327731964`,
+source `c2e67888a57d68f65d25faeb5b0c55e3eaab7d30`. Dedicated gates exercise
+actual address-bar input, URL/POST loading, source restoration, container and
+private boundaries, and a same-path branding upgrade followed by a warm launch.
+Measured frame checks and native screenshots confirm heading alignment and
+outline-free collapsed geometry. Actual Settings captures show gold-to-pink
+checkbox changes, with cancellation restoring gold and webpages unchanged.
+The [provenance](../release/provenance/v0.74.0-preview.1.md) records exact
+artifacts, rejected candidates, publication checks and limitations.
 
 ## Boundaries
 

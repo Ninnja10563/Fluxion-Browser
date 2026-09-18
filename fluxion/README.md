@@ -8,6 +8,16 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.74.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.74.0-preview.1)**
+defers New Tab creation until native address/search submission; cancellation
+leaves the current page and its search mode intact. Workspace headings sit
+beside bookmarks, the hidden sidebar no longer draws a blue edge, and checked
+Settings controls use the workspace accent. A packaged chrome fingerprint
+repairs stale Firefox menu labels once after a changed build while preserving
+browsing data and warm-start caching. All 1,256 tests and mandatory native
+macOS gates passed. See the [milestone](docs/milestone-0.74.md) and
+[provenance](release/provenance/v0.74.0-preview.1.md).
+
 **[0.73.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.73.0-preview.1)**
 adds counted **Close Duplicate Tabs…** in the native tab menu. Exact web
 addresses are matched only within the current workspace and account
@@ -25,8 +35,9 @@ text and controls retained. Actual macOS application-menu labels are captured
 and checked, not just their localization resources. All 1,191 tests and
 mandatory native gates passed; screenshots were reviewed. See the
 [milestone](docs/milestone-0.72.2.md) and
-[provenance](release/provenance/v0.72.2-preview.1.md). Existing-profile stale
-menu wording was not reproduced; no speculative cache deletion is performed.
+[provenance](release/provenance/v0.72.2-preview.1.md). That milestone did not
+reproduce existing-profile stale menu wording; 0.74 adds a separate reproduction
+and one-time upgrade-cache repair.
 
 **[0.72.1-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.1-preview.1)**
 retains Focus navigation when moving up into the macOS menu bar and retracts
