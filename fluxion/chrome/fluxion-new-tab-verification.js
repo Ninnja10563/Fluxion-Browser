@@ -27,12 +27,15 @@
     await wait(() => IOUtils.exists(PathUtils.join(driver, `${name}.sent`)), `Native driver did not acknowledge ${name}`);
   }
   function observeKeys(owner) {
+    // Draft Escape deliberately stops ordinary propagation. Gecko dispatches
+    // the system group separately after clearing those flags (EventDispatcher
+    // 155); observe there without preventing or altering the native event.
     owner.addEventListener("keydown", event => {
       if (event.isTrusted && ["t", "T", "Escape", "Enter"].includes(event.key) && report.keys.length < 80) {
         report.keys.push({ key: event.key, command: event.metaKey, private: owner === privateWindow,
           pending: owner.FluxionNewTab?.pending, tabs: owner.gBrowser.tabs.length });
       }
-    }, true);
+    }, { capture: true, mozSystemGroup: true, passive: true, wantUntrusted: false });
   }
   function snapshot(owner) {
     const tab = owner.gBrowser.selectedTab;

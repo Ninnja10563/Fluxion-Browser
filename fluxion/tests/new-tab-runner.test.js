@@ -6,11 +6,37 @@ const functions = source.slice(source.indexOf("owned() {"), source.indexOf("clea
 const verifier = fs.readFileSync(require.resolve("../chrome/fluxion-new-tab-verification.js"), "utf8");
 const queryHelper = verifier.slice(verifier.indexOf("  function createQueryTracker() {"), verifier.indexOf("  async function typeAndSettle("));
 const createQueryTracker = require("node:vm").runInNewContext(`${queryHelper}\ncreateQueryTracker`);
+const keyObserverHelper = verifier.slice(verifier.indexOf("  function observeKeys(owner) {"), verifier.indexOf("  function snapshot(owner) {"));
 const deferred = () => {
   let resolve, reject;
   const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
   return { promise, resolve, reject };
 };
+
+test("native key evidence passively observes the separate Gecko system group and rejects synthetic input", () => {
+  const report = { keys: [] };
+  const observe = require("node:vm").runInNewContext(`${keyObserverHelper}\nobserveKeys`, { report, privateWindow: null });
+  let registration;
+  const owner = { gBrowser: { tabs: [1, 2] }, FluxionNewTab: { pending: false },
+    addEventListener(type, listener, options) { registration = { type, listener, options }; } };
+  observe(owner);
+  assert.equal(registration.type, "keydown");
+  assert.deepEqual(JSON.parse(JSON.stringify(registration.options)), {
+    capture: true, mozSystemGroup: true, passive: true, wantUntrusted: false,
+  });
+  const event = { key: "Escape", isTrusted: true, metaKey: false,
+    preventDefault() { throw Error("Observer must not interfere with native input"); },
+    stopPropagation() { throw Error("Observer must not stop native input"); },
+    stopImmediatePropagation() { throw Error("Observer must not stop native input"); } };
+  registration.listener({ ...event, isTrusted: false });
+  assert.equal(report.keys.length, 0);
+  registration.listener(event);
+  assert.equal(report.keys.length, 1);
+  assert.equal(report.keys[0].key, "Escape");
+  assert.equal(report.keys[0].tabs, 2);
+  for (let index = 0; index < 100; index++) registration.listener(event);
+  assert.equal(report.keys.length, 80, "Evidence remains bounded");
+});
 
 test("native query tracking discards already-rejected predecessor state on replacement", async () => {
   const tracker = createQueryTracker(), old = deferred(), current = deferred();
