@@ -23,6 +23,15 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.73.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.73.0-preview.1)**
+adds **Close Duplicate Tabs…** to the native tab menu. Cleanup stays within the
+current workspace and account container, keeps protected tabs, defaults to
+Cancel, and retains native unsaved-page prompts and undo. Canceled Peek
+closure now retains its source tab. All 1,222 tests and mandatory macOS gates
+passed, including actual menu commands, nonzero-container undo and a real
+unsaved-page cancellation. See the [milestone](fluxion/docs/milestone-0.73.md)
+and [provenance](fluxion/release/provenance/v0.73.0-preview.1.md).
+
 **[0.72.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.2-preview.1)**
 replaces the Extensions fox illustration with the transparent Fluxion F and
 verifies actual macOS application-menu branding. All 1,191 tests and mandatory

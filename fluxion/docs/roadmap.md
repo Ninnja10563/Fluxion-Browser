@@ -60,6 +60,11 @@ controls work and its failure paths have been tested.
 
 ## Phase 3 — interaction model
 
+- explicit current-workspace duplicate cleanup by exact URL and Gecko account
+  container, preserving protected tabs, native unsaved-page prompts and undo
+  (published in 0.73; actual native menu/confirmation, nonzero-container reopen,
+  stale-consent rejection and real beforeunload cancellation verified).
+  Canceled Peek closure retains its source, with nested-event regression tests.
 - Focus retraction over Settings and the floating sidebar, including saved
   disabled autohide preferences without preference rewrites; viewport-inset
   heading and genuine navigation hit testing (published in 0.70.2).

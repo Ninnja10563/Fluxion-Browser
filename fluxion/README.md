@@ -8,6 +8,17 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.73.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.73.0-preview.1)**
+adds counted **Close Duplicate Tabs…** in the native tab menu. Exact web
+addresses are matched only within the current workspace and account
+container; protected tabs remain, Cancel is the default, and native
+unsaved-page prompts and undo are retained. Canceled Peek closure no longer
+forgets its source. All 1,222 tests and mandatory native macOS gates passed;
+actual menu and confirmation screenshots were reviewed. See the
+[milestone](docs/milestone-0.73.md) and
+[provenance](release/provenance/v0.73.0-preview.1.md). Planning runs only on
+menu opening; this is not a website-speed benchmark claim.
+
 **[0.72.2-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.72.2-preview.1)**
 uses the supplied transparent F in the native Extensions popup, with native
 text and controls retained. Actual macOS application-menu labels are captured

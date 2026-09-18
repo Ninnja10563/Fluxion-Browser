@@ -1,6 +1,9 @@
 # 0.73 — Careful tab cleanup
 
-Status: candidate; not yet published or native-verified.
+Status: published as [0.73.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.73.0-preview.1).
+All 1,222 tests and every mandatory native macOS gate passed at source
+`50f93f9e1397df4d50b142f8f7b40d8537a33a8b`. See the
+[release provenance](../release/provenance/v0.73.0-preview.1.md).
 
 ## Behavior
 
@@ -29,11 +32,28 @@ return contract is retained so ordinary close handling cannot retry it.
 
 ## Verification
 
-Pure and runtime tests exercise exact identity, protected keepers, stale
-consent, nested events, cancellation, cleanup and a 1,000-tab linear planner.
-The full macOS gate remains required before a release is published, including
-the new actual native-menu, confirmation, beforeunload and recovery fixture.
-No physical M3 trackpad or website-speed benchmark result is claimed.
+Pure and runtime tests exercise exact identity, all protected states (including
+paused screen/camera capture), stale consent, nested events, cancellation,
+private-window execution, cleanup and a 1,000-tab linear planner. The Peek
+regression executes the shipped module and generic close dispatcher; it is not
+represented as a native unsaved-Peek test.
+
+The new native gate uses actual macOS keyboard menu input and a real Cancel-
+default confirmation. It verifies selected/context/pinned tabs, URL query and
+fragment differences, hidden workspaces and distinct account containers. Native
+Cmd–Shift–T restores the closed tab's workspace and nonzero container. Navigation
+during confirmation aborts the entire stale plan.
+
+A real loopback page receives trusted input only after Gecko's visible layer
+switch completes. A per-document nonce, native page title and server events
+prove which duplicate armed beforeunload; cancellation of the actual leave-page
+dialog retains it. Group/split/media protections are covered by runtime tests,
+not claimed as native cleanup cases. Actual menu and confirmation captures were
+reviewed with unslop-ui: native hierarchy, no decorative icons or new panels.
+
+The full workflow also passed browsing, signed replacement/relaunch, session
+recovery, last-window persistence, privacy, accessibility and large-session
+gates. No physical M3 trackpad or website-speed benchmark result is claimed.
 
 ## Boundaries
 
