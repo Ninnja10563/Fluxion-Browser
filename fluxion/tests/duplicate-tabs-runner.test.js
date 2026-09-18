@@ -81,13 +81,21 @@ test("duplicate loopback fixture refuses foreign hosts and methods and records b
     assert.equal((await fetch(`${origin}/page`, { method: "POST" })).status, 405);
     assert.equal((await fetch(`${origin}/unknown`)).status, 404);
     assert.equal((await fetch(`${origin}/event?name=foreign`, { method: "POST" })).status, 400);
+    await fetch(`${origin}/page?case=beforeunload`);
+    const fixture = (await (await fetch(`${origin}/state`)).json()).documents[0];
+    assert.equal((await fetch(`${origin}/event?name=armed&nonce=unknown`, { method: "POST" })).status, 400);
     for (const name of ["armed", "unload", "unload"]) {
-      assert.equal((await fetch(`${origin}/event?name=${name}`, { method: "POST" })).status, 204);
+      assert.equal((await fetch(`${origin}/event?name=${name}&nonce=${fixture.nonce}`, { method: "POST" })).status, 204);
     }
-    assert.deepEqual(await (await fetch(`${origin}/state`)).json(), { armed: 1, unload: 2 });
+    assert.deepEqual(await (await fetch(`${origin}/state`)).json(), { armed: 1, unload: 2,
+      documents: [fixture], events: ["armed", "unload", "unload"].map(name => ({ name, nonce: fixture.nonce,
+        case: "beforeunload", path: "/page?case=beforeunload" })) });
     const page = await (await fetch(`${origin}/page?case=test#fragment`)).text();
     assert.match(page, /event\.isTrusted/);
     assert.match(page, /navigator\.userActivation\.isActive/);
     assert.match(page, /beforeunload/);
+    assert.match(page, /if \(!false \|\| !event\.isTrusted/);
+    const ordinary = (await (await fetch(`${origin}/state`)).json()).documents[1];
+    assert.equal((await fetch(`${origin}/event?name=armed&nonce=${ordinary.nonce}`, { method: "POST" })).status, 400);
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); }
 });

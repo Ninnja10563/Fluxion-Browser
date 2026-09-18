@@ -8,7 +8,7 @@
   const { document, gBrowser } = window;
   const driver = Services.env.get("FLUXION_DUPLICATE_TABS_DRIVER_DIR");
   const origin = Services.env.get("FLUXION_DUPLICATE_TABS_ORIGIN");
-  const report = { input: "System Events native context menu and reopen; Gecko widget prompt controls", checks: [], prompts: [], menuEvents: [], readiness: [], keys: [] };
+  const report = { input: "System Events native context menu and reopen; Gecko widget prompt controls", checks: [], prompts: [], menuEvents: [], popupEvents: [], readiness: [], keys: [] };
   const assert = (condition, message) => { if (!condition) throw Error(message); };
   const stage = value => { Services.prefs.setStringPref(`${prefix}.stage`, value); Services.prefs.savePrefFile(null); };
   const wait = async (check, message, timeout = 20000) => {
@@ -101,6 +101,13 @@
     const popup = document.getElementById("fluxion-tab-context"), item = document.getElementById("fluxion-close-duplicate-tabs");
     assert(item?.parentNode === popup, "Duplicate cleanup must be a native top-level tab action");
     let active = null, commands = 0;
+    for (const type of ["popupshowing", "popupshown", "popuphiding", "popuphidden"]) {
+      popup.addEventListener(type, event => {
+        if (event.target === popup && report.popupEvents.length < 40) {
+          report.popupEvents.push({ type, trusted: event.isTrusted, state: popup.state });
+        }
+      });
+    }
     const describe = node => node ? { id: node.id || "", name: node.localName,
       className: typeof node.className === "string" ? node.className : "",
       tabIndex: node._fluxionTab ? [...gBrowser.tabs].indexOf(node._fluxionTab) : null } : null;
@@ -212,16 +219,43 @@
     report.checks.push("modal-time-navigation-invalidates-whole-plan-without-retargeting");
     const unloadURL = `${origin}/page?case=beforeunload`;
     const survivor = await create(unloadURL), armed = await create(unloadURL);
-    ui.selectTab(armed);
-    await wait(() => armed.linkedBrowser.getBoundingClientRect().height > 100 && Services.focus.activeWindow === window,
-      "Beforeunload page is not visible");
-    clickWidget(window, armed.linkedBrowser);
     const serverState = async () => (await window.fetch(`${origin}/state`)).json();
-    await wait(async () => (await serverState()).armed === 1, "Trusted page activation did not arm beforeunload");
-    ui.selectTab(selected);
-    await invoke(context, 1, { beforeUnload: true });
-    await wait(async () => (await serverState()).unload >= 1, "Actual beforeunload handler did not execute");
-    assert(live(armed) && live(survivor), "Canceling real leave-page prompt failed to preserve duplicate");
+    const tabState = tab => ({ live: Boolean(live(tab)), closing: tab.closing, selected: tab === gBrowser.selectedTab,
+      url: tab.linkedBrowser?.currentURI?.spec, title: tab.linkedBrowser?.contentTitle,
+      docShellActive: tab.linkedBrowser?.docShellIsActive, hasLayers: tab.linkedBrowser?.hasLayers,
+      visible: !gBrowser._switcher || gBrowser._switcher.visibleTab === tab,
+      switchInProgress: gBrowser._switcher?.switchInProgress || false,
+      pendingPaint: gBrowser.tabpanels.hasAttribute("pendingpaint") });
+    report.beforeUnload = {};
+    try {
+      ui.selectTab(armed);
+      // Gecko's selectedTab setter precedes its async layer/paint switch. The
+      // same browser rectangle can still display and route input to the old
+      // document until AsyncTabSwitcher exposes the requested visible panel.
+      await wait(() => gBrowser.selectedTab === armed && (!gBrowser._switcher ||
+        (gBrowser._switcher.visibleTab === armed && !gBrowser._switcher.switchInProgress)) &&
+        gBrowser.tabpanels.selectedPanel === gBrowser.tabContainer.getRelatedElement(armed) &&
+        armed.linkedBrowser.docShellIsActive && armed.linkedBrowser.hasLayers &&
+        !gBrowser.tabpanels.hasAttribute("pendingpaint") && Services.focus.activeWindow === window,
+      "Beforeunload page's actual native layer switch did not complete");
+      report.beforeUnload.beforeClick = tabState(armed);
+      clickWidget(window, armed.linkedBrowser);
+      const event = await wait(async () => (await serverState()).events.find(entry => entry.name === "armed"),
+        "Trusted designated-page activation did not arm beforeunload");
+      await wait(() => armed.linkedBrowser.contentTitle === `Fluxion armed ${event.nonce}`,
+        "Arming beacon did not belong to the intended duplicate document");
+      assert(survivor.linkedBrowser.contentTitle === "Fluxion duplicate fixture", "Fixture armed its keeper instead of the duplicate");
+      report.beforeUnload.nonce = event.nonce;
+      ui.selectTab(selected);
+      await invoke(context, 1, { beforeUnload: true });
+      await wait(async () => (await serverState()).events.some(entry => entry.name === "unload" && entry.nonce === event.nonce),
+        "Intended duplicate's actual beforeunload handler did not execute");
+      assert(live(armed) && live(survivor), "Canceling real leave-page prompt failed to preserve duplicate");
+    } finally {
+      report.beforeUnload.final = { armed: tabState(armed), survivor: tabState(survivor), selected: tabState(gBrowser.selectedTab) };
+      try { report.beforeUnload.server = await serverState(); }
+      catch (error) { report.beforeUnload.serverError = String(error); }
+    }
     report.checks.push("trusted-page-beforeunload-cancel-preserves-page-through-native-close-path");
     assert(live(stale), "Unrelated stale-group survivor vanished");
   }
