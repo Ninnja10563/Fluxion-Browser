@@ -25,6 +25,13 @@ const project = new Function("AppConstants", "Services", "state", "lazy = { Priv
 const services = startup => ({ prefs: { getIntPref: () => startup } });
 const mac = { platform: "macosx" };
 
+test("empty workspace identity participates in Gecko's native persisted attribute allowlist", () => {
+  const replacement = JSON.parse(python('print(json.dumps(m.REPLACEMENTS["modules/sessionstore/TabAttributes.sys.mjs"]))'))[0];
+  assert.equal(replacement[0], 'const PERSISTED_ATTRIBUTES = ["customizemode"];');
+  const attributes = new Function(`${replacement[1]} return PERSISTED_ATTRIBUTES;`)();
+  assert.deepEqual(attributes, ["customizemode", "fluxion-empty-workspace"]);
+});
+
 test("macOS last-window policy follows the explicit startup choice, not stale initial startup state", () => {
   for (const platform of ["macosx", "linux", "win"]) for (const startup of [0, 1, 3]) for (const permanentPrivateBrowsing of [false, true]) {
     assert.equal(restoreChoice({ platform }, { permanentPrivateBrowsing }, services(startup)),

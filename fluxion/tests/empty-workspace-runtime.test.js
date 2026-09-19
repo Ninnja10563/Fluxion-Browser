@@ -20,7 +20,7 @@ function node() {
 function fixture({ marker = false, url = "about:blank", lateUI = false, os = "Darwin" } = {}) {
   const root = node(), commands = new Map(["Browser:AddBookmarkAs", "Browser:BookmarkAllTabs"].map(id => [id, Object.assign(node(), { id })]));
   const document = { documentElement: root, createElementNS: () => node(), getElementById: id => commands.get(id) };
-  const tasks = [], tabs = [], removed = [], saved = [], calls = [];
+  const tasks = [], tabs = [], removed = [], calls = [];
   let selected, progress, disposedProgress = false, current = "focus", refreshes = 0;
   const make = (spec, workspace = current, marked = false) => {
     const tab = Object.assign(node(), { parentNode: {}, closing: false, workspace,
@@ -48,9 +48,8 @@ function fixture({ marker = false, url = "about:blank", lateUI = false, os = "Da
     refresh() { refreshes++; } };
   const window = emitter({ document, gBrowser, PlacesCommandHook: places, closed: false,
     queueMicrotask: fn => tasks.push(fn), ...(lateUI ? {} : { FluxionUI: ui }) });
-  vm.runInNewContext(source, { window, Services: { appinfo: { OS: os }, prefs: { getStringPref: () => "resource://fluxion/newtab/index.html" } },
-    SessionStore: { persistTabAttribute: name => saved.push(name) } });
-  return { window, root, commands, gBrowser, initial, make, calls, removed, saved, places, originals, tasks,
+  vm.runInNewContext(source, { window, Services: { appinfo: { OS: os }, prefs: { getStringPref: () => "resource://fluxion/newtab/index.html" } } });
+  return { window, root, commands, gBrowser, initial, make, calls, removed, places, originals, tasks,
     get api() { return window.FluxionEmptyWorkspace; }, get refreshes() { return refreshes; },
     progressRemoved: () => disposedProgress,
     flush() { let limit = 50; while (tasks.length && limit--) tasks.shift()(); assert.ok(limit > 0, "lifecycle must settle without a timer loop"); },
@@ -90,9 +89,8 @@ test("native private start page remains empty only when explicitly marked", () =
   assert.equal(f.api.isPlaceholder(f.initial), true);
   assert.equal(f.root.hasAttribute("data-fluxion-empty-workspace"), true);
 });
-test("explicit restored marker persists and paints empty before chrome UI initializes", () => {
+test("native-restored explicit marker paints empty before chrome UI initializes without an unsupported SessionStore API", () => {
   const f = fixture({ marker: true, lateUI: true });
-  assert.deepEqual(f.saved, ["fluxion-empty-workspace"]);
   assert.equal(f.root.hasAttribute("data-fluxion-empty-workspace"), true);
   f.installUI(); f.api.adopt(f.initial);
   assert.equal(f.initial.getAttribute("fluxion-workspace"), "focus");

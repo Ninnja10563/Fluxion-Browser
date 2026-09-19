@@ -1,4 +1,4 @@
-/* global Services, SessionStore */
+/* global Services */
 (function initialiseEmptyWorkspaces(window) {
   "use strict";
   const { document, gBrowser } = window;
@@ -18,7 +18,9 @@
     :root[data-fluxion-empty-workspace] #star-button-box { visibility: hidden !important; }
   `;
   root.appendChild(style);
-  try { SessionStore.persistTabAttribute(ATTRIBUTE); } catch (_) {}
+  // The hash-pinned native session policy registers ATTRIBUTE in Gecko's
+  // TabAttributes list before session restoration. Gecko 155 has no public
+  // persistTabAttribute API; a swallowed call here would not persist identity.
   function on(target, type, handler, capture = false) {
     target.addEventListener(type, handler, capture);
     cleanup.push(() => target.removeEventListener(type, handler, capture));

@@ -12,6 +12,8 @@ replacement with a persisted tab attribute, excludes it from tab lists and
 closed-tab history, and promotes it on navigation. Explicit user-created blank
 tabs are ordinary tabs. Native beforeunload, tab cleanup, containers, search POST
 data and SessionStore remain responsible for their existing behavior.
+The marker is added to Gecko's hash-pinned native `TabAttributes` allowlist;
+Gecko 155 no longer exposes the old runtime `persistTabAttribute` API.
 
 ## Performance work
 
@@ -60,3 +62,8 @@ empty normal/private workspaces, session attributes, explicit blank tabs and
 the existing session, privacy, update and browser-integration checks. Physical M3
 Speedometer validation remains outstanding. Builds are ad-hoc signed, not Apple
 notarized.
+
+The first candidate, `cef2094`, was rejected by native run `35474375673`:
+the empty surface worked, but the marker was absent from native session state.
+The run was canceled and nothing published. This exposed the removed runtime
+persistence API; the native allowlist fix keeps the original assertion intact.

@@ -24,6 +24,7 @@ VERSION = "155.0.1"
 HASHES = {
     "modules/sessionstore/SessionStore.sys.mjs": "456cef74607b5abafc352909f6f4a67901140cb358cf606fc55c9f1f21d700a1",
     "modules/sessionstore/SessionSaver.sys.mjs": "c542e5d51cbf50bd27ffae0e294174444c87cbc8162eb2d51542ac72434ea374",
+    "modules/sessionstore/TabAttributes.sys.mjs": "1d9b8494e76849602727b06b9ac24870401ac2795a7673fb59cb3acca9bc57cd",
     "chrome/browser/content/browser/tabbrowser/tabbrowser.js": "b9b385572ad4652dd24093f3058d3cd530effa4ff69867962f2e4379a85eda8b",
 }
 DEPENDENCY_HASHES = {
@@ -155,6 +156,12 @@ TAB_REPLACEMENTS = [
 ]
 
 REPLACEMENTS = {
+    # Gecko 155 removed the runtime persistTabAttribute API. Extend its exact
+    # native allowlist so save/restore owns this marker even before chrome loads.
+    "modules/sessionstore/TabAttributes.sys.mjs": [
+        ('const PERSISTED_ATTRIBUTES = ["customizemode"];',
+         'const PERSISTED_ATTRIBUTES = ["customizemode", "fluxion-empty-workspace"];'),
+    ],
     "modules/sessionstore/SessionStore.sys.mjs": STORE_REPLACEMENTS,
     "modules/sessionstore/SessionSaver.sys.mjs": SAVER_REPLACEMENTS,
     "chrome/browser/content/browser/tabbrowser/tabbrowser.js": TAB_REPLACEMENTS,
