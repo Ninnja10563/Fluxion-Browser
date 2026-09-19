@@ -103,6 +103,29 @@ SAVER_REPLACEMENTS = [
 ]
 
 TAB_REPLACEMENTS = [
+    ('''      if (newTab) {
+        this.addTrustedTab(BROWSER_NEW_TAB_URL, {''', '''      if (newTab) {
+        const replacementTab = this.addTrustedTab(BROWSER_NEW_TAB_URL, {'''),
+    ('''          tabIndex: 0,
+        });
+      } else {
+        TabBarVisibility.update();''', '''          tabIndex: 0,
+        });
+        // Only Gecko's automatic last-tab replacement is an empty workspace.
+        // Explicit blank tabs remain ordinary user tabs, including for undo.
+        replacementTab.setAttribute("fluxion-empty-workspace", "true");
+        try {
+          window.FluxionEmptyWorkspace?.adopt(replacementTab);
+        } catch (error) {
+          console.error("Fluxion empty workspace adoption", error);
+        }
+      } else {
+        TabBarVisibility.update();'''),
+    ('''          adoptedBy: adoptedByTab,
+          skipSessionStore,
+          metricsContext,''', '''          adoptedBy: adoptedByTab,
+          skipSessionStore: skipSessionStore || aTab.hasAttribute("fluxion-empty-workspace"),
+          metricsContext,'''),
     ('''        this.tabs.length == tabs.length &&
         Services.prefs.getBoolPref("browser.tabs.closeWindowWithLastTab")''', '''        this.tabs.length == tabs.length &&
         !window.toolbar.visible &&

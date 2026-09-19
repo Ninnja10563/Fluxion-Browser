@@ -20,14 +20,14 @@ SHA256 = "88464e8fef698473f4ad09036c4392845aaf61bc37f011fa9dd6054e48950748"
 # The session policy runs first. Pin its exact Gecko 155.0.1 tabbrowser output,
 # so neither an upstream drift nor a changed earlier policy is silently accepted.
 TAB_ENTRY = "chrome/browser/content/browser/tabbrowser/tabbrowser.js"
-TAB_SHA256 = "5f673b0f29d7af0637f89e9b22480c47faed94aaa770c0f2029eeaf7fc715e70"
+TAB_SHA256 = "2e71fa17b4db52da73e1ce9beb21caa0b9ffd185718b4cefea0eaa9223f9df0a"
 TAB_REPLACEMENTS = [
     ('''        if (aNewTab) {
           gURLBar.select();
         }''', '''        // A last-tab replacement is not a request to edit the address.
         // Explicit Focus keeps its toolbar hidden until a real location/menu
         // action. Do not blur an existing editor or alter native close guards.
-        if (aNewTab &&
+        if (aNewTab && !this.selectedTab.hasAttribute("fluxion-empty-workspace") &&
             !document.documentElement.hasAttribute("data-fluxion-focus-mode") &&
             !document.documentElement.hasAttribute("data-fluxion-native-focus")) {
           gURLBar.select();

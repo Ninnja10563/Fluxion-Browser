@@ -1227,7 +1227,7 @@
   }
 
   function createNamedGroup(tabs, requestedName) {
-    const candidates = [...new Set(tabs)].filter(tab => tab?.parentNode && !tab.pinned && !tab.splitview);
+    const candidates = [...new Set(tabs)].filter(tab => tab?.parentNode && !tab.pinned && !tab.splitview && !window.FluxionEmptyWorkspace?.isPlaceholder(tab));
     if (!candidates.length) return null;
     const name = FluxionTabGroups.normaliseGroupName(requestedName);
     if (!name) {
@@ -1449,7 +1449,7 @@
         if (tab.hidden) gBrowser.showTab(tab);
       }
       if (!workspaceTabs.length) {
-        const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
+        const tab = window.FluxionEmptyWorkspace?.create(id) || gBrowser.addTrustedTab(NEW_TAB_URL);
         setTabWorkspace(tab, id);
         workspaceTabs = [tab];
       }
@@ -1548,9 +1548,9 @@
   function contextTabs(tab = contextTab) {
     if (!arguments.length) {
       const menuContext = flowMenuSession?.context(contextMenu);
-      if (menuContext) return [...menuContext.tabs];
+      if (menuContext) return [...menuContext.tabs].filter(candidate => !window.FluxionEmptyWorkspace?.isPlaceholder(candidate));
     }
-    return FluxionTabSelection.contextTabs(tab, gBrowser.selectedTabs);
+    return FluxionTabSelection.contextTabs(tab, gBrowser.selectedTabs).filter(candidate => !window.FluxionEmptyWorkspace?.isPlaceholder(candidate));
   }
 
   function splitOrientation(tab = gBrowser.selectedTab) {
@@ -1639,6 +1639,7 @@
   }
 
   function createSplitView(primary, secondary, options = {}) {
+    if ([primary, secondary].some(tab => window.FluxionEmptyWorkspace?.isPlaceholder(tab))) return null;
     if (!FluxionSplitViews.canSplit(primary, secondary)) return null;
     const orientation = FluxionSplitViews.normaliseOrientation(options.orientation);
     const workspace = tabWorkspace(primary);
@@ -1663,7 +1664,7 @@
   }
 
   function openNewSplit(primary = gBrowser.selectedTab, orientation = FluxionSplitViews.SIDE_BY_SIDE) {
-    if (!primary || primary.pinned || primary.splitview) return null;
+    if (!primary || primary.pinned || primary.splitview || window.FluxionEmptyWorkspace?.isPlaceholder(primary)) return null;
     const tab = gBrowser.addTrustedTab(NEW_TAB_URL);
     setTabWorkspace(tab, tabWorkspace(primary));
     const splitView = createSplitView(primary, tab, { selectSecondary: true, orientation });
@@ -2670,7 +2671,8 @@
     dirtyTabs.clear();
     renderWorkspaces();
     // Gecko emits TabClose before its closing animation detaches the native tab.
-    const visible = [...gBrowser.tabs].filter(tab => tab.parentNode && !tab.closing && tabWorkspace(tab) === currentWorkspace);
+    const visible = [...gBrowser.tabs].filter(tab => tab.parentNode && !tab.closing &&
+      !window.FluxionEmptyWorkspace?.isPlaceholder(tab) && tabWorkspace(tab) === currentWorkspace);
     reconcileFlowTabs(visible);
     const noPinnedTabs = pinnedTabs.childElementCount === 0;
     if (pinnedLabel.hidden !== noPinnedTabs) pinnedLabel.hidden = noPinnedTabs;
@@ -2733,9 +2735,9 @@
   }
 
   function updateWindowTitle() {
-    const label = tabLabel(gBrowser.selectedTab);
+    const label = window.FluxionEmptyWorkspace?.isPlaceholder(gBrowser.selectedTab) ? "" : tabLabel(gBrowser.selectedTab);
     const isPrivate = Boolean(window.PrivateBrowsingUtils?.isWindowPrivate(window));
-    const title = `${label} — Fluxion${isPrivate ? " Private" : ""}`;
+    const title = `${label ? `${label} — ` : ""}Fluxion${isPrivate ? " Private" : ""}`;
     if (document.title !== title) document.title = title;
   }
 

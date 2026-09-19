@@ -83,6 +83,7 @@ node --check chrome/core/duplicate-tabs.js
 node --check chrome/fluxion-duplicate-tabs.js
 node --check chrome/fluxion-duplicate-tabs-verification.js
 node --check chrome/fluxion-new-tab.js
+node --check chrome/fluxion-empty-workspace.js
 node --check chrome/fluxion-new-tab-verification.js
 node --check scripts/new-tab-fixture.mjs
 node --check chrome/fluxion-branding-upgrade-verification.js

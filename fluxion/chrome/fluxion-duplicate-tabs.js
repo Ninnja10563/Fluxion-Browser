@@ -10,7 +10,7 @@
   item.setAttribute("tooltiptext", "Review exact duplicate web addresses in this workspace; different accounts stay separate");
   popup.insertBefore(item, popup.lastElementChild);
   let snapshot = null, disposed = false, running = false;
-  const live = tab => Boolean(tab?.parentNode && !tab.closing && !window.closed &&
+  const live = tab => Boolean(tab?.parentNode && !tab.closing && !window.closed && !window.FluxionEmptyWorkspace?.isPlaceholder(tab) &&
     gBrowser.getTabForBrowser(tab.linkedBrowser) === tab &&
     (tab.ownerGlobal || tab.documentGlobal || tab.ownerDocument?.defaultView) === window);
   const protectedTab = (tab, context) => Boolean(context.has(tab) || tab === gBrowser.selectedTab ||

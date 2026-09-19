@@ -183,7 +183,7 @@
     const records = [];
     let unchanged = Boolean(previous);
     for (const tab of gBrowser.tabs) {
-      if (tab.closing || ui.tabWorkspace(tab) !== workspace) continue;
+      if (tab.closing || window.FluxionEmptyWorkspace?.isPlaceholder(tab) || ui.tabWorkspace(tab) !== workspace) continue;
       const record = { tab, title: tab.label || tab.getAttribute("label") || "",
         url: tab.linkedBrowser?.currentURI?.spec || "", pinned: tab.pinned,
         grouped: Boolean(tab.group), split: Boolean(tab.splitview) };
@@ -225,9 +225,10 @@
   }
 
   function commandItems() {
+    const hasPage = !window.FluxionEmptyWorkspace?.isPlaceholder(gBrowser.selectedTab);
     const items = [
       {
-        label: "New tab", detail: "Open a blank tab", kind: "Command", boost: 45,
+        label: "New tab", detail: "Enter an address or search to open a tab", kind: "Command", boost: 45,
         keywords: ["create page"], run: () => ui.newTab(),
       },
       {
@@ -239,11 +240,11 @@
         keywords: ["incognito privacy"], run: () => window.OpenBrowserWindow({ private: true }),
       },
       {
-        label: "Duplicate current tab", detail: "Create a copy in this workspace", kind: "Command",
+        label: "Duplicate current tab", detail: "Create a copy in this workspace", kind: "Command", requiresPage: true,
         keywords: ["copy page"], run: () => gBrowser.duplicateTab(gBrowser.selectedTab),
       },
       {
-        label: "Close current tab", detail: "Close the selected tab", kind: "Command",
+        label: "Close current tab", detail: "Close the selected tab", kind: "Command", requiresPage: true,
         keywords: ["remove page"], run: () => gBrowser.removeTab(gBrowser.selectedTab),
       },
       {
@@ -255,7 +256,7 @@
         keywords: ["add create workspace"], run: () => ui.addWorkspace(),
       },
       {
-        label: "New tab group", detail: "Start a named group with the current tab", kind: "Command",
+        label: "New tab group", detail: "Start a named group with the current tab", kind: "Command", requiresPage: true,
         keywords: ["add create organize tabs"], run: () => ui.createGroup(),
       },
       {
@@ -333,13 +334,14 @@
       ["Extensions & Themes", "Manage Firefox-compatible WebExtensions", "Tools:Addons", ["addons add-ons themes"]],
     ];
     for (const [label, detail, command, keywords] of nativePageCommands) {
+      if (!hasPage && command !== "View:FullScreen" && command !== "Tools:Addons") continue;
       if (!ui.nativeCommandAvailable(command)) continue;
       items.push({
         label, detail, kind: "Page", keywords,
         run: () => ui.runNativeCommand(command),
       });
     }
-    if (ui.developerToolsAvailable()) {
+    if (hasPage && ui.developerToolsAvailable()) {
       items.push({
         label: "Developer Tools", detail: "Inspect the current page with Gecko DevTools", kind: "Page",
         keywords: ["devtools inspector console"], run: () => ui.openDeveloperTools(),
@@ -364,7 +366,7 @@
         });
       }
     }
-    const selectedTab = gBrowser.selectedTab;
+    const selectedTab = hasPage ? gBrowser.selectedTab : null;
     const privateWindow = PrivateBrowsingUtils.isWindowPrivate(window);
     const aiConfig = window.FluxionAI?.config();
     const suggestion = organisationSuggestion();
@@ -380,6 +382,7 @@
     }
     items.splice(9, 0, {
       label: "Ask Current Page",
+      requiresPage: true,
       detail: aiConfig?.provider === "disabled"
         ? "Configure an optional AI provider first"
         : `Use ${aiConfig.provider} with extracted page text`,
@@ -391,7 +394,7 @@
     });
     if (gBrowser.selectedTabs.length >= 2) {
       const comparisonTabs = [...gBrowser.selectedTabs]
-        .filter(tab => tab.linkedBrowser)
+        .filter(tab => tab.linkedBrowser && !window.FluxionEmptyWorkspace?.isPlaceholder(tab))
         .slice(0, 4);
       items.splice(10, 0, {
         label: "Compare Selected Pages",
@@ -412,7 +415,7 @@
           boost: 12, keywords: ["semantic history remember visited page"], run: () => open("memory"),
         },
         {
-          label: "Exclude this site from Browser Memory", detail: "Remove this domain from local semantic results", kind: "Privacy",
+          label: "Exclude this site from Browser Memory", detail: "Remove this domain from local semantic results", kind: "Privacy", requiresPage: true,
           keywords: ["semantic history domain private"], run: async () => {
             const url = gBrowser.selectedBrowser?.currentURI?.spec;
             if (!url || !/^https?:/i.test(url)) return;
@@ -522,7 +525,7 @@
         },
       );
     }
-    return items;
+    return items.filter(item => hasPage || !item.requiresPage);
   }
 
   function tabItems() {
@@ -535,7 +538,7 @@
           window.FluxionSplitViews.canSplit(splitSource, tab)
         )
       : [...gBrowser.tabs];
-    return tabs.map(tab => {
+    return tabs.filter(tab => !window.FluxionEmptyWorkspace?.isPlaceholder(tab)).map(tab => {
       let cached = tabSearchItems.get(tab);
       if (!cached || cached.source !== source || cached.orientation !== orientation) {
         cached = { source, orientation, item: { run: () => source

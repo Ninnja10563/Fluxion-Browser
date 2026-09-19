@@ -34,8 +34,26 @@ test("native key evidence passively observes the separate Gecko system group and
   assert.equal(report.keys.length, 1);
   assert.equal(report.keys[0].key, "Escape");
   assert.equal(report.keys[0].tabs, 2);
+  registration.listener({ ...event, key: "t" });
+  assert.equal(report.keys.length, 1, "Typed query letters must not crowd out command evidence");
+  registration.listener({ ...event, key: "w", metaKey: true });
+  assert.equal(report.keys.length, 2);
+  assert.equal(report.keys[1].key, "w");
+  assert.equal(report.keys[1].command, true);
   for (let index = 0; index < 100; index++) registration.listener(event);
   assert.equal(report.keys.length, 80, "Evidence remains bounded");
+});
+
+test("empty workspace evidence captures only four bounded normal/private states after foreground ownership checks", () => {
+  for (const state of ["ordinary-empty", "ordinary-draft", "private-empty", "private-draft"]) {
+    assert.ok(source.includes(`capture-${state}`));
+    assert.ok(verifier.includes(`"capture-${state}"`));
+  }
+  assert.match(source, /owned \|\| exit 1\n\s+\/usr\/sbin\/screencapture -x "\$artifact_dir\/\$action\.png"\n\s+\[\[ -s "\$artifact_dir\/\$action\.png" \]\] \|\| exit 1/);
+  assert.match(source, /Wrong foreground process/);
+  assert.match(verifier, /capture-\$\{label\}-empty/);
+  assert.match(verifier, /capture-\$\{label\}-draft/);
+  assert.match(source, /sequence <= 80/);
 });
 
 test("native query tracking discards already-rejected predecessor state on replacement", async () => {

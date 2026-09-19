@@ -80,7 +80,7 @@ wait_for_owned_browser || exit 1
 sequence=1
 for ((attempt=0; attempt<1200; attempt++)); do
   owned || break
-  for action in activate newtab type return escape; do
+  for action in activate newtab close type return escape capture-ordinary-empty capture-ordinary-draft capture-private-empty capture-private-draft; do
     request="$sequence-$action"
     if [[ -f "$driver/$request.ready" && ! -f "$driver/$request.sent" ]]; then
       (( sequence <= 80 )) || exit 1
@@ -101,12 +101,17 @@ on run arguments
         tell first application process whose unix id is browserPID
           if actionName is "newtab" then
             key code 17 using {command down}
+          else if actionName is "close" then
+            key code 13 using {command down}
           else if actionName is "type" then
             keystroke (item 3 of arguments)
           else if actionName is "return" then
             key code 36
           else if actionName is "escape" then
             key code 53
+          else if actionName is "capture-ordinary-empty" or actionName is "capture-ordinary-draft" or actionName is "capture-private-empty" or actionName is "capture-private-draft" then
+            -- Foreground/profile ownership is checked; capture does not send input.
+            set captureReady to true
           else
             error "Unknown new tab action"
           end if
@@ -116,13 +121,20 @@ on run arguments
   end timeout
 end run
 APPLESCRIPT
+      case "$action" in
+        capture-ordinary-empty|capture-ordinary-draft|capture-private-empty|capture-private-draft)
+          owned || exit 1
+          /usr/sbin/screencapture -x "$artifact_dir/$action.png"
+          [[ -s "$artifact_dir/$action.png" ]] || exit 1
+          ;;
+      esac
       touch "$driver/$request.sent"
       sequence=$((sequence + 1))
     fi
   done
   if [[ -f "$profile/prefs.js" ]]; then
     if grep -Fq 'user_pref("fluxion.newTab.verification.health", "native-deferred-new-tab-verified")' "$profile/prefs.js"; then
-      printf 'Verified native deferred New Tab, Escape cancellation, URL/POST submission, workspace/container boundaries and private browsing.\n'
+      printf 'Verified native deferred New Tab, empty-workspace Cmd-W, Escape cancellation, URL/POST submission, workspace/container boundaries and private browsing.\n'
       exit 0
     fi
     if grep -Fq 'user_pref("fluxion.newTab.verification.error"' "$profile/prefs.js"; then break; fi

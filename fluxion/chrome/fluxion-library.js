@@ -975,9 +975,14 @@
   }));
 
   function syncVisibility() {
+    if (destroyed) return;
     const tab = selectedLibraryTab();
     const visible = Boolean(tab);
     const wasVisible = !root.hidden;
+    // Ordinary page navigations do not change an already hidden Library. Its
+    // hide transition owns menu dismissal and query cancellation exactly once;
+    // do not rewrite browser chrome or invalidate work on every later URL.
+    if (!visible && !wasVisible) return;
     if (!visible) dismissItemMenu();
     root.hidden = !visible;
     if (visible) contentDeck.hidden = true;
@@ -1029,7 +1034,10 @@
 
   gBrowser.tabContainer.addEventListener("TabSelect", handleTabSelect);
   const progressListener = {
-    onLocationChange(browser) {
+    onLocationChange(browser, webProgress) {
+      // Gecko forwards subframe locations too. They neither commit a Library
+      // route nor change the selected top-level surface (or its pending intent).
+      if (destroyed || !webProgress?.isTopLevel) return;
       pendingSections.delete(browser);
       if (browser === gBrowser.selectedBrowser) handleTabSelect();
     },

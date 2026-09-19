@@ -30,7 +30,7 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   }
   const Services = {
     dirsvc: { get: key => { assert.equal(key, "GreD"); return new File("/app"); } },
-    env: { get: name => name === "FLUXION_ROOT" ? "/app/fluxion" : "" },
+    env: { get: name => name === "FLUXION_ROOT" ? "/app/fluxion" : options.env?.[name] ?? "" },
     io: {
       newFileURI: file => ({ spec: `file://${file.path}` }),
       newURI: spec => ({ spec }),
@@ -67,7 +67,7 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     } },
     scriptSecurityManager: { getSystemPrincipal: () => ({}) },
   };
-  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../runtime/fluxion.cfg"), "utf8"), {
+  vm.runInNewContext(options.runtimeSource ?? fs.readFileSync(path.join(__dirname, "../runtime/fluxion.cfg"), "utf8"), {
     Services,
     Components: { manager: { QueryInterface: () => ({ autoRegister(file) {
       assert.equal(startupObserver, undefined, "Defaults must register before browser startup observation");
@@ -104,6 +104,119 @@ function startupFixture(selectedURL, saved = [], options = {}) {
     profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
     get managerCalls() { return managerCalls; }, boundaryEvents };
 }
+
+// Frozen from 0.74 (c2e67888): gating must preserve the dependency order of
+// every production script and each explicitly enabled native verifier.
+const startupLoadOrder = require("./fixtures/startup-load-order.json");
+const verificationRules = [
+  ["tab-links", "FLUXION_TAB_LINKS_TEST"],
+  ["duplicate-tabs", "FLUXION_DUPLICATE_TABS_TEST"],
+  ["tab-transfer", "FLUXION_TAB_TRANSFER_TEST"],
+  ["browsing", "FLUXION_VISUAL_BROWSING_TEST"],
+  ["library", "FLUXION_LIBRARY_SCALE_TEST"],
+  ["memory-candidate", "FLUXION_MEMORY_PRIVACY_TEST"],
+  ["memory-privacy", "FLUXION_MEMORY_PRIVACY_TEST"],
+  ["memory-migration", "FLUXION_SEMANTIC_MODEL_TEST"],
+  ["update", "FLUXION_UPDATE_TEST"],
+  ["external-open", "FLUXION_EXTERNAL_OPEN_TEST"],
+  ["settings-accessibility", "FLUXION_SETTINGS_ACCESSIBILITY_TEST"],
+  ["ai-privacy", "FLUXION_AI_PRIVACY_TEST"],
+  ["workspace", "FLUXION_WORKSPACE_TEST"],
+  ["file-picker", "FLUXION_FILE_PICKER_TEST"],
+  ["shortcut", "FLUXION_SHORTCUT_TEST"],
+  ["selection", "FLUXION_SELECTION_TEST"],
+  ["structure", "FLUXION_STRUCTURE_TEST"],
+  ["frame", "FLUXION_FRAME_TEST"],
+  ["new-tab", "FLUXION_NEW_TAB_TEST"],
+  ["product-chrome", "FLUXION_PRODUCT_CHROME_TEST"],
+  ["branding", "FLUXION_VERIFY_BRANDING"],
+  ["migration", "FLUXION_MIGRATION_TEST"],
+  ["workspace-gesture", "FLUXION_WORKSPACE_GESTURE_TEST"],
+  ["last-window", "FLUXION_LAST_WINDOW_TEST", ["seed", "restore", "existing", "existing-restore", "existing-quit-restore", "choice0", "choice1"]],
+  ["memory-policy", "FLUXION_MEMORY_POLICY_TEST", ["seed", "check"]],
+  ["memory-corruption", "FLUXION_MEMORY_CORRUPTION_TEST", ["seed", "check"]],
+  ["default-bookmarks", "FLUXION_DEFAULT_BOOKMARKS_TEST", ["seed", "restore"]],
+  ["branding-upgrade", "FLUXION_BRANDING_CACHE_PHASE", ["seed", "legacy", "repaired", "warm"]],
+  ["sidebar-width", "FLUXION_SIDEBAR_WIDTH_PHASE", ["seed", "restore"], "FLUXION_SIDEBAR_WIDTH_TEST"],
+  ["colors", "FLUXION_COLORS_PHASE", ["seed", "restore"], "FLUXION_COLORS_TEST"],
+].map(([name, environment, values = ["1"], prerequisite]) => ({
+  file: `chrome/fluxion-${name}-verification.js`, environment, values, prerequisite,
+}));
+const recoveryFlags = [
+  "FLUXION_SESSION_SEED_TEST", "FLUXION_SESSION_RESTORE_TEST",
+  "FLUXION_PRIVATE_ISOLATION_TEST", "FLUXION_PRIVATE_ABSENCE_TEST",
+  "FLUXION_STARTUP_PREFERENCES_SEED_TEST", "FLUXION_STARTUP_HOMEPAGE_TEST",
+  "FLUXION_STARTUP_BLANK_SEED_TEST", "FLUXION_STARTUP_BLANK_TEST",
+  "FLUXION_CRASH_SEED_TEST", "FLUXION_CRASH_RESTORE_TEST",
+];
+const recoveryScript = "chrome/fluxion-session-recovery.js";
+const updaterScript = "chrome/fluxion-native-updater-verification.js";
+const updaterPreference = "fluxion.verification.nativeUpdater";
+const verificationFiles = new Set([...verificationRules.map(rule => rule.file), recoveryScript, updaterScript]);
+
+function assertStartupLoads(env = {}, updater = false) {
+  const enabled = new Set(verificationRules.filter(rule =>
+    rule.values.includes(env[rule.environment]) && (!rule.prerequisite || env[rule.prerequisite] === "1"),
+  ).map(rule => rule.file));
+  if (recoveryFlags.some(name => env[name] === "1")) enabled.add(recoveryScript);
+  if (updater) enabled.add(updaterScript);
+  const expected = startupLoadOrder.filter(file => !verificationFiles.has(file) || enabled.has(file));
+  expected.splice(expected.indexOf("chrome/fluxion-chrome.js"), 0, "chrome/fluxion-empty-workspace.js");
+  const fixture = startupFixture("https://example.com/restored", [[updaterPreference, updater]], { env });
+  assert.deepEqual(fixture.errors, []);
+  assert.deepEqual(fixture.loadedScripts, expected.map(file => `resource://fluxion/${file}`));
+  assert.deepEqual(fixture.navigations, []);
+  return fixture;
+}
+
+test("normal startup skips all 32 native-test payloads and preserves production dependency order", () => {
+  assert.equal(startupLoadOrder.length, 105);
+  assert.equal(verificationFiles.size, 32);
+  assert.ok([...verificationFiles].every(file => startupLoadOrder.includes(file)));
+  const fixture = assertStartupLoads();
+  assert.equal(fixture.loadedScripts.length, 74);
+  assert.ok(fixture.loadedScripts.includes("resource://fluxion/chrome/fluxion-tab-sleeping.js"));
+  assert.ok(fixture.loadedScripts.includes("resource://fluxion/chrome/core/session-recovery.js"));
+});
+
+for (const rule of verificationRules) {
+  test(`startup gates ${path.basename(rule.file)} on its exact native-test modes`, () => {
+    const prerequisite = rule.prerequisite ? { [rule.prerequisite]: "1" } : {};
+    for (const value of rule.values) assertStartupLoads({ ...prerequisite, [rule.environment]: value });
+    for (const value of ["", "0", "false", "true", "yes", "2", "future-mode"]) {
+      assertStartupLoads({ ...prerequisite, [rule.environment]: value });
+    }
+    if (rule.prerequisite) {
+      for (const value of rule.values) for (const flag of ["", "0", "true"]) {
+        assertStartupLoads({ [rule.environment]: value, [rule.prerequisite]: flag });
+      }
+    }
+  });
+}
+
+test("every session recovery test retains its exact opt-in without loading it for production", () => {
+  for (const environment of recoveryFlags) {
+    assertStartupLoads({ [environment]: "1" });
+    for (const value of ["", "0", "false", "true", "2"]) assertStartupLoads({ [environment]: value });
+  }
+});
+
+test("native updater follows its persistent verification preference, including relaunch", () => {
+  assertStartupLoads({}, true);
+  assertStartupLoads({ FLUXION_NATIVE_UPDATER_TEST: "1" });
+});
+
+test("unrecognized test flags do not enable any verification scripts", () => {
+  assertStartupLoads({ FLUXION_TEST: "1", FLUXION_ANY_TEST: "1", FLUXION_UNKNOWN_TEST: "1" });
+});
+
+test("all explicitly enabled verifiers retain the original complete startup order", () => {
+  const env = Object.fromEntries(verificationRules.flatMap(rule => [
+    [rule.environment, rule.values[0]], ...(rule.prerequisite ? [[rule.prerequisite, "1"]] : []),
+  ]));
+  env[recoveryFlags[0]] = "1";
+  assert.equal(assertStartupLoads(env, true).loadedScripts.length, 106);
+});
 
 test("native fullscreen autohide is a product default without overriding saved or managed choices", () => {
   const name = "browser.fullscreen.autohide";
@@ -272,7 +385,7 @@ for (const selectedURL of [
     const h = startupFixture(selectedURL);
     assert.equal(h.window.__fluxionLoaded, true);
     assert.deepEqual(h.errors, []);
-    assert.ok(h.loadedScripts.includes("resource://fluxion/chrome/fluxion-session-recovery.js"));
+    assert.ok(h.loadedScripts.includes("resource://fluxion/chrome/fluxion-window-tabs.js"));
     assert.deepEqual(h.navigations, [], "startup must leave SessionStore's selected browser untouched");
     assert.equal(h.selectedBrowser.currentURI.spec, selectedURL);
     assert.equal(h.AboutNewTab.newTabURL, "file:///app/fluxion/newtab/index.html");

@@ -144,7 +144,7 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const queries = [], errors = [], opened = [], navigations = [], timers = new Map();
   tab.linkedBrowser.loadURI = (uri, options) => navigations.push({ uri: uri.spec, options });
   let nextTimer = 0;
-  let observerRemoved = false;
+  let observerRemoved = false, progressRemoved = false;
   let placesObserver;
   let progressListener;
   let downloadView;
@@ -163,7 +163,8 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   const context = vm.createContext({ window, document, URL,
     gBrowser: { tabs: [tab], selectedTab: tab, selectedBrowser: tab.linkedBrowser,
       addTrustedTab(url) { opened.push(url); return new Element("tab"); },
-      tabContainer: new Element(), addTabsProgressListener(listener) { progressListener = listener; }, removeTabsProgressListener() {} },
+      tabContainer: new Element(), addTabsProgressListener(listener) { progressListener = listener; },
+      removeTabsProgressListener(listener) { progressRemoved = listener === progressListener; } },
     ChromeUtils: { importESModule: () => ({ PlacesUtils, Downloads, PrivateBrowsingUtils: { isWindowPrivate: () => false } }) },
     SessionStore: { persistTabAttribute() {} },
     Cu: { reportError: error => errors.push(error) },
@@ -180,16 +181,28 @@ function harness({ section = "history", initialURI = "about:downloads#history", 
   }
   const byClass = name => elements.find(node => node.className === name);
   const input = byClass("fluxion-library-search");
-  return { window, document, queries, errors, timers, input, opened, navigations, tab,
+  const activity = { visibilityWrites: 0, rootAttributes: 0, menuDismissals: 0, timerCancellations: 0 };
+  for (const node of [document.getElementById("fluxion-library"), deck]) {
+    let hidden = node.hidden;
+    Object.defineProperty(node, "hidden", { get: () => hidden, set(value) { activity.visibilityWrites += 1; hidden = value; } });
+  }
+  const originalToggle = document.documentElement.toggleAttribute.bind(document.documentElement);
+  document.documentElement.toggleAttribute = (...args) => { activity.rootAttributes += 1; return originalToggle(...args); };
+  const menu = document.getElementById("fluxion-library-item-menu"), originalHide = menu.hidePopup.bind(menu);
+  menu.hidePopup = () => { activity.menuDismissals += 1; return originalHide(); };
+  const originalClear = window.clearTimeout;
+  window.clearTimeout = id => { activity.timerCancellations += 1; originalClear(id); };
+  return { window, document, queries, errors, timers, input, opened, navigations, tab, activity, deck,
+    progressRemoved: () => progressRemoved,
     bookmarks: PlacesUtils.bookmarks,
     savePage: elements.find(node => node.textContent === "Save current page"),
     folderSelect: byClass("fluxion-library-folder-select"), note: byClass("fluxion-library-note"),
     selectCurrent: () => window.FluxionUI.selectTab(tab),
     sectionButton: label => elements.find(node => node.parentNode?.className === "fluxion-library-nav" && node.textContent === label),
-    location: browser => progressListener.onLocationChange(browser),
+    location: (browser, isTopLevel = true) => progressListener.onLocationChange(browser, { isTopLevel }),
     menu: document.getElementById("fluxion-library-item-menu"),
     placesChanged(events) { placesObserver(events); },
-    commitURI(uri) { tab.linkedBrowser.currentURI.spec = uri; progressListener.onLocationChange(tab.linkedBrowser); },
+    commitURI(uri) { tab.linkedBrowser.currentURI.spec = uri; progressListener.onLocationChange(tab.linkedBrowser, { isTopLevel: true }); },
     downloadChanged(download) { downloadView.onDownloadChanged(download); },
     list: byClass("fluxion-library-list"), root: document.getElementById("fluxion-library"),
     next: elements.find(node => node.getAttribute("aria-label") === "Next Library page"),
@@ -206,6 +219,88 @@ function rows(title, count = 1) {
     return { getResultByName: name => row[name] };
   });
 }
+
+test("1000 subframe navigations perform zero Library visibility writes or query work", async () => {
+  for (const initialURI of ["https://benchmark.example/", "about:downloads#history"]) {
+    const h = harness({ initialURI }); await settle();
+    const before = { ...h.activity }, queries = h.queries.length;
+    for (let index = 0; index < 1000; index += 1) h.location(h.tab.linkedBrowser, false);
+    await settle();
+    assert.deepEqual(h.activity, before);
+    assert.equal(h.queries.length, queries);
+  }
+});
+
+test("subframe navigation cannot clear pending Library fragment intent", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("history")); await settle();
+  h.sectionButton("Downloads").click(); await settle();
+  h.location(h.tab.linkedBrowser, false);
+  h.selectCurrent(); await settle();
+  assert.equal(h.sectionButton("Downloads").getAttribute("aria-current"), "true");
+  h.commitURI("about:downloads#downloads"); await settle();
+  assert.equal(h.sectionButton("Downloads").getAttribute("aria-current"), "true");
+  assert.equal(h.navigations.length, 1);
+});
+
+test("hidden Library ignores repeated top-level locations but still records the current page for bookmarking", async () => {
+  const h = harness({ initialURI: "https://benchmark.example/" }); await settle();
+  const before = { ...h.activity };
+  for (let index = 0; index < 1000; index += 1) {
+    h.commitURI(`https://benchmark.example/route/${index}`);
+    h.location({ currentURI: { spec: "https://background.example/" } });
+  }
+  await settle();
+  assert.deepEqual(h.activity, before);
+  assert.equal(h.queries.length, 0);
+  const fetched = [];
+  h.bookmarks.fetch = async ({ url }) => { fetched.push(url); };
+  h.bookmarks.insert = async () => ({ guid: "saved_______" });
+  h.commitURI("about:downloads#bookmarks"); await settle();
+  assert.equal(h.root.hidden, false);
+  assert.equal(h.deck.hidden, true);
+  h.savePage.click(); await settle();
+  assert.deepEqual(fetched, ["https://benchmark.example/route/999"]);
+});
+
+test("leaving Library still dismisses its menu and cancels pending query exactly once", async () => {
+  const h = harness(); await settle();
+  h.queries[0].resolve(rows("initial")); await settle();
+  h.list.children[0].querySelector(".fluxion-library-more").click();
+  assert.equal(h.menu.state, "open");
+  h.type("late result"); h.flush(); await settle();
+  const stale = h.queries.at(-1);
+  // A pending query already closes the old item menu. Reopen its native shell
+  // here to ensure the visibility transition still owns its dismissal.
+  h.menu.openPopup(null);
+  const before = { ...h.activity };
+  h.commitURI("https://example.test/outside");
+  assert.equal(h.root.hidden, true);
+  assert.equal(h.deck.hidden, false);
+  assert.equal(h.menu.state, "closed");
+  assert.equal(h.activity.menuDismissals, before.menuDismissals + 1);
+  assert.equal(h.activity.timerCancellations, before.timerCancellations + 1);
+  const after = { ...h.activity }, children = [...h.list.children];
+  h.commitURI("https://example.test/another");
+  stale.resolve(rows("must not render")); await settle();
+  assert.deepEqual(h.activity, after);
+  assert.deepEqual(h.list.children, children);
+  h.commitURI("about:downloads#history"); await settle();
+  assert.equal(h.root.hidden, false);
+  assert.ok(h.queries.length > 2, "returning to Library must refresh its data");
+});
+
+test("disposed Library rejects late location callbacks and removes its progress listener", async () => {
+  const h = harness({ initialURI: "https://benchmark.example/" }); await settle();
+  h.window.dispatch("unload");
+  assert.equal(h.progressRemoved(), true);
+  const before = { ...h.activity };
+  h.commitURI("about:downloads#history");
+  h.location(h.tab.linkedBrowser, false);
+  await settle();
+  assert.deepEqual(h.activity, before);
+  assert.equal(h.queries.length, 0);
+});
 
 test("Library section controls navigate Gecko's canonical fragment and its commit retains search and focus", async () => {
   const h = harness(); await settle();

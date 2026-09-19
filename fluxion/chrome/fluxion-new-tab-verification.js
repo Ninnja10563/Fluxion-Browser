@@ -7,7 +7,7 @@
   Services.prefs.setBoolPref(`${prefix}.claimed`, true);
   const driver = Services.env.get("FLUXION_NEW_TAB_DRIVER_DIR");
   const origin = Services.env.get("FLUXION_NEW_TAB_ORIGIN");
-  const report = { input: "System Events Cmd-T, typing, Return and Escape; Gecko widget sidebar click", checks: [], keys: [], stages: [] };
+  const report = { input: "System Events Cmd-T, Cmd-W, typing, Return and Escape; Gecko widget sidebar click", checks: [], keys: [], stages: [] };
   const assert = (condition, message) => { if (!condition) throw Error(message); };
   const stage = value => {
     report.stages.push(value); Services.prefs.setStringPref(`${prefix}.stage`, value); Services.prefs.savePrefFile(null);
@@ -19,7 +19,9 @@
   };
   let sequence = 0, privateWindow = null;
   async function key(owner, action, text = "") {
-    assert(["activate", "newtab", "type", "return", "escape"].includes(action) && ++sequence <= 80, "Unknown or unbounded native key request");
+    assert(["activate", "newtab", "close", "type", "return", "escape",
+      "capture-ordinary-empty", "capture-ordinary-draft", "capture-private-empty", "capture-private-draft"].includes(action) &&
+      ++sequence <= 80, "Unknown or unbounded native key request");
     if (action !== "activate") assert(Services.focus.activeWindow === owner && owner.document.hasFocus(), "Native key target lost foreground");
     if (action === "type") assert(/^[\x20-\x7e]{1,512}$/.test(text), "Native typing fixture must be short ASCII");
     const name = `${sequence}-${action}`;
@@ -31,7 +33,8 @@
     // the system group separately after clearing those flags (EventDispatcher
     // 155); observe there without preventing or altering the native event.
     owner.addEventListener("keydown", event => {
-      if (event.isTrusted && ["t", "T", "Escape", "Enter"].includes(event.key) && report.keys.length < 80) {
+      const command = event.metaKey && ["t", "w"].includes(event.key.toLowerCase());
+      if (event.isTrusted && (command || ["Escape", "Enter"].includes(event.key)) && report.keys.length < 80) {
         report.keys.push({ key: event.key, command: event.metaKey, private: owner === privateWindow,
           pending: owner.FluxionNewTab?.pending, tabs: owner.gBrowser.tabs.length });
       }
@@ -115,6 +118,108 @@
       "Submitted draft crossed its workspace or account container");
     unchanged(owner, source);
     return target;
+  }
+  async function verifyEmptyWorkspace(owner, searchOrigin, privateMode) {
+    const label = privateMode ? "private" : "ordinary";
+    stage(`${label}-empty-workspace`);
+    await wait(() => owner.FluxionEmptyWorkspace, "Empty workspace controller did not initialize");
+    const ui = owner.FluxionUI, empty = owner.FluxionEmptyWorkspace, browser = owner.gBrowser;
+    const marker = "fluxion-empty-workspace";
+    const preserved = [...browser.tabs].filter(tab => !tab.closing && !empty.isPlaceholder(tab))
+      .map(tab => ({ tab, url: tab.linkedBrowser.currentURI.spec, workspace: ui.tabWorkspace(tab) }));
+    assert(preserved.length > 0, "Empty workspace fixture needs real tabs in another workspace");
+    const workspace = ui.createWorkspace(`${label} empty workspace`, { activate: false });
+    const sourceURL = `${origin}/page?case=${label}-empty-source`;
+    const source = browser.addTrustedTab(sourceURL, { skipAnimation: true });
+    ui.setTabWorkspace(source, workspace.id);
+    ui.setSidebarState("expanded");
+    ui.selectTab(source);
+    const rows = () => [...owner.document.querySelectorAll("#fluxion-flow .fluxion-tab")];
+    await wait(() => source.linkedBrowser.currentURI.spec === sourceURL && !source.hasAttribute("busy") &&
+      rows().length === 1 && rows()[0]._fluxionTab === source, "Dedicated workspace did not show exactly its real source tab");
+    const assertOtherWorkspaces = () => {
+      assert(!owner.closed, "Closing an empty workspace closed its browser window");
+      assert(preserved.every(item => item.tab.parentNode && !item.tab.closing &&
+        item.tab.linkedBrowser.currentURI.spec === item.url && ui.tabWorkspace(item.tab) === item.workspace),
+      "Empty workspace closure changed or closed another workspace's tabs");
+    };
+    async function closeToEmpty(tab) {
+      browser.selectedBrowser.focus();
+      await key(owner, "close");
+      const backing = await wait(() => !owner.closed && !tab.parentNode &&
+        empty.isPlaceholder(browser.selectedTab) && ui.currentWorkspace() === workspace.id && rows().length === 0 &&
+        owner.document.documentElement.hasAttribute("data-fluxion-empty-workspace") && browser.selectedTab,
+      "Cmd-W did not leave an open, genuinely empty visible workspace");
+      assertOtherWorkspaces();
+      const emptyURLs = ["about:blank", "about:newtab", Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab")];
+      assert(emptyURLs.includes(backing.linkedBrowser.currentURI.spec), "Empty workspace backing page is not an owned blank/new-tab document");
+      const saved = JSON.parse(SessionStore.getTabState(backing));
+      assert(saved.attributes?.[marker] === "true", "Empty backing identity is absent from native session state");
+      return backing;
+    }
+    let backing = await closeToEmpty(source);
+    const emptyCount = browser.tabs.length, closedCount = SessionStore.getClosedTabCountForWindow(owner);
+    await key(owner, "close");
+    assert(browser.tabs.length === emptyCount && browser.selectedTab === backing && empty.isPlaceholder(backing) &&
+      rows().length === 0 && SessionStore.getClosedTabCountForWindow(owner) === closedCount,
+    "Cmd-W on an already empty workspace replaced its backing page or manufactured undo history");
+    assertOtherWorkspaces();
+    await new Promise(resolve => owner.requestAnimationFrame(() => owner.requestAnimationFrame(resolve)));
+    await key(owner, `capture-${label}-empty`);
+    const count = browser.tabs.length;
+    await begin(owner);
+    await typeAndSettle(owner, `${label} uncommitted empty draft`);
+    assert(rows().length === 0 && browser.tabs.length === count && browser.selectedTab === backing,
+      "Empty workspace draft materialized a visible or additional native tab before submit");
+    await new Promise(resolve => owner.requestAnimationFrame(() => owner.requestAnimationFrame(resolve)));
+    await key(owner, `capture-${label}-draft`);
+    await key(owner, "escape");
+    await wait(() => !owner.FluxionNewTab.pending && rows().length === 0 && !owner.gURLBar.focused &&
+      owner.document.activeElement !== owner.gURLBar.inputField,
+    "Escape did not return focus from the address draft to the empty workspace");
+    assert(browser.tabs.length === count && browser.selectedTab === backing && empty.isPlaceholder(backing),
+      "Canceling empty workspace draft changed its backing identity or allocated a tab");
+    assertOtherWorkspaces();
+
+    async function submitEmpty(value, url) {
+      const before = browser.tabs.length, placeholder = browser.selectedTab;
+      assert(empty.isPlaceholder(placeholder), "Commit fixture lost its empty workspace");
+      await begin(owner); await typeAndSettle(owner, value);
+      assert(browser.tabs.length === before && rows().length === 0, "Typing allocated a tab in an empty workspace");
+      await key(owner, "return");
+      const committed = await wait(() => browser.selectedBrowser.currentURI.spec === url && !browser.selectedTab.hasAttribute("busy") &&
+        rows().length === 1 && rows()[0]._fluxionTab === browser.selectedTab && browser.selectedTab,
+      "Empty workspace submission did not produce exactly one real visible tab");
+      assert(browser.tabs.length === before && committed === placeholder && !empty.isPlaceholder(committed) &&
+        !owner.FluxionNewTab.pending && !owner.document.documentElement.hasAttribute("data-fluxion-empty-workspace") &&
+        ui.tabWorkspace(committed) === workspace.id,
+      "Empty workspace submission failed to promote exactly its inert backing tab");
+      assert(JSON.parse(SessionStore.getTabState(committed)).attributes?.[marker] !== "true",
+        "Committed real page still carries empty identity in native session state");
+      assertOtherWorkspaces();
+      if (privateMode) assert(committed.linkedBrowser.contentPrincipal.originAttributes.privateBrowsingId === 1,
+        "Empty workspace promotion crossed the private browsing boundary");
+      return committed;
+    }
+    const url = `${origin}/page?case=${label}-empty-commit`;
+    const committed = await submitEmpty(url, url);
+    backing = await closeToEmpty(committed);
+    const words = `fluxion ${label} empty post proof`;
+    const searched = await submitEmpty(words, `${searchOrigin}/search`);
+    const requests = (await (await window.fetch(`${origin}/state`, { cache: "no-store" })).json()).requests;
+    assert(requests.filter(request => request.path === "/search" && request.method === "POST" &&
+      new URLSearchParams(request.body).get("q") === words).length === 1, "Empty workspace search lost or duplicated its native POST body");
+    const explicit = browser.addTrustedTab("about:blank", { skipAnimation: true });
+    ui.setTabWorkspace(explicit, workspace.id); ui.selectTab(explicit);
+    await wait(() => rows().length === 2 && rows().some(row => row._fluxionTab === explicit),
+      "User-created about:blank was incorrectly hidden as an empty-workspace placeholder");
+    assert(!empty.isPlaceholder(explicit), "Ordinary explicit about:blank acquired an internal placeholder marker");
+    await key(owner, "close");
+    await wait(() => !explicit.parentNode && rows().length === 1 && rows()[0]._fluxionTab === searched,
+      "Closing explicit blank page did not retain the workspace's real search tab");
+    assertOtherWorkspaces();
+    report.checks.push(`${label}-native-last-workspace-cmd-w-keeps-window-and-other-workspaces-empty-cancel-and-url-post-promotion`);
+    report.checks.push(`${label}-native-session-marker-only-for-backing-page-explicit-about-blank-remains-visible`);
   }
   async function run() {
     assert(driver === PathUtils.join(PathUtils.parent(PathUtils.profileDir), "driver") && /^http:\/\/127\.0\.0\.1:\d+$/.test(origin),
@@ -272,6 +377,8 @@
     assert(window.gBrowser.tabs.length === countBeforeSwitch, "Workspace cancellation committed a stale draft");
     report.checks.push("workspace-change-invalidates-draft-without-navigation");
 
+    await verifyEmptyWorkspace(window, searchOrigin, false);
+
     stage("private-native-commit");
     privateWindow = window.OpenBrowserWindow({ private: true });
     await wait(() => privateWindow.FluxionNewTab && privateWindow.FluxionUI && PrivateBrowsingUtils.isWindowPrivate(privateWindow),
@@ -284,6 +391,7 @@
     assert(privateTarget.linkedBrowser.contentPrincipal.originAttributes.privateBrowsingId === 1,
       "Native private draft escaped private origin attributes");
     report.checks.push("native-private-draft-commit-retains-private-origin-attributes");
+    await verifyEmptyWorkspace(privateWindow, searchOrigin, true);
     // Recheck after subsequent actual network loads and native commands, rather
     // than treating the synchronous load dispatch as script-completion proof.
     unchanged(window, scriptSource);
@@ -291,7 +399,8 @@
       !scriptTarget.linkedBrowser.contentPrincipal.isSystemPrincipal, "JavaScript draft later escaped its non-system target");
     report.checks.push("native-javascript-load-keeps-original-title-and-non-system-target-through-remaining-gate");
     assert(report.keys.some(event => event.command && event.key.toLowerCase() === "t") && report.keys.some(event => event.key === "Enter") &&
-      report.keys.some(event => event.key === "Escape"), "Required native input was not observed");
+      report.keys.some(event => event.key === "Escape") && report.keys.some(event => event.command && event.key.toLowerCase() === "w"),
+    "Required native input was not observed");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-deferred-new-tab-verified"))
     .catch(error => {
@@ -300,6 +409,13 @@
         tabs: owner.gBrowser?.tabs.length, url: owner.gBrowser?.selectedBrowser.currentURI.spec,
         typed: owner.gBrowser?.selectedBrowser.userTypedValue, field: owner.gURLBar?.value,
         pending: owner.FluxionNewTab?.pending, suggestions: owner.gURLBar?.view.isOpen,
+        empty: owner.FluxionEmptyWorkspace?.isPlaceholder(owner.gBrowser?.selectedTab),
+        emptySurface: owner.document.documentElement.hasAttribute("data-fluxion-empty-workspace"),
+        workspace: owner.FluxionUI?.currentWorkspace(),
+        rows: [...owner.document.querySelectorAll("#fluxion-flow .fluxion-tab")].map(row => ({
+          url: row._fluxionTab?.linkedBrowser.currentURI.spec,
+          workspace: row._fluxionTab ? owner.FluxionUI?.tabWorkspace(row._fluxionTab) : null,
+        })),
         focused: owner.document.activeElement?.id || owner.document.activeElement?.localName,
       }));
       Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack || ""}`); Cu.reportError(error);

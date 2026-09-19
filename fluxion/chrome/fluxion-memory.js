@@ -29,10 +29,9 @@
   const indexedAt = new Map();
   const activityEvents = ["keydown", "pointerdown", "touchstart", "wheel"];
   let idleService = null;
-  try {
-    idleService = Cc["@mozilla.org/widget/useridleservice;1"]
-      .getService(Ci.nsIUserIdleService);
-  } catch (_) {}
+  let indexingActive = false;
+  let indexingDestroyed = false;
+  let batteryGeneration = 0;
 
   function enabled() {
     return Services.prefs.getBoolPref(PREF_ENABLED, false);
@@ -107,7 +106,7 @@
   }
 
   function updateBatteryState() {
-    if (!batteryManager) return;
+    if (!indexingActive || !batteryManager) return;
     batteryState.supported = true;
     batteryState.charging = Boolean(batteryManager.charging);
     batteryState.level = Number.isFinite(batteryManager.level) ? batteryManager.level : 1;
@@ -473,8 +472,6 @@
       if (stopped && network && webProgress?.isTopLevel) scheduleIndex(browser);
     },
   };
-  window.gBrowser.addTabsProgressListener(progressListener);
-
   const observer = () => { applyExclusions().catch(Cu.reportError); };
   const stopPolicyObserver = FluxionExclusionPolicy.subscribe(() => {
     indexScheduler?.clear(); indexedAt.clear();
@@ -489,33 +486,58 @@
       indexScheduler?.wake();
     },
   };
-  const activityObserver = () => indexScheduler.notifyActivity();
-  const memoryPressureObserver = () => indexScheduler.defer("memory-pressure", 30000);
-  Services.obs.addObserver(observer, "places-semantichistorymanager-update-complete");
-  Services.obs.addObserver(memoryPressureObserver, "memory-pressure");
-  Services.prefs.addObserver(PREF_EMBEDDING_PROVIDER, embeddingPrefObserver);
-  for (const eventName of activityEvents) {
-    window.addEventListener(eventName, activityObserver, { capture: true, passive: true });
-  }
-  if (typeof window.navigator.getBattery === "function") {
-    window.navigator.getBattery().then(manager => {
-      batteryManager = manager;
-      updateBatteryState();
-      batteryManager.addEventListener("chargingchange", updateBatteryState);
-      batteryManager.addEventListener("levelchange", updateBatteryState);
-    }).catch(Cu.reportError);
-  }
-  window.addEventListener("unload", () => {
-    stopPolicyObserver();
-    window.gBrowser.removeTabsProgressListener(progressListener);
-    Services.obs.removeObserver(observer, "places-semantichistorymanager-update-complete");
-    Services.obs.removeObserver(memoryPressureObserver, "memory-pressure");
-    Services.prefs.removeObserver(PREF_EMBEDDING_PROVIDER, embeddingPrefObserver);
-    for (const eventName of activityEvents) {
-      window.removeEventListener(eventName, activityObserver, { capture: true });
+  const activityObserver = () => { if (indexingActive) indexScheduler.notifyActivity(); };
+  const memoryPressureObserver = () => { if (indexingActive) indexScheduler.defer("memory-pressure", 30000); };
+  function syncIndexingLifecycle() {
+    const active = !indexingDestroyed && enabled() && !PrivateBrowsingUtils.isWindowPrivate(window);
+    if (active === indexingActive) return;
+    indexingActive = active;
+    const generation = ++batteryGeneration;
+    if (!active) {
+      window.gBrowser.removeTabsProgressListener(progressListener);
+      Services.obs.removeObserver(memoryPressureObserver, "memory-pressure");
+      for (const name of activityEvents) window.removeEventListener(name, activityObserver, { capture: true });
+      batteryManager?.removeEventListener("chargingchange", updateBatteryState);
+      batteryManager?.removeEventListener("levelchange", updateBatteryState);
+      batteryManager = null;
+      Object.assign(batteryState, { supported: false, charging: true, level: 1 });
+      idleService = null;
+      indexScheduler.clear();
+      return;
     }
-    batteryManager?.removeEventListener("chargingchange", updateBatteryState);
-    batteryManager?.removeEventListener("levelchange", updateBatteryState);
+    try {
+      idleService = Cc["@mozilla.org/widget/useridleservice;1"].getService(Ci.nsIUserIdleService);
+    } catch (_) {}
+    indexScheduler.notifyActivity();
+    window.gBrowser.addTabsProgressListener(progressListener);
+    Services.obs.addObserver(memoryPressureObserver, "memory-pressure");
+    for (const name of activityEvents) window.addEventListener(name, activityObserver, { capture: true, passive: true });
+    if (typeof window.navigator.getBattery === "function") {
+      window.navigator.getBattery().then(manager => {
+        // A promise from an earlier opt-in must not reattach listeners after
+        // opt-out, a later opt-in, or destruction of its browser window.
+        if (!indexingActive || generation !== batteryGeneration || indexingDestroyed) return;
+        batteryManager = manager;
+        updateBatteryState();
+        manager.addEventListener("chargingchange", updateBatteryState);
+        manager.addEventListener("levelchange", updateBatteryState);
+      }).catch(error => {
+        if (indexingActive && generation === batteryGeneration && !indexingDestroyed) Cu.reportError(error);
+      });
+    }
+  }
+  const enabledPrefObserver = { observe: syncIndexingLifecycle };
+  Services.obs.addObserver(observer, "places-semantichistorymanager-update-complete");
+  Services.prefs.addObserver(PREF_EMBEDDING_PROVIDER, embeddingPrefObserver);
+  Services.prefs.addObserver(PREF_ENABLED, enabledPrefObserver);
+  syncIndexingLifecycle();
+  window.addEventListener("unload", () => {
+    indexingDestroyed = true;
+    syncIndexingLifecycle();
+    stopPolicyObserver();
+    Services.obs.removeObserver(observer, "places-semantichistorymanager-update-complete");
+    Services.prefs.removeObserver(PREF_EMBEDDING_PROVIDER, embeddingPrefObserver);
+    Services.prefs.removeObserver(PREF_ENABLED, enabledPrefObserver);
     indexScheduler.destroy();
   }, { once: true });
 

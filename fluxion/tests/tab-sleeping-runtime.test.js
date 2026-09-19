@@ -131,6 +131,19 @@ test("concurrent sleep calls flush and discard an eligible tab only once", async
   assert.equal(f.attributes.get("fluxion-sleeping"), "true");
 });
 
+test("empty-workspace backing browsers cannot be slept, including ownership acquired during flush", async () => {
+  for (const initiallyMarked of [false, true]) {
+    const f = fixture();
+    if (initiallyMarked) f.tab.setAttribute("fluxion-empty-workspace", "true");
+    const pending = f.controller.sleep(f.tab, { forceAge: true });
+    assert.equal(f.calls.prepare, initiallyMarked ? 0 : 1);
+    f.tab.setAttribute("fluxion-empty-workspace", "true");
+    f.finishFlush();
+    assert.equal(await pending, false);
+    assert.equal(f.calls.discard, 0);
+  }
+});
+
 test("sleep ownership checks use Gecko's live browser map without enumerating the tab list", async () => {
   const f = fixture();
   let owned = true;

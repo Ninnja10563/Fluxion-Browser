@@ -16,6 +16,8 @@ function emitter(object = {}) {
 }
 function fixture({ context = 0, privateWindow = false, missing = null, os = "Darwin" } = {}) {
   const document = { activeElement: null }, calls = [], microtasks = [], tabs = [], states = new Map();
+  const flow = { focus() { document.activeElement = flow; urlbar.emit("focusout"); } };
+  document.getElementById = id => id === "fluxion-flow" ? flow : null;
   const stateFor = browser => { if (!states.has(browser)) states.set(browser, {}); return states.get(browser); };
   const modes = { get: browser => stateFor(browser).searchModes?.confirmed || null,
     set: (browser, mode) => { stateFor(browser).searchModes = { confirmed: mode }; } };
@@ -110,6 +112,59 @@ test("New Tab and plain native Cmd-T focus one draft without creating a tab or n
   assert.equal(f.urlbar.value, "unfinished query", "repeated New Tab preserves an existing draft");
   assert.equal(f.gBrowser.tabs.length, 1);
   assert.equal(f.original.linkedBrowser.currentURI.spec, "https://example.org/original");
+});
+function emptyBacking(f) {
+  const placeholders = new Set([f.original]);
+  f.window.FluxionEmptyWorkspace = {
+    isPlaceholder: tab => placeholders.has(tab),
+    promote(tab) { return placeholders.delete(tab); },
+  };
+  f.original.linkedBrowser.currentURI.spec = "about:newtab";
+  return placeholders;
+}
+test("empty workspace Cmd-T and Escape preserve emptiness; URL submit promotes the same backing browser", () => {
+  const f = fixture({ context: 5, privateWindow: true }), marked = emptyBacking(f);
+  f.BrowserCommands.openTab();
+  assert.equal(f.api.pending, true); assert.equal(f.gBrowser.tabs.length, 1);
+  f.escape(); f.flush();
+  assert.ok(marked.has(f.original)); assert.equal(f.gBrowser.tabs.length, 1);
+  assert.equal(f.document.activeElement, f.document.getElementById("fluxion-flow"), "Escape releases address focus without targeting the hidden browser");
+  f.api.begin();
+  const principal = {}, postData = {};
+  f.enter("https://example.net/search", { triggeringPrincipal: principal, postData, private: true });
+  assert.equal(f.gBrowser.selectedTab, f.original);
+  assert.equal(f.gBrowser.tabs.length, 1);
+  assert.equal(marked.size, 0);
+  const call = f.calls.find(item => item.kind === "load");
+  assert.equal(call.details.browserId, f.original.linkedBrowser.browserId);
+  assert.equal(call.details.params.triggeringPrincipal, principal);
+  assert.equal(call.details.params.postData, postData);
+  assert.equal(call.details.params.private, true);
+});
+test("empty workspace engine search promotes in place; changed container or background request allocates separately", () => {
+  for (const name of ["openSERP", "openSearchForm"]) {
+    const f = fixture(), marked = emptyBacking(f); f.api.begin();
+    f.controller[name](...(name === "openSERP" ? ["engine", "search words", "tab", false, 1] : ["engine", "tab", false, 1]));
+    assert.equal(f.gBrowser.tabs.length, 1); assert.equal(marked.size, 0);
+    const call = f.calls.find(item => ["search", "form"].includes(item.kind));
+    assert.equal(call.args.at(-1), 1);
+  }
+  for (const params of [{ userContextId: 9 }, { inBackground: true }]) {
+    const f = fixture({ context: 2 }), marked = emptyBacking(f); f.api.begin();
+    f.enter("https://example.net/", params);
+    assert.equal(f.gBrowser.tabs.length, 2);
+    assert.ok(marked.has(f.original), "lifecycle controller retires only after real selection, not at allocation");
+    if (params.inBackground) assert.equal(f.gBrowser.selectedTab, f.original);
+    else assert.equal(f.gBrowser.selectedTab.getAttribute("usercontextid"), "9");
+  }
+});
+test("ordinary address commit promotes only its exact current destination, including explicit blank pages", () => {
+  const f = fixture(), marked = emptyBacking(f);
+  f.controller.loadURL({ url: "https://other.example/", where: "window", params: {}, browserId: 1 });
+  assert.ok(marked.has(f.original));
+  f.controller.loadURL({ url: "about:blank", where: "current", params: {}, browserId: 1 });
+  assert.equal(marked.size, 0);
+  assert.equal(f.gBrowser.tabs.length, 1);
 });
 test("Escape cancels the draft and restores the source address/search state without close history", () => {
   const f = fixture(), mode = { engineName: "Original" };

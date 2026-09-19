@@ -39,6 +39,7 @@
 
   async function sleep(tab, { forceAge = false } = {}) {
     if (destroyed || !tab?.parentNode || tab.closing || pending.has(tab) ||
+        tab.hasAttribute("fluxion-empty-workspace") ||
         gBrowser.getTabForBrowser(tab.linkedBrowser) !== tab) return false;
     const scheduledMinutes = minutes();
     const threshold = scheduledMinutes * 60_000;
@@ -59,6 +60,7 @@
       if (destroyed || scheduledRevision !== preferenceRevision ||
           currentMinutes !== scheduledMinutes ||
           (!currentThreshold && !forceAge) || !tab.parentNode || tab.closing ||
+          tab.hasAttribute("fluxion-empty-workspace") ||
           gBrowser.getTabForBrowser(browser) !== tab ||
           tab.linkedBrowser !== browser ||
           !FluxionTabSleepingPolicy.canSleep(tab, tabState(tab, Date.now(), forceAge ? 0 : currentThreshold))) {

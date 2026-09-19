@@ -70,7 +70,15 @@
     controller.cancelQuery();
     urlbar.view.close();
     restoreSource(snapshot, true);
-    if (focusPage && gBrowser.selectedTab === snapshot.tab) snapshot.browser.focus();
+    if (focusPage && gBrowser.selectedTab === snapshot.tab) {
+      // Empty workspaces deliberately hide their backing browser from paint
+      // and accessibility. Move owned address focus to the existing neutral
+      // Flow wrapper, otherwise Gecko cannot blur into that hidden browser.
+      const emptyTarget = window.FluxionEmptyWorkspace?.isPlaceholder(snapshot.tab)
+        ? document.getElementById?.("fluxion-flow") : null;
+      if (emptyTarget) emptyTarget.focus({ preventScroll: true });
+      else snapshot.browser.focus();
+    }
     return true;
   }
   function begin() {
@@ -99,6 +107,10 @@
     urlbar.removeAttribute("data-fluxion-new-tab");
     restoreSource(snapshot, false);
     if (!["current", "tab", "tabshifted"].includes(where)) return { where, browserId: snapshot.browser.browserId };
+    if (!inBackground && context === snapshot.context && window.FluxionEmptyWorkspace?.isPlaceholder(snapshot.tab)) {
+      window.FluxionEmptyWorkspace.promote(snapshot.tab);
+      return { where: "current", browserId: snapshot.browser.browserId };
+    }
     const tab = gBrowser.addTrustedTab("about:blank", { userContextId: context });
     ui.setTabWorkspace(tab, snapshot.workspace);
     if (!inBackground) gBrowser.selectedTab = tab;
@@ -111,7 +123,10 @@
   });
   replace(controller, "loadURL", original => function (details) {
     const snapshot = draft;
-    if (!snapshot) return original.call(this, details);
+    if (!snapshot) {
+      promoteCurrentTarget(details.where, details.browserId);
+      return original.call(this, details);
+    }
     if (details.browserId != null && details.browserId !== snapshot.browser.browserId) {
       cancel(); return { reverted: false, browserId: snapshot.browser.browserId };
     }
@@ -124,8 +139,11 @@
   for (const name of ["openSERP", "openSearchForm"]) {
     replace(controller, name, original => function (...args) {
       const snapshot = draft;
-      if (!snapshot) return original.apply(this, args);
       const whereIndex = name === "openSERP" ? 2 : 1;
+      if (!snapshot) {
+        promoteCurrentTarget(args[whereIndex], args[whereIndex + 2]);
+        return original.apply(this, args);
+      }
       if (args[whereIndex + 2] != null && args[whereIndex + 2] !== snapshot.browser.browserId) {
         cancel(); return undefined;
       }
@@ -135,6 +153,12 @@
       args[whereIndex + 2] = target.browserId;
       return original.apply(this, args);
     });
+  }
+  function promoteCurrentTarget(where, browserId) {
+    if (where !== "current") return;
+    const tab = browserId == null ? gBrowser.selectedTab
+      : [...gBrowser.tabs].find(candidate => candidate.linkedBrowser.browserId === browserId);
+    window.FluxionEmptyWorkspace?.promote(tab);
   }
   replace(controller, "resolveFallbackNavigation", original => async function (...args) {
     const snapshot = draft;

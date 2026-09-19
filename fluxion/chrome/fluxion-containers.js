@@ -21,7 +21,7 @@
   const allowed = () => !window.closed && !PrivateBrowsingUtils.isWindowPrivate(window) &&
     Services.prefs.getBoolPref("privacy.userContext.enabled", false) &&
     Services.policies?.getActivePolicies()?.Containers?.Enabled !== false;
-  const live = tab => tab?.parentNode && !tab.closing && [...gBrowser.tabs].includes(tab) &&
+  const live = tab => tab?.parentNode && !tab.closing && !window.FluxionEmptyWorkspace?.isPlaceholder(tab) && [...gBrowser.tabs].includes(tab) &&
     (tab.ownerGlobal || tab.documentGlobal || tab.ownerDocument?.defaultView) === window;
   const identityKey = identity => JSON.stringify(identity);
   let current = null, disposed = false, revision = 0;

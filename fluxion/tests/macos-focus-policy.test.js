@@ -19,18 +19,18 @@ const focusReplacement = new Function("aNewTab", "document", "gURLBar", tabRepla
 
 test("automatic last-tab replacements do not claim address focus in explicit Focus, without blurring real editing", () => {
   for (const mode of ["expanded", "compact", "focus", "native-focus"]) for (const aNewTab of [false, true]) {
-    for (const alreadyEditing of [false, true]) {
+    for (const alreadyEditing of [false, true]) for (const placeholder of [false, true]) {
       const originalFocus = alreadyEditing ? { id: "urlbar-input", value: "unfinished query" } : { id: "page" };
       const document = { activeElement: originalFocus, documentElement: { hasAttribute: name =>
         name === "data-fluxion-focus-mode" ? mode === "focus" : name === "data-fluxion-native-focus" && mode === "native-focus" } };
       let selects = 0;
       const gURLBar = { select() { selects++; } };
-      focusReplacement(aNewTab, document, gURLBar);
-      assert.equal(selects, Number(aNewTab && ["expanded", "compact"].includes(mode)));
+      focusReplacement.call({ selectedTab: { hasAttribute: () => placeholder } }, aNewTab, document, gURLBar);
+      assert.equal(selects, Number(aNewTab && !placeholder && ["expanded", "compact"].includes(mode)));
       assert.equal(document.activeElement, originalFocus, "no deferred or blanket focus release");
       if (alreadyEditing) assert.equal(originalFocus.value, "unfinished query");
       gURLBar.select();
-      assert.equal(selects, Number(aNewTab && ["expanded", "compact"].includes(mode)) + 1,
+      assert.equal(selects, Number(aNewTab && !placeholder && ["expanded", "compact"].includes(mode)) + 1,
         "explicit native location commands are not intercepted");
     }
   }
