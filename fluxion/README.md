@@ -8,6 +8,17 @@ support, then replaces the primary tab interaction with Fluxion's compact
 
 ## Current milestone
 
+**[0.75.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.75.0-preview.1)**
+keeps the window open with an empty workspace after its last tab closes.
+Command-T / New Tab opens an address draft; submission creates the visible tab,
+while Escape cancels. Native session attributes preserve empty-state identity,
+and repeated Close Tab does not manufacture undo entries. Startup skips 32
+test-only scripts, disabled Memory detaches indexing hooks, and the hidden
+Library avoids redundant navigation updates. All 1,325 tests and mandatory
+native macOS gates passed. No M3 Speedometer gain is claimed without a matched
+retest. See the [milestone](docs/milestone-0.75.md) and
+[provenance](release/provenance/v0.75.0-preview.1.md).
+
 **[0.74.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.74.0-preview.1)**
 defers New Tab creation until native address/search submission; cancellation
 leaves the current page and its search mode intact. Workspace headings sit

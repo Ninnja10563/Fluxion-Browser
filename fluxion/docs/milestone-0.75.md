@@ -56,12 +56,14 @@ See [Speedometer's official instructions](https://browserbench.org/Speedometer3.
 
 ## Verification status
 
-Local regression checks and the native macOS release gates must pass before
-publishing. Native coverage includes real keyboard input, URL and POST searches,
+All 1,325 regression tests and mandatory native macOS release gates passed in
+run `35475460284`, source `5f7f3e52ab136991ccc2e8e0b5d04647fc868cc8`.
+Native coverage includes real keyboard input, URL and POST searches,
 empty normal/private workspaces, session attributes, explicit blank tabs and
 the existing session, privacy, update and browser-integration checks. Physical M3
 Speedometer validation remains outstanding. Builds are ad-hoc signed, not Apple
-notarized.
+notarized. See [release provenance](../release/provenance/v0.75.0-preview.1.md)
+for artifact and publication verification.
 
 The first candidate, `cef2094`, was rejected by native run `35474375673`:
 the empty surface worked, but the marker was absent from native session state.

@@ -23,6 +23,16 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.75.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.75.0-preview.1)**
+keeps an empty workspace open after its last tab closes. New Tab / Command-T
+opens an address draft; a tab appears only on submission, and Escape cancels.
+Startup loads fewer scripts, disabled Memory detaches indexing activity hooks,
+and the hidden Library avoids redundant updates. All 1,325 tests and mandatory
+native macOS gates passed, with actual empty-workspace screenshots reviewed.
+No M3 Speedometer improvement is claimed without a matching retest. See the
+[milestone](fluxion/docs/milestone-0.75.md) and
+[provenance](fluxion/release/provenance/v0.75.0-preview.1.md).
+
 **[0.74.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.74.0-preview.1)**
 makes New Tab an address-bar draft until submission, raises the workspace
 heading beside bookmarks, removes the hidden sidebar's blue focus edge, and
