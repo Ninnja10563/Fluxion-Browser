@@ -105,6 +105,85 @@ test("final-tab gate fails if the window closes or multiple replacements remain"
   await assert.rejects(emptyWindowFixture({ duplicateReplacement: true }).run(), /empty replacement tab did not settle/);
 });
 
+function lastWorkspaceFixture({ retainMarker = false, reloadOtherWorkspace = false } = {}) {
+  const checks = [], inputs = [], loads = [], pending = [];
+  let current = "focus", globalID = 0;
+  const browser = { tabs: [], selectedTab: null,
+    get selectedBrowser() { return this.selectedTab.linkedBrowser; },
+    get visibleTabs() { return this.tabs.filter(tab => tab.parentNode && !tab.hidden); } };
+  function createTab(spec = "about:blank", marked = false) {
+    const attrs = new Set(marked ? ["fluxion-empty-workspace"] : []);
+    const tab = { parentNode: {}, workspace: current, hidden: false,
+      hasAttribute: name => attrs.has(name), getAttribute: name => attrs.has(name) ? "true" : null,
+      linkedBrowser: { currentURI: { spec }, browsingContext: { currentWindowGlobal: { innerWindowId: ++globalID } },
+        loadURI(uri) {
+          loads.push({ tab, url: uri.spec, wasEmpty: attrs.has("fluxion-empty-workspace") });
+          attrs.add("busy");
+          pending.push(() => {
+            this.currentURI = uri; attrs.delete("busy");
+            if (!retainMarker) attrs.delete("fluxion-empty-workspace");
+          });
+        } } };
+    browser.tabs.push(tab); return tab;
+  }
+  browser.addTrustedTab = createTab;
+  browser.removeTab = tab => { tab.parentNode = null; browser.tabs.splice(browser.tabs.indexOf(tab), 1); };
+  browser.selectedTab = createTab();
+  const win = { closed: false, gBrowser: browser,
+    FluxionEmptyWorkspace: { isPlaceholder: tab => tab.hasAttribute("fluxion-empty-workspace") },
+    FluxionUI: { setSidebarState() {}, currentWorkspace: () => current, tabWorkspace: tab => tab.workspace,
+      setTabWorkspace: (tab, workspace) => { tab.workspace = workspace; },
+      createWorkspace() {
+        browser.tabs.forEach(tab => { tab.hidden = true; });
+        current = "close-fixture"; browser.selectedTab = createTab("about:blank", true);
+        return { id: current };
+      } } };
+  const context = vm.createContext({ evidence: { checks }, marker: value => `data:${value}`,
+    Services: { io: { newURI: spec => ({ spec }) }, scriptSecurityManager: { getSystemPrincipal: () => ({}) } },
+    ensure: (ok, message) => { if (!ok) throw Error(message); },
+    until: async (predicate, message) => {
+      for (let attempt = 0; attempt < 3; attempt++) {
+        if (predicate()) return;
+        pending.splice(0).forEach(finish => finish());
+      }
+      throw Error(message);
+    },
+    closeTabWithInput: async (target, tab, input) => {
+      assert.equal(target, win);
+      assert.equal(tab.hasAttribute("busy"), false, "Fixture must await completed navigation before closing");
+      assert.equal(tab.hasAttribute("fluxion-empty-workspace"), false, "Fixture must promote the workspace backing page before closing");
+      assert.notEqual(tab.linkedBrowser.currentURI.spec, "about:blank");
+      inputs.push(input); browser.removeTab(tab);
+      browser.selectedTab = createTab("about:blank", true);
+      if (reloadOtherWorkspace) browser.tabs.find(item => item.hidden).linkedBrowser.browsingContext.currentWindowGlobal.innerWindowId++;
+    },
+  });
+  const start = source.indexOf("  async function verifyLastWorkspaceTab("), end = source.indexOf("  async function verifyFinalCheckpoint(", start);
+  assert.ok(start >= 0 && end > start);
+  vm.runInContext(source.slice(start, end), context);
+  return { checks, inputs, loads, browser, run: () => context.verifyLastWorkspaceTab(win) };
+}
+
+test("last-workspace gate navigates each initially empty backing page before Cmd-W and Flow close", async () => {
+  const f = lastWorkspaceFixture(); await f.run();
+  assert.deepEqual(f.inputs, ["native-cmd-w-handler", "flow-widget-close-button"]);
+  assert.equal(f.loads.length, 3, "Retained hidden page plus a real source for each close input");
+  assert.deepEqual(f.loads.map(load => load.wasEmpty), [false, true, true]);
+  assert.equal(f.checks.length, 2);
+  assert.ok(f.checks.every(check => check.windowRetained && check.hiddenPageRetained && check.workspaceRetained));
+  assert.equal(f.browser.tabs.length, 2);
+  assert.equal(f.browser.tabs.filter(tab => tab.hasAttribute("fluxion-empty-workspace")).length, 1);
+  assert.equal(f.browser.selectedTab.hasAttribute("fluxion-empty-workspace"), true);
+  assert.equal(f.browser.tabs.find(tab => tab.hidden).linkedBrowser.currentURI.spec, "data:hidden-workspace-must-survive");
+});
+
+test("last-workspace gate rejects failed promotion before any close and detects hidden page reload", async () => {
+  const stale = lastWorkspaceFixture({ retainMarker: true });
+  await assert.rejects(stale.run(), /did not load|did not promote|not.*real|placeholder/);
+  assert.deepEqual(stale.inputs, [], "A marker that never clears must fail before exercising a close command");
+  await assert.rejects(lastWorkspaceFixture({ reloadOtherWorkspace: true }).run(), /another workspace tab was changed, lost or reloaded/);
+});
+
 function checkpointFixture(mode) {
   const calls = [], evidence = { checks: [] }, urls = ["data:pinned", "data:first", "data:second"];
   const closed = { _shouldRestore: true }, disk = { windows: [{ urls: [...urls] }] };

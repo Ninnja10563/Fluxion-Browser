@@ -74,3 +74,10 @@ Gecko completes closed-tab history asynchronously after detaching the tab. The
 test now waits for the exact browser's native final-flush notification and real
 closed-page record before comparing undo history. The product also guards the
 native Close Tab command entry point, not just DOM keyboard events.
+
+Candidate `0d679db`, run `35474872318`, passed the dedicated native empty-state
+gate (including four reviewed screenshots) but exposed an obsolete last-window
+fixture: it tried to close a newly created, intentionally empty workspace and
+expected a replacement. That fixture now loads a real page before testing its
+closure. Empty-workspace Close Tab remains a no-op; production behavior is not
+changed to satisfy the old fixture.

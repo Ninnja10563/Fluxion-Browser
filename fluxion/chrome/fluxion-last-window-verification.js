@@ -224,6 +224,15 @@
     const retainedGlobal = retained.linkedBrowser.browsingContext.currentWindowGlobal.innerWindowId;
     for (const input of ["native-cmd-w-handler", "flow-widget-close-button"]) {
       const closing = win.gBrowser.selectedTab;
+      // New workspaces and last-tab replacements are intentionally empty. Test
+      // closing a real page, not the no-op Close Tab action on a backing browser.
+      const closingURL = marker(`workspace-final-page-${input}`);
+      closing.linkedBrowser.loadURI(Services.io.newURI(closingURL), {
+        triggeringPrincipal: Services.scriptSecurityManager.getSystemPrincipal(),
+      });
+      await until(() => closing.linkedBrowser.currentURI.spec === closingURL &&
+        !closing.hasAttribute("busy") && !win.FluxionEmptyWorkspace.isPlaceholder(closing),
+      `${input}: real final workspace page did not load and promote its backing browser`);
       ensure(win.gBrowser.visibleTabs.length === 1 && ui.tabWorkspace(closing) === other.id,
         `${input}: fixture is not the workspace's final visible tab`);
       await closeTabWithInput(win, closing, input);
