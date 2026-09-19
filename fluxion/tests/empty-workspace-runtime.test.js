@@ -43,13 +43,16 @@ function fixture({ marker = false, url = "about:blank", lateUI = false, os = "Da
   const places = { bookmarkPage(...args) { calls.push({ kind: "page", args }); },
     bookmarkTabs(tabs, ...args) { calls.push({ kind: "tabs", tabs, args }); } };
   const originals = { ...places };
+  const browserCommands = { closeTabOrWindow(...args) { calls.push({ kind: "close", receiver: this, args }); return "native-close"; },
+    tryToCloseWindow(...args) { calls.push({ kind: "close-window", args }); return "native-window"; } };
+  const originalClose = browserCommands.closeTabOrWindow;
   const ui = { currentWorkspace: () => current, tabWorkspace: tab => tab.workspace,
     setTabWorkspace(tab, workspace) { tab.workspace = workspace; tab.setAttribute("fluxion-workspace", workspace); },
     refresh() { refreshes++; } };
-  const window = emitter({ document, gBrowser, PlacesCommandHook: places, closed: false,
+  const window = emitter({ document, gBrowser, PlacesCommandHook: places, BrowserCommands: browserCommands, closed: false,
     queueMicrotask: fn => tasks.push(fn), ...(lateUI ? {} : { FluxionUI: ui }) });
   vm.runInNewContext(source, { window, Services: { appinfo: { OS: os }, prefs: { getStringPref: () => "resource://fluxion/newtab/index.html" } } });
-  return { window, root, commands, gBrowser, initial, make, calls, removed, places, originals, tasks,
+  return { window, root, commands, gBrowser, initial, make, calls, removed, places, originals, tasks, browserCommands, originalClose,
     get api() { return window.FluxionEmptyWorkspace; }, get refreshes() { return refreshes; },
     progressRemoved: () => disposedProgress,
     flush() { let limit = 50; while (tasks.length && limit--) tasks.shift()(); assert.ok(limit > 0, "lifecycle must settle without a timer loop"); },
@@ -88,6 +91,23 @@ test("native private start page remains empty only when explicitly marked", () =
   const f = fixture({ marker: true, url: "about:privatebrowsing" });
   assert.equal(f.api.isPlaceholder(f.initial), true);
   assert.equal(f.root.hasAttribute("data-fluxion-empty-workspace"), true);
+});
+test("native Close Tab command guards empty accelerators but preserves real-tab batches and explicit window close", () => {
+  const f = fixture({ marker: true }), event = { metaKey: true };
+  assert.equal(f.browserCommands.closeTabOrWindow(event), undefined);
+  assert.equal(f.calls.length, 0);
+  assert.equal(f.browserCommands.tryToCloseWindow(event), "native-window");
+  const real = f.make("https://example.test/");
+  f.gBrowser.multiSelectedTabsCount = 2;
+  f.gBrowser.selectedTabs = [f.initial, real];
+  assert.equal(f.browserCommands.closeTabOrWindow(event), "native-close");
+  assert.equal(f.calls.at(-1).receiver, f.browserCommands);
+  assert.equal(f.calls.at(-1).args[0], event);
+  f.gBrowser.multiSelectedTabsCount = 0;
+  f.gBrowser.selectedTab = real;
+  assert.equal(f.browserCommands.closeTabOrWindow(event), "native-close");
+  f.window.emit("unload");
+  assert.equal(f.browserCommands.closeTabOrWindow, f.originalClose);
 });
 test("native-restored explicit marker paints empty before chrome UI initializes without an unsupported SessionStore API", () => {
   const f = fixture({ marker: true, lateUI: true });

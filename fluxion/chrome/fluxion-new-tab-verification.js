@@ -119,6 +119,13 @@
     unchanged(owner, source);
     return target;
   }
+  function observeFinalSessionFlush(browser) {
+    const topic = "sessionstore-browser-shutdown-flush";
+    let complete = false;
+    const observer = subject => { if (subject === browser) complete = true; };
+    Services.obs.addObserver(observer, topic);
+    return { get complete() { return complete; }, dispose() { Services.obs.removeObserver(observer, topic); } };
+  }
   async function verifyEmptyWorkspace(owner, searchOrigin, privateMode) {
     const label = privateMode ? "private" : "ordinary";
     stage(`${label}-empty-workspace`);
@@ -144,28 +151,50 @@
       "Empty workspace closure changed or closed another workspace's tabs");
     };
     async function closeToEmpty(tab) {
+      const closedURL = tab.linkedBrowser.currentURI.spec;
+      // Gecko can add the real page to undo history only after its asynchronous
+      // final child-state update, later than tab detachment. Observe the pinned
+      // SessionStore completion notification before sending the actual Cmd-W.
+      const flush = observeFinalSessionFlush(tab.linkedBrowser);
       browser.selectedBrowser.focus();
-      await key(owner, "close");
-      const backing = await wait(() => !owner.closed && !tab.parentNode &&
-        empty.isPlaceholder(browser.selectedTab) && ui.currentWorkspace() === workspace.id && rows().length === 0 &&
-        owner.document.documentElement.hasAttribute("data-fluxion-empty-workspace") && browser.selectedTab,
-      "Cmd-W did not leave an open, genuinely empty visible workspace");
-      assertOtherWorkspaces();
-      const emptyURLs = ["about:blank", "about:newtab", Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab")];
-      assert(emptyURLs.includes(backing.linkedBrowser.currentURI.spec), "Empty workspace backing page is not an owned blank/new-tab document");
-      const saved = JSON.parse(SessionStore.getTabState(backing));
-      assert(saved.attributes?.[marker] === "true", "Empty backing identity is absent from native session state");
-      return backing;
+      try {
+        await key(owner, "close");
+        const backing = await wait(() => !owner.closed && !tab.parentNode &&
+          empty.isPlaceholder(browser.selectedTab) && ui.currentWorkspace() === workspace.id && rows().length === 0 &&
+          owner.document.documentElement.hasAttribute("data-fluxion-empty-workspace") && browser.selectedTab,
+        "Cmd-W did not leave an open, genuinely empty visible workspace");
+        assertOtherWorkspaces();
+        const emptyURLs = ["about:blank", "about:newtab", Services.prefs.getStringPref("fluxion.newtab.url", "about:newtab")];
+        assert(emptyURLs.includes(backing.linkedBrowser.currentURI.spec), "Empty workspace backing page is not an owned blank/new-tab document");
+        const saved = JSON.parse(SessionStore.getTabState(backing));
+        assert(saved.attributes?.[marker] === "true", "Empty backing identity is absent from native session state");
+        await wait(() => flush.complete, "Closed real source did not finish its native SessionStore shutdown flush");
+        await wait(() => SessionStore.getClosedTabDataForWindow(owner).some(item =>
+          item.state?.entries?.some(entry => entry.url === closedURL)),
+        `Closed real source is missing from native undo history: ${closedURL}`);
+        return backing;
+      } finally { flush.dispose(); }
     }
     let backing = await closeToEmpty(source);
-    const emptyCount = browser.tabs.length, closedCount = SessionStore.getClosedTabCountForWindow(owner);
-    await key(owner, "close");
-    assert(browser.tabs.length === emptyCount && browser.selectedTab === backing && empty.isPlaceholder(backing) &&
-      rows().length === 0 && SessionStore.getClosedTabCountForWindow(owner) === closedCount,
-    "Cmd-W on an already empty workspace replaced its backing page or manufactured undo history");
-    assertOtherWorkspaces();
     await new Promise(resolve => owner.requestAnimationFrame(() => owner.requestAnimationFrame(resolve)));
     await key(owner, `capture-${label}-empty`);
+    const emptyCount = browser.tabs.length, closedCount = SessionStore.getClosedTabCountForWindow(owner);
+    await key(owner, "close");
+    const repeatClose = { label, countBefore: emptyCount, countAfter: browser.tabs.length,
+      sameBacking: browser.selectedTab === backing, originalAttached: !!backing.parentNode,
+      originalClosing: backing.closing, selectedEmpty: empty.isPlaceholder(browser.selectedTab), rows: rows().length,
+      closedBefore: closedCount, closedAfter: SessionStore.getClosedTabCountForWindow(owner),
+      closedTabs: SessionStore.getClosedTabDataForWindow(owner).map(item => ({ closedId: item.closedId,
+        empty: item.state?.attributes?.[marker], urls: item.state?.entries?.map(entry => entry.url) })) };
+    (report.repeatEmptyClose ??= []).push(repeatClose);
+    const diagnostic = JSON.stringify(repeatClose);
+    assert(repeatClose.sameBacking && repeatClose.originalAttached && !repeatClose.originalClosing,
+      `Cmd-W on an already empty workspace replaced its backing identity: ${diagnostic}`);
+    assert(repeatClose.countAfter === emptyCount && repeatClose.selectedEmpty && repeatClose.rows === 0,
+      `Cmd-W on an already empty workspace changed its tab count or visible state: ${diagnostic}`);
+    assert(repeatClose.closedAfter === closedCount && !repeatClose.closedTabs.some(item => item.empty === "true"),
+      `Cmd-W on an already empty workspace manufactured undo history: ${diagnostic}`);
+    assertOtherWorkspaces();
     const count = browser.tabs.length;
     await begin(owner);
     await typeAndSettle(owner, `${label} uncommitted empty draft`);

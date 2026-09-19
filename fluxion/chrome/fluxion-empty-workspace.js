@@ -116,8 +116,12 @@
   on(window, "FluxionWorkspacesChanged", schedule);
   // The backing browser is not a user tab. Closing it again would create a
   // replacement loop. Keep explicit Close Window (including Shift+accel+W).
+  function closesOnlyPlaceholder() {
+    return isPlaceholder(gBrowser.selectedTab) && !(gBrowser.multiSelectedTabsCount &&
+      [...gBrowser.selectedTabs].some(tab => live(tab) && !isPlaceholder(tab)));
+  }
   function stopEmptyClose(event) {
-    if (!isPlaceholder(gBrowser.selectedTab)) return;
+    if (!closesOnlyPlaceholder()) return;
     if (event.type === "keydown") {
       const accelerator = Services.appinfo.OS === "Darwin" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
       if (!accelerator || event.altKey || event.shiftKey || event.key?.toLowerCase() !== "w") return;
@@ -127,6 +131,13 @@
   }
   on(window, "keydown", stopEmptyClose, true);
   on(window, "command", stopEmptyClose, true);
+  // macOS native menu accelerators can invoke the command without a DOM key
+  // event. Guard that public command boundary too; explicit window close is
+  // the separate BrowserCommands.tryToCloseWindow method and stays native.
+  replace(window.BrowserCommands, "closeTabOrWindow", original => function (...args) {
+    if (closesOnlyPlaceholder()) return undefined;
+    return original.apply(this, args);
+  });
   // Preserve native bookmark destinations and dialogs, but do not manufacture
   // bookmarks for the implementation-only browser behind an empty workspace.
   const places = window.PlacesCommandHook;

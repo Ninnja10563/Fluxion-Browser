@@ -67,3 +67,10 @@ The first candidate, `cef2094`, was rejected by native run `35474375673`:
 the empty surface worked, but the marker was absent from native session state.
 The run was canceled and nothing published. This exposed the removed runtime
 persistence API; the native allowlist fix keeps the original assertion intact.
+
+Candidate `4e4f85f`, run `35474613462`, passed the native marker check but was
+rejected at the repeated-Cmd-W assertion and canceled without publication.
+Gecko completes closed-tab history asynchronously after detaching the tab. The
+test now waits for the exact browser's native final-flush notification and real
+closed-page record before comparing undo history. The product also guards the
+native Close Tab command entry point, not just DOM keyboard events.

@@ -13,6 +13,27 @@ const deferred = () => {
   return { promise, resolve, reject };
 };
 
+test("native close waits for exact-browser final SessionStore flush and always detaches its observer", () => {
+  const helper = verifier.slice(verifier.indexOf("  function observeFinalSessionFlush("), verifier.indexOf("  async function verifyEmptyWorkspace("));
+  let registration, removed;
+  const observe = require("node:vm").runInNewContext(`${helper}\nobserveFinalSessionFlush`, {
+    Services: { obs: {
+      addObserver(observer, topic) { registration = { observer, topic }; },
+      removeObserver(observer, topic) { removed = { observer, topic }; },
+    } },
+  });
+  const browser = {}, tracker = observe(browser);
+  assert.equal(registration.topic, "sessionstore-browser-shutdown-flush");
+  assert.equal(tracker.complete, false);
+  registration.observer({});
+  assert.equal(tracker.complete, false, "Another tab's asynchronous flush must not satisfy the close boundary");
+  registration.observer(browser);
+  assert.equal(tracker.complete, true);
+  tracker.dispose();
+  assert.deepEqual(removed, registration);
+  assert.match(verifier, /finally \{ flush\.dispose\(\); \}/);
+});
+
 test("native key evidence passively observes the separate Gecko system group and rejects synthetic input", () => {
   const report = { keys: [] };
   const observe = require("node:vm").runInNewContext(`${keyObserverHelper}\nobserveKeys`, { report, privateWindow: null });
