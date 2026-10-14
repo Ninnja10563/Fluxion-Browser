@@ -103,6 +103,16 @@ remain unmeasured; no whole-browser speed increase is claimed.
 
 ## Current milestone
 
+**[0.78.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.78.0-preview.1)**
+refines sidebar motion without per-frame webpage resizing, cancels stale focus
+requests after rapid hide/reopen, honors reduced motion, and retains navigation
+while hovering the native macOS menu bar. All 1,376 tests and mandatory Mac
+gates passed; 176 sampled frames retained stable page geometry during sidebar
+hover/reversal. See the [audit scope](docs/milestone-0.78.md) and
+[provenance](release/provenance/v0.78.0-preview.1.md).
+
+## Previous milestones
+
 **[0.77.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.77.0-preview.1)**
 adds persistent empty/populated workspace folders, browser-data import tools,
 fullscreen toolbar overlay fixes, local startup diagnostics and a redesigned
@@ -110,8 +120,6 @@ DMG install window. All 1,367 tests and mandatory native macOS gates passed.
 No whole-browser speed gain is claimed. See the
 [milestone](docs/milestone-0.77.md) and
 [provenance](release/provenance/v0.77.0-preview.1.md).
-
-## Previous milestones
 
 **[0.76.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.76.0-preview.1)**
 refines sidebar hierarchy, fixes the workspace heading above scrolling tabs,

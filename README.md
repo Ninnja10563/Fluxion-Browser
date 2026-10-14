@@ -23,6 +23,14 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.78.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.78.0-preview.1)**
+refines sidebar motion without continuously resizing webpages, fixes rapid
+hide/reopen focus races, respects motion preferences, and keeps the toolbar
+visible when moving into the macOS menu bar. All 1,376 tests and mandatory
+native Mac gates passed, including viewport stability during sidebar reversal.
+See the [audit scope](fluxion/docs/milestone-0.78.md) and
+[provenance](fluxion/release/provenance/v0.78.0-preview.1.md).
+
 **[0.77.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.77.0-preview.1)**
 adds persistent workspace folders, browser-data import tools, fullscreen toolbar
 overlay fixes and a redesigned drag-to-install DMG. All 1,367 tests and mandatory
