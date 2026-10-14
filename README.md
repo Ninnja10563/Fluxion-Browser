@@ -23,6 +23,15 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.79.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.79.0-preview.1)**
+automatically detects browser profiles in Import settings, adds Zen/Firefox
+bookmark backups without replacing existing bookmarks, fixes inherited toolbar
+focus in new hidden-sidebar windows, and gives toolbar retraction a 200ms transition.
+All 1,391 tests and mandatory native Mac gates passed, including repeated backup
+imports and new-window navigation ownership. Cookies, signed-in sessions and
+workspace layouts are not migrated. See the [release notes](fluxion/release/notes/v0.79.0-preview.1.md)
+and [provenance](fluxion/release/provenance/v0.79.0-preview.1.md).
+
 **[0.78.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.78.0-preview.1)**
 refines sidebar motion without continuously resizing webpages, fixes rapid
 hide/reopen focus races, respects motion preferences, and keeps the toolbar
