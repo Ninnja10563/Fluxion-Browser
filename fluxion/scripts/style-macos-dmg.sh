@@ -30,7 +30,15 @@ hdiutil attach "$disk_image" "${attach_options[@]}"
 mounted=true
 [[ -d "$mount_path/Fluxion.app" && -L "$mount_path/Applications" ]]
 [[ "$(readlink "$mount_path/Applications")" == /Applications ]]
-window_id="$(osascript "$fluxion_root/packaging/macos/dmg-layout.applescript" "$mode" "$mount_path")"
+if ! window_id="$(osascript "$fluxion_root/packaging/macos/dmg-layout.applescript" "$mode" "$mount_path" 2>"$mount_root/finder.log")"; then
+  cat "$mount_root/finder.log" >&2
+  if [[ -n "${FLUXION_DMG_ARTIFACT_DIR:-}" ]]; then
+    mkdir -p "$FLUXION_DMG_ARTIFACT_DIR"
+    cp "$mount_root/finder.log" "$FLUXION_DMG_ARTIFACT_DIR/$mode-failure.txt"
+    screencapture -x "$FLUXION_DMG_ARTIFACT_DIR/$mode-failure.png" || true
+  fi
+  exit 1
+fi
 [[ "$window_id" =~ ^[0-9]+$ ]]
 [[ -s "$mount_path/.DS_Store" && -s "$mount_path/.background/background.tiff" ]]
 if [[ "$mode" == verify ]]; then
