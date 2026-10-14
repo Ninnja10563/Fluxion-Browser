@@ -6,7 +6,7 @@ viewer, developer tools, private browsing, session recovery, and WebExtension
 support, then replaces the primary tab interaction with Fluxion's compact
 **Flow** sidebar.
 
-## Unreleased — folders, imports and fullscreen follow-up
+## 0.77 — folders, imports and fullscreen follow-up
 
 - Right-click the workspace heading, or open its three-dot menu, and choose
   **New Folder…**. Folders appear above the divider. Move tabs through
@@ -26,11 +26,13 @@ support, then replaces the primary tab interaction with Fluxion's compact
   not measure total application launch or website loading; the reported loading
   delay has not yet been isolated or shown to improve.
 
-These changes are not in the published 0.76 DMG. Native macOS execution remains
-pending, including new folder/session and per-frame fullscreen geometry gates.
-The CSS-only fixture accepts `?folders&checks` for 72 folder-layout cases; it
-does not substitute for native Gecko validation. The unslop-ui review keeps
-folder controls inline and uses the existing sidebar spacing and type system.
+These changes ship in 0.77. Native folder/session and per-frame fullscreen
+geometry gates passed. The CSS-only fixture accepts `?folders&checks` for 72
+folder-layout cases; it does not substitute for native Gecko validation. The
+unslop-ui review keeps folder controls inline and uses the existing sidebar
+spacing and type system. The redesigned DMG uses neutral artwork, clear native
+typography and the real draggable icons; its compressed, reopened read-only
+Finder window was verified and visually reviewed.
 
 ## 0.76 sidebar refinement — October 14
 
@@ -101,6 +103,16 @@ remain unmeasured; no whole-browser speed increase is claimed.
 
 ## Current milestone
 
+**[0.77.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.77.0-preview.1)**
+adds persistent empty/populated workspace folders, browser-data import tools,
+fullscreen toolbar overlay fixes, local startup diagnostics and a redesigned
+DMG install window. All 1,367 tests and mandatory native macOS gates passed.
+No whole-browser speed gain is claimed. See the
+[milestone](docs/milestone-0.77.md) and
+[provenance](release/provenance/v0.77.0-preview.1.md).
+
+## Previous milestones
+
 **[0.76.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.76.0-preview.1)**
 refines sidebar hierarchy, fixes the workspace heading above scrolling tabs,
 and aligns tab/New Tab sizing. Background tab scans and ranking do less work;
@@ -109,8 +121,6 @@ The launcher recreates missing profile directories and preserves existing files.
 All 1,338 tests and mandatory native macOS gates passed. See the
 [milestone](docs/milestone-0.76.md) and
 [provenance](release/provenance/v0.76.0-preview.1.md).
-
-## Previous milestone
 
 **[0.75.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.75.0-preview.1)**
 keeps the window open with an empty workspace after its last tab closes.

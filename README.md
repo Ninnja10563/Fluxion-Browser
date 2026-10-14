@@ -23,6 +23,14 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.77.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.77.0-preview.1)**
+adds persistent workspace folders, browser-data import tools, fullscreen toolbar
+overlay fixes and a redesigned drag-to-install DMG. All 1,367 tests and mandatory
+native macOS gates passed; actual folder and installer captures were reviewed.
+The reported loading delay remains under investigation; no browsing-speed gain
+is claimed. See the [milestone](fluxion/docs/milestone-0.77.md) and
+[provenance](fluxion/release/provenance/v0.77.0-preview.1.md).
+
 **[0.76.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.76.0-preview.1)**
 keeps the workspace heading fixed above scrolling tabs, aligns sidebar rows and
 New Tab, and reduces background scan/search work. Memory embedding code loads
