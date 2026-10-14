@@ -250,7 +250,7 @@
   }
   function newTabGeometryEvidence(density, row, button, before) {
     const tab = rect(row), after = rect(button), style = window.getComputedStyle(button), tabStyle = window.getComputedStyle(row);
-    const expected = { compact: 28, standard: 34, roomy: 36 }[density];
+    const expected = { compact: 28, standard: 36, roomy: 40 }[density];
     assert(near(tab.height, expected) && near(after.height, expected) && near(after.width, tab.width) && near(after.left, tab.left),
       `New tab does not share normal ${density} tab geometry: ${JSON.stringify({ tab, after })}`);
     assert(["left", "top", "width", "height"].every(key => near(before[key], after[key])), "Hover changed New tab geometry");
@@ -796,6 +796,9 @@
     await select(webpage);
     stage("inline-new-tab-and-scroll-stable-workspace-dock");
     const dockBefore = rect(dock);
+    const fixedHeading = flow.querySelector(".fluxion-workspace-heading");
+    assert(fixedHeading && !scrollArea.contains(fixedHeading), "Workspace heading must stay outside the tab scroller");
+    const headingBeforeScroll = rect(fixedHeading);
     const overflowTabs = Array.from({ length: Math.ceil(rect(scrollArea).height / 28) + 4 }, (_, index) =>
       add(`about:blank?fluxion-frame=overflow-${index}`));
     await wait(() => overflowTabs.every(tab => rowFor(tab)) && scrollArea.scrollHeight > scrollArea.clientHeight + 30,
@@ -803,6 +806,10 @@
     newTab.scrollIntoView({ block: "nearest" }); await delay(200);
     const dockAfter = rect(dock), newTabRect = rect(newTab), lastRow = rect(rowFor(overflowTabs.at(-1)));
     assert(["left", "top", "width", "height"].every(key => near(dockBefore[key], dockAfter[key])), "Scrolling many tabs moved the workspace dock");
+    const headingAfterScroll = rect(fixedHeading);
+    assert(["left", "top", "width", "height"].every(key => near(headingBeforeScroll[key], headingAfterScroll[key])),
+      "Scrolling many tabs moved the workspace heading");
+    report.checks.push("workspace-heading-remains-stationary-above-overflowing-tabs");
     assert(newTabRect.top >= lastRow.bottom - 1 && newTabRect.top - lastRow.bottom <= 24 &&
       newTabRect.bottom <= dockAfter.top + 1 && newTabRect.top >= rect(scrollArea).top - 1,
     "Inline new-tab control is not reachable immediately after the lowest tab when scrolling");

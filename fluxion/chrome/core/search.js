@@ -61,41 +61,32 @@
 
   function rankSearchItems(query, items, limit = 12) {
     const safeLimit = Math.floor(Math.max(0, Math.min(Number(limit) || 0, 100)));
+    if (!safeLimit) return [];
     const needle = normaliseSearchText(query), tokens = needle.split(" ");
-    let strongestRealMatch = Number.NEGATIVE_INFINITY;
-    const records = items
-      .map((item, index) => {
-        let score = Number.NEGATIVE_INFINITY;
-        for (const field of preparedFields(item)) score = Math.max(score, scoreNormalised(needle, field, tokens));
-        const record = {
-          item,
-          index,
-          fallback: item.fallback === true,
-          score: score + Number(item.boost || 0),
-        };
-        if (!record.fallback && Number.isFinite(record.score)) strongestRealMatch = Math.max(strongestRealMatch, record.score);
-        return record;
-      })
-      .filter(record => Number.isFinite(record.score));
-    const confidenceFloor = strongestRealMatch >= 650 ? 400 : Number.NEGATIVE_INFINITY;
-    const compare = (left, right) =>
-        Number(left.fallback) - Number(right.fallback) ||
-        right.score - left.score ||
-        left.index - right.index;
-    const best = [];
-    for (const record of records) {
-      if (!safeLimit || (!record.fallback && record.score < confidenceFloor)) continue;
-      if (best.length === safeLimit && compare(record, best[best.length - 1]) >= 0) continue;
+    // Keep only bounded winners rather than allocating a record for every tab
+    // on every keystroke. Separate fallback winners must survive until we know
+    // the confidence floor: a late strong match may remove weaker real ones.
+    const real = [], fallback = [];
+    for (const item of items) {
+      let score = Number.NEGATIVE_INFINITY;
+      for (const field of preparedFields(item)) score = Math.max(score, scoreNormalised(needle, field, tokens));
+      score += Number(item.boost || 0);
+      if (!Number.isFinite(score)) continue;
+      const best = item.fallback === true ? fallback : real;
+      // Later equal-scoring entries follow earlier ones, preserving input order.
+      if (best.length === safeLimit && score <= best[best.length - 1].score) continue;
       let low = 0, high = best.length;
       while (low < high) {
         const middle = (low + high) >>> 1;
-        if (compare(record, best[middle]) < 0) high = middle;
+        if (score > best[middle].score) high = middle;
         else low = middle + 1;
       }
-      best.splice(low, 0, record);
+      best.splice(low, 0, { item, score });
       if (best.length > safeLimit) best.pop();
     }
-    return best.map(record => record.item);
+    const confidenceFloor = real[0]?.score >= 650 ? 400 : Number.NEGATIVE_INFINITY;
+    return real.filter(record => record.score >= confidenceFloor).concat(fallback)
+      .slice(0, safeLimit).map(record => record.item);
   }
 
   const api = Object.freeze({ fuzzyScore, normaliseSearchText, rankSearchItems });

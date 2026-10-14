@@ -22,7 +22,7 @@
     const offset = Math.round(Math.min(available, Math.max(0, wanted)));
     const width = overlay ? 0 : Math.round(rail.width);
     // The heading starts beside bookmarks, directly below navigation. The
-    // scroll area already supplies its six-pixel inset; do not reserve the
+    // heading already supplies its six-pixel inset; do not reserve the
     // whole toolbox or add a second navigation-sized blank band.
     // Narrow windows retain the original below-toolbox layout: native toolbar
     // overflow and caption ownership take precedence over reclaiming this gap.

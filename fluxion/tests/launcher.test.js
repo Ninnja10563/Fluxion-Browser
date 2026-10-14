@@ -82,6 +82,55 @@ process.stdout.write(JSON.stringify({
     assert.equal((await stat(profile)).mode & 0o777, 0o700);
   });
 
+  await t.test("relaunch recreates a deleted default profile without touching neighbouring profiles", async () => {
+    const userHome = join(directory, "deleted-profile home");
+    const profiles = join(userHome, "Library/Application Support/Fluxion/Profiles");
+    const profile = join(profiles, "default");
+    const other = join(profiles, "other", "places.sqlite");
+    const firefoxData = join(userHome, "Library/Application Support/Firefox/Profiles/existing", "places.sqlite");
+    await mkdir(join(profiles, "other"), { recursive: true });
+    await mkdir(join(userHome, "Library/Application Support/Firefox/Profiles/existing"), { recursive: true });
+    await writeFile(other, "other Fluxion profile");
+    await writeFile(firefoxData, "Firefox bookmarks");
+    const environment = { HOME: userHome, FLUXION_PROFILE: "" };
+    launch([], environment);
+    await writeFile(join(profile, ".fluxion-chrome-cache"), `${fingerprint}\n`);
+    // Simulate the user's deletion only inside this test's temporary directory.
+    await rm(profile, { recursive: true });
+    const evidence = launch([], environment);
+    assert.deepEqual(evidence.args, ["--profile", profile, "--purgecaches"]);
+    assert.equal(evidence.cachePending, "1");
+    assert.equal((await stat(profile)).mode & 0o777, 0o700);
+    assert.equal(await readFile(other, "utf8"), "other Fluxion profile");
+    assert.equal(await readFile(firefoxData, "utf8"), "Firefox bookmarks");
+    await assert.rejects(stat(join(profile, ".fluxion-chrome-cache")), { code: "ENOENT" });
+  });
+
+  await t.test("relaunch recreates a deleted custom profile and its missing parents", async () => {
+    const parent = join(directory, "deleted custom profiles");
+    const profile = join(parent, "mémoire 流");
+    launch([], { FLUXION_PROFILE: profile });
+    await rm(parent, { recursive: true });
+    assert.deepEqual(launch([], { FLUXION_PROFILE: profile }).args,
+      ["--profile", profile, "--purgecaches"]);
+    assert.equal((await stat(profile)).mode & 0o777, 0o700);
+  });
+
+  await t.test("a file at the profile path is reported, never replaced or passed to Gecko", async () => {
+    const profile = join(directory, "profile-is-a-file");
+    await writeFile(profile, "preserve this file");
+    const result = spawnSync(executable, [], {
+      encoding: "utf8", timeout: 10000,
+      env: { ...process.env, FLUXION_PROFILE: profile },
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 73);
+    assert.equal(result.stdout, "", "runtime must not start with an invalid profile directory");
+    assert.match(result.stderr, /could not create or open its profile directory/);
+    assert.ok(result.stderr.includes(profile));
+    assert.equal(await readFile(profile, "utf8"), "preserve this file");
+  });
+
   await t.test("only exact acknowledged chrome reuses caches, preserving the profile and user arguments", async () => {
     const profile = join(directory, "existing profile");
     await mkdir(profile);

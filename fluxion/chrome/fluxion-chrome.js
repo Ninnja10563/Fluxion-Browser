@@ -110,6 +110,9 @@
       --fluxion-hover: light-dark(rgba(25,26,23,.055), rgba(255,255,250,.06));
       --fluxion-accent: light-dark(#3f596e, #8ba9bd);
       --fluxion-fast: 140ms cubic-bezier(.2,.7,.2,1);
+      --fluxion-row-height: 36px;
+      --fluxion-rail-gutter: 8px;
+      --fluxion-row-radius: 8px;
     }
     #toolbar-menubar, #TabsToolbar { visibility: collapse !important; }
     :root[data-fluxion-workspace-appearance="light"] :is(#navigator-toolbox, #fluxion-flow, #fluxion-settings, #fluxion-library) {
@@ -366,12 +369,14 @@
     }
     .fluxion-workspaces {
       display: grid; grid-template-columns: 30px minmax(0, 1fr) 30px;
-      flex: none; align-items: center; gap: 3px; padding: 6px 7px;
+      flex: none; align-items: center; gap: 3px; padding: 6px var(--fluxion-rail-gutter);
     }
     .fluxion-workspace-heading {
-      display: flex; align-items: center; gap: 9px; min-height: 40px; padding: 4px 8px; margin: 0 7px;
+      display: flex; flex: none; align-items: center; gap: 9px; min-height: 40px;
+      padding: 4px 8px; margin: 6px var(--fluxion-rail-gutter) 0;
       color: var(--fluxion-muted); font-weight: 600; overflow: hidden;
-      border-radius: 7px;
+      border-radius: var(--fluxion-row-radius);
+      transition: background-color 100ms ease, color 100ms ease;
     }
     .fluxion-workspace-heading:hover, .fluxion-workspace-heading:focus-within,
     .fluxion-workspace-heading[data-menu-open="true"] {
@@ -388,6 +393,10 @@
     }
     .fluxion-workspace-more > svg { width: 16px; height: 16px; }
     #fluxion-flow[data-state="compact"] .fluxion-workspace-heading { display: none; }
+    .fluxion-workspace-divider {
+      flex: none; height: 1px; margin: 8px 16px 4px; background: var(--fluxion-line);
+    }
+    #fluxion-flow[data-state="compact"] .fluxion-workspace-divider { display: none; }
     .fluxion-workspace-list {
       min-width: 0; flex: 1; display: flex; align-items: center; gap: 2px;
       overflow-x: auto; scrollbar-width: none;
@@ -423,27 +432,28 @@
     }
     .fluxion-section-label {
       height: 24px; display: flex; align-items: center; padding: 4px 11px 3px;
-      color: var(--fluxion-muted); font-size: 10px; font-weight: 600;
-      letter-spacing: .055em; text-transform: uppercase; white-space: nowrap;
+      color: var(--fluxion-muted); font-size: 11px; font-weight: 500;
+      white-space: nowrap;
     }
     .fluxion-section-label[hidden], .fluxion-tabs[hidden] { display: none !important; }
-    .fluxion-tab-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-block: 6px; }
-    .fluxion-tabs { padding: 1px 7px 0; }
+    .fluxion-tab-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; padding-block: 4px; }
+    .fluxion-tabs { padding: 1px var(--fluxion-rail-gutter) 0; }
     .fluxion-tab {
-      position: relative; height: 34px; display: flex; align-items: center; gap: 9px;
-      padding: 0 8px; margin: 2px 0; border-radius: 7px; color: var(--fluxion-muted);
+      position: relative; height: var(--fluxion-row-height); display: flex; align-items: center; gap: 9px;
+      padding: 0 8px; margin: 2px 0; border-radius: var(--fluxion-row-radius); color: var(--fluxion-muted);
       user-select: none; transition: opacity 100ms ease, transform var(--fluxion-fast),
         height 120ms cubic-bezier(.2,.7,.2,1), margin 120ms cubic-bezier(.2,.7,.2,1),
         padding 120ms cubic-bezier(.2,.7,.2,1), background-color 80ms linear;
     }
-    :root[data-fluxion-density="compact"] .fluxion-tab,
-    :root[data-fluxion-density="compact"] .fluxion-new-tab { height: 28px; }
-    :root[data-fluxion-density="roomy"] .fluxion-tab,
-    :root[data-fluxion-density="roomy"] .fluxion-new-tab { height: 36px; }
+    :root[data-fluxion-density="compact"] { --fluxion-row-height: 28px; }
+    :root[data-fluxion-density="roomy"] { --fluxion-row-height: 40px; }
     :root[data-fluxion-no-motion] #fluxion-flow,
     :root[data-fluxion-no-motion] .fluxion-surface,
     :root[data-fluxion-no-motion] .fluxion-tab,
     :root[data-fluxion-no-motion] .fluxion-workspace-more,
+    :root[data-fluxion-no-motion] .fluxion-workspace-heading,
+    :root[data-fluxion-no-motion] .fluxion-new-tab,
+    :root[data-fluxion-no-motion] .fluxion-keyhint,
     :root[data-fluxion-no-motion] .fluxion-group-disclosure { transition: none !important; }
     :root[data-fluxion-no-motion] #fluxion-settings,
     :root[data-fluxion-no-motion] #fluxion-library { transition: none !important; }
@@ -499,9 +509,9 @@
     .fluxion-split-mark::after { inset-inline-end: 1px; }
     .fluxion-group { position: relative; margin: 2px 0 4px; }
     .fluxion-group-heading {
-      width: 100%; height: 25px; display: flex; align-items: center; gap: 5px;
+      width: 100%; height: var(--fluxion-row-height); display: flex; align-items: center; gap: 5px;
       padding: 0 7px; border: 0; border-radius: 3px; color: var(--fluxion-muted);
-      background: transparent; font: inherit; font-size: 10.5px; text-align: start;
+      background: transparent; font: inherit; text-align: start;
     }
     .fluxion-group-heading:hover,
     .fluxion-group-heading[data-dragover="true"] { color: var(--fluxion-ink); background: var(--fluxion-hover); }
@@ -557,18 +567,29 @@
     .fluxion-audio .fluxion-control-glyph { width: 14px; height: 14px; }
     .fluxion-tab:hover .fluxion-close, .fluxion-tab:focus-within .fluxion-close, .fluxion-audio { opacity: 1; }
     .fluxion-footer {
-      flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 7px;
+      flex: none; display: flex; align-items: center; gap: 6px; padding: 2px var(--fluxion-rail-gutter);
     }
     .fluxion-new-tab {
-      flex: 1; height: 34px; border: 0; border-radius: 7px; background: transparent;
+      flex: 1; min-width: 0; height: var(--fluxion-row-height); border: 0;
+      border-radius: var(--fluxion-row-radius); background: transparent;
       display: flex; align-items: center; gap: 9px;
       color: var(--fluxion-muted); font: inherit; text-align: start; padding: 0 8px;
+      transition: background-color 100ms ease, color 100ms ease;
     }
     .fluxion-new-tab > [aria-hidden] {
       width: 16px; height: 16px; flex: none; display: grid; place-items: center;
       font-size: 20px; font-weight: 300; line-height: 16px;
     }
-    .fluxion-new-tab:hover { background: var(--fluxion-hover); }
+    .fluxion-new-tab:hover { background: var(--fluxion-hover); color: var(--fluxion-ink); }
+    .fluxion-new-tab > .fluxion-new-tab-label {
+      min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .fluxion-new-tab > .fluxion-keyhint {
+      width: auto; height: auto; display: block; margin-inline-start: auto;
+      font: inherit; font-size: 11px; line-height: 1; color: var(--fluxion-muted);
+      opacity: 0; transition: opacity 100ms ease;
+    }
+    .fluxion-new-tab:is(:hover, :focus-visible) > .fluxion-keyhint { opacity: 1; }
     .fluxion-count { display: none; }
     .fluxion-visually-hidden {
       position: fixed !important; width: 1px !important; height: 1px !important;
@@ -582,6 +603,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-split-mark,
     #fluxion-flow[data-state="compact"] .fluxion-close,
     #fluxion-flow[data-state="compact"] .fluxion-count,
+    #fluxion-flow[data-state="compact"] .fluxion-keyhint,
     #fluxion-flow[data-state="compact"] .fluxion-new-tab span:not([aria-hidden]) { display: none; }
     .fluxion-pinned-tabs {
       display: grid; grid-template-columns: repeat(auto-fill, minmax(30px, 1fr));
@@ -628,7 +650,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-footer { padding-inline: 7px; }
     #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
-      .fluxion-workspace-more { transition: none !important; }
+      .fluxion-workspace-more, .fluxion-workspace-heading, .fluxion-new-tab, .fluxion-keyhint { transition: none !important; }
       #fluxion-flow, .fluxion-surface, .fluxion-tab { transition-duration: 0.01ms !important; transition-delay: 0s !important; }
       #fluxion-settings, #fluxion-library { transition: none !important; }
       .fluxion-status[data-kind="loading"]::before { animation: none !important; }
@@ -1053,7 +1075,13 @@
   const footer = create("div", "fluxion-footer");
   const newTabButton = create("button", "fluxion-new-tab");
   newTabButton.type = "button";
-  newTabButton.innerHTML = `<span aria-hidden="true">+</span> <span>New tab</span>`;
+  const newTabLabel = create("span", "fluxion-new-tab-label");
+  newTabLabel.textContent = "New tab";
+  const newTabHint = create("kbd", "fluxion-keyhint");
+  newTabHint.textContent = toolbarAccel("⌘T", "Ctrl+T");
+  newTabHint.setAttribute("aria-hidden", "true");
+  newTabButton.append(vectorGlyph("fluxion-control-glyph", [["path", { d: "M8 2v12M2 8h12" }]]), newTabLabel, newTabHint);
+  newTabButton.title = `New tab (${newTabHint.textContent})`;
   newTabButton.setAttribute("aria-label", "New tab");
   const count = create("span", "fluxion-count");
   const dragAnnouncement = create("span", "fluxion-visually-hidden");
@@ -1074,7 +1102,9 @@
   workspaceMoreButton.title = "Workspace options";
   workspaceMoreButton.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3" cy="8" r="1"/><circle cx="8" cy="8" r="1"/><circle cx="13" cy="8" r="1"/></svg>`;
   workspaceHeading.append(workspaceSymbol(workspaces.find(item => item.id === currentWorkspace)?.icon), workspaceHeadingLabel, workspaceMoreButton);
-  tabScroll.append(workspaceHeading, pinnedLabel, pinnedTabs, tabsList, footer);
+  const workspaceDivider = create("div", "fluxion-workspace-divider");
+  workspaceDivider.setAttribute("aria-hidden", "true");
+  tabScroll.append(pinnedLabel, pinnedTabs, tabsList, footer);
   const sidebarResizer = create("div");
   sidebarResizer.id = "fluxion-sidebar-resizer";
   sidebarResizer.setAttribute("role", "separator");
@@ -1082,7 +1112,7 @@
   sidebarResizer.setAttribute("aria-orientation", "vertical");
   sidebarResizer.setAttribute("aria-controls", "fluxion-flow");
   surface.append(
-    tabScroll, workspaceBar, dragAnnouncement, sidebarResizer,
+    workspaceHeading, workspaceDivider, tabScroll, workspaceBar, dragAnnouncement, sidebarResizer,
   );
   flow.append(surface);
   browser.prepend(flow);
@@ -3114,6 +3144,13 @@
     }
   }
   on(workspaceMoreButton, "click", event => openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event));
+  on(workspaceHeading, "click", event => {
+    // The title and symbol are the same workspace-options target. Let the
+    // ellipsis keep its native button activation without toggling twice as
+    // its click bubbles through the containing heading.
+    if (event.defaultPrevented || event.button !== 0 || workspaceMoreButton.contains(event.target)) return;
+    openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event);
+  });
   on(workspaceMoreButton, "keydown", event => {
     if (event.key !== "ArrowDown") return;
     event.preventDefault();

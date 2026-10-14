@@ -75,3 +75,35 @@ test("strong matches suppress unrelated subsequences without disabling typo sear
     "Open downloads",
   );
 });
+
+test("bounded ranking matches a full-sort reference across large corpora, limits, fallbacks and mutations", () => {
+  function reference(query, items, limit) {
+    const records = items.map((item, index) => ({ item, index, fallback: item.fallback === true,
+      score: Math.max(...[item.label, item.detail, ...(item.keywords || [])].map(field => fuzzyScore(query, field))) + Number(item.boost || 0),
+    })).filter(record => Number.isFinite(record.score));
+    const strongest = Math.max(-Infinity, ...records.filter(record => !record.fallback).map(record => record.score));
+    return records.filter(record => record.fallback || strongest < 650 || record.score >= 400)
+      .sort((a, b) => Number(a.fallback) - Number(b.fallback) || b.score - a.score || a.index - b.index)
+      .slice(0, Math.floor(Math.max(0, Math.min(Number(limit) || 0, 100)))).map(record => record.item);
+  }
+  const items = Array.from({ length: 1200 }, (_, index) => ({
+    label: ["Résumé", "Research", "Read this", "Restore window", "New tab", "📚 reading"][index % 6],
+    detail: `https://example.test/${index % 51}`, keywords: index % 9 ? [] : ["saved tabs"],
+    boost: index % 19 === 0 ? Infinity : index % 37 - 18, fallback: index % 13 === 0,
+  }));
+  for (const query of ["re", "resume", "rdth", "saved tabs", "📚", "", "missing"]) {
+    for (const limit of [0, 1, 12, 100, 101, -1, NaN, 3.8]) {
+      assert.deepEqual(rankSearchItems(query, items, limit), reference(query, items, limit));
+    }
+  }
+  items[3].label = "Changed title";
+  items[3].keywords.push("modified");
+  assert.deepEqual(rankSearchItems("modified", items), reference("modified", items, 12));
+});
+
+test("late strong matches leave fallback slots available after low-confidence real matches are removed", () => {
+  const fallback = { label: "Search", keywords: ["rd"], fallback: true };
+  const strong = { label: "rd" };
+  const items = [fallback, ...Array.from({ length: 50 }, () => ({ label: "Read" })), strong];
+  assert.deepEqual(rankSearchItems("rd", items, 12), [strong, fallback]);
+});

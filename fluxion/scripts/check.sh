@@ -57,6 +57,8 @@ node --check scripts/benchmark-tab-search.cjs
 node --check scripts/benchmark-tab-sleeping.cjs
 node --check scripts/benchmark-workspace-selection.cjs
 node --check scripts/benchmark-palette-organisation.cjs
+node --check scripts/preview-sidebar.cjs
+node --check scripts/sidebar-layout-checks.js
 node --check scripts/browsing-fixture.mjs
 node --check chrome/core/url.js
 node --check chrome/core/search.js
@@ -196,6 +198,7 @@ bash -n scripts/install-sparkle.sh
 node --check modules/FluxionAIControl.sys.mjs
 node --test tests/*.test.js
 python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("tests/fixtures/ollama-stub.py").read_text(encoding="utf-8"))'
+python3 -c 'import ast, pathlib; ast.parse(pathlib.Path("scripts/benchmark-branding-storage.py").read_text(encoding="utf-8"))'
 
 if [[ "$(uname -s)" == "Darwin" ]]; then
   xcrun clang -arch "$(uname -m)" -fsyntax-only -Wall -Wextra -Werror \

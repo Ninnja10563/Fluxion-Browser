@@ -70,6 +70,9 @@ def install(resources, manifest=None, artwork=None):
             with archive_tools._archive.readable_archive(archive) as source:
                 entries = source.infolist()
                 names = [entry.filename for entry in entries]
+                # ZipFile.writestr mutates ZipInfo.header_offset. Capture the
+                # original preload set before replacement sizes change offsets.
+                preload_members = {entry.filename for entry in entries if entry.header_offset < preload}
                 rules = strings["archives"].get(relative, {})
                 art = images["archives"].get(relative, {})
                 if len(set(names)) != len(names) or set(rules) & set(art) or not (set(rules) | set(art)) <= set(names):
@@ -90,8 +93,16 @@ def install(resources, manifest=None, artwork=None):
                 output = io.BytesIO()
                 with zipfile.ZipFile(output, "w", allowZip64=False) as target:
                     for entry in entries:
-                        target.writestr(entry, patches.get(entry.filename, source.read(entry)))
-                result = archive_tools.optimize_zip(output.getvalue(), {entry.filename for entry in entries if entry.header_offset < preload})
+                        # Large inline PNG/SVG replacements can inherit STORED
+                        # from a tiny upstream asset. Compress our artwork only;
+                        # keep all decoded bytes, order, and preload membership.
+                        # Unrelated runtime entries retain their original method.
+                        data = patches[entry.filename] if entry.filename in patches else source.read(entry)
+                        if entry.filename in art:
+                            target.writestr(entry, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+                        else:
+                            target.writestr(entry, data)
+                result = archive_tools.optimize_zip(output.getvalue(), preload_members)
             descriptor, temporary = tempfile.mkstemp(prefix=".fluxion-branding-", dir=archive.parent)
             prepared.append((archive, temporary))
             with os.fdopen(descriptor, "wb") as target:

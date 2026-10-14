@@ -6,7 +6,7 @@ const { execFileSync } = require("node:child_process");
 const { readFileSync } = require("node:fs");
 const { performance } = require("node:perf_hooks");
 const vm = require("node:vm");
-const BASELINE = "eca27212472017d3b174dc4d158a7709b0ed5e0a";
+const BASELINE = "5cf540467a718051b11aa39ab5469d263859393c";
 const sources = {
   baseline: execFileSync("git", ["show", `${BASELINE}:fluxion/chrome/fluxion-tab-sleeping.js`], { encoding: "utf8" }),
   current: readFileSync(require.resolve("../chrome/fluxion-tab-sleeping.js"), "utf8"),
@@ -57,9 +57,10 @@ function fixture(source, count, privateWindow = false) {
       assert.equal(f.counters.prepares, 0); assert.equal(f.counters.discards, 0);
       work[name] = { ...f.counters };
     }
-    assert.equal(work.baseline.tabListReads, count + 1);
+    assert.equal(work.baseline.tabListReads, 1);
+    assert.equal(work.baseline.ownershipLookups, count);
     assert.equal(work.current.tabListReads, 1);
-    assert.equal(work.current.ownershipLookups, count);
+    assert.equal(work.current.ownershipLookups, 0);
     for (let repeat = 0; repeat < 24; repeat++) {
       for (const name of repeat % 2 ? ["current", "baseline"] : ["baseline", "current"]) {
         const start = performance.now();
@@ -76,7 +77,7 @@ function fixture(source, count, privateWindow = false) {
   }
   const before = fixture(sources.baseline, 0, true), after = fixture(sources.current, 0, true);
   assert.equal(await before.controller.run(), 0); assert.equal(await after.controller.run(), 0);
-  assert.equal(before.counters.timers, 1);
+  assert.equal(before.counters.timers, 0);
   assert.equal(after.counters.timers, 0);
   assert.equal(after.counters.tabListReads, 0);
   console.log(JSON.stringify({ scenario: "private-window-scheduling", baselineTimers: before.counters.timers, currentTimers: after.counters.timers }));

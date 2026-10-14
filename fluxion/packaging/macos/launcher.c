@@ -29,19 +29,34 @@ static int chrome_cache_matches(const char *profile) {
       memcmp(value, FLUXION_CHROME_CACHE_ID, 64) == 0;
 }
 
+static int ensure_directory(const char *path) {
+  if (mkdir(path, 0700) == 0) return 0;
+  if (errno != EEXIST) return -1;
+  struct stat metadata;
+  if (stat(path, &metadata) != 0) return -1;
+  if (!S_ISDIR(metadata.st_mode)) {
+    errno = ENOTDIR;
+    return -1;
+  }
+  return 0;
+}
+
 static int make_directories(const char *path) {
   char copy[PATH_MAX];
   size_t length = strnlen(path, sizeof(copy));
-  if (length == 0 || length >= sizeof(copy)) return -1;
+  if (length == 0 || length >= sizeof(copy)) {
+    errno = length == 0 ? EINVAL : ENAMETOOLONG;
+    return -1;
+  }
   memcpy(copy, path, length + 1);
 
   for (char *cursor = copy + 1; *cursor; cursor++) {
     if (*cursor != '/') continue;
     *cursor = '\0';
-    if (mkdir(copy, 0700) != 0 && errno != EEXIST) return -1;
+    if (ensure_directory(copy) != 0) return -1;
     *cursor = '/';
   }
-  return mkdir(copy, 0700) == 0 || errno == EEXIST ? 0 : -1;
+  return ensure_directory(copy);
 }
 
 int main(int argc, char **argv) {
@@ -93,7 +108,8 @@ int main(int argc, char **argv) {
   }
 
   if (make_directories(profile) != 0) {
-    perror("Fluxion profile");
+    fprintf(stderr, "Fluxion could not create or open its profile directory: %s\n%s\n"
+                    "Existing profile data has not been replaced.\n", profile, strerror(errno));
     return 73;
   }
   // Keep Gecko's native URL forwarding, in a product-specific IPC namespace.

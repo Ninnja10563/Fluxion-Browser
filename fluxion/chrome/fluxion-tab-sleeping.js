@@ -85,7 +85,16 @@
     running = true;
     let count = 0;
     try {
+      const minimumIdleMs = minutes() * 60_000;
+      const now = Date.now();
       for (const tab of gBrowser.tabs) {
+        // Most tabs are young, selected, pinned or already discarded. Reject
+        // them synchronously instead of allocating/awaiting one promise each.
+        // sleep() still rechecks current preferences and every native safety
+        // guard, both before and after the asynchronous session-state flush.
+        if (!tab?.parentNode || tab.closing || pending.has(tab) ||
+            tab.hasAttribute("fluxion-empty-workspace") ||
+            !FluxionTabSleepingPolicy.canSleep(tab, tabState(tab, now, minimumIdleMs))) continue;
         if (await sleep(tab)) count++;
       }
     } finally {

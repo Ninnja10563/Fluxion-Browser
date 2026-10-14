@@ -233,6 +233,25 @@ test("heading toggle closes an open menu and other keyboard keys keep their nati
   assert.equal(f.document.activeElement, button);
 });
 
+test("workspace title clicks share the options menu without double toggling or taking secondary clicks", () => {
+  const f = fixture();
+  f.workspaceHeading.dispatch("click", f.workspaceHeading, { button: 0 });
+  assert.equal(f.workspaceMenu.state, "open");
+  assert.equal(f.workspaceMenu.openArgs[0], f.workspaceMoreButton);
+  assert.equal(f.document.activeElement, f.workspaceMoreButton);
+  // Simulate the existing button's click bubbling through the heading.
+  f.workspaceHeading.dispatch("click", f.workspaceMoreButton, { button: 0 });
+  assert.equal(f.workspaceMenu.state, "open");
+  f.workspaceHeading.dispatch("click", f.workspaceHeading, { button: 1 });
+  f.workspaceHeading.dispatch("click", f.workspaceHeading, { button: 2 });
+  f.workspaceHeading.dispatch("click", f.workspaceHeading, { button: 0, defaultPrevented: true });
+  assert.equal(f.workspaceMenu.state, "open");
+  f.workspaceHeading.dispatch("click", f.workspaceHeading, { button: 0 });
+  assert.equal(f.workspaceMenu.state, "closed");
+  f.flush();
+  assert.equal(f.workspaceMoreButton.getAttribute("aria-expanded"), "false");
+});
+
 test("heading context menu preserves pointer-owned focus and cannot open a deleted workspace", () => {
   const f = fixture(), external = {};
   f.document.activeElement = external;

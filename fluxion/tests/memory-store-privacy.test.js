@@ -25,7 +25,7 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
   const prefObservers = new Map();
   let timerID = 0;
   let embeddingCalls = 0;
-  let opens = 0, closes = 0, yields = 0;
+  let opens = 0, closes = 0, yields = 0, embeddingImports = 0;
   let historyObserver;
   const db = {
     async getSchemaVersion() { return 3; },
@@ -57,9 +57,13 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     PathUtils: { profileDir: "/profile", join: (...parts) => parts.join("/") },
     IOUtils: { exists: async () => options.existingFile ?? true },
     PlacesUtils: { tensorToSQLBindable: vector => vector },
-    GeckoEmbeddings: factoryStyle === "current"
-      ? { embeddingsGeneratorFactory: { forPlaces: createEngine }, EmbeddingsGenerator: {} }
-      : { EmbeddingsGenerator: { forPlaces: createEngine } },
+    ChromeUtils: { importESModule(uri) {
+      assert.equal(uri, "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs");
+      embeddingImports++;
+      return factoryStyle === "current"
+        ? { embeddingsGeneratorFactory: { forPlaces: createEngine }, EmbeddingsGenerator: {} }
+        : { EmbeddingsGenerator: { forPlaces: createEngine } };
+    } },
     Cu: { reportError: error => errors.push(error) },
     URL,
     FluxionMemorySearch,
@@ -90,9 +94,23 @@ function fixture(persistedPrefs = new Map(), factoryStyle = "legacy", storedDime
     setPref(key, value) { persistedPrefs.set(key, value); prefObservers.get(key)?.observe(); },
     opens: () => opens, closes: () => closes, yields: () => yields,
     embeddingCalls: () => embeddingCalls,
+    embeddingImports: () => embeddingImports,
     expireEmbeddingWait: () => { for (const callback of timers.values()) callback(); },
     notifyHistory: events => historyObserver(events) };
 }
+
+test("loading Memory privacy observers does not load ML; first use imports it once", async () => {
+  const f = fixture();
+  assert.equal(f.embeddingImports(), 0);
+  assert.equal(f.opens(), 0);
+  const first = f.store.embed("https://example.com/one", "Evidence");
+  await f.embeddingStarted.promise;
+  assert.equal(f.embeddingImports(), 1);
+  f.embedding.resolve({ output: [0.25, 0.75] });
+  await first;
+  await f.store.embed("https://example.com/two", "More evidence");
+  assert.equal(f.embeddingImports(), 1);
+});
 
 test("canonical policy changes invalidate deferred embeddings immediately before cleanup starts", async () => {
   const f = fixture();

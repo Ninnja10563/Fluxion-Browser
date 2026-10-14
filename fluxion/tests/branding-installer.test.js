@@ -85,6 +85,39 @@ for data in [normal,warning,disabled]:
 `);
 });
 
+test("stored branding assets are losslessly compressed without changing other entry methods or preload membership", () => {
+  python(`
+mark=(m.ROOT/'assets/app-icons/fluxion-mark.png').read_bytes()
+names={'logo.svg':'normal','warning.svg':'warning','disabled.svg':'disabled','logo.png':'png'}
+original=b'original fixture'
+images={'version':art['version'],'markSHA256':art['markSHA256'],'archives':{'browser/omni.ja':{
+ n:{'kind':kind,'sha256':hashlib.sha256(original).hexdigest()} for n,kind in names.items()}}}
+strings={'version':manifest['version'],'archives':{}}
+with tempfile.TemporaryDirectory() as temp:
+ p=pathlib.Path(temp);(p/'browser').mkdir();(p/'application.ini').write_text('[App]\\nVersion=155.0.1\\n')
+ arc=p/'browser/omni.ja'
+ with zipfile.ZipFile(arc,'w') as z:
+  z.writestr('keep-stored',b'unchanged')
+  z.writestr('keep-deflated',b'unchanged compressed',compress_type=zipfile.ZIP_DEFLATED)
+  for name in names:z.writestr(name,original)
+ preload={'keep-stored','keep-deflated','logo.svg','warning.svg'}
+ arc.write_bytes(m.archive_tools.optimize_zip(arc.read_bytes(),preload))
+ m.install(p,strings,images)
+ boundary=struct.unpack('<I',arc.read_bytes()[:4])[0]
+ with m.archive_tools._archive.readable_archive(arc) as z:
+  assert z.testzip() is None
+  assert {e.filename for e in z.infolist() if e.header_offset<boundary}==preload
+  assert z.getinfo('keep-stored').compress_type==zipfile.ZIP_STORED
+  assert z.getinfo('keep-deflated').compress_type==zipfile.ZIP_DEFLATED
+  assert z.read('keep-stored')==b'unchanged'
+  assert z.read('keep-deflated')==b'unchanged compressed'
+  for name,kind in names.items():
+   assert z.getinfo(name).compress_type==zipfile.ZIP_DEFLATED
+   assert z.read(name)==(mark if kind=='png' else m.brand_svg(mark,kind))
+   if name.endswith('.svg'):assert z.getinfo(name).compress_size<z.getinfo(name).file_size*0.8
+`);
+});
+
 test("native Extensions empty state packages the existing transparent F without changing its controls or layout rules", () => {
   python(`
 import base64,xml.etree.ElementTree as ET

@@ -188,7 +188,7 @@ function tab(height) {
   } };
 }
 test("native new-tab hover gate accepts normal row geometry in all densities", () => {
-  for (const [density, height] of [["compact", 28], ["standard", 34], ["roomy", 36]]) {
+  for (const [density, height] of [["compact", 28], ["standard", 36], ["roomy", 40]]) {
     const row = tab(height), button = tab(height); button.box.top = 170;
     assert.equal(api.newTabGeometryEvidence(density, row, button, { ...button.box }).after.height, height);
   }
@@ -196,7 +196,7 @@ test("native new-tab hover gate accepts normal row geometry in all densities", (
 test("native new-tab hover gate rejects undersized, shifted, expanding or mismatched-radius controls", () => {
   for (const mutate of [node => { node.box.height = 26; }, node => { node.box.width = 210; },
     node => { node.box.left = 10; }, node => { node.box.top += 3; }, node => { node.style.borderTopLeftRadius = "3px"; }]) {
-    const row = tab(34), button = tab(34), before = { ...button.box }; mutate(button);
+    const row = tab(36), button = tab(36), before = { ...button.box }; mutate(button);
     assert.throws(() => api.newTabGeometryEvidence("standard", row, button, before), /New tab|Hover/);
   }
 });

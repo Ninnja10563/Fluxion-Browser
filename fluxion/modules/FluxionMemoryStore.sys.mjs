@@ -1,7 +1,6 @@
 import { Sqlite } from "resource://gre/modules/Sqlite.sys.mjs";
 import { AsyncShutdown } from "resource://gre/modules/AsyncShutdown.sys.mjs";
 import { PlacesUtils } from "resource://gre/modules/PlacesUtils.sys.mjs";
-import * as GeckoEmbeddings from "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs";
 import { setTimeout, clearTimeout } from "resource://gre/modules/Timer.sys.mjs";
 import { FluxionMemorySearch } from "resource://fluxion/modules/FluxionMemorySearch.sys.mjs";
 import { FluxionMemoryPolicy } from "resource://fluxion/modules/FluxionMemoryPolicy.sys.mjs";
@@ -228,6 +227,11 @@ function ensureShutdownBlocker() {
 
 function generator() {
   if (!embedder) {
+    // The store is imported for privacy observers even when Memory is off.
+    // Do not load the ML module graph until a database/model operation needs it.
+    const GeckoEmbeddings = ChromeUtils.importESModule(
+      "chrome://global/content/ml/EmbeddingsGenerator.sys.mjs",
+    );
     // Firefox 155 moved the production factory off the class; preserve its
     // region/model policy and support the earlier factory during upgrades.
     const factory = GeckoEmbeddings.embeddingsGeneratorFactory || GeckoEmbeddings.EmbeddingsGenerator;

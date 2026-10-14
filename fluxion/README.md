@@ -6,6 +6,71 @@ viewer, developer tools, private browsing, session recovery, and WebExtension
 support, then replaces the primary tab interaction with Fluxion's compact
 **Flow** sidebar.
 
+## Unreleased sidebar refinement — October 14
+
+Reviewed the owner's Zen screenshots alongside Zen's official
+[workspace](https://docs.zen-browser.app/user-manual/workspaces),
+[compact-mode](https://docs.zen-browser.app/user-manual/compact-mode) and
+[address-bar](https://docs.zen-browser.app/user-manual/urlbar) documentation.
+Fluxion already has the bottom workspace dock, edge-revealed sidebar and
+address-first New Tab flow. This pass refines their hierarchy rather than
+adding another competing navigation surface:
+
+- Workspace title stays above the scrolling tabs; a quiet divider separates it
+  from the list. Clicking the title or symbol opens its existing native menu.
+- Tabs and New Tab share sizing, side insets and corner tokens. Standard rows
+  are 36px; Compact stays 28px and Roomy becomes 40px. Folder rows use the same
+  rhythm and readable text size.
+- New Tab uses the existing vector-glyph style and reveals its platform shortcut
+  on hover or keyboard focus. The hint reserves space, so labels do not jump.
+- Workspace options retain their hover/focus reveal and cancellation behaviour.
+  New feedback transitions respect both reduced-motion settings.
+
+The unslop-ui review favoured consistent alignment, neutral surfaces and
+functional controls, without extra gradients, blur, or decorative panels.
+`node fluxion/scripts/preview-sidebar.cjs` serves a **CSS fixture**, not a Gecko
+browser, at `http://127.0.0.1:4176`. Add `?checks` to reproduce 72 rendered cases
+(LTR/RTL, light/dark, expanded/floating, three densities, three widths), checking
+stationary headings during scrolling, matching row bounds, dock containment and
+reduced motion. Native macOS visual/input validation and release remain pending.
+
+## Unreleased performance work — October 13
+
+This working-tree pass reduces background tab-scan work, retains only bounded
+search ranking candidates, lazily imports the Memory embedding module, and
+losslessly compresses packaged branding artwork. Sleeping-tab safeguards,
+search ordering, privacy observers and decoded artwork bytes remain intact.
+The branding writer also snapshots the original archive preload membership
+before ZIP writes mutate entry offsets. No browsing data or cache is deleted.
+
+Local Node 24.19 / Linux ARM64 comparisons against release source
+`5cf540467a718051b11aa39ab5469d263859393c` used alternating execution order:
+
+| Recent tabs | Sleeping scan median, before → after | Search ranking median, before → after |
+| --- | --- | --- |
+| 200 | 2.23 → 1.52 ms | 2.37 → 2.04 ms |
+| 1,000 | 11.64 → 7.15 ms | 12.11 → 10.32 ms |
+| 3,000 | 35.83 → 20.78 ms | 38.21 → 30.36 ms |
+
+The stored-resource branding fixture shrank from 47,601,536 to 36,410,291
+bytes (23.51%); every decoded member is compared. This is **not** a whole-app
+or DMG size measurement. Deflate trades a small decompression cost for less
+disk I/O; native startup impact is not yet measured. Lazy ML loading avoids an
+unneeded import but does not claim a measured process-memory saving.
+
+Reproduce from the repository root:
+
+```sh
+node fluxion/scripts/benchmark-tab-sleeping.cjs
+node fluxion/scripts/benchmark-tab-search.cjs
+python3 fluxion/scripts/benchmark-branding-storage.py
+./fluxion/scripts/check.sh
+```
+
+These are component benchmarks, not Speedometer results. Native macOS gates,
+real app size, resident memory, battery use and matched M3 browsing benchmarks
+remain required before publishing a release or claiming whole-browser gains.
+
 ## Current milestone
 
 **[0.75.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.75.0-preview.1)**

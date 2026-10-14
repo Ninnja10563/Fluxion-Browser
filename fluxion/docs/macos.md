@@ -144,6 +144,31 @@ is not bundled with Fluxion and is not needed for ordinary browsing or uploads.
 
 ## Troubleshooting
 
+### Deleted profile folder
+
+Fully quit Fluxion before reopening `/Applications/Fluxion.app`. The launcher
+creates `~/Library/Application Support/Fluxion/Profiles/default` if it is
+missing, including missing parent directories. Gecko initializes a fresh
+profile there; it cannot restore the deleted bookmarks, passwords or tabs.
+Existing profiles are not reset or replaced, and Firefox's profiles are not
+used. Start the application bundle, not its internal `firefox` executable,
+which bypasses Fluxion's directory-creation step.
+
+If the folder was intentionally deleted and you want a fresh profile, these
+Terminal commands also create the missing directory and open the installed app:
+
+```sh
+mkdir -p "$HOME/Library/Application Support/Fluxion/Profiles/default"
+open /Applications/Fluxion.app
+```
+
+Run these only after quitting the app. `mkdir -p` does not erase existing data.
+If it reports a permission error or a file blocking the directory, stop and
+inspect that error rather than deleting more files or running Fluxion as root.
+If the profile error persists, collect the installed Fluxion version and the
+launcher error output; creating the directory does not repair unrelated
+permissions or stale restart configuration.
+
 Fluxion accepts links and local files through macOS **Open With**. To target a
 particular application bundle without changing your default browser:
 

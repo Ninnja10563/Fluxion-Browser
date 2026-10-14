@@ -168,3 +168,37 @@ test("private windows never schedule periodic sleeping work, including after pre
   assert.equal(f.calls.prepare, 0);
   assert.equal(f.calls.discard, 0);
 });
+
+test("a large ineligible sweep avoids ownership lookups and asynchronous sleeping calls", async () => {
+  const f = fixture();
+  const now = Date.now();
+  f.gBrowser.tabs = Array.from({ length: 3000 }, (_, index) => ({
+    ...f.tab,
+    linkedBrowser: { getAttribute: () => "" },
+    // Exercise recent, pinned, audible and already-discarded background tabs.
+    lastAccessed: index % 4 === 0 ? now : 1,
+    pinned: index % 4 === 1,
+    soundPlaying: index % 4 === 2,
+    linkedPanel: index % 4 === 3 ? null : "panel",
+  }));
+  let completed = false;
+  const scan = f.controller.run().then(() => { completed = true; });
+  await Promise.resolve();
+  assert.equal(completed, true, "ineligible sweep must not yield once per tab");
+  assert.equal(await scan, undefined);
+  assert.equal(f.calls.lookups, 0);
+  assert.equal(f.calls.prepare, 0);
+  assert.equal(f.calls.discard, 0);
+});
+
+test("sweep still flushes an eligible tab and rechecks protection during the flush", async () => {
+  for (const protect of [false, true]) {
+    const f = fixture();
+    const scan = f.controller.run();
+    assert.equal(f.calls.prepare, 1);
+    if (protect) f.tab.soundPlaying = true;
+    f.finishFlush();
+    assert.equal(await scan, protect ? 0 : 1);
+    assert.equal(f.calls.discard, protect ? 0 : 1);
+  }
+});
