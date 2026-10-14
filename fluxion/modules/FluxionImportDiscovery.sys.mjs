@@ -18,6 +18,61 @@ export function parseProfiles(text) {
   return profiles.filter(p => p.Path && ["0", "1"].includes(p.IsRelative));
 }
 
+// A backup is a restore format: even replace:false retains its original GUIDs.
+// Give imported descendants fresh identities so shared/repeated backups cannot
+// collide with existing bookmarks. Keep roots and internal folder queries.
+export function prepareBookmarkCopy(tree, generateGuid) {
+  if (!tree || !Array.isArray(tree.children)) throw new Error("Invalid bookmark backup.");
+  const mapping = new Map(), nodes = [];
+  const visit = (node, depth) => {
+    if (!node || typeof node !== "object" || depth > 128 || nodes.length >= 100000)
+      throw new Error("Bookmark backup is too large or malformed.");
+    nodes.push(node);
+    if (depth > 1) {
+      const previous = node.guid;
+      node.guid = generateGuid();
+      if (previous) mapping.set(previous, node.guid);
+    }
+    if (node.children !== undefined) {
+      if (!Array.isArray(node.children)) throw new Error("Invalid bookmark folder.");
+      for (const child of node.children) visit(child, depth + 1);
+    }
+  };
+  visit(tree, 0);
+  for (const node of nodes) {
+    for (const key of ["uri", "url"]) {
+      if (typeof node[key] === "string" && node[key].startsWith("place:"))
+        node[key] = node[key].replace(/([:&])parent=([^&]+)/g,
+          (match, separator, guid) => mapping.has(guid) ? `${separator}parent=${mapping.get(guid)}` : match);
+    }
+  }
+  return tree;
+}
+
+async function importBookmarkCopy(path, allowed) {
+  const limit = 32 * 1024 * 1024;
+  const compressed = path.endsWith(".jsonlz4");
+  if ((await IOUtils.stat(path)).size > limit) throw new Error("Bookmark backup is too large.");
+  if (compressed) {
+    const header = await IOUtils.read(path, { maxBytes: 12 });
+    if (header.length !== 12 || new DataView(header.buffer, header.byteOffset, header.byteLength).getUint32(8, true) > limit)
+      throw new Error("Bookmark backup is too large or malformed.");
+  }
+  const text = await IOUtils.readUTF8(path, { decompress: compressed });
+  if (text.length > limit) throw new Error("Bookmark backup is too large.");
+  const { PlacesUtils } = ChromeUtils.importESModule("resource://gre/modules/PlacesUtils.sys.mjs");
+  const tree = prepareBookmarkCopy(JSON.parse(text), () => PlacesUtils.history.makeGuid());
+  const file = Services.dirsvc.get("TmpD", Ci.nsIFile);
+  file.append("fluxion-bookmark-import.json");
+  file.createUnique(Ci.nsIFile.NORMAL_FILE_TYPE, 0o600);
+  try {
+    await IOUtils.writeUTF8(file.path, JSON.stringify(tree));
+    if (!allowed()) throw new Error("Import is no longer available in this window.");
+    return await ChromeUtils.importESModule("resource://gre/modules/BookmarkJSONUtils.sys.mjs")
+      .BookmarkJSONUtils.importFromFile(file.path, { replace: false });
+  } finally { await IOUtils.remove(file.path); }
+}
+
 export function createImportDiscovery({ allowed, scan, latestBackup, confirm, importBackup, openWizard }) {
   let profiles = new Map(), busy = false, sequence = 0;
   const check = () => { if (!allowed()) throw new Error("Profile detection is unavailable in this window or disabled by your administrator."); };
@@ -135,8 +190,7 @@ export function forWindow(window, { profileRoots, confirm } = {}) {
     },
     confirm: confirm || (profile => Services.prompt.confirm(window, "Import bookmarks",
       `Add bookmarks from the latest saved backup of ${profile.source === "zen" ? "Zen" : "Firefox"} — ${profile.name || "Default"}? Recent edits may not be in that backup. Existing Fluxion bookmarks will be kept. Repeating this import can add duplicates. Passwords, cookies and sessions are not copied.`)),
-    importBackup: path => ChromeUtils.importESModule("resource://gre/modules/BookmarkJSONUtils.sys.mjs")
-      .BookmarkJSONUtils.importFromFile(path, { replace: false }),
+    importBackup: path => importBookmarkCopy(path, allowed),
     openWizard: profile => {
       const { MigrationUtils } = ChromeUtils.importESModule("resource:///modules/MigrationUtils.sys.mjs");
       return MigrationUtils.showMigrationWizard(window, { entrypoint: MigrationUtils.MIGRATION_ENTRYPOINTS.PREFERENCES,

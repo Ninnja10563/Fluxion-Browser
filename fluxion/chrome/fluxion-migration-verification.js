@@ -207,12 +207,16 @@
       detectedBookmark?.title === "Detected café bookmark" && detectedFolder?.title === "Detected source folder",
     "Detected profile backup did not preserve its Unicode title and folder");
     assert(await unchanged(), "Detected profile import replaced an existing bookmark");
+    const repeated = await importer.transfer(selected.id);
+    assert(repeated.state === "done" && repeated.added > 0 && await unchanged(),
+      "Repeated backup import collided with existing bookmark identities");
     const backupAfter = await IOUtils.read(backup);
     assert(backupBefore.length === backupAfter.length && backupBefore.every((byte, index) => byte === backupAfter[index]) &&
       await IOUtils.readUTF8(PathUtils.join(sourceRoot, "profiles.ini")) === registry,
     "Detected profile import changed its source files");
     report.checks.push("native-profile-registry-discovery-with-opaque-selection", "detected-backup-cancel-keeps-data-unchanged",
       "native-jsonlz4-profile-import-preserves-folders-and-existing-bookmarks", "source-profile-files-byte-for-byte-unchanged");
+    report.checks.push("repeated-backup-import-uses-fresh-identities-without-replacing-existing-bookmarks");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-wizard-cancel-and-html-import-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack || ""}`); Cu.reportError(error); })

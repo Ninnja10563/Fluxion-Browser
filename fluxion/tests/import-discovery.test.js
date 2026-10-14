@@ -24,6 +24,29 @@ test("profile parser handles CRLF, multiple profiles and custom locations withou
   assert.deepEqual(parseProfiles("x".repeat(1024 * 1024 + 1)), []);
   assert.equal(parseProfiles(Array.from({ length: 70 }, (_, i) => `[Profile${i}]\nIsRelative=1\nPath=p${i}`).join("\n")).length, 64);
 });
+test("backup copies retain native roots and remap descendants and saved folder queries", async () => {
+  const { prepareBookmarkCopy } = await ready;
+  let id = 0;
+  const tree = { guid: "root________", children: [{ guid: "toolbar_____", children: [
+    { guid: "folderOld___", id: 42, title: "café", children: [{ guid: "bookmarkOld_", uri: "https://example.org/", tags: "tag" }] },
+    { guid: "queryOld____", uri: "place:parent=folderOld___&parent=toolbar_____" },
+  ] }] };
+  const copy = prepareBookmarkCopy(structuredClone(tree), () => `new${++id}`);
+  assert.equal(copy.guid, tree.guid); assert.equal(copy.children[0].guid, "toolbar_____");
+  const [folder, query] = copy.children[0].children;
+  assert.equal(folder.guid, "new1"); assert.equal(folder.id, 42); assert.equal(folder.title, "café");
+  assert.equal(folder.children[0].guid, "new2"); assert.equal(folder.children[0].tags, "tag");
+  assert.equal(query.uri, "place:parent=new1&parent=toolbar_____");
+  assert.equal(tree.children[0].children[0].guid, "folderOld___", "source object retained");
+});
+test("backup copy rejects malformed folders and excessive nesting before importing", async () => {
+  const { prepareBookmarkCopy } = await ready;
+  assert.throws(() => prepareBookmarkCopy(null, () => "guid"), /Invalid/);
+  assert.throws(() => prepareBookmarkCopy({ children: [{ children: {} }] }, () => "guid"), /Invalid/);
+  let tree = {};
+  for (let i = 0; i < 132; i++) tree = { children: [tree] };
+  assert.throws(() => prepareBookmarkCopy(tree, () => "guid"), /too large/);
+});
 test("discovery reads metadata only and exposes opaque selections rather than filesystem paths", async () => {
   const h = await fixture(); assert.deepEqual(h.calls, []);
   const result = await h.controller.discover();
@@ -76,24 +99,35 @@ test("native adapter detects macOS registries, ignores current profile and missi
     ["/home/Library/Application Support/Firefox/profiles.ini", "[Profile0]\nName=Default\nIsRelative=0\nPath=/firefox"],
   ]);
   const directories = new Set(["/home/Library/Application Support/zen/Profiles/work", "/fluxion", "/firefox"]);
+  let temporaryText = null, temporaryRemoved = false, failImport = false;
   const context = vm.createContext({ TextDecoder, Services: {
     appinfo: { OS: "Darwin" }, policies: { isAllowed: () => true }, prompt: { confirm: () => true },
-    dirsvc: { get: key => ({ path: key === "Home" ? "/home" : "/fluxion" }) },
-  }, Ci: {}, Cc: { "@mozilla.org/file/local;1": { createInstance: () => ({
+    dirsvc: { get: key => key === "TmpD" ? { path: "/tmp/owned-import.json", append() {}, createUnique(_type, mode) { assert.equal(mode, 0o600); } } : ({ path: key === "Home" ? "/home" : "/fluxion" }) },
+  }, Ci: { nsIFile: { NORMAL_FILE_TYPE: 0 } }, Cc: { "@mozilla.org/file/local;1": { createInstance: () => ({
     initWithPath(value) { this.path = value; }, normalize() {}, isDirectory() { return directories.has(this.path); }, equals(other) { return this.path === other.path; },
   }) } }, PathUtils: { join: (base, ...leaves) => {
     assert.ok(leaves.every(leaf => !leaf.includes("/")), "Gecko join accepts leaf names, not nested relative paths");
     return path.posix.join(base, ...leaves);
   }, joinRelative: path.posix.join, filename: path.posix.basename },
   IOUtils: { exists: async p => entries.has(p) || p.endsWith("bookmarkbackups"), stat: async () => ({ type: "regular", size: 200 }),
-    read: async p => { calls.push(["read", p]); return new TextEncoder().encode(entries.get(p)); },
+    read: async p => { calls.push(["read", p]); return p.endsWith("jsonlz4") ? new Uint8Array(12) : new TextEncoder().encode(entries.get(p)); },
+    readUTF8: async (p, options) => {
+      assert.equal(p, "/home/Library/Application Support/zen/Profiles/work/bookmarkbackups/bookmarks-2026-10-14_6_hash.jsonlz4");
+      assert.equal(options.decompress, true);
+      return JSON.stringify({ children: [{ guid: "toolbar_____", children: [{ guid: "original", uri: "https://example.org/" }] }] });
+    },
+    writeUTF8: async (_p, value) => { temporaryText = JSON.parse(value); },
+    remove: async p => { assert.equal(p, "/tmp/owned-import.json"); temporaryRemoved = true; },
     getChildren: async p => ["bookmarks-2026-10-01_5_hash.jsonlz4", "bookmarks-2026-10-14_6_hash.jsonlz4", "random.json"].map(name => path.posix.join(p, name)),
   }, ChromeUtils: { importESModule: name => {
     if (name.includes("PrivateBrowsing")) return { PrivateBrowsingUtils: { isWindowPrivate: () => false } };
+    if (name.includes("PlacesUtils")) return { PlacesUtils: { history: { makeGuid: () => "fresh-guid" } } };
     if (name.includes("MigrationUtils")) return { MigrationUtils: { getMigrator: async () => ({ hasPermissions: async () => true,
       getSourceProfiles: async () => [{ id: "Profile 1", name: "Person" }] }), MIGRATION_ENTRYPOINTS: { PREFERENCES: "prefs" },
       showMigrationWizard: async (_w, options) => calls.push(["wizard", options]) } };
-    if (name.includes("BookmarkJSONUtils")) return { BookmarkJSONUtils: { importFromFile: async (file, options) => { calls.push(["import", file, options]); return 6; } } };
+    if (name.includes("BookmarkJSONUtils")) return { BookmarkJSONUtils: { importFromFile: async (file, options) => {
+      calls.push(["import", file, options]); if (failImport) throw Error("import failed"); return 6;
+    } } };
     throw Error(name);
   } } });
   const source = fs.readFileSync(path.join(__dirname, "../modules/FluxionImportDiscovery.sys.mjs"), "utf8").replace(/^export /gm, "");
@@ -103,7 +137,12 @@ test("native adapter detects macOS registries, ignores current profile and missi
   assert.equal(calls.length, 2, "only profiles.ini files read during discovery");
   await adapter.transfer(result.profiles[0].id);
   assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1))), ["import",
-    "/home/Library/Application Support/zen/Profiles/work/bookmarkbackups/bookmarks-2026-10-14_6_hash.jsonlz4", { replace: false }]);
+    "/tmp/owned-import.json", { replace: false }]);
+  assert.equal(temporaryText.children[0].children[0].guid, "fresh-guid");
+  assert.equal(temporaryRemoved, true);
+  failImport = true; temporaryRemoved = false;
+  await assert.rejects(adapter.transfer(result.profiles[0].id), /import failed/);
+  assert.equal(temporaryRemoved, true, "private temporary copy removed on import failure too");
   await adapter.transfer(result.profiles[2].id);
   assert.deepEqual(JSON.parse(JSON.stringify(calls.at(-1))), ["wizard", { entrypoint: "prefs", migratorKey: "chrome", profileId: "Profile 1" }]);
 });
