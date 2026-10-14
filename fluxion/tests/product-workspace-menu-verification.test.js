@@ -17,7 +17,7 @@ function fixture({ count = 1, currentIndex = 0 } = {}) {
     querySelector(selector) { return selector === "menupopup" && this.localName === "menu" ? { children: [{}, {}] } : null; },
   });
   const menu = { state: "open", isNativeMenu: true, children: [
-    node("Rename Workspace…"), node("Change Icon", {}, "menu"), node("Workspace Appearance…"),
+    node("Rename Workspace…"), node("New Folder…"), node("Change Icon", {}, "menu"), node("Workspace Appearance…"),
     ...workspaces.map((workspace, index) => node(workspace.name, {
       type: "radio", name: "fluxion-workspace-switch", checked: String(index === currentIndex),
     })),
@@ -60,6 +60,7 @@ test("native menu assertion rejects stale entries, selection, order and unpopula
     h => { h.item("Change Icon").querySelector = () => ({ children: [] }); },
     h => { h.item("Workspace Appearance…").attributes.label = "Change Accent"; },
     h => { h.item("Rename Workspace…").hidden = true; },
+    h => { h.item("New Folder…").hidden = true; },
     h => { h.menu.state = "closed"; },
   ];
   for (const change of changes) {
@@ -117,7 +118,7 @@ test("native workspace activation waits for observed leaves before Return and re
   const h = activationFixture(); await h.run();
   assert.equal(h.report.workspaceHeading.activation.activated, "research");
   assert.deepEqual(Array.from(h.report.workspaceHeading.activation.highlighted),
-    ["Rename Workspace…", "Workspace Appearance…", "Focus", "Research"]);
+    ["Rename Workspace…", "New Folder…", "Workspace Appearance…", "Focus", "Research"]);
   assert.equal(h.keys.at(-1), "select-return");
   assert.equal(h.current(), "focus");
   assert.equal(h.listenerRemoved(), true);

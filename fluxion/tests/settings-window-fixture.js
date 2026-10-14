@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updateCoordinator, ai, sidebarWidth, colors, permissions, prompt, shellService, policies } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updateCoordinator, ai, sidebarWidth, colors, permissions, prompt, shellService, policies, browserImport, clipboard } = {}) {
   const preferences = new Map(saved);
   const timers = new Map(); let timerId = 0;
   const elements = [];
@@ -94,10 +94,12 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../chrome/fluxion-settings.js"), "utf8"), {
     window, gBrowser,
     ChromeUtils: { importESModule: name => name.includes("FluxionUpdateCoordinator") ? { FluxionUpdateCoordinator: updateCoordinator }
+      : name.includes("FluxionBrowserImport") ? { forWindow: () => browserImport }
       : name.includes("ShellService.sys.mjs") ? { ShellService: shellService }
       : { SearchService: { init: async () => {}, getVisibleEngines: async () => [] } } },
     Services: { prefs, prompt, policies, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },
     Cu: { reportError: error => errors.push(error) },
+    Cc: { "@mozilla.org/widget/clipboardhelper;1": { getService: () => ({ copyString: value => clipboard?.push(value) }) } }, Ci: {},
     FluxionSettings: globalThis.FluxionSettings,
     FluxionBrowserPreferences: require("../chrome/core/browser-preferences.js"),
     FluxionAIProviders: require("../chrome/core/ai-providers.js"),

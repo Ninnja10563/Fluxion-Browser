@@ -91,6 +91,7 @@ function fixture() {
     renameWorkspace: id => actions.push(["rename", id]), reorderWorkspace: (id, direction) => actions.push(["move", id, direction]),
     updateWorkspaceAppearance: (id, appearance) => actions.push(["appearance", id, appearance]),
     deleteWorkspace: id => actions.push(["delete", id]), addWorkspace: () => actions.push(["new"]),
+    createWorkspaceFolder: id => actions.push(["folder", id]),
     switchWorkspace: id => { actions.push(["switch", id]); context.currentWorkspace = id; },
   });
   vm.runInContext(block("  function openWorkspaceMenu(", "  popupSet.append(contextMenu, groupMenu, workspaceMenu)"), context);
@@ -306,7 +307,7 @@ test("workspace radios rebuild from live order and names, use current checked st
 });
 
 test("stale workspace menu commands are rejected and reset heading state before any action", () => {
-  for (const command of ["Rename Workspace…", "Focus"]) {
+  for (const command of ["Rename Workspace…", "New Folder…", "Focus"]) {
     for (const change of ["deleted", "renamed", "switched"]) {
       const f = fixture(); f.workspaceMoreButton.dispatch("click");
       const item = f.workspaceMenu.children.find(item => item.getAttribute("label") === command);
@@ -323,7 +324,7 @@ test("stale workspace menu commands are rejected and reset heading state before 
 });
 
 test("workspace menu retains working create, rename, appearance, reorder and delete actions with live limits", () => {
-  for (const [label, expected] of [["New Workspace…", ["new"]], ["Rename Workspace…", ["rename", "build"]],
+  for (const [label, expected] of [["New Workspace…", ["new"]], ["New Folder…", ["folder", "build"]], ["Rename Workspace…", ["rename", "build"]],
     ["Move Workspace Later", ["move", "build", 1]], ["Delete Workspace…", ["delete", "build"]]]) {
     const f = fixture(); f.workspaceMoreButton.dispatch("click");
     const item = f.workspaceMenu.children.find(item => item.getAttribute("label") === label);

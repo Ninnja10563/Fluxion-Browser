@@ -55,6 +55,19 @@ REPLACEMENTS = [
       // navigation toolbar. Native location/search editing still vetoes hide.
       (!fluxionFocus || gNavToolbox.contains(focused)) &&
       !BrowserHandler.kiosk'''),
+    ('''  _mouseTargetRectFromBounds(rect) {
+    return {
+      top: rect.top + 50,''', '''  _mouseTargetRectFromBounds(rect) {
+    // Fluxion's fullscreen Focus toolbar overlays the page. Its hit band
+    // must not count as page content, even before the reveal has painted.
+    // Measure only on native reveal/resize, never on each mouse movement.
+    let top = rect.top;
+    if (document.documentElement.hasAttribute("data-fluxion-native-focus")) {
+      const toolbar = window.windowUtils.getBoundsWithoutFlushing(gNavToolbox);
+      top = Math.max(top, toolbar.height, toolbar.bottom);
+    }
+    return {
+      top: top + 50,'''),
 ]
 
 

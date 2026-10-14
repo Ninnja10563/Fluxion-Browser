@@ -268,8 +268,10 @@ test("Flow tab and group context keys anchor the native menu to the focused item
         activateTabAudio: () => assert.fail("Context key must not activate audio"),
       });
       const node = grouped ? "heading" : "item";
-      vm.runInContext(block(`    ${node}.addEventListener("keydown", event => {`,
-        `    ${node}.addEventListener("contextmenu", event => {`), context);
+      const ownerStart = grouped ? source.indexOf("  function createGroupElement(") : 0;
+      const handlerStart = source.indexOf(`    ${node}.addEventListener("keydown", event => {`, ownerStart);
+      const handlerEnd = source.indexOf(`    ${node}.addEventListener("contextmenu", event => {`, handlerStart);
+      vm.runInContext(source.slice(handlerStart, handlerEnd), context);
       let prevented = 0, stopped = 0;
       listeners.keydown({ key, shiftKey: key === "F10",
         preventDefault() { prevented++; }, stopPropagation() { stopped++; } });

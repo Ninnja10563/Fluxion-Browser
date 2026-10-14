@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.76.0";
-  const PRODUCT_RELEASE = "0.76.0-preview.1";
+  const PRODUCT_VERSION = "0.77.0";
+  const PRODUCT_RELEASE = "0.77.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -124,6 +124,11 @@
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .fluxion-settings-actions > .fluxion-settings-button { width: 100%; justify-self: stretch; }
+    .fluxion-import-tabs { display: grid; gap: 8px; min-width: 0; }
+    .fluxion-import-tabs textarea { box-sizing: border-box; width: 100%; min-height: 100px; resize: vertical;
+      color: var(--fluxion-ink); background: var(--fluxion-bg); border: 1px solid var(--fluxion-line);
+      border-radius: 4px; padding: 8px; font: inherit; }
+    .fluxion-import-tabs textarea:focus-visible { outline: 2px solid var(--fluxion-accent); outline-offset: 1px; }
     #fluxion-sidebar-width-controls { grid-template-columns: minmax(0, 1fr) auto; }
     .fluxion-color-palette { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
     .fluxion-color-field { display: grid; gap: 5px; min-width: 0; }
@@ -569,6 +574,77 @@
     setNote(`Could not load search engines: ${error.message}`, "general");
   });
   addBrowserPreferences(general, "general");
+
+  const importPanel = section("import", "Import data", "Bring your bookmarks, passwords and tab links into Fluxion. Your existing data stays in place; nothing is read until you choose an action.");
+  let browserImport = null, importPending = false, importDisposed = false;
+  const importService = () => {
+    if (!browserImport) browserImport = ChromeUtils.importESModule("resource://fluxion/modules/FluxionBrowserImport.sys.mjs").forWindow(window);
+    return browserImport;
+  };
+  const importHelp = {
+    zen: "In Zen, export bookmarks as HTML from Manage Bookmarks and passwords as CSV from Passwords. Workspace layouts, extensions and signed-in sessions are not transferred.",
+    firefox: "In Firefox, export bookmarks as HTML from Manage Bookmarks and passwords as CSV from Passwords. This adds data without replacing either browser’s profile.",
+    chrome: "Use the browser import dialog to choose a Chrome profile and the data to transfer. Your system may request access. HTML and CSV exports also work.",
+    other: "Choose an available browser in the import dialog, or use exported bookmarks and passwords. Available data depends on the source and system permissions.",
+  };
+  const sourceChoice = select([["zen", "Zen"], ["firefox", "Firefox"], ["chrome", "Chrome"], ["other", "Another browser"]], "zen", () => syncImportSource());
+  sourceChoice.id = "fluxion-import-source";
+  row(importPanel, "Import from", "Choose the browser you are moving from.", sourceChoice);
+  const sourceHelp = create("p", "fluxion-settings-intro", importHelp.zen);
+  sourceHelp.id = "fluxion-import-source-help";
+  sourceHelp.setAttribute("aria-live", "polite");
+  importPanel.appendChild(sourceHelp);
+  const importButtons = [];
+  async function performImport(action) {
+    if (importPending || importDisposed) return;
+    importPending = true;
+    syncImportSource();
+    setNote("Waiting for your import choice…", "import");
+    try {
+      const result = await action(importService());
+      if (importDisposed) return;
+      if (result.state === "cancelled") setNote("Import cancelled. No data was added.", "import");
+      else if (result.state === "wizard") setNote("Choose the items to transfer in the browser import dialog. Completion is reported there.", "import");
+      else if (result.state === "done") setNote(result.kind === "passwords"
+        ? `Password import finished: ${result.added} added, ${result.updated} updated, ${result.errors} could not be imported. Remove your plaintext export when finished.`
+        : `${result.added} ${result.kind === "tabs" ? "tabs added to this workspace" : "bookmarks imported"}.`, "import");
+    } catch (error) {
+      if (!importDisposed) setNote(`Import could not finish: ${error.message}. Some data may already have been added; check before retrying.`, "import");
+    } finally {
+      importPending = false;
+      if (!importDisposed) syncImportSource();
+    }
+  }
+  function importAction(kind, title, help, label) {
+    const button = create("button", "fluxion-settings-button", label);
+    button.type = "button"; button.id = `fluxion-import-${kind}`;
+    button.addEventListener("click", () => performImport(service => service.run(kind, sourceChoice.value)));
+    importButtons.push(button); row(importPanel, title, help, button);
+    return button;
+  }
+  const browserImportButton = importAction("browser", "Browser profile", "Select bookmarks, history and other supported data using the native importer. Zen and Firefox use the export actions below.", "Choose browser data…");
+  importAction("bookmarks", "Bookmarks", "Choose a bookmarks HTML export, up to 32 MB. This adds bookmarks without replacing existing ones.", "Import bookmarks…");
+  importAction("passwords", "Saved passwords", "Choose a password CSV or TSV export, up to 32 MB. Exports contain readable passwords; keep them private and remove them afterwards.", "Import passwords…");
+  const tabsImportGroup = create("div", "fluxion-import-tabs");
+  const tabLinks = create("textarea");
+  tabLinks.id = "fluxion-import-tab-links"; tabLinks.placeholder = "https://example.com\nhttps://another.example";
+  tabLinks.setAttribute("aria-label", "Tab links to import, one web address per line");
+  tabLinks.maxLength = 256 * 1024;
+  const tabsImportButton = create("button", "fluxion-settings-button", "Add tab links…");
+  tabsImportButton.type = "button"; tabsImportButton.id = "fluxion-import-tabs";
+  tabsImportButton.addEventListener("click", () => performImport(service => service.tabs(tabLinks.value)));
+  importButtons.push(tabsImportButton);
+  tabsImportGroup.append(tabLinks, tabsImportButton);
+  row(importPanel, "Open tabs", "Paste up to 100 http:// or https:// links, one per line. Duplicates are removed. Tabs are added to the current workspace and load only when selected; login sessions are not copied.", tabsImportGroup);
+  function syncImportSource() {
+    sourceHelp.textContent = importHelp[sourceChoice.value] || importHelp.other;
+    sourceChoice.disabled = importPending;
+    tabLinks.disabled = importPending;
+    for (const button of importButtons) button.disabled = importPending;
+    browserImportButton.disabled = importPending || !["chrome", "other"].includes(sourceChoice.value);
+  }
+  syncImportSource();
+  window.addEventListener("unload", () => { importDisposed = true; }, { once: true });
 
   const appearance = section("appearance", "Appearance", "Choose your theme, sidebar size, tab spacing, and motion preferences.");
   const themeOptions = [
@@ -1542,6 +1618,23 @@
   about.appendChild(aboutMark);
   const geckoVersion = Services.appinfo.platformVersion;
   const geckoBuildID = Services.appinfo.platformBuildID;
+  const copyStartup = create("button", "fluxion-settings-button", "Copy startup diagnostics");
+  copyStartup.id = "fluxion-copy-startup-diagnostics"; copyStartup.type = "button";
+  copyStartup.addEventListener("click", () => {
+    try {
+      const report = window.FluxionStartupDiagnostics;
+      if (!report) { setNote("Startup diagnostics are not available in this window yet.", "about"); return; }
+      const safeDuration = value => Number.isFinite(value) && value >= 0 ? Math.round(value * 100) / 100 : 0;
+      const safe = { version: PRODUCT_RELEASE, scope: "Fluxion browser-delayed-startup initialization only; not page loading or total app launch",
+        completed: report.completed === true, durationMs: safeDuration(report.durationMs),
+        scripts: (Array.isArray(report.scripts) ? report.scripts : []).slice(0, 128)
+          .filter(item => /^chrome\/[a-z/-]+\.js$/.test(item.module))
+          .map(item => ({ module: item.module, durationMs: safeDuration(item.durationMs), completed: item.completed === true })) };
+      Cc["@mozilla.org/widget/clipboardhelper;1"].getService(Ci.nsIClipboardHelper).copyString(JSON.stringify(safe, null, 2));
+      setNote("Startup timings copied. They contain module names and durations, not browsing history or profile paths.", "about");
+    } catch (_) { setNote("Startup diagnostics could not be copied.", "about"); }
+  });
+  row(about, "Startup troubleshooting", "Copy local module timings to help investigate slow browser initialization. Nothing is sent automatically.", copyStartup);
   row(about, "Engine", `Mozilla Gecko ${geckoVersion}`, create("div", "fluxion-shortcut", `Build ${geckoBuildID}`));
   row(
     about, "Privacy",

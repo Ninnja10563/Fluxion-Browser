@@ -19,6 +19,8 @@ createServer((request, response) => {
   const count = url.searchParams.has("many") ? 45 : 6;
   const theme = url.searchParams.has("light") ? "light" : "dark";
   const tabs = Array.from({ length: count }, (_, i) => `<div class="fluxion-tab" tabindex="0" role="treeitem" aria-selected="${i === 1}">${svg("M3 2h7l3 3v9H3ZM10 2v4h3", "fluxion-fallback")}<span class="fluxion-title">${names[i % names.length]}</span><button class="fluxion-close" aria-label="Close tab">×</button></div>`).join("");
+  const folders = url.searchParams.has("folders") ? ["Reference", "Reading list"].map(name =>
+    `<div class="fluxion-group is-collapsed"><button class="fluxion-group-heading" role="treeitem" aria-expanded="false"><span class="fluxion-group-disclosure" aria-hidden="true">›</span>${svg("M1 4V2.5h5l2 2h7v9H1Z", "fluxion-folder-icon")}<span class="fluxion-group-name">${name}</span></button></div>`).join("") : "";
   response.writeHead(200, { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store" });
   response.end(`<!doctype html><html dir="${rtl ? "rtl" : "ltr"}" chromedir="${rtl ? "rtl" : "ltr"}" data-fluxion-density="${density}"><meta charset="utf-8"><title>Fluxion sidebar CSS review — not native Gecko</title><style>${css}
   :root {color-scheme:${theme};--fluxion-sidebar-width:252px;--fluxion-persistent-sidebar-top:48px;--fluxion-page-inset:0px}
@@ -30,6 +32,7 @@ createServer((request, response) => {
   </style><header><div class="address">Search or enter address</div></header><div id="browser">
   <div id="fluxion-flow" data-state="${state}" data-revealed="true"><div class="fluxion-surface">
   <div class="fluxion-workspace-heading">${folder}<span>Research</span><button class="fluxion-icon-button fluxion-workspace-more" aria-label="Workspace options">···</button></div>
+  <div class="fluxion-folders" role="tree" aria-label="Workspace folders">${folders}</div>
   <div class="fluxion-workspace-divider" aria-hidden="true"></div>
   <div class="fluxion-tab-scroll"><div class="fluxion-tabs" role="tree">${tabs}</div>
   <div class="fluxion-footer"><button class="fluxion-new-tab" aria-label="New tab">${plus}<span class="fluxion-new-tab-label">New tab</span><kbd class="fluxion-keyhint" aria-hidden="true">⌘T</kbd></button></div></div>

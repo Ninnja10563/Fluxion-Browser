@@ -16,7 +16,17 @@
   style.id = "fluxion-focus-navigation-style";
   style.textContent = `
     #fluxion-navigation-edge { display: none; }
-    :root[data-fluxion-native-focus] #navigator-toolbox { z-index: 19 !important; }
+    /* Native fullscreen still owns visibility, keyboard focus and popup
+       guards. Take its toolbar out of document flow so negative-margin
+       retraction cannot resize the page on every animation frame. */
+    :root[data-fluxion-native-focus] #navigator-toolbox {
+      position: fixed !important; inset-inline: 0 !important; top: 0 !important;
+      width: auto !important; z-index: 19 !important;
+    }
+    :root[data-fluxion-native-focus] #fullscr-toggler {
+      position: fixed !important; inset: 0 0 auto !important; height: 4px !important;
+      z-index: 20 !important;
+    }
     /* Retain Gecko's native fullscreen geometry and popup guards, but not its
        800ms collapse animation. Only explicitly hidden Flow opts into this. */
     :root[data-fluxion-native-focus] #navigator-toolbox[fullscreenShouldAnimate] {
@@ -183,7 +193,7 @@
   on(document, "popupshowing", event => {
     if (event.defaultPrevented || !trustedChrome(event) || !["panel", "menupopup"].includes(event.target.localName)) return;
     if (event.target.id.startsWith("fluxion-workspace") ||
-        ["fluxion-tab-context", "fluxion-group-context"].includes(event.target.id) || flow.contains(event.target)) return;
+        ["fluxion-tab-context", "fluxion-group-context", "fluxion-empty-folder-context"].includes(event.target.id) || flow.contains(event.target)) return;
     popups.add(event.target);
     reveal({ immediate: true });
     // A later native handler may cancel opening; Gecko then need not send

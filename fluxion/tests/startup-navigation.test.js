@@ -19,6 +19,8 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   let startupObserver;
   let profileObserver;
   let managerCalls = 0;
+  let preferenceSaves = 0;
+  let elapsed = 0;
   const boundaryEvents = [];
   class File {
     constructor(filePath = "") { this.path = filePath; }
@@ -53,9 +55,13 @@ function startupFixture(selectedURL, saved = [], options = {}) {
         getBoolPref: (key, fallback) => defaults.get(key) ?? fallback,
       }),
       clearUserPref: key => preferences.delete(key),
-      savePrefFile() {},
+      savePrefFile() { preferenceSaves++; },
     },
-    scriptloader: { loadSubScript: uri => loadedScripts.push(uri) },
+    scriptloader: { loadSubScript(uri) {
+      loadedScripts.push(uri);
+      elapsed += options.scriptDurationMs ?? 2;
+      if (uri.endsWith(options.failedScript || "no-failed-script")) throw new Error("fixture error with private path /secret/profile");
+    } },
     obs: { addObserver(observer, topic) {
       if (topic === "profile-after-change") { profileObserver = observer; return; }
       assert.equal(topic, "browser-delayed-startup-finished");
@@ -96,14 +102,42 @@ function startupFixture(selectedURL, saved = [], options = {}) {
   };
   const selectedTab = { linkedBrowser: selectedBrowser };
   const window = {
+    performance: { now: () => elapsed },
     document: { documentURI: "chrome://browser/content/browser.xhtml" },
     gBrowser: { selectedBrowser, selectedTab, tabs: [selectedTab], loadURI(...args) { navigations.push(args); } },
   };
   startupObserver.observe(window, "browser-delayed-startup-finished");
   return { preferences, defaults, prefs: Services.prefs, registeredManifests, loadedScripts, navigations, errors, AboutNewTab, window, selectedBrowser,
     profileReady() { profileObserver?.(); }, get profilePending() { return !!profileObserver; },
-    get managerCalls() { return managerCalls; }, boundaryEvents };
+    get managerCalls() { return managerCalls; }, get preferenceSaves() { return preferenceSaves; }, boundaryEvents };
 }
+
+test("startup diagnostics measure shipped module initialization without persistent writes or browsing data", () => {
+  const fixture = startupFixture("https://private.example/secret", [], { scriptDurationMs: 3 });
+  const report = fixture.window.FluxionStartupDiagnostics;
+  assert.equal(report.phase, "browser-delayed-startup");
+  assert.equal(report.completed, true);
+  assert.equal(report.durationMs, fixture.loadedScripts.length * 3);
+  assert.equal(report.scripts.length, fixture.loadedScripts.length);
+  assert.ok(report.scripts.every(item => item.durationMs === 3 && item.completed && /^chrome\/[a-z/-]+\.js$/.test(item.module)));
+  assert.ok(Object.isFrozen(report) && Object.isFrozen(report.scripts) && report.scripts.every(Object.isFrozen));
+  assert.equal(fixture.preferenceSaves, 0);
+  assert.doesNotMatch(JSON.stringify(report), /private\.example|\/app\/|\/secret\/|https?:/);
+  assert.equal([...fixture.preferences.keys()].some(key => /timing|diagnostic|duration/i.test(key)), false);
+});
+
+test("startup diagnostics retain failure duration without copying private error details", () => {
+  const fixture = startupFixture("https://private.example/secret", [], { failedScript: "chrome/core/workspaces.js", scriptDurationMs: 7 });
+  const report = fixture.window.FluxionStartupDiagnostics;
+  assert.equal(report.completed, false);
+  assert.equal(report.durationMs, 14);
+  assert.equal(report.scripts.length, 2);
+  assert.equal(report.scripts[1].completed, false);
+  assert.equal(report.scripts[1].durationMs, 7);
+  assert.doesNotMatch(JSON.stringify(report), /secret|private|fixture error/);
+  assert.equal(fixture.errors.length, 1, "Existing startup error reporting is preserved");
+  assert.equal(fixture.preferenceSaves, 1, "Only the pre-existing error-state flush occurs");
+});
 
 // Frozen from 0.74 (c2e67888): gating must preserve the dependency order of
 // every production script and each explicitly enabled native verifier.

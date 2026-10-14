@@ -33,11 +33,20 @@ test("animated native departure stays below navigation but above Gecko's immedia
 const start = source.indexOf("  function floatingSidebarEvidence("), end = source.indexOf("  async function focusNavigation(", start);
 assert.ok(start > 0 && end > start);
 let hit = null;
-const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence, navigationControlHitEvidence, navigationMotionEvidence })`, {
+const api = vm.runInNewContext(`${source.slice(start, end)}; ({ floatingSidebarEvidence, newTabGeometryEvidence, nativeAddressEvidence, navigationControlHitEvidence, navigationMotionEvidence, stableViewportEvidence })`, {
   document: { elementFromPoint: () => hit },
   window: { innerHeight: 800, getComputedStyle: node => node.style }, rect: node => node.box,
   near: (a, b) => Math.abs(a - b) < 1.5,
   assert(value, message) { if (!value) throw new Error(message); },
+});
+test("fullscreen hover gate rejects page motion as well as viewport resizing", () => {
+  const before = { left: 0, top: 0, width: 1280, height: 800 };
+  api.stableViewportEvidence(before, { ...before }, "revealed");
+  for (const key of ["left", "top", "width", "height"]) {
+    assert.throws(() => api.stableViewportEvidence(before, { ...before, [key]: before[key] + 44 }, "animating"), /resized or shifted/);
+  }
+  assert.match(source, /window\.requestAnimationFrame\(sampleViewport\)/,
+    "native verification samples the animation, not just its endpoints");
 });
 test("computed Focus timing gate rejects Gecko's former 800ms animation and motion-disabled regressions", () => {
   for (const native of [false, true]) {

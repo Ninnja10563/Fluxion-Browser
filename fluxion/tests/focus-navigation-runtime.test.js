@@ -110,6 +110,20 @@ test("Focus motion is short and scoped; reduced motion overrides both native and
     "browser motion-off rule must match the native override specificity");
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*:root\[data-fluxion-focus-mode\] #navigator-toolbox,\s*:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/);
 });
+test("native fullscreen Focus toolbar is an overlay, not a page-resizing layout row", () => {
+  const f = fixture(), css = f.root.children.find(n => n.id === "fluxion-focus-navigation-style").textContent;
+  const block = css.match(/:root\[data-fluxion-native-focus\] #navigator-toolbox\s*\{([^}]+)\}/)?.[1];
+  assert.ok(block);
+  assert.match(block, /position: fixed !important/);
+  assert.match(block, /inset-inline: 0 !important/);
+  assert.match(block, /top: 0 !important/);
+  assert.match(css, /:root\[data-fluxion-native-focus\] #fullscr-toggler\s*\{\s*position: fixed !important; inset: 0 0 auto !important; height: 4px !important;/,
+    "the hidden toolbar's native reveal strip must not add a page-layout row");
+  assert.doesNotMatch(block, /margin-top|transform|display: none/,
+    "native collapse, Cocoa translation and popup ownership remain native");
+  assert.doesNotMatch(css, /:root\[inFullscreen\] #navigator-toolbox\s*\{/,
+    "persistent and DOM fullscreen modes must not inherit the Focus overlay");
+});
 test("upward and sideways navigation exits retain reveal until a trusted pointer crosses below the whole toolbox", () => {
   for (const native of [false, true]) {
     for (const y of [-20, 0, 43, undefined]) {

@@ -6,6 +6,32 @@ viewer, developer tools, private browsing, session recovery, and WebExtension
 support, then replaces the primary tab interaction with Fluxion's compact
 **Flow** sidebar.
 
+## Unreleased — folders, imports and fullscreen follow-up
+
+- Right-click the workspace heading, or open its three-dot menu, and choose
+  **New Folder…**. Folders appear above the divider. Move tabs through
+  **Move to Folder**, or drag them into an empty folder. Names and collapsed
+  state use per-window SessionStore metadata; empty folders need no dummy tabs.
+  Moving a tab preserves its existing account container.
+- **Settings → Import data** accepts bookmark HTML and password CSV/TSV exports
+  from Zen or Firefox, opens the native importer for Chrome, and accepts up to
+  100 pasted web-tab links. It does not clone profiles, workspace layouts,
+  extensions or signed-in sessions. Password exports are plaintext: keep them
+  private and remove them after use.
+- Fullscreen Focus navigation is taken out of page layout, with a matching
+  native hover hit band, so revealing it should not resize the page. Hidden
+  macOS window controls no longer reserve a blank toolbar gutter.
+- **Settings → About Fluxion → Copy startup diagnostics** copies local module
+  initialization timings, without browsing history or profile paths. These do
+  not measure total application launch or website loading; the reported loading
+  delay has not yet been isolated or shown to improve.
+
+These changes are not in the published 0.76 DMG. Native macOS execution remains
+pending, including new folder/session and per-frame fullscreen geometry gates.
+The CSS-only fixture accepts `?folders&checks` for 72 folder-layout cases; it
+does not substitute for native Gecko validation. The unslop-ui review keeps
+folder controls inline and uses the existing sidebar spacing and type system.
+
 ## 0.76 sidebar refinement — October 14
 
 Reviewed the owner's Zen screenshots alongside Zen's official

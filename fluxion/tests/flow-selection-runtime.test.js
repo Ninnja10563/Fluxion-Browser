@@ -89,8 +89,8 @@ function fixture(size = 1000) {
   }
   const create = (_tag, className) => new Element(className);
   document.createElementNS = () => new Element();
-  const pinnedTabs = new Element("fluxion-pinned-tabs"), tabsList = new Element("fluxion-tabs");
-  pinnedTabs.root = tabsList.root = true;
+  const pinnedTabs = new Element("fluxion-pinned-tabs"), tabsList = new Element("fluxion-tabs"), folderTabs = new Element("fluxion-folders");
+  pinnedTabs.root = tabsList.root = folderTabs.root = true;
   const tabs = Array.from({ length: size }, (_, index) => ({
     label: `Page ${index}`, parentNode: {}, workspace: "focus", linkedPanel: "panel", pinned: false,
     linkedBrowser: { currentURI: { displaySpec: `https://example.org/${index}` } },
@@ -104,7 +104,8 @@ function fixture(size = 1000) {
     // reach a listener incorrectly installed on the tab-strip child.
     if (target.parentEventTarget) emit(target.parentEventTarget, type, origin);
   };
-  const gBrowser = { tabs, get selectedTabs() { return tabs.filter(tab => tab === selected || tab.multiselected); },
+  const gBrowser = { tabs, get tabGroups() { return [...new Set(tabs.map(tab => tab.group).filter(Boolean))]; },
+    get selectedTabs() { return tabs.filter(tab => tab === selected || tab.multiselected); },
     getTabForBrowser: browser => tabs.find(tab => tab.linkedBrowser === browser),
     addTabsProgressListener(listener) { this.progressListener = listener; },
     removeTabsProgressListener(listener) { if (this.progressListener === listener) this.progressListener = null; },
@@ -131,7 +132,8 @@ function fixture(size = 1000) {
     currentWorkspace: "focus", structureDirty: true, renderQueued: false,
     flowMenuSession: null, closingTabs: new Set(),
     focusTabAfterRender: null, focusGroupAfterRender: null, focusWorkspaceAfterRender: null,
-    groupRenderSequence: 0, pinnedTabs, tabsList, pinnedLabel: {}, count: {},
+    groupRenderSequence: 0, pinnedTabs, tabsList, folderTabs, pinnedLabel: {}, count: {},
+    workspaceFolders: [], emptyFolderElements: new Map(), syncWorkspaceFolders() {},
     tabWorkspace: tab => tab.workspace, tabLabel: tab => tab?.label || "New tab", iconFor: () => "",
     renderWorkspaces() {}, resetTabDrag() {}, create, statusGlyph: () => new Element(), controlGlyph: () => new Element(),
     describeTab: () => ({ labels: [], indicators: [], audio: null }), splitOrientation: tab => tab.splitview.orientation,
@@ -152,8 +154,8 @@ function fixture(size = 1000) {
   const flush = () => { while (frames.length) frames.shift()(); };
   context.render();
   const row = tab => context.tabElements.get(tab);
-  const nodes = () => [...pinnedTabs.querySelectorAll(".fluxion-tab"), ...tabsList.querySelectorAll(".fluxion-tab")];
-  return { context, document, tabs, gBrowser, pinnedTabs, tabsList, flush, row, nodes, Element };
+  const nodes = () => [...pinnedTabs.querySelectorAll(".fluxion-tab"), ...folderTabs.querySelectorAll(".fluxion-tab"), ...tabsList.querySelectorAll(".fluxion-tab")];
+  return { context, document, tabs, gBrowser, pinnedTabs, tabsList, folderTabs, flush, row, nodes, Element };
 }
 
 test("same-document location changes refresh real row tooltips without replacing controls or other rows", () => {
@@ -269,7 +271,7 @@ test("native selection leaves an unrelated focused row or group completely untou
     f.gBrowser.selectedTab = f.tabs[f.gBrowser.selectedTab === f.tabs[1] ? 2 : 1]; f.flush();
     assert.equal(f.document.activeElement, element);
     assert.equal(element.writes, before);
-    assert.equal(f.tabsList.querySelectorAll(".fluxion-tab, .fluxion-group-heading").filter(item => item.tabIndex === 0).length, 1);
+    assert.equal(f.context.renderedTreeItems().filter(item => item.tabIndex === 0).length, 1);
   }
 });
 

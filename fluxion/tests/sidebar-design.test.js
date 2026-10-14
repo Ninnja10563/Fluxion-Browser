@@ -8,7 +8,7 @@ const css = source.match(/style\.textContent = `([\s\S]*?)`;/)[1];
 
 test("workspace context is outside the scrolling rows while New Tab remains after them", () => {
   assert.match(source, /tabScroll\.append\(pinnedLabel, pinnedTabs, tabsList, footer\)/);
-  assert.match(source, /surface\.append\(\s*workspaceHeading, workspaceDivider, tabScroll, workspaceBar/);
+  assert.match(source, /surface\.append\(\s*workspaceHeading, folderTabs, workspaceDivider, tabScroll, workspaceBar/);
   assert.match(source, /workspaceDivider\.setAttribute\("aria-hidden", "true"\)/);
 });
 

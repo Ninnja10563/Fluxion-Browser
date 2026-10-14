@@ -248,6 +248,11 @@
       `Native navigation control is obscured by floating chrome: ${control.id}`);
     return { id: control.id, box, hit: hit?.id || hit?.localName };
   }
+  function stableViewportEvidence(before, after, label) {
+    assert(["left", "top", "width", "height"].every(key => near(before[key], after[key])),
+      `Fullscreen Focus ${label} resized or shifted the page: ${JSON.stringify({ before, after })}`);
+    return { label, page: after };
+  }
   function newTabGeometryEvidence(density, row, button, before) {
     const tab = rect(row), after = rect(button), style = window.getComputedStyle(button), tabStyle = window.getComputedStyle(row);
     const expected = { compact: 28, standard: 36, roomy: 40 }[density];
@@ -955,6 +960,7 @@
     const ui = window.FluxionUI, root = document.documentElement;
     const originalSize = { width: window.outerWidth, height: window.outerHeight };
     const evidence = report.fullscreen = { input: "Real window.fullScreen transition, Gecko widget-routed hover, native macOS Cmd-L/Escape", keys: [], geometry: [] };
+    let viewportFrame = 0;
     const tab = gBrowser.addTrustedTab("https://example.org/", { skipAnimation: true });
     ui.setTabWorkspace(tab, ui.currentWorkspace()); ui.selectTab(tab);
     try {
@@ -1073,6 +1079,17 @@
       moveToPage();
       evidence.geometry.push(pageCornerEvidence(browser, "browser-fullscreen-hidden"));
       await action("capture-fullscreen-focus-hidden");
+      const fullscreenPageBaseline = rect(browser);
+      const viewportSamples = [];
+      let viewportError = null;
+      const sampleViewport = () => {
+        try {
+          const sample = stableViewportEvidence(fullscreenPageBaseline, rect(browser), "hover animation");
+          if (viewportSamples.length < 180) viewportSamples.push(sample);
+        } catch (error) { viewportError = error; }
+        viewportFrame = window.requestAnimationFrame(sampleViewport);
+      };
+      viewportFrame = window.requestAnimationFrame(sampleViewport);
       const toggler = document.getElementById("fullscr-toggler"), edge = rect(toggler);
       assert(!toggler.hidden && edge.height >= 1, "Native fullscreen hover target is unavailable");
       const point = nativeFullscreenEdgePoint(edge, window.devicePixelRatio);
@@ -1089,6 +1106,10 @@
         "Native fullscreen top-edge hover did not reach its real target and reveal navigation");
       } finally { toggler.removeEventListener("mouseover", observed, true); }
       await action("capture-fullscreen-focus-revealed");
+      evidence.geometry.push(stableViewportEvidence(fullscreenPageBaseline, rect(browser), "revealed"));
+      assert(window.getComputedStyle(toolbox).position === "fixed", "Fullscreen Focus navigation is not a page overlay");
+      const fullscreenBack = rect(document.getElementById("back-button"));
+      assert(fullscreenBack.left < 60, "Fullscreen navigation retains an empty window-control gutter");
       const fullscreenDepartures = [], fullscreenBand = rect(toolbox);
       const departure = event => fullscreenDepartures.push({ type: event.type, trusted: event.isTrusted,
         x: event.clientX, y: event.clientY });
@@ -1110,6 +1131,13 @@
       } finally { toolbox.removeEventListener("pointerleave", departure); }
       moveToPage();
       await wait(() => window.FullScreen.navToolboxHidden, "Native fullscreen toolbar did not re-hide");
+      await wait(() => rect(toolbox).bottom <= 1, "Fullscreen retraction animation did not finish");
+      window.cancelAnimationFrame(viewportFrame);
+      if (viewportError) throw viewportError;
+      assert(viewportSamples.length > 0, "Fullscreen viewport animation sampler never ran");
+      evidence.viewportSamples = viewportSamples;
+      evidence.geometry.push(stableViewportEvidence(fullscreenPageBaseline, rect(browser), "retracted"));
+      report.checks.push("fullscreen-focus-toolbar-reveal-and-retraction-never-reflow-page");
       evidence.motion = await verifyNavigationMotion(toolbox, true, async () => {
         await revealNativeNavigation("normal-motion-sidebar-retraction");
         const flow = document.getElementById("fluxion-flow"), edge = rect(flow);
@@ -1178,6 +1206,7 @@
       report.checks.push("fullscreen-focus-retracts-over-settings-and-floating-sidebar-with-saved-autohide-false-unchanged",
         "floating-sidebar-has-viewport-six-pixel-insets-and-heading-padding-even-with-toolbar-visible");
     } finally {
+      window.cancelAnimationFrame(viewportFrame);
       window.removeEventListener("keydown", key, true);
       window.fullScreen = false;
       await wait(() => !window.fullScreen && !root.hasAttribute("inFullscreen") &&

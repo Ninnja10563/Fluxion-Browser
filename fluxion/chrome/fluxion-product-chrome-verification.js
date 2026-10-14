@@ -85,7 +85,7 @@
     const evidence = items.map(node => ({ label: node.getAttribute("label"), kind: node.localName,
       disabled: node.getAttribute("disabled") === "true", type: node.getAttribute("type"),
       name: node.getAttribute("name"), checked: node.getAttribute("checked") === "true" }));
-    for (const label of ["Rename Workspace…", "Change Icon", "Workspace Appearance…", "Move Workspace Earlier",
+    for (const label of ["Rename Workspace…", "New Folder…", "Change Icon", "Workspace Appearance…", "Move Workspace Earlier",
       "Move Workspace Later", "New Workspace…", "Delete Workspace…"]) {
       const node = items.find(item => item.getAttribute("label") === label);
       assert(node && !node.hidden && node.getAttribute("hidden") !== "true", `Workspace menu action is missing: ${label}`);
@@ -464,6 +464,129 @@
       "workspace-preview-preserves-global-embedder-color-scheme");
     } finally { schemeObserver.disconnect(); }
   }
+
+  function answerFolderPrompt(name) {
+    let settled = false, claimed = false, resolve, reject;
+    const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+    const finish = error => {
+      if (settled) return;
+      settled = true; window.clearTimeout(timer);
+      Services.obs.removeObserver(observer, "common-dialog-loaded");
+      if (error) reject(error); else resolve({ renderedPrompt: true, name });
+    };
+    const observer = { observe(subject) {
+      if (settled || subject.opener !== window) return;
+      const dialog = subject.Dialog;
+      if (claimed || dialog?.args?.promptType !== "prompt" || dialog.args.title !== "New Folder") {
+        finish(new Error("Unexpected folder prompt; unrelated dialog left untouched")); return;
+      }
+      claimed = true;
+      wait(() => painted(dialog.ui.loginTextbox) && painted(dialog.ui.button0) && !dialog.ui.button0.disabled,
+        "Native folder naming field did not become visible").then(() => {
+        if (settled) return;
+        dialog.ui.loginTextbox.value = name;
+        dialog.ui.button0.click();
+        finish();
+      }).catch(finish);
+    } };
+    const timer = window.setTimeout(() => finish(new Error("Native folder prompt timed out")), 20000);
+    Services.obs.addObserver(observer, "common-dialog-loaded");
+    return { promise, dispose() { if (!settled) finish(new Error("Folder prompt ended without confirmation")); } };
+  }
+
+  function folderIdentityEvidence(tab, snapshot) {
+    assert(gBrowser.tabs.includes(tab) && tab.linkedBrowser === snapshot.browser &&
+      tab.linkedBrowser.browsingContext === snapshot.context && tab.linkedBrowser.permanentKey === snapshot.permanentKey &&
+      tab.getAttribute("usercontextid") === snapshot.container && gBrowser.tabs.length === snapshot.tabCount,
+    "Moving to a folder recreated the tab/browser or changed its container identity");
+    return { sameTab: true, sameBrowser: true, sameBrowsingContext: true, userContextId: snapshot.container };
+  }
+
+  async function workspaceFolders() {
+    stage("native-workspace-folders");
+    const ui = window.FluxionUI, id = ui.currentWorkspace(), original = gBrowser.selectedTab;
+    const key = window.FluxionTabGroups.FOLDERS_WINDOW_KEY, name = "Product folder fixture";
+    const folders = () => window.FluxionTabGroups.normaliseFolders(SessionStore.getCustomWindowValue(window, key));
+    const serialised = () => {
+      const state = SessionStore.getWindowState(window);
+      return window.FluxionTabGroups.normaliseFolders(state.windows[0].extData?.[key]);
+    };
+    const region = document.querySelector(".fluxion-folders");
+    const divider = document.querySelector(".fluxion-workspace-divider");
+    const heading = () => [...region.querySelectorAll(".fluxion-group-heading")]
+      .find(node => node.querySelector(".fluxion-group-name")?.textContent === name);
+    const menu = document.getElementById("fluxion-workspace-context");
+    const more = document.querySelector(".fluxion-workspace-more");
+    const before = new Set(gBrowser.tabs), nativeGroupsBefore = new Set(gBrowser.tabGroups);
+    more.click();
+    await wait(() => menu.state === "open", "Workspace folder menu did not open");
+    const create = [...menu.children].find(node => node.getAttribute("label") === "New Folder…");
+    assert(create && !create.disabled, "Workspace menu cannot create a folder");
+    const prompt = answerFolderPrompt(name);
+    try {
+      // Invoke the shipped XUL command and real rendered Gecko prompt. This is
+      // chrome automation, not a claim of physical/macOS menu input.
+      window.setTimeout(() => create.doCommand(), 0);
+      await prompt.promise;
+    } finally { prompt.dispose(); menu.hidePopup(); }
+    await wait(() => painted(heading()) && folders().some(folder => folder.label === name),
+      "Confirmed empty workspace folder was not rendered and saved");
+    const folder = folders().find(item => item.label === name);
+    assert(folder.workspaceId === id && !folder.groupId && gBrowser.tabs.length === before.size &&
+      [...gBrowser.tabs].every(tab => before.has(tab)) && gBrowser.tabGroups.length === nativeGroupsBefore.size,
+    "Creating an empty folder added a hidden native tab or native group");
+    assert(serialised().some(item => item.id === folder.id && item.label === name && item.workspaceId === id),
+      "Empty folder is absent from the actual SessionStore window serialization");
+    const emptyBox = rect(heading()), dividerBox = rect(divider);
+    assert(emptyBox.bottom <= dividerBox.top + 1 && emptyBox.top >= rect(document.querySelector(".fluxion-workspace-heading")).bottom - 1,
+      "Empty folder is not above the workspace divider and below the workspace heading");
+    const evidence = report.workspaceFolders = { input: "Shipped native XUL commands and rendered Gecko prompt automation; no physical menu input claimed",
+      empty: { id: folder.id, nativeTabCountUnchanged: true, serialised: true, heading: emptyBox, divider: dividerBox } };
+    let tab;
+    try {
+      tab = gBrowser.addTrustedTab("about:blank", { userContextId: 1, skipAnimation: true });
+      ui.setTabWorkspace(tab, id); gBrowser.selectedTab = tab; ui.refresh();
+      await wait(() => [...document.querySelectorAll(".fluxion-tab")].some(row => row._fluxionTab === tab),
+        "Native container tab did not appear in Flow");
+      const browser = tab.linkedBrowser, context = browser.browsingContext;
+      const container = tab.getAttribute("usercontextid"), permanentKey = browser.permanentKey;
+      const snapshot = { browser, context, container, permanentKey, tabCount: before.size + 1 };
+      assert(container === "1", "Folder fixture did not create an actual container tab");
+      const row = [...document.querySelectorAll(".fluxion-tab")].find(item => item._fluxionTab === tab);
+      row.dispatchEvent(new window.MouseEvent("contextmenu", { bubbles: true, cancelable: true, button: 2,
+        screenX: window.screenX + rect(row).left + 12, screenY: window.screenY + rect(row).top + 12 }));
+      const tabMenu = document.getElementById("fluxion-tab-context");
+      await wait(() => tabMenu.state === "open", "Real tab context menu did not open");
+      const submenu = [...tabMenu.children].find(node => node.getAttribute("label") === "Move to Folder")?.querySelector("menupopup");
+      assert(submenu, "Tab context menu is missing Move to Folder");
+      submenu.openPopup(submenu.parentNode, "end_before");
+      await wait(() => submenu.state === "open", "Move to Folder submenu did not open");
+      const destination = [...submenu.children].find(node => node.getAttribute("label") === name);
+      assert(destination && !destination.disabled, "Empty folder is absent from the actual tab move menu");
+      destination.doCommand(); submenu.hidePopup(); tabMenu.hidePopup();
+      await wait(() => tab.group?.label === name && heading()?.closest(".fluxion-group")?.querySelector(".fluxion-tab")?._fluxionTab === tab,
+        "Move to Folder command did not put the same tab in the folder projection");
+      evidence.populated = folderIdentityEvidence(tab, snapshot);
+      await wait(() => serialised().some(item => item.id === folder.id && item.groupId === tab.group.id),
+        "Native group linkage is absent from serialized folder metadata");
+      heading().click();
+      await wait(() => tab.group.collapsed && serialised().find(item => item.id === folder.id)?.collapsed,
+        "Folder collapse did not persist through native SessionStore serialization");
+      Object.assign(evidence.populated, { groupId: tab.group.id, collapseSerialised: true });
+      gBrowser.selectedTab = original;
+      gBrowser.removeTab(tab, { animate: false });
+      await wait(() => !tab.parentNode && painted(heading()) && !heading().closest(".fluxion-group").querySelector(".fluxion-tab"),
+        "Closing the last folder tab did not retain its empty folder");
+      assert(serialised().some(item => item.id === folder.id), "Last-tab removal discarded the saved empty folder");
+      evidence.emptyAfterClose = true;
+      report.checks.push("native-workspace-menu-creates-empty-folder-above-divider-without-tabs",
+        "native-folder-move-preserves-tab-browser-container-and-serializes-collapse",
+        "native-last-folder-tab-close-preserves-empty-folder");
+    } finally {
+      if (original?.parentNode) gBrowser.selectedTab = original;
+      if (tab?.parentNode) gBrowser.removeTab(tab, { animate: false });
+    }
+  }
   function bookmarksSurface(label) {
     const selectors = ["#PersonalToolbar", "#nav-bar", "#fluxion-flow > .fluxion-surface"];
     const surfaces = selectors.map(id => {
@@ -703,6 +826,7 @@
     report.checks.push("real-update-indicator-geometry-only-contained-without-toolbar-overlap-at-1280-and-800");
     await workspaceHeading();
     await workspaceTheme();
+    await workspaceFolders();
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-product-policy-and-toolbar-geometry-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack}`); Cu.reportError(error); })

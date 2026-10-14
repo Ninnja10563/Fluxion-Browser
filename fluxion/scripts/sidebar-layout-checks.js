@@ -26,6 +26,11 @@
         check(["left", "width", "height"].every(key => Math.abs(tab[key] - newTab[key]) <= 0.5), "tab and New Tab targets differ");
         check(box(".fluxion-workspaces").bottom <= box(".fluxion-surface").bottom + 0.5, "dock clipped");
         check(getComputedStyle(q(".fluxion-new-tab")).transitionDuration === "0s", "reduced motion ignored");
+        if (q(".fluxion-folders").children.length) {
+          check(box(".fluxion-folders").bottom <= box(".fluxion-workspace-divider").top + 0.5, "folders overlap workspace divider");
+          check(box(".fluxion-folders").top >= box(".fluxion-workspace-heading").bottom - 0.5, "folders overlap workspace heading");
+          check(q(".fluxion-folders").clientWidth >= q(".fluxion-folders").scrollWidth, "folders overflow horizontally");
+        }
         report.cases++;
       }
   const result = document.createElement("pre");

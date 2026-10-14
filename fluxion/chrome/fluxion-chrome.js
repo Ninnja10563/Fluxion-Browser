@@ -52,9 +52,13 @@
   let workspaceSwitchDepth = 0;
   let workspaceSelectionQueued = false;
   let groupRenderSequence = 0;
+  let workspaceFolders = [];
+  let foldersLoaded = false;
+  const emptyFolderElements = new Map();
 
   Promise.resolve(SessionStore.promiseAllWindowsRestored).then(() => {
     sessionRestoreSettled = true;
+    loadWorkspaceFolders();
     const pending = pendingRestoreWorkspace;
     pendingRestoreWorkspace = null;
     const restored = windowSessionWorkspace();
@@ -207,7 +211,10 @@
       color: inherit; fill: currentColor; pointer-events: none;
     }
     @media (-moz-platform: macos) {
-      #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
+      :root:not([inFullscreen]) #nav-bar > .titlebar-buttonbox-container { display: flex !important; }
+      /* Cocoa provides fullscreen window controls. Do not reserve an empty
+         traffic-light gutter in the revealed navigation row. */
+      :root[inFullscreen] #nav-bar > .titlebar-buttonbox-container { display: none !important; }
     }
     #appMenu-fxa-status2,
     #appMenu-fxa-separator,
@@ -508,6 +515,10 @@
     .fluxion-split-mark::before { inset-inline-start: 1px; }
     .fluxion-split-mark::after { inset-inline-end: 1px; }
     .fluxion-group { position: relative; margin: 2px 0 4px; }
+    .fluxion-folders { padding: 2px var(--fluxion-rail-gutter); min-height: 0;
+      max-height: 40%; flex: 0 1 auto; overflow-y: auto; scrollbar-width: thin; }
+    .fluxion-folders:empty { display: none; }
+    .fluxion-folder-icon { width: 16px; height: 16px; flex: none; color: var(--group-accent, currentColor); }
     .fluxion-group-heading {
       width: 100%; height: var(--fluxion-row-height); display: flex; align-items: center; gap: 5px;
       padding: 0 7px; border: 0; border-radius: 3px; color: var(--fluxion-muted);
@@ -1104,6 +1115,9 @@
   workspaceHeading.append(workspaceSymbol(workspaces.find(item => item.id === currentWorkspace)?.icon), workspaceHeadingLabel, workspaceMoreButton);
   const workspaceDivider = create("div", "fluxion-workspace-divider");
   workspaceDivider.setAttribute("aria-hidden", "true");
+  const folderTabs = create("div", "fluxion-folders");
+  folderTabs.setAttribute("role", "tree");
+  folderTabs.setAttribute("aria-label", "Workspace folders");
   tabScroll.append(pinnedLabel, pinnedTabs, tabsList, footer);
   const sidebarResizer = create("div");
   sidebarResizer.id = "fluxion-sidebar-resizer";
@@ -1112,7 +1126,7 @@
   sidebarResizer.setAttribute("aria-orientation", "vertical");
   sidebarResizer.setAttribute("aria-controls", "fluxion-flow");
   surface.append(
-    workspaceHeading, workspaceDivider, tabScroll, workspaceBar, dragAnnouncement, sidebarResizer,
+    workspaceHeading, folderTabs, workspaceDivider, tabScroll, workspaceBar, dragAnnouncement, sidebarResizer,
   );
   flow.append(surface);
   browser.prepend(flow);
@@ -1244,12 +1258,126 @@
     const accepted = Services.prompt.prompt(
       window,
       title,
-      "Group name:",
+      "Folder name:",
       value,
       null,
       { value: false },
     );
     return accepted ? FluxionTabGroups.normaliseGroupName(value.value) : null;
+  }
+
+  function loadWorkspaceFolders() {
+    if (foldersLoaded) return;
+    try {
+      workspaceFolders = FluxionTabGroups.normaliseFolders(
+        SessionStore.getCustomWindowValue(window, FluxionTabGroups.FOLDERS_WINDOW_KEY));
+      foldersLoaded = sessionRestoreSettled;
+    } catch (_) {}
+  }
+
+  function saveWorkspaceFolders() {
+    // SessionStore keeps private-window metadata ephemeral and keeps each
+    // window's folders with its own native groups across normal restoration.
+    try { SessionStore.setCustomWindowValue(window, FluxionTabGroups.FOLDERS_WINDOW_KEY,
+      JSON.stringify(workspaceFolders)); } catch (error) { Cu.reportError(error); }
+  }
+
+  function syncWorkspaceFolders() {
+    loadWorkspaceFolders();
+    const next = FluxionTabGroups.synchroniseFolders(workspaceFolders, gBrowser.tabGroups,
+      tabWorkspace, () => Services.uuid.generateUUID().toString());
+    if (JSON.stringify(next) !== JSON.stringify(workspaceFolders)) {
+      workspaceFolders = next;
+      if (sessionRestoreSettled) saveWorkspaceFolders();
+    }
+  }
+
+  function createWorkspaceFolder(id = currentWorkspace) {
+    if (!workspaces.some(item => item.id === id)) return null;
+    syncWorkspaceFolders();
+    if (workspaceFolders.length >= FluxionTabGroups.MAX_FOLDERS) return null;
+    const name = askGroupName("New Folder");
+    if (!name) return null;
+    const folder = { id: Services.uuid.generateUUID().toString(), workspaceId: id,
+      label: name, collapsed: false, groupId: "" };
+    workspaceFolders.push(folder);
+    foldersLoaded = true;
+    saveWorkspaceFolders();
+    scheduleRender();
+    return folder;
+  }
+
+  function moveTabsToFolder(tabs, id) {
+    const folder = workspaceFolders.find(item => item.id === id);
+    if (!folder) return;
+    const candidates = [...new Set(tabs)].filter(tab => tab?.parentNode && !tab.closing &&
+      !tab.pinned && !tab.splitview && !window.FluxionEmptyWorkspace?.isPlaceholder(tab) &&
+      tabWorkspace(tab) === folder.workspaceId);
+    if (!candidates.length) return;
+    let group = gBrowser.tabGroups.find(item => item.id === folder.groupId);
+    if (group) group.addTabs(candidates);
+    else {
+      group = gBrowser.addTabGroup(candidates, { label: folder.label, insertBefore: candidates[0] });
+      folder.groupId = group.id;
+      group.collapsed = folder.collapsed;
+    }
+    // Membership changes native grouping only: cookie containers and browsing
+    // history remain on the same tab objects, with no reload or account change.
+    saveWorkspaceFolders();
+    gBrowser.clearMultiSelectedTabs();
+    scheduleRender();
+  }
+
+  function createEmptyFolderElement(folder) {
+    const item = create("div", "fluxion-group");
+    const heading = create("button", "fluxion-group-heading");
+    heading.type = "button";
+    heading.setAttribute("role", "treeitem");
+    heading.setAttribute("aria-level", "1");
+    heading.tabIndex = -1;
+    const disclosure = create("span", "fluxion-group-disclosure");
+    disclosure.textContent = "›";
+    disclosure.setAttribute("aria-hidden", "true");
+    const icon = vectorGlyph("fluxion-folder-icon", [["path", { d: "M1 4V2.5h5l2 2h7v9H1Z" }]]);
+    const label = create("span", "fluxion-group-name");
+    heading.append(disclosure, icon, label);
+    item.append(heading);
+    item._folderParts = { heading, label };
+    const record = () => workspaceFolders.find(value => value.id === folder.id);
+    const showMenu = event => {
+      const current = record();
+      if (!current) return;
+      event.preventDefault();
+      contextEmptyFolder = current.id;
+      if (event.type === "contextmenu") emptyFolderMenu.openPopupAtScreen(event.screenX, event.screenY, true);
+      else emptyFolderMenu.openPopup(heading, "after_start", 0, 0, true);
+    };
+    heading.addEventListener("click", () => {
+      const current = record();
+      if (current) { current.collapsed = !current.collapsed; saveWorkspaceFolders(); scheduleRender(); }
+    });
+    heading.addEventListener("contextmenu", showMenu);
+    heading.addEventListener("keydown", event => {
+      if (event.key === "ContextMenu" || (event.key === "F10" && event.shiftKey)) return showMenu(event);
+      if (FluxionFlowNavigation.handlesRovingKey(event.key)) {
+        event.preventDefault(); moveFlowFocus(heading, event.key);
+      } else if (["ArrowLeft", "ArrowRight"].includes(event.key)) {
+        const current = record();
+        if (current) { event.preventDefault(); current.collapsed = event.key === "ArrowLeft";
+          saveWorkspaceFolders(); scheduleRender(); }
+      }
+    });
+    heading.addEventListener("dragover", event => {
+      if (!dragTabs.length || !dragTabs.every(tab => !tab.pinned && !tab.splitview &&
+          tabWorkspace(tab) === record()?.workspaceId)) return;
+      event.preventDefault(); heading.setAttribute("data-dragover", "true");
+    });
+    heading.addEventListener("dragleave", () => heading.removeAttribute("data-dragover"));
+    heading.addEventListener("drop", event => {
+      event.preventDefault(); heading.removeAttribute("data-dragover");
+      try { moveTabsToFolder(dragTabs, folder.id); } finally { resetTabDrag(); }
+    });
+    return item;
   }
 
   function createGroupForTab(tab) {
@@ -1271,13 +1399,13 @@
   }
 
   function createGroupForTabs(tabs) {
-    const name = askGroupName("New Tab Group");
+    const name = askGroupName("New Folder");
     return name === null ? null : createNamedGroup(tabs, name);
   }
 
   function renameGroup(group) {
     if (!group?.isConnected) return;
-    const name = askGroupName("Rename Tab Group", group.label || "");
+    const name = askGroupName("Rename Folder", group.label || "");
     if (name) group.label = name;
   }
 
@@ -1393,6 +1521,14 @@
 
   function migrateWorkspaceTabs(id, destinationId) {
     if (!workspaces.some(workspace => workspace.id === destinationId)) return 0;
+    loadWorkspaceFolders();
+    const movedFolders = workspaceFolders.some(folder => folder.workspaceId === id);
+    if (movedFolders) {
+      workspaceFolders = workspaceFolders.map(folder => folder.workspaceId === id
+        ? { ...folder, workspaceId: destinationId } : folder);
+      foldersLoaded = true;
+      saveWorkspaceFolders();
+    }
     const ownedTabs = [...gBrowser.tabs].filter(tab => storedTabWorkspace(tab) === id);
     for (const tab of ownedTabs) {
       setWorkspaceTabActive(tab, false);
@@ -1849,7 +1985,8 @@
   }
 
   function renderedTreeItems() {
-    return [...tabsList.querySelectorAll(".fluxion-group-heading, .fluxion-tab")]
+    return [...folderTabs.querySelectorAll(".fluxion-group-heading, .fluxion-tab"),
+      ...tabsList.querySelectorAll(".fluxion-group-heading, .fluxion-tab")]
       .filter(element => !element.closest(".fluxion-group-tabs[hidden]"));
   }
 
@@ -2444,8 +2581,7 @@
     const disclosure = create("span", "fluxion-group-disclosure");
     disclosure.textContent = "›";
     disclosure.setAttribute("aria-hidden", "true");
-    const mark = create("span", "fluxion-group-mark");
-    mark.setAttribute("aria-hidden", "true");
+    const mark = vectorGlyph("fluxion-folder-icon", [["path", { d: "M1 4V2.5h5l2 2h7v9H1Z" }]]);
     const label = create("span", "fluxion-group-name");
     const groupCount = create("span", "fluxion-group-count");
     heading.append(disclosure, mark, label, groupCount);
@@ -2635,6 +2771,7 @@
   }
 
   function reconcileFlowTabs(visible) {
+    syncWorkspaceFolders();
     const wantedTabs = new Set(), wantedGroups = new Set();
     function tabPlan(tab, level = 1) {
       const role = tab.pinned ? "tab" : "treeitem";
@@ -2661,7 +2798,7 @@
     const regularTabs = visible.filter(tab => !tab.pinned);
     const ungrouped = new Map(splitPlans(tabsList, regularTabs.filter(tab => !tab.group))
       .map(plan => [plan.node._fluxionSplitView || plan.node._fluxionTab, plan]));
-    const regular = [], seenSplitViews = new Set();
+    const regular = [], folders = [], seenSplitViews = new Set();
     for (const row of FluxionTabGroups.projectTabRows(regularTabs, currentWorkspace,
       { workspaceOf: tabWorkspace, groupOf: tab => tab.group })) {
       if (row.kind === "group") {
@@ -2670,7 +2807,7 @@
         const projection = refreshGroupElement(row.group, row.tabs, item);
         const { heading, groupTabs } = item._fluxionParts;
         wantedGroups.add(row.group);
-        regular.push({ node: item, children: [{ node: heading },
+        folders.push({ node: item, children: [{ node: heading },
           { node: groupTabs, children: splitPlans(groupTabs, projection.visibleTabs, 2) }] });
       } else {
         const split = row.tab.splitview;
@@ -2682,7 +2819,28 @@
         if (plan) regular.push(plan);
       }
     }
-    FluxionFlowTree.reconcile([{ node: pinnedTabs, children: pinned }, { node: tabsList, children: regular }]);
+    const liveGroupIds = new Set(gBrowser.tabGroups.map(group => group.id));
+    const wantedEmpty = new Set();
+    for (const folder of workspaceFolders.filter(item => item.workspaceId === currentWorkspace)) {
+      if (liveGroupIds.has(folder.groupId)) continue;
+      let item = emptyFolderElements.get(folder.id);
+      if (!item) { item = createEmptyFolderElement(folder); emptyFolderElements.set(folder.id, item); }
+      item.classList.toggle("is-collapsed", folder.collapsed);
+      item._folderParts.label.textContent = folder.label;
+      item._folderParts.heading.setAttribute("aria-expanded", String(!folder.collapsed));
+      item._folderParts.heading.setAttribute("aria-label", `${folder.label}, empty folder`);
+      wantedEmpty.add(folder.id);
+      folders.push({ node: item });
+    }
+    for (const id of emptyFolderElements.keys()) if (!wantedEmpty.has(id)) emptyFolderElements.delete(id);
+    // Retain the persisted order even while a folder becomes empty or receives
+    // its first tab (Gecko cannot represent an empty native tab group).
+    const emptyIds = new Map([...emptyFolderElements].map(([id, node]) => [node, id]));
+    const folderIndex = node => workspaceFolders.findIndex(folder =>
+      node._fluxionGroup ? folder.groupId === node._fluxionGroup.id : folder.id === emptyIds.get(node));
+    folders.sort((a, b) => folderIndex(a.node) - folderIndex(b.node));
+    FluxionFlowTree.reconcile([{ node: pinnedTabs, children: pinned },
+      { node: folderTabs, children: folders }, { node: tabsList, children: regular }]);
     for (const tab of tabElements.keys()) if (!wantedTabs.has(tab)) tabElements.delete(tab);
     for (const group of groupElements.keys()) if (!wantedGroups.has(group)) groupElements.delete(group);
   }
@@ -2975,14 +3133,19 @@
   const moveToPopup = xul("menupopup");
   moveToMenu.appendChild(moveToPopup);
   contextMenu.appendChild(moveToMenu);
-  const tabGroupMenu = xul("menu", { label: "Tab Group" });
+  const tabGroupMenu = xul("menu", { label: "Move to Folder" });
   const tabGroupPopup = xul("menupopup");
   tabGroupMenu.appendChild(tabGroupPopup);
   contextMenu.appendChild(tabGroupMenu);
   tabGroupPopup.addEventListener("popupshowing", event => {
     if (event.target !== tabGroupPopup) return;
     tabGroupPopup.replaceChildren();
-    appendAction(tabGroupPopup, "New Group…", () => createGroupForTabs(contextTabs()));
+    syncWorkspaceFolders();
+    appendAction(tabGroupPopup, "New Folder…", () => createGroupForTabs(contextTabs()));
+    for (const folder of workspaceFolders.filter(item => item.workspaceId === currentWorkspace &&
+      !gBrowser.tabGroups.some(group => group.id === item.groupId))) {
+      appendAction(tabGroupPopup, folder.label, () => moveTabsToFolder(contextTabs(), folder.id));
+    }
     const groups = gBrowser.tabGroups.filter(group =>
       group.tabs.some(tab => tabWorkspace(tab) === currentWorkspace)
     );
@@ -3072,7 +3235,7 @@
   });
 
   const groupMenu = xul("menupopup", { id: "fluxion-group-context" });
-  appendAction(groupMenu, "Rename Group…", () => renameGroup(contextGroup));
+  appendAction(groupMenu, "Rename Folder…", () => renameGroup(contextGroup));
   const collapseGroupItem = appendAction(groupMenu, "Collapse Group", () => {
     if (contextGroup) contextGroup.collapsed = !contextGroup.collapsed;
   });
@@ -3101,9 +3264,36 @@
   groupMenu.appendChild(groupWorkspaceMenu);
   groupMenu.appendChild(xul("menuseparator"));
   appendAction(groupMenu, "Ungroup Tabs", () => {
+    workspaceFolders = workspaceFolders.filter(folder => folder.groupId !== contextGroup?.id);
+    saveWorkspaceFolders();
     contextGroup?.ungroupTabs();
     scheduleRender();
   });
+
+  let contextEmptyFolder = null;
+  const emptyFolderMenu = xul("menupopup", { id: "fluxion-empty-folder-context" });
+  on(emptyFolderMenu, "popupshowing", event => {
+    if (event.target === emptyFolderMenu) focusOpenMenus.add(emptyFolderMenu);
+  });
+  on(emptyFolderMenu, "popuphidden", event => {
+    if (event.target !== emptyFolderMenu) return;
+    focusOpenMenus.delete(emptyFolderMenu);
+    scheduleFocusSurfaceHide();
+  });
+  appendAction(emptyFolderMenu, "Rename Folder…", () => {
+    const folder = workspaceFolders.find(item => item.id === contextEmptyFolder);
+    if (!folder) return;
+    const name = askGroupName("Rename Folder", folder.label);
+    if (name) { folder.label = name; saveWorkspaceFolders(); scheduleRender(); }
+  });
+  appendAction(emptyFolderMenu, "Delete Empty Folder", () => {
+    const folder = workspaceFolders.find(item => item.id === contextEmptyFolder);
+    if (!folder || gBrowser.tabGroups.some(group => group.id === folder.groupId)) return;
+    workspaceFolders = workspaceFolders.filter(item => item !== folder);
+    saveWorkspaceFolders(); scheduleRender();
+  });
+  popupSet.appendChild(emptyFolderMenu);
+  cleanup.push(() => emptyFolderMenu.remove());
   groupMenu.addEventListener("popupshowing", event => {
     if (event.target !== groupMenu) return;
     collapseGroupItem.setAttribute(
@@ -3162,6 +3352,7 @@
     openWorkspaceMenu(currentWorkspace, workspaceMoreButton, event);
   });
   appendAction(workspaceMenu, "Rename Workspace…", () => renameWorkspace(contextWorkspace));
+  appendAction(workspaceMenu, "New Folder…", () => createWorkspaceFolder(contextWorkspace));
   const symbolMenu = xul("menu", { label: "Change Icon" });
   const symbolPopup = xul("menupopup");
   const symbolItems = new Map();
@@ -3836,7 +4027,7 @@
       collapsedGroup.collapsed = true;
       render();
       window.requestAnimationFrame(() => {
-        const groupItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+        const groupItem = [...folderTabs.querySelectorAll(".fluxion-group")].find(candidate =>
           candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
         );
         const activeRow = tabElements.get(fixtureTabs[1]);
@@ -3863,7 +4054,7 @@
           bubbles: true,
         }));
         window.setTimeout(() => {
-          const inactiveItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+          const inactiveItem = [...folderTabs.querySelectorAll(".fluxion-group")].find(candidate =>
             candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
           );
           const keyboardSelectedTab = gBrowser.selectedTab;
@@ -3894,7 +4085,7 @@
             bubbles: true,
           }));
           window.requestAnimationFrame(() => {
-            const expandedItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+            const expandedItem = [...folderTabs.querySelectorAll(".fluxion-group")].find(candidate =>
               candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
             );
             const expandedHeading = expandedItem?.querySelector(".fluxion-group-heading");
@@ -3909,7 +4100,7 @@
               bubbles: true,
             }));
             window.requestAnimationFrame(() => {
-              const collapsedItem = [...tabsList.querySelectorAll(".fluxion-group")].find(candidate =>
+              const collapsedItem = [...folderTabs.querySelectorAll(".fluxion-group")].find(candidate =>
                 candidate.querySelector(".fluxion-group-name")?.textContent === "Collapsed continuity"
               );
               const collapsedHeading = collapsedItem?.querySelector(".fluxion-group-heading");

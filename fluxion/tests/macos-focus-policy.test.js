@@ -15,6 +15,22 @@ const prefAllowsHide = new Function("Services", "window", "document", "BrowserHa
 const inputVeto = new Function("focused", "document", "BrowserHandler", "gNavToolbox", "fluxionFocus",
   `return Boolean(focused && focused.ownerDocument == document && ${replacements[1][1]});`);
 const tabReplacements = JSON.parse(python("print(json.dumps(m.TAB_REPLACEMENTS))"));
+const mouseTargetBody = replacements[2][1].split("_mouseTargetRectFromBounds(rect) {")[1];
+const mouseTargetTop = new Function("rect", "document", "window", "gNavToolbox",
+  `${mouseTargetBody} bottom: rect.bottom, left: rect.left, right: rect.right };`);
+test("fullscreen overlay mouse tracking excludes its complete toolbar before and after reveal", () => {
+  for (const focus of [false, true]) for (const toolbar of [
+    { height: 72, bottom: 0 }, { height: 72, bottom: 72 }, { height: 72, bottom: 100 },
+  ]) {
+    let reads = 0;
+    const box = { top: focus ? 0 : 72, bottom: 900, left: 0, right: 1280 };
+    const result = mouseTargetTop(box, { documentElement: { hasAttribute: () => focus } },
+      { windowUtils: { getBoundsWithoutFlushing() { reads++; return toolbar; } } }, {});
+    assert.equal(result.top, (focus ? Math.max(toolbar.height, toolbar.bottom) : box.top) + 50);
+    assert.deepEqual([result.bottom, result.left, result.right], [900, 0, 1280]);
+    assert.equal(reads, Number(focus));
+  }
+});
 const focusReplacement = new Function("aNewTab", "document", "gURLBar", tabReplacements[0][1]);
 
 test("automatic last-tab replacements do not claim address focus in explicit Focus, without blurring real editing", () => {
