@@ -1,0 +1,54 @@
+name: macOS presentation diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Check folder menu and Finder presentation (not a release)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check product code and regressions
+        run: ./fluxion/scripts/check.sh
+      - name: Download verified Gecko runtime
+        run: |
+          set -euo pipefail
+          node ./fluxion/scripts/download-gecko.mjs "$RUNNER_TEMP/firefox.dmg"
+          mkdir -p "$RUNNER_TEMP/firefox-volume" "$RUNNER_TEMP/firefox-source"
+          hdiutil attach "$RUNNER_TEMP/firefox.dmg" -mountpoint "$RUNNER_TEMP/firefox-volume" -nobrowse -readonly
+          ditto "$RUNNER_TEMP/firefox-volume/Firefox.app" "$RUNNER_TEMP/firefox-source/Firefox.app"
+          hdiutil detach "$RUNNER_TEMP/firefox-volume"
+          codesign --verify --deep --strict "$RUNNER_TEMP/firefox-source/Firefox.app"
+      - name: Build diagnostic application
+        id: build
+        env:
+          FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
+          FLUXION_TARGET_ARCH: universal2
+          FLUXION_SKIP_LAUNCH_CHECK: "1"
+        run: ./fluxion/scripts/build-macos.sh --clean
+      - name: Verify native folder menu and product chrome
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_PRODUCT_CHROME_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-product-chrome-evidence
+        run: ./fluxion/scripts/verify-macos-product-chrome.sh '.runtime/Fluxion.app'
+      - name: Verify mounted Finder presentation
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        env:
+          FLUXION_DMG_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-dmg-evidence
+        run: |
+          version="$(node -p 'require("./fluxion/package.json").version')"
+          ./fluxion/scripts/package-macos-dmg.sh --app '.runtime/Fluxion.app' --output-dir "$RUNNER_TEMP/presentation-only" --version "$version"
+      - name: Preserve diagnostics only (never a distributable)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-presentation-diagnostic
+          path: |
+            ${{ runner.temp }}/fluxion-product-chrome-evidence
+            ${{ runner.temp }}/fluxion-dmg-evidence
+          if-no-files-found: error

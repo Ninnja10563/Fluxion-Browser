@@ -35,7 +35,8 @@ on run arguments
     if position of item "Fluxion.app" of mountedFolder is not {180, 212} then error "Fluxion icon position was not saved"
     if position of item "Applications" of mountedFolder is not {460, 212} then error "Applications icon position was not saved"
     set savedBackground to background picture of options as alias
-    if POSIX path of savedBackground is not mountPath & "/.background/background.tiff" then error "DMG background does not resolve inside its own mounted image"
+    set expectedBackground to (POSIX file (mountPath & "/.background/background.tiff")) as alias
+    if savedBackground is not expectedBackground then error "DMG background does not resolve inside its own mounted image"
     set savedBounds to bounds of installWindow
     if (item 3 of savedBounds) - (item 1 of savedBounds) is not 640 then error "DMG width was not saved"
     if (item 4 of savedBounds) - (item 2 of savedBounds) is not 444 then error "DMG height was not saved"

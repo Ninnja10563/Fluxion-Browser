@@ -63,6 +63,19 @@ on run arguments
             error "Unsupported workspace color action"
           end if
         end tell
+      else if captureName starts with "key-product-folder-" then
+        if not frontmost of ownedProcess then error "Folder menu lost its foreground owner"
+        tell ownedProcess
+          if captureName ends with "-down" then
+            key code 125
+          else if captureName ends with "-right" then
+            key code 124
+          else if captureName ends with "-return" then
+            key code 36
+          else
+            error "Unsupported folder key action"
+          end if
+        end tell
       else if captureName starts with "key-product-workspace-" then
         if not frontmost of ownedProcess then error "Workspace key input lost its foreground owner"
         tell ownedProcess
@@ -100,6 +113,16 @@ FLUXION_PROFILE="$profile" FLUXION_PRODUCT_CHROME_TEST=1 FLUXION_PRODUCT_CHROME_
 process_id=$!
 for ((attempt=0; attempt<720; attempt++)); do
   kill -0 "$process_id" 2>/dev/null || break
+  for request in "$check_root"/key-product-folder-*.ready; do
+    [[ -f "$request" ]] || continue
+    action="$(basename "$request" .ready)"
+    [[ "$action" =~ ^key-product-folder-([1-9]|[1-7][0-9]|80)-(down|right|return)$ ]] || exit 1
+    if [[ ! -f "$check_root/$action.sent" ]]; then
+      native_action "$action"
+      owned || exit 1
+      touch "$check_root/$action.sent"
+    fi
+  done
   for action in capture-product-chrome-1280 query-product-suggestions-1280 capture-product-suggestions-1280 capture-product-chrome-800 query-product-suggestions-800 capture-product-suggestions-800 \
     capture-product-workspace-idle capture-product-workspace-hover capture-product-workspace-menu key-product-workspace-escape-pointer \
     key-product-workspace-down capture-product-workspace-menu-updated key-product-workspace-escape-keyboard \

@@ -557,18 +557,63 @@
         screenX: window.screenX + rect(row).left + 12, screenY: window.screenY + rect(row).top + 12 }));
       const tabMenu = document.getElementById("fluxion-tab-context");
       await wait(() => tabMenu.state === "open", "Real tab context menu did not open");
-      const submenu = [...tabMenu.children].find(node => node.getAttribute("label") === "Move to Folder")?.querySelector("menupopup");
+      const folderMenu = [...tabMenu.children].find(node => node.getAttribute("label") === "Move to Folder");
+      const submenu = folderMenu?.querySelector("menupopup");
       assert(submenu, "Tab context menu is missing Move to Folder");
-      submenu.openPopup(submenu.parentNode, "end_before");
-      await wait(() => submenu.state === "open", "Move to Folder submenu did not open");
-      const destination = [...submenu.children].find(node => node.getAttribute("label") === name);
-      assert(destination && !destination.disabled, "Empty folder is absent from the actual tab move menu");
-      destination.doCommand();
-      // Gecko may dispatch a native menu command asynchronously. Do not clear
-      // its captured tab context by manually hiding the menu before dispatch.
-      await wait(() => tab.group?.label === name && heading()?.closest(".fluxion-group")?.querySelector(".fluxion-tab")?._fluxionTab === tab,
-        "Move to Folder command did not put the same tab in the folder projection");
-      submenu.hidePopup(); tabMenu.hidePopup();
+      // Opening a nested menupopup as an independent popup is not how Cocoa
+      // menus work: it can dismiss the parent and invalidate its tab snapshot.
+      // Navigate the actual parent menu with OS keys, as a user would.
+      const menuEvidence = evidence.moveMenu = { keys: [], events: [] };
+      let selected = null, sequence = 0, command = null;
+      const observe = event => {
+        if (event.type === "DOMMenuItemActive") selected = event.target;
+        if (event.type === "command") command = event.target;
+        menuEvidence.events.push({ type: event.type, label: event.target.getAttribute("label"),
+          trusted: event.isTrusted, parent: tabMenu.state, submenu: submenu.state });
+      };
+      const key = async (action, expected = null) => {
+        const request = `key-product-folder-${++sequence}-${action}`;
+        assert(sequence <= 80, "Folder native-key sequence exceeded its bound");
+        menuEvidence.keys.push({ action, expected: expected?.getAttribute("label") || null });
+        await IOUtils.writeUTF8(PathUtils.join(driver, `${request}.ready`), "ready");
+        await wait(() => IOUtils.exists(PathUtils.join(driver, `${request}.sent`)),
+          `Native folder key was not acknowledged: ${request}`, 20000);
+        if (expected?.localName === "menuitem") {
+          await wait(() => selected === expected, `Native ${action} did not highlight ${expected.getAttribute("label")}`);
+        } else { await delay(0); await delay(0); }
+      };
+      const enabled = popup => [...popup.children].filter(node => ["menu", "menuitem"].includes(node.localName) &&
+        !node.hidden && !node.disabled && window.getComputedStyle(node).display !== "none" &&
+        window.getComputedStyle(node).visibility !== "collapse");
+      for (const type of ["DOMMenuItemActive", "command", "popuphidden"]) tabMenu.addEventListener(type, observe, true);
+      try {
+        assert(tabMenu.isNativeMenu, "Folder test requires the OS-native context menu");
+        await key("down");
+        await wait(() => selected?.parentNode === tabMenu, "Native folder navigation did not select the first context item");
+        const items = enabled(tabMenu), from = items.indexOf(selected), target = items.indexOf(folderMenu);
+        assert(from >= 0 && target >= from && target - from <= 40, "Folder menu navigation is not bounded");
+        for (let index = from; index < target; index++) await key("down", items[index + 1]);
+        await key("right");
+        await wait(() => submenu.state === "open" && tabMenu.state === "open", "Native ArrowRight did not open the owned folder submenu");
+        const destination = [...submenu.children].find(node => node.getAttribute("label") === name);
+        assert(destination && !destination.disabled, "Empty folder is absent from the actual tab move menu");
+        selected = null;
+        await key("down");
+        await wait(() => selected?.parentNode === submenu, "Folder submenu did not receive native selection");
+        const choices = enabled(submenu), start = choices.indexOf(selected), end = choices.indexOf(destination);
+        assert(start >= 0 && end >= start && end - start <= 40, "Folder destination navigation is not bounded");
+        for (let index = start; index < end; index++) await key("down", choices[index + 1]);
+        await key("return");
+        await wait(() => command === destination, "Native Return did not invoke the folder destination");
+        await wait(() => tab.group?.label === name && heading()?.closest(".fluxion-group")?.querySelector(".fluxion-tab")?._fluxionTab === tab,
+          "Move to Folder command did not put the same tab in the folder projection");
+      } finally {
+        menuEvidence.final = { parent: tabMenu.state, submenu: submenu.state,
+          groupId: tab.group?.id || null, groupLabel: tab.group?.label || null, folders: folders(),
+          headings: [...region.querySelectorAll(".fluxion-group-name")].map(node => node.textContent) };
+        for (const type of ["DOMMenuItemActive", "command", "popuphidden"]) tabMenu.removeEventListener(type, observe, true);
+        submenu.hidePopup(); tabMenu.hidePopup();
+      }
       evidence.populated = folderIdentityEvidence(tab, snapshot);
       await wait(() => serialised().some(item => item.id === folder.id && item.groupId === tab.group.id),
         "Native group linkage is absent from serialized folder metadata");
