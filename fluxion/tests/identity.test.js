@@ -28,6 +28,12 @@ test("About Fluxion presents the current product version without remote scripts"
   assert.doesNotMatch(runtime, /registerFactory|nsIAboutModule/);
 });
 
+test("update coordinator compares releases against the exact shipped version", () => {
+  const coordinator = fs.readFileSync(path.join(root, "modules/FluxionUpdateCoordinator.sys.mjs"), "utf8");
+  assert.equal(coordinator.match(/const INSTALLED = "([^"]+)";/)?.[1], packageData.version,
+    "a stale installed version can offer the current release as an upgrade");
+});
+
 test("the native Flow menu owns product commands while retaining Gecko execution", () => {
   assert.match(chrome, /id: "fluxion-native-menu", label: "Flow"/);
   assert.match(chrome, /Command Palette…/);
