@@ -4,8 +4,10 @@
 import AppKit
 
 guard CommandLine.arguments.count == 3,
-      let expected = NSBitmapImageRep(contentsOfFile: CommandLine.arguments[1]),
-      let actual = NSBitmapImageRep(contentsOfFile: CommandLine.arguments[2]) else {
+      let expectedData = try? Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[1])),
+      let actualData = try? Data(contentsOf: URL(fileURLWithPath: CommandLine.arguments[2])),
+      let expected = NSBitmapImageRep(data: expectedData),
+      let actual = NSBitmapImageRep(data: actualData) else {
     fatalError("Expected embedded TIFF and actual Finder window screenshot")
 }
 let expectedScale = Double(expected.pixelsWide) / 640
