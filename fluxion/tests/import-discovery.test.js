@@ -81,7 +81,10 @@ test("native adapter detects macOS registries, ignores current profile and missi
     dirsvc: { get: key => ({ path: key === "Home" ? "/home" : "/fluxion" }) },
   }, Ci: {}, Cc: { "@mozilla.org/file/local;1": { createInstance: () => ({
     initWithPath(value) { this.path = value; }, normalize() {}, isDirectory() { return directories.has(this.path); }, equals(other) { return this.path === other.path; },
-  }) } }, PathUtils: { join: path.posix.join, filename: path.posix.basename },
+  }) } }, PathUtils: { join: (base, ...leaves) => {
+    assert.ok(leaves.every(leaf => !leaf.includes("/")), "Gecko join accepts leaf names, not nested relative paths");
+    return path.posix.join(base, ...leaves);
+  }, joinRelative: path.posix.join, filename: path.posix.basename },
   IOUtils: { exists: async p => entries.has(p) || p.endsWith("bookmarkbackups"), stat: async () => ({ type: "regular", size: 200 }),
     read: async p => { calls.push(["read", p]); return new TextEncoder().encode(entries.get(p)); },
     getChildren: async p => ["bookmarks-2026-10-01_5_hash.jsonlz4", "bookmarks-2026-10-14_6_hash.jsonlz4", "random.json"].map(name => path.posix.join(p, name)),

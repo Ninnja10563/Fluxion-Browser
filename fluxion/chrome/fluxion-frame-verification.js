@@ -978,8 +978,8 @@
     report.geometry.push({ mode: "library", page: libraryRect });
     report.checks.push("settings-and-library-share-the-native-page-frame-boundary");
     report.checks.push("actual-light-dark-webpage-and-settings-captures");
-    await nativeFullscreen();
     await newWindowNavigation();
+    await nativeFullscreen();
   }
   async function newWindowNavigation() {
     stage("new-window-navigation-ownership");

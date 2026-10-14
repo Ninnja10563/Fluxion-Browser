@@ -96,7 +96,9 @@ export function forWindow(window, { profileRoots, confirm } = {}) {
           const text = new TextDecoder().decode(await IOUtils.read(registry, { maxBytes: 1024 * 1024 }));
           for (const record of parseProfiles(text)) {
             try {
-              const path = profileFolder(record.IsRelative === "1" ? PathUtils.join(base, record.Path) : record.Path);
+              // Registry paths are relative paths, not single leaf names.
+              // PathUtils.join rejects separators in any component after base.
+              const path = profileFolder(record.IsRelative === "1" ? PathUtils.joinRelative(base, record.Path) : record.Path);
               if (!path || seen.has(path)) continue;
               seen.add(path);
               profiles.push({ source, name: record.Name, path, kind: "backup" });

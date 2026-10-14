@@ -229,9 +229,16 @@
     evidence.menus.push(workspaceMenuEvidence(menu, ui.workspaces(), ui.currentWorkspace()));
     await capture("capture-product-workspace-menu");
     await nativeWorkspaceKey("escape-pointer");
-    await wait(() => menu.state === "closed" && document.activeElement === button &&
-      button.getAttribute("aria-expanded") === "false" && !heading.hasAttribute("data-menu-open"),
-    "Native Escape did not dismiss the workspace popup and restore ellipsis focus");
+    try {
+      await wait(() => menu.state === "closed" && document.activeElement === button &&
+        button.getAttribute("aria-expanded") === "false" && !heading.hasAttribute("data-menu-open"),
+      "Native Escape did not dismiss the workspace popup and restore ellipsis focus");
+    } finally {
+      evidence.escapePointer = { menu: menu.state, expanded: button.getAttribute("aria-expanded"),
+        menuOpen: heading.dataset.menuOpen || null, focused: document.activeElement === button,
+        activeId: document.activeElement?.id, activeClass: document.activeElement?.getAttribute("class"),
+        documentFocused: document.hasFocus(), activeWindow: Services.focus.activeWindow === window };
+    }
     moveAway();
     await wait(() => !heading.matches(":hover") && Number(window.getComputedStyle(button).opacity) === 1,
       "Focused workspace ellipsis disappeared when the pointer left");

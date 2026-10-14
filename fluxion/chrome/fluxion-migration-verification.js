@@ -193,6 +193,7 @@
     const importer = forWindow(window, { profileRoots: [["zen", sourceRoot]],
       confirm: () => { prompts++; return consent; } });
     const detected = await importer.discover();
+    report.discovery = detected;
     const selected = detected.profiles.find(p => p.source === "zen" && p.name === "Detected café profile");
     assert(selected && !JSON.stringify(detected.profiles).includes(sourceRoot), "Native profile metadata detection failed or exposed a path");
     assert(!await PlacesUtils.bookmarks.fetch({ url: sourceURL }), "Discovery imported bookmarks without confirmation");
