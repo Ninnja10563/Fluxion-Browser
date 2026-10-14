@@ -112,7 +112,9 @@ test("moving into an empty folder materialises one native group without replacin
 
 test("workspace context menu exposes creation and folder section precedes divider", () => {
   assert.match(source, /appendAction\(workspaceMenu, "New Folder…", \(\) => createWorkspaceFolder\(contextWorkspace\)\)/);
-  assert.match(source, /workspaceHeading, folderTabs, workspaceDivider, tabScroll/);
+  assert.match(source, /tabTree\.append\(folderTabs, workspaceDivider, tabScroll\)/);
+  assert.match(source, /tabTree\.setAttribute\("role", "tree"\)/);
+  assert.match(source, /folderTabs\.setAttribute\("role", "group"\)/);
   assert.match(source, /label: "Move to Folder"/);
   assert.match(source, /Rename Folder…/);
 });

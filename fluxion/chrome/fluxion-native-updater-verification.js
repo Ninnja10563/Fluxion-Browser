@@ -122,7 +122,8 @@
       const value = native.getState();
       if (value.state !== previous && report.transitions.length < 100) {
         previous = value.state;
-        report.transitions.push({ stage: report.stage, state: value.state, received: value.received, total: value.total, error: value.error });
+        report.transitions.push({ stage: report.stage, state: value.state, received: value.received, total: value.total,
+          error: value.error, message: value.message, busy: value.busy, canRetry: value.canRetry });
       }
       return value;
     };
@@ -146,7 +147,10 @@
     } };
     Services.obs.addObserver(cancelFirstQuit, "quit-application-requested");
     command("install");
-    await until(() => cancelled === 1 && state().canRetry, "Sparkle did not retain retry after native quit cancellation", 180000);
+    await until(() => {
+      const value = state(); // retain diagnostics even before quit is requested
+      return cancelled === 1 && value.canRetry;
+    }, "Sparkle did not retain retry after native quit cancellation", 180000);
     ensure(!window.closed && (await IOUtils.readJSON(markerPath)).version === config.oldVersion, "Cancelled Quit replaced the app or closed its session");
     await snapshot(expected);
     report.checks.push("real-sparkle-apple-quit-cancelled-and-session-still-live");

@@ -32,7 +32,7 @@ function fixture() {
   for (const container of containers.values()) container.querySelectorAll = selector => {
     assert.equal(selector, ".fluxion-tab"); return container.rows;
   };
-  const tree = { rows: rows.slice(1, 7), stops: [firstHeading, ...rows.slice(1, 7), collapsedHeading],
+  const tree = { rows: [...rows.slice(2, 7), rows[1]], stops: [firstHeading, ...rows.slice(1, 7), collapsedHeading],
     querySelectorAll(selector) { return selector === ".fluxion-tab" ? this.rows : this.stops; } };
   const pinned = { rows: [rows[0]], querySelectorAll(selector) { assert.equal(selector, ".fluxion-tab"); return this.rows; } };
   const groups = new Map([[group, firstHeading], [collapsed, collapsedHeading]]);

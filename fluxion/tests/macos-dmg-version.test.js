@@ -22,6 +22,7 @@ function fixture(t, release = "0.12.0-preview.2") {
   fs.mkdirSync(path.join(app, "Contents/MacOS"), { recursive: true });
   fs.mkdirSync(bin);
   fs.writeFileSync(path.join(app, "Contents/MacOS/Fluxion"), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
+  let failedTool = "";
   const metadata = (version = release, overrides = {}) => {
     const base = version.split("-")[0];
     const [major, minor, patch] = base.split(".").map(Number);
@@ -39,15 +40,28 @@ function fixture(t, release = "0.12.0-preview.2") {
 const fs = require('node:fs'), path = require('node:path');
 const name = path.basename(process.argv[1]), args = process.argv.slice(2);
 fs.appendFileSync(process.env.FLUXION_PACKAGE_TEST_LOG, JSON.stringify({name,args})+'\\n');
+if(process.env.FLUXION_PACKAGE_FAILED_TOOL===name) process.exit(1);
 if(name==='lipo') console.log('arm64 x86_64');
 if(name==='ditto') fs.cpSync(args[0],args[1],{recursive:true});
-if(name==='hdiutil') fs.writeFileSync(args.at(-1),'synthetic disk image for shell control-flow testing');
+if(name==='xcrun') { for(const file of ['background.png','background@2x.png']) fs.writeFileSync(path.join(args.at(-1),file),'synthetic artwork'); }
+if(name==='tiffutil') fs.writeFileSync(args.at(-1),'synthetic Retina artwork');
+if(name==='osascript') { fs.writeFileSync(path.join(args.at(-1),'.DS_Store'),'synthetic Finder metadata'); console.log('42'); }
+if(name==='hdiutil') {
+  if(['create','convert'].includes(args[0])) fs.writeFileSync(args.at(-1),'synthetic disk image for shell control-flow testing');
+  if(args[0]==='attach') {
+    const calls=fs.readFileSync(process.env.FLUXION_PACKAGE_TEST_LOG,'utf8').trim().split('\\n').map(JSON.parse);
+    const stage=path.dirname(calls.find(c=>c.name==='ditto').args[1]);
+    fs.cpSync(stage,args[args.indexOf('-mountpoint')+1],{recursive:true,verbatimSymlinks:true});
+  }
+}
 `;
-  for (const tool of ["lipo", "codesign", "ditto", "hdiutil"]) fs.writeFileSync(path.join(bin, tool), shim, { mode: 0o755 });
+  for (const tool of ["lipo", "codesign", "ditto", "hdiutil", "xcrun", "tiffutil", "osascript"]) fs.writeFileSync(path.join(bin, tool), shim, { mode: 0o755 });
   return { root, app, output, settings, plist, metadata,
+    failTool(name) { failedTool = name; },
     calls: () => fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) : [],
     run: (...args) => spawnSync("bash", [script, "--app", app, "--output-dir", output, ...args], {
-      cwd: root, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FLUXION_PACKAGE_TEST_LOG: log },
+      cwd: root, encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FLUXION_PACKAGE_TEST_LOG: log,
+        FLUXION_PACKAGE_FAILED_TOOL: failedTool },
     }),
   };
 }
@@ -59,7 +73,11 @@ test("default DMG release comes from supplied older app, independently of checko
   assert.ok(fs.existsSync(path.join(f.output, "Fluxion-0.12.0-preview.2-macOS-universal.dmg.sha256")));
   const image = f.calls().find(call => call.name === "hdiutil");
   assert.equal(image.args[image.args.indexOf("-volname") + 1], "Fluxion 0.12.0-preview.2");
-  assert.equal(f.calls().filter(call => call.name === "hdiutil").length, 1);
+  assert.deepEqual(f.calls().filter(call => call.name === "hdiutil").map(call => call.args[0]),
+    ["create", "attach", "detach", "convert", "attach", "detach"]);
+  const mounts = f.calls().filter(call => call.name === "hdiutil" && call.args[0] === "attach");
+  assert.equal(mounts[0].args.includes("-readonly"), false);
+  assert.equal(mounts[1].args.includes("-readonly"), true);
 });
 
 test("explicit current release packages the exact signed native beta version and full release marker", t => {
@@ -70,6 +88,33 @@ test("explicit current release packages the exact signed native beta version and
   assert.ok(fs.readFileSync(f.plist, "utf8").includes(`<string>${release.replace("-preview.", "b")}</string>`));
   assert.ok(f.calls().some(call => call.name === "lipo"));
   assert.ok(f.calls().some(call => call.name === "codesign" && call.args.join(" ").startsWith("--verify --deep --strict")));
+});
+
+test("layout failure does not promote a DMG or overwrite a prior package and detaches its owned image", t => {
+  const f = fixture(t); f.failTool("osascript");
+  fs.mkdirSync(f.output);
+  const previous = path.join(f.output, "Fluxion-0.12.0-preview.2-macOS-universal.dmg");
+  fs.writeFileSync(previous, "previous verified image");
+  const result = f.run();
+  assert.notEqual(result.status, 0);
+  assert.equal(fs.readFileSync(previous, "utf8"), "previous verified image");
+  assert.deepEqual(fs.readdirSync(f.output), [path.basename(previous)]);
+  assert.ok(f.calls().some(call => call.name === "hdiutil" && call.args[0] === "detach"));
+  assert.equal(f.calls().some(call => call.name === "hdiutil" && call.args[0] === "convert"), false);
+});
+
+test("DMG art uses native type and real Finder icons, with reopened read-only layout verification", () => {
+  const artwork = fs.readFileSync(path.resolve(__dirname, "../packaging/macos/dmg-background.swift"), "utf8");
+  const layout = fs.readFileSync(path.resolve(__dirname, "../packaging/macos/dmg-layout.applescript"), "utf8");
+  const helper = fs.readFileSync(path.resolve(__dirname, "../scripts/style-macos-dmg.sh"), "utf8");
+  assert.match(artwork, /for scale in \[1, 2\]/);
+  assert.match(artwork, /NSFont\.systemFont/);
+  assert.match(artwork, /Drag Fluxion to Applications/);
+  assert.match(layout, /\{180, 212\}/); assert.match(layout, /\{460, 212\}/);
+  assert.match(layout, /DMG background does not resolve inside its own mounted image/);
+  assert.match(helper, /attach_options\+=\(-readonly\)/);
+  assert.match(helper, /codesign --verify --deep --strict/);
+  assert.doesNotMatch(helper, /detach -force/);
 });
 
 test("signed native version, display release, and marker must agree before any packaging tools run", t => {

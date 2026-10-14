@@ -563,9 +563,12 @@
       await wait(() => submenu.state === "open", "Move to Folder submenu did not open");
       const destination = [...submenu.children].find(node => node.getAttribute("label") === name);
       assert(destination && !destination.disabled, "Empty folder is absent from the actual tab move menu");
-      destination.doCommand(); submenu.hidePopup(); tabMenu.hidePopup();
+      destination.doCommand();
+      // Gecko may dispatch a native menu command asynchronously. Do not clear
+      // its captured tab context by manually hiding the menu before dispatch.
       await wait(() => tab.group?.label === name && heading()?.closest(".fluxion-group")?.querySelector(".fluxion-tab")?._fluxionTab === tab,
         "Move to Folder command did not put the same tab in the folder projection");
+      submenu.hidePopup(); tabMenu.hidePopup();
       evidence.populated = folderIdentityEvidence(tab, snapshot);
       await wait(() => serialised().some(item => item.id === folder.id && item.groupId === tab.group.id),
         "Native group linkage is absent from serialized folder metadata");

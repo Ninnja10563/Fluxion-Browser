@@ -515,6 +515,7 @@
     .fluxion-split-mark::before { inset-inline-start: 1px; }
     .fluxion-split-mark::after { inset-inline-end: 1px; }
     .fluxion-group { position: relative; margin: 2px 0 4px; }
+    .fluxion-tab-tree { display: flex; flex-direction: column; flex: 1; min-height: 0; }
     .fluxion-folders { padding: 2px var(--fluxion-rail-gutter); min-height: 0;
       max-height: 40%; flex: 0 1 auto; overflow-y: auto; scrollbar-width: thin; }
     .fluxion-folders:empty { display: none; }
@@ -1078,10 +1079,7 @@
   pinnedTabs.setAttribute("aria-label", "Pinned tabs");
   pinnedTabs.setAttribute("aria-orientation", "horizontal");
   const tabsList = create("div", "fluxion-tabs");
-  tabsList.setAttribute("role", "tree");
-  tabsList.setAttribute("aria-label", "Open tabs in current workspace");
-  tabsList.setAttribute("aria-orientation", "vertical");
-  tabsList.setAttribute("aria-multiselectable", "true");
+  tabsList.setAttribute("role", "group");
 
   const footer = create("div", "fluxion-footer");
   const newTabButton = create("button", "fluxion-new-tab");
@@ -1116,9 +1114,15 @@
   const workspaceDivider = create("div", "fluxion-workspace-divider");
   workspaceDivider.setAttribute("aria-hidden", "true");
   const folderTabs = create("div", "fluxion-folders");
-  folderTabs.setAttribute("role", "tree");
+  folderTabs.setAttribute("role", "group");
   folderTabs.setAttribute("aria-label", "Workspace folders");
-  tabScroll.append(pinnedLabel, pinnedTabs, tabsList, footer);
+  const tabTree = create("div", "fluxion-tab-tree");
+  tabTree.setAttribute("role", "tree");
+  tabTree.setAttribute("aria-label", "Open tabs in current workspace");
+  tabTree.setAttribute("aria-orientation", "vertical");
+  tabTree.setAttribute("aria-multiselectable", "true");
+  tabScroll.append(tabsList, footer);
+  tabTree.append(folderTabs, workspaceDivider, tabScroll);
   const sidebarResizer = create("div");
   sidebarResizer.id = "fluxion-sidebar-resizer";
   sidebarResizer.setAttribute("role", "separator");
@@ -1126,7 +1130,7 @@
   sidebarResizer.setAttribute("aria-orientation", "vertical");
   sidebarResizer.setAttribute("aria-controls", "fluxion-flow");
   surface.append(
-    workspaceHeading, folderTabs, workspaceDivider, tabScroll, workspaceBar, dragAnnouncement, sidebarResizer,
+    workspaceHeading, pinnedLabel, pinnedTabs, tabTree, workspaceBar, dragAnnouncement, sidebarResizer,
   );
   flow.append(surface);
   browser.prepend(flow);

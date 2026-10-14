@@ -71,6 +71,8 @@ test("native folder identity gate rejects replacement tabs, browsers, browsing c
 test("native product gate executes folder commands, checks real window serialization and runs before health success", () => {
   assert.match(source, /create\.doCommand\(\)/);
   assert.match(source, /destination\.doCommand\(\)/);
+  assert.ok(source.indexOf('"Move to Folder command did not put the same tab in the folder projection"') <
+    source.indexOf("submenu.hidePopup(); tabMenu.hidePopup();"), "do not dismiss asynchronous Gecko commands before they execute");
   assert.match(source, /SessionStore\.getWindowState\(window\)/);
   assert.match(source, /state\.windows\[0\]\.extData\?\.\[key\]/);
   assert.match(source, /emptyBox\.bottom <= dividerBox\.top/);

@@ -32,10 +32,10 @@ createServer((request, response) => {
   </style><header><div class="address">Search or enter address</div></header><div id="browser">
   <div id="fluxion-flow" data-state="${state}" data-revealed="true"><div class="fluxion-surface">
   <div class="fluxion-workspace-heading">${folder}<span>Research</span><button class="fluxion-icon-button fluxion-workspace-more" aria-label="Workspace options">···</button></div>
-  <div class="fluxion-folders" role="tree" aria-label="Workspace folders">${folders}</div>
+  <div class="fluxion-tab-tree" role="tree" aria-label="Open tabs in current workspace"><div class="fluxion-folders" role="group" aria-label="Workspace folders">${folders}</div>
   <div class="fluxion-workspace-divider" aria-hidden="true"></div>
-  <div class="fluxion-tab-scroll"><div class="fluxion-tabs" role="tree">${tabs}</div>
-  <div class="fluxion-footer"><button class="fluxion-new-tab" aria-label="New tab">${plus}<span class="fluxion-new-tab-label">New tab</span><kbd class="fluxion-keyhint" aria-hidden="true">⌘T</kbd></button></div></div>
+  <div class="fluxion-tab-scroll"><div class="fluxion-tabs" role="group">${tabs}</div>
+  <div class="fluxion-footer"><button class="fluxion-new-tab" aria-label="New tab">${plus}<span class="fluxion-new-tab-label">New tab</span><kbd class="fluxion-keyhint" aria-hidden="true">⌘T</kbd></button></div></div></div>
   <div class="fluxion-workspaces"><button class="fluxion-icon-button" aria-label="Toggle sidebar">${svg("M2 3h12v10H2ZM6 3v10")}</button><div class="fluxion-workspace-list"><button class="fluxion-workspace" aria-selected="true" aria-label="Research">${folder}</button><button class="fluxion-workspace" aria-label="Development">${svg("M6 4 2 8l4 4m4-8 4 4-4 4", "fluxion-workspace-symbol")}</button></div><button class="fluxion-add-workspace" aria-label="New workspace">${plus}</button></div>
   </div></div><main><p class="note">Sidebar layout review using Fluxion’s actual CSS. This is a visual fixture, not a running browser build.</p></main></div>
   ${url.searchParams.has("checks") ? `<script>${readFileSync(join(__dirname, "sidebar-layout-checks.js"), "utf8")}</script>` : ""}</html>`);

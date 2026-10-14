@@ -51,6 +51,12 @@ jobs:
           source_version="$(plutil -extract CFBundleShortVersionString raw "$RUNNER_TEMP/firefox-source/Firefox.app/Contents/Info.plist")"
           [[ "$source_version" == "$locked_version" ]]
 
+      - name: Compile DMG presentation tools
+        shell: bash
+        run: |
+          xcrun swiftc -typecheck fluxion/packaging/macos/dmg-background.swift
+          osacompile -o "$RUNNER_TEMP/fluxion-dmg-layout.scpt" fluxion/packaging/macos/dmg-layout.applescript
+
       - name: Build Fluxion application
         id: build
         shell: bash
@@ -506,10 +512,19 @@ jobs:
         shell: bash
         env:
           RELEASE_VERSION: ${{ inputs.version }}
+          FLUXION_DMG_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-dmg-evidence
         run: |
           ./fluxion/scripts/package-macos-dmg.sh \
             --version "$RELEASE_VERSION" \
             --output-dir "$GITHUB_WORKSPACE/dist"
+
+      - name: Preserve actual DMG install window
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-${{ inputs.version }}-dmg-evidence
+          path: ${{ runner.temp }}/fluxion-dmg-evidence
+          if-no-files-found: warn
 
       - name: Authenticate verified release archive
         shell: bash

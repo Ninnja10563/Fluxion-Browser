@@ -227,7 +227,9 @@ test("native groups and tabs form one focus-stable Flow tree", () => {
   assert.match(chrome, /FluxionTabGroups\.collapsedGroupProjection/);
   assert.match(chrome, /has-visible-active/);
   assert.match(chrome, /`\+\$\{projection\.hiddenCount\}`/);
-  assert.match(chrome, /tabsList\.setAttribute\("role", "tree"\)/);
+  assert.match(chrome, /tabTree\.setAttribute\("role", "tree"\)/);
+  assert.match(chrome, /tabsList\.setAttribute\("role", "group"\)/);
+  assert.match(chrome, /tabTree\.append\(folderTabs, workspaceDivider, tabScroll\)/);
   assert.match(chrome, /heading\.setAttribute\("role", "treeitem"\)/);
   assert.match(chrome, /groupTabs\.setAttribute\("role", "group"\)/);
   assert.match(chrome, /FluxionFlowNavigation\.groupKeyAction/);

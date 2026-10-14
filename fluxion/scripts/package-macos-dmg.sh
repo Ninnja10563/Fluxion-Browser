@@ -126,6 +126,11 @@ trap cleanup EXIT
 
 ditto "$app" "$stage/Fluxion.app"
 ln -s /Applications "$stage/Applications"
+mkdir "$stage/.background"
+xcrun swift "$fluxion_root/packaging/macos/dmg-background.swift" "$stage/.background"
+tiffutil -cathidpicheck "$stage/.background/background.png" "$stage/.background/background@2x.png" \
+  -out "$stage/.background/background.tiff"
+rm -f -- "$stage/.background/background.png" "$stage/.background/background@2x.png"
 create_attempt=1
 while (( create_attempt <= 4 )); do
   attempt_dmg="$output_dir/.${dmg_name}.attempt-${create_attempt}.dmg"
@@ -133,11 +138,9 @@ while (( create_attempt <= 4 )); do
   if hdiutil create \
       -volname "Fluxion ${version}" \
       -srcfolder "$stage" \
-      -format UDZO \
+      -format UDRW \
       -ov \
       "$attempt_dmg"; then
-    mv -f -- "$attempt_dmg" "$dmg"
-    attempt_dmg=""
     break
   fi
   rm -f -- "$attempt_dmg"
@@ -150,6 +153,16 @@ while (( create_attempt <= 4 )); do
   sleep "$((create_attempt * 2))"
   ((create_attempt += 1))
 done
+
+# Finder writes the layout into this private writable staging image. Reopen
+# the compressed read-only result to prove that layout/background survived;
+# do not modify the signed application or promote an unverified package.
+bash "$fluxion_root/scripts/style-macos-dmg.sh" configure "$attempt_dmg"
+hdiutil convert "$attempt_dmg" -format UDZO -o "$stage/final.dmg"
+bash "$fluxion_root/scripts/style-macos-dmg.sh" verify "$stage/final.dmg"
+mv -f -- "$stage/final.dmg" "$attempt_dmg"
+mv -f -- "$attempt_dmg" "$dmg"
+attempt_dmg=""
 
 (
   cd "$output_dir"

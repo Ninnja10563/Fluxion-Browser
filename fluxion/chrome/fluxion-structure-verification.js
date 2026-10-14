@@ -282,7 +282,8 @@
     await operation("unpin-role-change-preserves-unaffected-rows", new Set([fixtures[20]]),
       () => gBrowser.unpinTab(fixtures[20]), closeFocus());
     assert(rows().get(fixtures[20]).getAttribute("role") === "treeitem", "Unpinned row role is not treeitem");
-    const headings = () => new Map([...flow.querySelectorAll(".fluxion-group-heading")].map(node => [node._fluxionGroup, node]));
+    const headings = () => new Map([...flow.querySelectorAll(".fluxion-group-heading")]
+      .filter(node => node._fluxionGroup).map(node => [node._fluxionGroup, node]));
     const visible = row => row && !row.closest("[hidden]");
     async function dragFlow(source, target, after = false) {
       assert(source?.isConnected && target?.isConnected, "Drag fixture lost its source or target");
@@ -306,7 +307,9 @@
     function hierarchy() {
       const nativeTabs = [...gBrowser.tabs].filter(tab => ui.tabWorkspace(tab) === workspace);
       for (const [container, isPinned] of [[tree, false], [pinned, true]]) {
-        const expected = nativeTabs.filter(tab => tab.pinned === isPinned &&
+        const projected = isPinned ? nativeTabs : [
+          ...nativeTabs.filter(tab => tab.group), ...nativeTabs.filter(tab => !tab.group)];
+        const expected = projected.filter(tab => tab.pinned === isPinned &&
           (isPinned || !tab.group?.collapsed || tab === gBrowser.selectedTab));
         const actual = [...container.querySelectorAll(".fluxion-tab")].filter(visible).map(row => row._fluxionTab);
         assert(actual.length === expected.length && actual.every((tab, index) => tab === expected[index]),
