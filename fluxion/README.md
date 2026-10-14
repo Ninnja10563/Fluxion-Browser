@@ -6,7 +6,7 @@ viewer, developer tools, private browsing, session recovery, and WebExtension
 support, then replaces the primary tab interaction with Fluxion's compact
 **Flow** sidebar.
 
-## Unreleased sidebar refinement — October 14
+## 0.76 sidebar refinement — October 14
 
 Reviewed the owner's Zen screenshots alongside Zen's official
 [workspace](https://docs.zen-browser.app/user-manual/workspaces),
@@ -32,11 +32,13 @@ functional controls, without extra gradients, blur, or decorative panels.
 browser, at `http://127.0.0.1:4176`. Add `?checks` to reproduce 72 rendered cases
 (LTR/RTL, light/dark, expanded/floating, three densities, three widths), checking
 stationary headings during scrolling, matching row bounds, dock containment and
-reduced motion. Native macOS visual/input validation and release remain pending.
+reduced motion. The release also passed native macOS frame/input validation,
+including the stationary heading and all three New Tab row densities. Actual
+Mac captures were reviewed; see the 0.76 provenance for evidence and limits.
 
-## Unreleased performance work — October 13
+## 0.76 performance work — October 13
 
-This working-tree pass reduces background tab-scan work, retains only bounded
+This pass reduces background tab-scan work, retains only bounded
 search ranking candidates, lazily imports the Memory embedding module, and
 losslessly compresses packaged branding artwork. Sleeping-tab safeguards,
 search ordering, privacy observers and decoded artwork bytes remain intact.
@@ -67,11 +69,22 @@ python3 fluxion/scripts/benchmark-branding-storage.py
 ./fluxion/scripts/check.sh
 ```
 
-These are component benchmarks, not Speedometer results. Native macOS gates,
-real app size, resident memory, battery use and matched M3 browsing benchmarks
-remain required before publishing a release or claiming whole-browser gains.
+These are component benchmarks, not Speedometer results. Native macOS release
+gates passed. Resident memory, battery use and matched M3 browsing benchmarks
+remain unmeasured; no whole-browser speed increase is claimed.
 
 ## Current milestone
+
+**[0.76.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.76.0-preview.1)**
+refines sidebar hierarchy, fixes the workspace heading above scrolling tabs,
+and aligns tab/New Tab sizing. Background tab scans and ranking do less work;
+Memory embedding imports are lazy and branding artwork is losslessly compressed.
+The launcher recreates missing profile directories and preserves existing files.
+All 1,338 tests and mandatory native macOS gates passed. See the
+[milestone](docs/milestone-0.76.md) and
+[provenance](release/provenance/v0.76.0-preview.1.md).
+
+## Previous milestone
 
 **[0.75.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.75.0-preview.1)**
 keeps the window open with an empty workspace after its last tab closes.

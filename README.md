@@ -23,6 +23,16 @@ system confirms the change; Fluxion does not repeatedly prompt at startup.
 These are development previews, ad-hoc signed rather than Apple-notarized.
 See [macOS installation and troubleshooting](fluxion/docs/macos.md) for details.
 
+**[0.76.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.76.0-preview.1)**
+keeps the workspace heading fixed above scrolling tabs, aligns sidebar rows and
+New Tab, and reduces background scan/search work. Memory embedding code loads
+only when needed; branding artwork is losslessly compressed. Missing profile
+directories are recreated safely. All 1,338 tests and mandatory native macOS
+gates passed, with actual sidebar and fullscreen captures reviewed. Component
+benchmarks improved, but no M3 Speedometer gain is claimed. See the
+[milestone](fluxion/docs/milestone-0.76.md) and
+[provenance](fluxion/release/provenance/v0.76.0-preview.1.md).
+
 **[0.75.0-preview.1](https://github.com/Ninnja10563/Fluxion-Browser/releases/tag/v0.75.0-preview.1)**
 keeps an empty workspace open after its last tab closes. New Tab / Command-T
 opens an address draft; a tab appears only on submission, and Escape cancels.

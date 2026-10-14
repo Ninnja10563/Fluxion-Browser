@@ -15,10 +15,12 @@
 
 ## Validation
 
-Before release preparation, all 1,338 local regression tests and 72 rendered
-sidebar CSS-fixture cases passed. The fixture is not native Gecko. Native
-macOS build, browser, recovery, signing and updater gates must pass before
-publication; final run and artifact details belong in release provenance.
+All 1,338 regression tests and mandatory native macOS build, browser, recovery,
+signing and updater gates passed in run 38517152442. Native frame checks include
+the stationary heading and equal tab/New Tab bounds in all three densities.
+Actual Mac captures were reviewed. Separately, 72 rendered sidebar CSS-fixture
+cases passed; that fixture is not native Gecko. Release provenance records the
+tested source, artifact checks and an earlier unsuccessful run.
 
 Local Linux ARM64 / Node 24.19 component comparisons with 0.75 show lower
 sleeping-scan and search-ranking CPU time. The stored-resource archive fixture
