@@ -1157,6 +1157,31 @@
           sidebar: flow.dataset.state, toolbox: rect(toolbox), animationAttribute: toolbox.hasAttribute("fullscreenShouldAnimate") };
       });
       moveToPage();
+      const menuEvidence = evidence.nativeMenuBar = { updates: [] };
+      const observeMenu = event => menuEvidence.updates.push({ trusted: event.isTrusted,
+        targetIsWindow: event.target === window, shift: event.detail, time: window.performance.now() });
+      window.addEventListener("MacFullscreenMenubarRevealUpdate", observeMenu);
+      try {
+        const x = window.mozInnerScreenX + window.innerWidth / 2;
+        const menu = { x, y: window.screen.top };
+        await IOUtils.writeUTF8(PathUtils.join(driver, "pointer-menu-fullscreen-up.json"), JSON.stringify({ points: [menu] }));
+        await action("pointer-menu-fullscreen-up");
+        await wait(() => menuEvidence.updates.some(item => item.trusted && item.targetIsWindow && item.shift > 0),
+          "Real fullscreen macOS menu hover did not deliver a trusted Cocoa reveal");
+        await delay(700);
+        menuEvidence.held = { hidden: window.FullScreen.navToolboxHidden, shift: window.FullScreen._currentToolbarShift, toolbox: rect(toolbox) };
+        assert(!menuEvidence.held.hidden && menuEvidence.held.shift > 0 && menuEvidence.held.toolbox.bottom > 0,
+          "Fullscreen navigation retracted while the pointer was in the native menu bar");
+        await action("capture-fullscreen-menu-held");
+        const pagePoint = { x, y: window.mozInnerScreenY + Math.max(rect(toolbox).bottom, 100) + 160 };
+        await IOUtils.writeUTF8(PathUtils.join(driver, "pointer-menu-fullscreen-down.json"), JSON.stringify({ points: [pagePoint] }));
+        await action("pointer-menu-fullscreen-down");
+        await wait(() => window.FullScreen._currentToolbarShift == 0 && window.FullScreen.navToolboxHidden && rect(toolbox).bottom <= 1,
+          "Fullscreen menu-bar return below navigation did not retract it");
+        menuEvidence.source = "macOS CGEvent; exact active owned PID";
+        menuEvidence.menu = menu; menuEvidence.pagePoint = pagePoint;
+        report.checks.push("native-fullscreen-menu-bar-retains-navigation-until-pointer-returns-below");
+      } finally { window.removeEventListener("MacFullscreenMenubarRevealUpdate", observeMenu); }
       await action("fullscreen-location");
       await wait(() => evidence.keys.some(item => item.trusted && item.meta && item.key.toLowerCase() === "l") &&
         document.activeElement === window.gURLBar.inputField && !window.FullScreen.navToolboxHidden,

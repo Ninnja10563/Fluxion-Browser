@@ -68,6 +68,13 @@ REPLACEMENTS = [
     }
     return {
       top: top + 50,'''),
+    ('''    // a popup menu is open in chrome: don't collapse chrome''', '''    // Cocoa's fullscreen menu-bar animation may bypass DOM hover tracking.
+    // Native popup/mouse callbacks must also respect that active reveal.
+    if (fluxionFocus && this._currentToolbarShift > 0) {
+      return;
+    }
+
+    // a popup menu is open in chrome: don't collapse chrome'''),
 ]
 
 

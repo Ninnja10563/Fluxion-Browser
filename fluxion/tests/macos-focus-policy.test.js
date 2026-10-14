@@ -32,6 +32,12 @@ test("fullscreen overlay mouse tracking excludes its complete toolbar before and
   }
 });
 const focusReplacement = new Function("aNewTab", "document", "gURLBar", tabReplacements[0][1]);
+const nativeMenuAllowsHide = new Function("fluxionFocus", `${replacements[3][1]}\nreturn true;`);
+test("native fullscreen hide callbacks retain Cocoa menu reveal only in explicit Focus", () => {
+  for (const focus of [false, true]) for (const shift of [undefined, 0, "0.00", 1, "24.00"]) {
+    assert.equal(Boolean(nativeMenuAllowsHide.call({ _currentToolbarShift: shift }, focus)), !(focus && shift > 0));
+  }
+});
 
 test("automatic last-tab replacements do not claim address focus in explicit Focus, without blurring real editing", () => {
   for (const mode of ["expanded", "compact", "focus", "native-focus"]) for (const aNewTab of [false, true]) {

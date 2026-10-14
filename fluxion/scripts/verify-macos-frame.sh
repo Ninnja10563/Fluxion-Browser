@@ -75,7 +75,8 @@ for ((attempt=0; attempt<960; attempt++)); do
     capture-focus-navigation-hidden capture-focus-navigation-revealed focus-location focus-location-escape \
     capture-focus-navigation-security focus-identity-escape capture-page-light capture-page-dark capture-page-split capture-settings \
     capture-fullscreen-focus-hidden capture-fullscreen-focus-revealed fullscreen-location fullscreen-location-escape capture-fullscreen-restored \
-    pointer-menu-up pointer-menu-down close-focus-workspace; do
+    pointer-menu-up pointer-menu-down pointer-menu-fullscreen-up pointer-menu-fullscreen-down \
+    capture-fullscreen-menu-held close-focus-workspace; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       if [[ "$action" == pointer-menu-* ]]; then

@@ -1,0 +1,43 @@
+name: macOS Focus interaction diagnostics
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Check native menu-bar hover (not a release)
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check product code and regressions
+        run: ./fluxion/scripts/check.sh
+      - name: Download verified Gecko runtime
+        run: |
+          set -euo pipefail
+          node ./fluxion/scripts/download-gecko.mjs "$RUNNER_TEMP/firefox.dmg"
+          mkdir -p "$RUNNER_TEMP/firefox-volume" "$RUNNER_TEMP/firefox-source"
+          hdiutil attach "$RUNNER_TEMP/firefox.dmg" -mountpoint "$RUNNER_TEMP/firefox-volume" -nobrowse -readonly
+          ditto "$RUNNER_TEMP/firefox-volume/Firefox.app" "$RUNNER_TEMP/firefox-source/Firefox.app"
+          hdiutil detach "$RUNNER_TEMP/firefox-volume"
+          codesign --verify --deep --strict "$RUNNER_TEMP/firefox-source/Firefox.app"
+      - name: Build diagnostic application
+        env:
+          FLUXION_FIREFOX_BIN: ${{ runner.temp }}/firefox-source/Firefox.app/Contents/MacOS/firefox
+          FLUXION_TARGET_ARCH: universal2
+          FLUXION_SKIP_LAUNCH_CHECK: "1"
+        run: ./fluxion/scripts/build-macos.sh --clean
+      - name: Verify native window and fullscreen menu-bar hover
+        env:
+          FLUXION_FRAME_ARTIFACT_DIR: ${{ runner.temp }}/fluxion-focus-evidence
+        run: ./fluxion/scripts/verify-macos-frame.sh '.runtime/Fluxion.app'
+      - name: Preserve diagnostics only (never a distributable)
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: Fluxion-focus-diagnostic
+          path: ${{ runner.temp }}/fluxion-focus-evidence
+          if-no-files-found: warn

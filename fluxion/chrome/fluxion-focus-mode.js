@@ -8,7 +8,7 @@
   const cleanups = [], popups = new Set();
   const HIDE_DELAY_MS = 60;
   let enabled = false, revealed = false, pointerInside = false, pointerAbove = false, timer = 0, disposed = false;
-  let sidebarState = null, nativeFocus = false;
+  let sidebarState = null, nativeFocus = false, nativeMenuBar = false;
   const edge = document.createElementNS("http://www.w3.org/1999/xhtml", "div");
   edge.id = "fluxion-navigation-edge";
   edge.setAttribute("aria-hidden", "true");
@@ -70,7 +70,7 @@
   }
   function cancel() { if (timer) window.clearTimeout(timer); timer = 0; }
   function keepOpen() {
-    return pointerInside || pointerAbove || toolbox.contains(document.activeElement) || popups.size > 0 ||
+    return pointerInside || pointerAbove || nativeMenuBar || toolbox.contains(document.activeElement) || popups.size > 0 ||
       Boolean(window.gURLBar?.view?.isOpen) || root.hasAttribute("customizing");
   }
   function paint(value) {
@@ -124,7 +124,7 @@
     sidebarState = flow.dataset.state;
     const nextNativeFocus = Boolean(window.fullScreen && sidebarState === "focus" &&
       !document.fullscreenElement && !root.hasAttribute("inDOMFullscreen") && !root.hasAttribute("customizing"));
-    if (nativeFocus !== nextNativeFocus) { pointerAbove = false; pointerInside = false; }
+    if (nativeFocus !== nextNativeFocus) { pointerAbove = false; pointerInside = false; nativeMenuBar = false; }
     nativeFocus = nextNativeFocus;
     root.toggleAttribute("data-fluxion-native-focus", nativeFocus);
     // New Tab automatically focuses the location field. An explicit collapse
@@ -154,6 +154,18 @@
   }
   const trustedChrome = event => event.isTrusted === true &&
     event.target?.ownerDocument === document && event.target?.nodePrincipal?.isSystemPrincipal === true;
+  // Cocoa can reveal fullscreen navigation without a DOM pointerenter (the
+  // menu bar is outside our window). Own that reveal explicitly, including
+  // its animation, rather than letting the shown-notification timer hide it.
+  on(window, "MacFullscreenMenubarRevealUpdate", event => {
+    if (!nativeFocus || !event.isTrusted || event.target !== window ||
+        !Number.isFinite(event.detail) || event.detail < 0) return;
+    nativeMenuBar = event.detail > 0;
+    if (nativeMenuBar) { pointerAbove = true; cancel(); }
+    // Finishing the native animation isn't a downward pointer departure.
+    // Retain pointerAbove until the pointer actually returns below the bar.
+    else scheduleHide();
+  });
   function enterNavigation(event) {
     if (!trustedChrome(event)) return;
     pointerInside = true; pointerAbove = false; cancel(); reveal();
@@ -207,7 +219,7 @@
   }, true);
   on(window, "blur", event => {
     if (event.target !== window) return;
-    pointerInside = false; pointerAbove = false; scheduleHide();
+    pointerInside = false; pointerAbove = false; nativeMenuBar = false; scheduleHide();
   });
   const observer = new window.MutationObserver(refresh);
   observer.observe(flow, { attributes: true, attributeFilter: ["data-state"] });

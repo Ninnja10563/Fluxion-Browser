@@ -178,6 +178,50 @@ test("upward retention uses the revealed toolbar band even during the first reve
   f.emit(f.window, "pointermove", f.page, { clientY: 44 }); f.advance(60);
   assert.equal(f.window.FluxionFocusMode.state().revealed, false);
 });
+test("Cocoa menu-bar reveal without DOM hover survives native notifications and retracts only after downward return", () => {
+  const f = fixture(), calls = [];
+  f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+  f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+  f.enterFocus(); f.flush(); calls.length = 0;
+  f.Services.obs.notifyObservers(f.toolbox, "fullscreen-nav-toolbox", "shown");
+  const shift = detail => f.emit(f.window, "MacFullscreenMenubarRevealUpdate", f.window, { detail });
+  shift(1); f.advance(1000);
+  assert.equal(calls.length, 0, "Cocoa reveal needs no preceding pointerenter");
+  shift(24); f.emit(f.toolbox, "focusout"); f.advance(1000);
+  assert.equal(calls.length, 0);
+  // A downward return can precede the last native animation frame.
+  f.emit(f.window, "pointermove", f.page, { clientY: 100 }); f.advance(60);
+  assert.equal(calls.length, 0, "the menu animation still owns the toolbar");
+  shift(0); f.advance(60);
+  assert.deepEqual(calls, [true]);
+  calls.length = 0;
+  shift(24); shift(0); f.advance(1000);
+  assert.equal(calls.length, 0, "animation completion alone isn't a downward exit");
+  f.emit(f.window, "pointermove", f.page, { clientY: 100 }); f.advance(60);
+  assert.deepEqual(calls, [true]);
+});
+test("Cocoa reveal rejects spoofed or invalid events and releases ownership across fullscreen modes", () => {
+  for (const extra of [{ isTrusted: false, detail: 24 }, { detail: NaN }, { detail: Infinity },
+    { detail: -1 }, { detail: "24" }, { detail: 24, target: {} }]) {
+    const f = fixture(), calls = [];
+    f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+    f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+    f.enterFocus(); f.flush(); calls.length = 0;
+    f.Services.obs.notifyObservers(f.toolbox, "fullscreen-nav-toolbox", "shown");
+    f.emit(f.window, "MacFullscreenMenubarRevealUpdate", f.window, extra); f.advance(60);
+    assert.deepEqual(calls, [true]);
+  }
+  for (const attr of ["inDOMFullscreen", "customizing"]) {
+    const f = fixture(), calls = [];
+    f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+    f.window.FullScreen = { hideNavToolbox(animate) { calls.push(animate); } };
+    f.enterFocus(); f.flush(); calls.length = 0;
+    f.emit(f.window, "MacFullscreenMenubarRevealUpdate", f.window, { detail: 24 });
+    f.root.setAttribute(attr, "true"); f.window.FluxionFocusMode.refresh();
+    f.root.removeAttribute(attr); f.window.FluxionFocusMode.refresh(); f.advance(60);
+    assert.deepEqual(calls, [true], `${attr} clears native menu ownership`);
+  }
+});
 test("DOM fullscreen and customization release prior native upward-pointer ownership", () => {
   for (const mode of ["inDOMFullscreen", "customizing"]) {
     const f = fixture(), calls = [];
