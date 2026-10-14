@@ -50,10 +50,10 @@ test("fullscreen hover gate rejects page motion as well as viewport resizing", (
 });
 test("computed Focus timing gate rejects Gecko's former 800ms animation and motion-disabled regressions", () => {
   for (const native of [false, true]) {
-    const toolbox = { style: { transitionProperty: native ? "margin-top" : "transform, opacity", transitionDuration: native ? "0.12s" : "0.12s, 0.1s" } };
+    const toolbox = { style: { transitionProperty: native ? "margin-top" : "transform, opacity", transitionDuration: native ? "0.2s" : "0.2s, 0.18s" } };
     api.navigationMotionEvidence(toolbox, native, false);
     toolbox.style.transitionDuration = "0.8s";
-    assert.throws(() => api.navigationMotionEvidence(toolbox, native, false), /120ms/);
+    assert.throws(() => api.navigationMotionEvidence(toolbox, native, false), /200ms/);
     assert.throws(() => api.navigationMotionEvidence(toolbox, native, true), /Reduced motion/);
     toolbox.style.transitionProperty = "none"; toolbox.style.transitionDuration = "0s";
     api.navigationMotionEvidence(toolbox, native, true);

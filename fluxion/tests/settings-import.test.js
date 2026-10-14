@@ -1,9 +1,9 @@
 "use strict";
 const test = require("node:test"), assert = require("node:assert/strict");
 const settingsWindow = require("./settings-window-fixture.js");
-function fixture(browserImport) {
+function fixture(browserImport, importDiscovery) {
   const clipboard = [];
-  const h = settingsWindow("about:preferences", [], { browserImport, clipboard });
+  const h = settingsWindow("about:preferences", [], { browserImport, importDiscovery, clipboard });
   return { ...h, clipboard, get: id => h.document.getElementById(`fluxion-${id}`) };
 }
 test("Import data has explicit Zen/Firefox export guidance, Chrome wizard and no startup imports", async () => {
@@ -11,6 +11,7 @@ test("Import data has explicit Zen/Firefox export guidance, Chrome wizard and no
   const h = fixture({ run: async (...args) => { calls.push(args); return { state: "wizard" }; } });
   assert.deepEqual(h.errors, []); assert.deepEqual(calls, []);
   h.choose("Import data");
+  await Promise.resolve(); await Promise.resolve();
   assert.equal(h.section(), "import");
   assert.equal(h.get("import-browser").disabled, true);
   assert.match(h.get("import-source-help").textContent, /Zen.*HTML.*CSV/);
@@ -34,6 +35,40 @@ test("import action prevents duplicate activation while awaiting a file and acce
   h.get("import-tab-links").value = "https://example.com\nhttps://other.example";
   await h.get("import-tabs").dispatchEvent({ type: "click" });
   assert.deepEqual(calls, ["https://example.com\nhttps://other.example"]);
+});
+test("Import settings automatically detects profiles once, refreshes explicitly, and transfers only on click", async () => {
+  const calls = [];
+  const h = fixture({}, {
+    discover: async () => { calls.push("detect"); return { profiles: [
+      { id: "1", source: "zen", name: "Work", kind: "backup" },
+      { id: "2", source: "chrome", name: "Personal", kind: "native" },
+    ], warnings: [] }; },
+    transfer: async id => { calls.push(["transfer", id]); return { state: "wizard" }; },
+  });
+  assert.deepEqual(calls, []);
+  h.choose("Import data"); await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(calls, ["detect"]);
+  assert.equal(h.get("import-profile").children.length, 2);
+  assert.equal(h.get("import-detected").disabled, false);
+  assert.match(h.get("import-detected").textContent, /saved bookmarks/);
+  h.choose("General"); h.choose("Import data");
+  assert.deepEqual(calls, ["detect"]);
+  h.get("import-profile").value = "2";
+  await h.get("import-profile").dispatchEvent({ type: "change" });
+  assert.match(h.get("import-detected").textContent, /Choose browser data/);
+  await h.get("import-detected").dispatchEvent({ type: "click" });
+  assert.deepEqual(calls, ["detect", ["transfer", "2"]]);
+  await h.get("import-detect").dispatchEvent({ type: "click" });
+  assert.equal(calls.at(-1), "detect");
+});
+test("profile detection failure remains retryable and does not disable export imports", async () => {
+  const h = fixture({}, { discover: async () => { throw Error("private path"); } });
+  h.choose("Import data"); await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.get("import-detected").disabled, true);
+  assert.equal(h.get("import-bookmarks").disabled, false);
+  assert.equal(h.get("import-detect").disabled, false);
+  assert.match(h.get("import-profile-status").textContent, /unavailable/);
+  assert.doesNotMatch(h.get("import-profile-status").textContent, /private path/);
 });
 test("startup diagnostic copy is explicit and excludes extra private fields", async () => {
   const h = fixture(); assert.deepEqual(h.clipboard, []);

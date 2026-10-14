@@ -1,5 +1,5 @@
-// User-initiated transfers only. No profile discovery, background reads, or
-// copying of cookies, keys, extensions, or another browser's profile files.
+// Export-file transfers and native wizard routing. Profile discovery lives in
+// FluxionImportDiscovery; neither path copies entire profiles or runs at startup.
 export const IMPORT_FILE_LIMIT = 32 * 1024 * 1024;
 export const IMPORT_TAB_LIMIT = 100;
 export const IMPORT_SOURCES = Object.freeze([

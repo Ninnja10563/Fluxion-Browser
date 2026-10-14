@@ -91,6 +91,8 @@ node --check chrome/fluxion-new-tab-verification.js
 node --check scripts/new-tab-fixture.mjs
 node --check chrome/fluxion-branding-upgrade-verification.js
 node --check modules/FluxionChromeCache.sys.mjs
+node --check modules/FluxionBrowserImport.sys.mjs
+node --check modules/FluxionImportDiscovery.sys.mjs
 node --check scripts/duplicate-tabs-fixture.mjs
 node --check chrome/core/tab-groups.js
 node --check chrome/core/split-views.js

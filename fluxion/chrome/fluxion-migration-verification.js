@@ -170,6 +170,48 @@
     await wait(() => dialog.closed, "Native import Done did not close the wizard");
     report.checks.push("real-native-file-picker-html-import", "unicode-titles-and-imported-folder-preserved", "existing-bookmark-guid-url-title-parent-retained");
     report.imported = { first: first.guid, second: second.guid, folder: folder.guid, retained: existing.guid };
+    stage("detecting-isolated-browser-profile");
+    const { BookmarkJSONUtils } = ChromeUtils.importESModule("resource://gre/modules/BookmarkJSONUtils.sys.mjs");
+    const { forWindow } = ChromeUtils.importESModule("resource://fluxion/modules/FluxionImportDiscovery.sys.mjs");
+    const sourceRoot = PathUtils.join(driver, "detected-browser");
+    const backupRoot = PathUtils.join(sourceRoot, "Profiles", "fixture", "bookmarkbackups");
+    await IOUtils.makeDirectory(backupRoot, { createAncestors: true });
+    const registry = "[Profile0]\nName=Detected café profile\nIsRelative=1\nPath=Profiles/fixture\n";
+    await IOUtils.writeUTF8(PathUtils.join(sourceRoot, "profiles.ini"), registry);
+    const sourceFolder = await PlacesUtils.bookmarks.insert({ parentGuid: PlacesUtils.bookmarks.toolbarGuid,
+      type: PlacesUtils.bookmarks.TYPE_FOLDER, title: "Detected source folder" });
+    const sourceURL = "https://fluxion-import-fixture.invalid/detected-backup";
+    await PlacesUtils.bookmarks.insert({ parentGuid: sourceFolder.guid, title: "Detected café bookmark", url: sourceURL });
+    const backup = PathUtils.join(backupRoot, "bookmarks-2026-10-15_1_fixture.jsonlz4");
+    await BookmarkJSONUtils.exportToFile(backup, { compress: true });
+    const backupBefore = await IOUtils.read(backup);
+    await PlacesUtils.bookmarks.remove(sourceFolder.guid);
+    let consent = false, prompts = 0;
+    // Only consent is injected here; actual metadata discovery, filesystem
+    // validation and Gecko's additive JSONLZ4 import run in the packaged app.
+    // Native UI consent/Cancel is independently covered by the wizard above.
+    const importer = forWindow(window, { profileRoots: [["zen", sourceRoot]],
+      confirm: () => { prompts++; return consent; } });
+    const detected = await importer.discover();
+    const selected = detected.profiles.find(p => p.source === "zen" && p.name === "Detected café profile");
+    assert(selected && !JSON.stringify(detected.profiles).includes(sourceRoot), "Native profile metadata detection failed or exposed a path");
+    assert(!await PlacesUtils.bookmarks.fetch({ url: sourceURL }), "Discovery imported bookmarks without confirmation");
+    assert((await importer.transfer(selected.id)).state === "cancelled", "Profile import ignored cancellation");
+    assert(!await PlacesUtils.bookmarks.fetch({ url: sourceURL }), "Cancelled profile import added data");
+    consent = true;
+    const importedBackup = await importer.transfer(selected.id);
+    const detectedBookmark = await PlacesUtils.bookmarks.fetch({ url: sourceURL });
+    const detectedFolder = detectedBookmark && await PlacesUtils.bookmarks.fetch(detectedBookmark.parentGuid);
+    assert(importedBackup.state === "done" && importedBackup.added > 0 && prompts === 2 &&
+      detectedBookmark?.title === "Detected café bookmark" && detectedFolder?.title === "Detected source folder",
+    "Detected profile backup did not preserve its Unicode title and folder");
+    assert(await unchanged(), "Detected profile import replaced an existing bookmark");
+    const backupAfter = await IOUtils.read(backup);
+    assert(backupBefore.length === backupAfter.length && backupBefore.every((byte, index) => byte === backupAfter[index]) &&
+      await IOUtils.readUTF8(PathUtils.join(sourceRoot, "profiles.ini")) === registry,
+    "Detected profile import changed its source files");
+    report.checks.push("native-profile-registry-discovery-with-opaque-selection", "detected-backup-cancel-keeps-data-unchanged",
+      "native-jsonlz4-profile-import-preserves-folders-and-existing-bookmarks", "source-profile-files-byte-for-byte-unchanged");
   }
   run().then(() => Services.prefs.setStringPref(`${prefix}.health`, "native-wizard-cancel-and-html-import-verified"))
     .catch(error => { Services.prefs.setStringPref(`${prefix}.error`, `${error.message}\n${error.stack || ""}`); Cu.reportError(error); })

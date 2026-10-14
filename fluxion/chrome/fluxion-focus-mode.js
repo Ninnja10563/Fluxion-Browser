@@ -30,7 +30,7 @@
     /* Retain Gecko's native fullscreen geometry and popup guards, but not its
        800ms collapse animation. Only explicitly hidden Flow opts into this. */
     :root[data-fluxion-native-focus] #navigator-toolbox[fullscreenShouldAnimate] {
-      transition: margin-top 120ms cubic-bezier(.2,.7,.2,1) !important;
+      transition: margin-top 200ms cubic-bezier(.2,.7,.2,1) !important;
     }
     :root[data-fluxion-focus-mode] #fluxion-navigation-edge {
       display: block; position: fixed; inset: 0 0 auto; height: 4px;
@@ -40,7 +40,7 @@
       position: fixed !important; inset: 0 0 auto !important; width: auto !important;
       z-index: 19; opacity: 0; pointer-events: none;
       transform: translateY(calc(-100% - 2px));
-      transition: transform 120ms cubic-bezier(.2,.7,.2,1), opacity 100ms ease;
+      transition: transform 200ms cubic-bezier(.2,.7,.2,1), opacity 180ms ease;
     }
     :root[data-fluxion-focus-mode][data-fluxion-navigation-revealed="true"] #navigator-toolbox {
       opacity: 1; pointer-events: auto; transform: translateY(0);
@@ -133,7 +133,18 @@
     if (enteringFocus && !root.hasAttribute("inDOMFullscreen") &&
         document.activeElement === window.gURLBar?.inputField && popups.size === 0) {
       window.gURLBar.view?.close();
-      window.gBrowser.selectedBrowser.focus();
+      const empty = window.FluxionEmptyWorkspace?.isPlaceholder(window.gBrowser.selectedTab);
+      if (!empty) window.gBrowser.selectedBrowser.focus();
+      if (empty || document.activeElement === window.gURLBar.inputField) {
+        // New windows can start on an empty workspace. Its backing browser
+        // is visibility:hidden and cannot accept focus, so using it leaves
+        // the address field focused and keepOpen() pins the bar indefinitely.
+        // The same fallback covers a new remote browser not yet focusable at
+        // first paint. Flow is a real keyboard target even when collapsed.
+        const wasRevealed = flow.dataset.revealed === "true";
+        flow.focus({ preventScroll: true });
+        if (!wasRevealed) window.FluxionUI?.hideSidebar({ force: true });
+      }
     }
     if (enteringFocus && nativeFocus && popups.size === 0) {
       // Browser fullscreen owns its native negative-margin/menu-bar reveal.
@@ -232,7 +243,9 @@
   observer.observe(root, { attributes: true, attributeFilter: ["inFullscreen", "inDOMFullscreen", "customizing"] });
   const urlbar = document.getElementById("urlbar");
   const addressObserver = new window.MutationObserver(() => {
-    if (urlbar.hasAttribute("open") || urlbar.hasAttribute("focused")) reveal({ immediate: true });
+    // Gecko speculatively sets `focused` before a new window's first paint.
+    // Only actual keyboard ownership or an open suggestion view pins the bar.
+    if (window.gURLBar?.view?.isOpen || toolbox.contains(document.activeElement)) reveal({ immediate: true });
     else scheduleHide();
   });
   if (urlbar) addressObserver.observe(urlbar, { attributes: true, attributeFilter: ["open", "focused"] });

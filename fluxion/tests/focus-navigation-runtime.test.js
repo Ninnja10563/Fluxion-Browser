@@ -2,7 +2,7 @@
 const test = require("node:test"), assert = require("node:assert/strict");
 const fs = require("node:fs"), path = require("node:path"), vm = require("node:vm");
 const source = fs.readFileSync(path.join(__dirname, "../chrome/fluxion-focus-mode.js"), "utf8");
-function fixture() {
+function fixture({ initialState = "expanded", placeholder = false, addressFocused = false } = {}) {
   const timers = new Map(), deadlines = new Map(), observers = [], listeners = new Map(), topics = new Map();
   let sequence = 0, geometryReads = 0, now = 0;
   const document = { activeElement: null };
@@ -15,6 +15,7 @@ function fixture() {
       }, removeEventListener(type, fn) { const map = listeners.get(this); map?.set(type, (map.get(type) || []).filter(f => f !== fn)); },
       append(...nodes) { for (const child of nodes) { child.parent = this; this.children.push(child); } },
       remove() { this.removed = true; },
+      focus() { document.activeElement = this; },
       contains(target) { for (let current = target; current; current = current.parent) if (current === this) return true; return false; },
       hasAttribute: name => attrs.has(name), getAttribute: name => attrs.get(name) ?? null,
       setAttribute: (name, value) => attrs.set(name, String(value)), removeAttribute: name => attrs.delete(name),
@@ -25,14 +26,16 @@ function fixture() {
   }
   const root = node("root"), toolbox = node("navigator-toolbox", root), flow = node("fluxion-flow", root);
   const toggler = node("fullscr-toggler", root);
-  const page = node("page"), input = node("urlbar-input", toolbox);
-  flow.dataset.state = "expanded"; document.activeElement = page;
+  const page = node("page"), urlbar = node("urlbar", toolbox), input = node("urlbar-input", urlbar);
+  flow.dataset.state = initialState; document.activeElement = addressFocused ? input : page;
   document.documentElement = root;
-  document.getElementById = id => ({ "navigator-toolbox": toolbox, "fluxion-flow": flow, "fullscr-toggler": toggler })[id];
+  document.getElementById = id => ({ "navigator-toolbox": toolbox, "fluxion-flow": flow, "fullscr-toggler": toggler, urlbar })[id];
   document.createElementNS = (_, name) => node("", null, name);
   document.addEventListener = toolbox.addEventListener; document.removeEventListener = toolbox.removeEventListener;
   const window = { document, gURLBar: { inputField: input, value: "", view: { isOpen: false, close() { this.isOpen = false; } } },
-    gBrowser: { selectedBrowser: { focus() { document.activeElement = page; } } }, FluxionChromeLayout: { refresh() {} },
+    gBrowser: { selectedTab: {}, selectedBrowser: { focus() { if (!placeholder) document.activeElement = page; } } },
+    FluxionEmptyWorkspace: { isPlaceholder: () => placeholder },
+    FluxionUI: { hideSidebar() { flow.dataset.revealed = "false"; } }, FluxionChromeLayout: { refresh() {} },
     setTimeout(fn, delay = 0) { const id = ++sequence; timers.set(id, fn); deadlines.set(id, now + delay); return id; },
     clearTimeout(id) { timers.delete(id); deadlines.delete(id); },
     addEventListener: toolbox.addEventListener, removeEventListener: toolbox.removeEventListener,
@@ -50,7 +53,7 @@ function fixture() {
     for (const fn of [...(listeners.get(owner)?.get(type) || [])]) fn(event);
     return event;
   };
-  return { window, document, root, toolbox, flow, toggler, input, page, edge, timers, observers, topics, Services, node, emit,
+  return { window, document, root, toolbox, flow, toggler, input, urlbar, page, edge, timers, observers, topics, Services, node, emit,
     get reads() { return geometryReads; },
     enterFocus() { flow.dataset.state = "focus"; window.FluxionFocusMode.refresh(); },
     flush() { const pending = [...timers.values()]; timers.clear(); deadlines.clear(); pending.forEach(fn => fn()); },
@@ -70,7 +73,7 @@ test("top-edge reveal hides after leaving, without rewriting sidebar mode or mov
   assert.equal(f.window.FluxionFocusMode.state().revealed, true, "crossing edge-to-toolbar gap must retain reveal");
   f.emit(f.toolbox, "pointerleave"); f.flush();
   assert.equal(f.window.FluxionFocusMode.state().revealed, false);
-  assert.equal(f.flow.dataset.state, "focus"); assert.equal(f.input.parent, f.toolbox);
+  assert.equal(f.flow.dataset.state, "focus"); assert.equal(f.input.parent, f.urlbar);
 });
 test("navigation departure uses one short grace period, cancels on reentry and preserves native focus ownership", () => {
   for (const fullscreen of [false, true]) {
@@ -104,8 +107,8 @@ test("navigation departure uses one short grace period, cancels on reentry and p
 });
 test("Focus motion is short and scoped; reduced motion overrides both native and composited paths", () => {
   const f = fixture(), css = f.root.children.find(n => n.id === "fluxion-focus-navigation-style").textContent;
-  assert.match(css, /:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\]\s*\{\s*transition: margin-top 120ms cubic-bezier\(\.2,\.7,\.2,1\) !important;/);
-  assert.match(css, /transition: transform 120ms cubic-bezier\(\.2,\.7,\.2,1\), opacity 100ms ease;/);
+  assert.match(css, /:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\]\s*\{\s*transition: margin-top 200ms cubic-bezier\(\.2,\.7,\.2,1\) !important;/);
+  assert.match(css, /transition: transform 200ms cubic-bezier\(\.2,\.7,\.2,1\), opacity 180ms ease;/);
   assert.match(css, /:root\[data-fluxion-no-motion\] #navigator-toolbox,\s*:root\[data-fluxion-no-motion\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/,
     "browser motion-off rule must match the native override specificity");
   assert.match(css, /@media \(prefers-reduced-motion: reduce\)\s*\{\s*:root\[data-fluxion-focus-mode\] #navigator-toolbox,\s*:root\[data-fluxion-native-focus\] #navigator-toolbox\[fullscreenShouldAnimate\] \{ transition: none !important; \}/);
@@ -354,6 +357,57 @@ test("entering Focus releases inherited New Tab address focus once without losin
   f.window.FluxionFocusMode.refresh();
   assert.equal(f.document.activeElement, f.input, "Repeated refresh must not steal an explicit native focus request");
   assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+});
+test("a new hidden-sidebar window releases inherited address focus when its backing page is hidden", () => {
+  const f = fixture({ initialState: "focus", placeholder: true, addressFocused: true });
+  assert.equal(f.document.activeElement, f.flow, "a hidden browser cannot receive keyboard focus");
+  assert.equal(f.flow.dataset.revealed, "false", "releasing address focus must not open the sidebar");
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  f.emit(f.edge, "pointerenter"); f.emit(f.toolbox, "pointerleave"); f.advance(60);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false, "hover can still retract in the empty window");
+  f.document.activeElement = f.input; f.emit(f.toolbox, "focusin", f.input);
+  f.window.FluxionFocusMode.refresh(); f.emit(f.toolbox, "pointerleave"); f.advance(60);
+  assert.equal(f.document.activeElement, f.input, "later Cmd-L/Cmd-T still owns address focus");
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+});
+test("new windows with persistent sidebars retain native initial address focus", () => {
+  for (const initialState of ["expanded", "compact"]) {
+    const f = fixture({ initialState, placeholder: true, addressFocused: true });
+    assert.equal(f.document.activeElement, f.input);
+    assert.equal(f.window.FluxionFocusMode.state().enabled, false);
+  }
+});
+test("speculative startup address attributes cannot pin navigation without actual keyboard or suggestion ownership", () => {
+  const f = fixture({ initialState: "focus" });
+  f.urlbar.setAttribute("focused", "true");
+  f.observers[1].fn(); f.advance(60);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+  assert.equal(f.root.hasAttribute("data-fluxion-navigation-pinned"), false);
+  f.window.gURLBar.view.isOpen = true;
+  f.observers[1].fn();
+  assert.equal(f.window.FluxionFocusMode.state().revealed, true);
+  f.window.gURLBar.view.isOpen = false;
+  f.observers[1].fn(); f.advance(60);
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});
+test("collapse falls back safely when a new remote page cannot yet accept focus", () => {
+  const f = fixture({ addressFocused: true });
+  f.window.gBrowser.selectedBrowser.focus = () => {};
+  f.enterFocus();
+  assert.equal(f.document.activeElement, f.flow);
+  assert.equal(f.flow.dataset.revealed, "false");
+  assert.equal(f.window.FluxionFocusMode.state().revealed, false);
+});
+test("empty-workspace collapse releases address focus in normal and native fullscreen without overriding popups", () => {
+  for (const popup of [false, true]) {
+    const f = fixture({ placeholder: true, addressFocused: true }), calls = [];
+    f.window.fullScreen = true; f.root.setAttribute("inFullscreen", "true");
+    f.window.FullScreen = { hideNavToolbox() { calls.push(f.document.activeElement); } };
+    if (popup) f.emit(f.document, "popupshowing", f.node("identity-popup", null, "panel"));
+    f.enterFocus();
+    assert.equal(f.document.activeElement, popup ? f.input : f.flow);
+    assert.deepEqual(calls, popup ? [] : [f.flow]);
+  }
 });
 test("entering Focus cannot steal keyboard focus from a live native security popup", () => {
   for (const fullscreen of [false, true]) {

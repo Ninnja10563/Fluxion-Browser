@@ -6,7 +6,7 @@ const path = require("node:path");
 const vm = require("node:vm");
 require("../chrome/core/settings.js");
 
-function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updateCoordinator, ai, sidebarWidth, colors, permissions, prompt, shellService, policies, browserImport, clipboard } = {}) {
+function settingsFixture(initialURL = "about:preferences", saved = [], { sharedPrefs, memory, updateCoordinator, ai, sidebarWidth, colors, permissions, prompt, shellService, policies, browserImport, importDiscovery, clipboard } = {}) {
   const preferences = new Map(saved);
   const timers = new Map(); let timerId = 0;
   const elements = [];
@@ -95,6 +95,7 @@ function settingsFixture(initialURL = "about:preferences", saved = [], { sharedP
     window, gBrowser,
     ChromeUtils: { importESModule: name => name.includes("FluxionUpdateCoordinator") ? { FluxionUpdateCoordinator: updateCoordinator }
       : name.includes("FluxionBrowserImport") ? { forWindow: () => browserImport }
+      : name.includes("FluxionImportDiscovery") ? { forWindow: () => importDiscovery || { discover: async () => ({ profiles: [], warnings: [] }) } }
       : name.includes("ShellService.sys.mjs") ? { ShellService: shellService }
       : { SearchService: { init: async () => {}, getVisibleEngines: async () => [] } } },
     Services: { prefs, prompt, policies, env: { get: () => "" }, appinfo: { OS: "Darwin", platformVersion: "155.0.1", platformBuildID: "20260901000000" } },

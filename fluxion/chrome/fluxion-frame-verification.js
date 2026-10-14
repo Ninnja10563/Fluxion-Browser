@@ -283,8 +283,8 @@
     const durations = style.transitionDuration.split(",").map(value => parseFloat(value));
     const property = native ? "margin-top" : "transform", index = properties.indexOf(property);
     if (reduced) assert(durations.every(value => value === 0), "Reduced motion retained navigation animation");
-    else assert(index >= 0 && Math.abs(durations[index % durations.length] - .12) < .001,
-      `Focus navigation did not use its scoped 120ms ${property} transition: ${style.transitionDuration}`);
+    else assert(index >= 0 && Math.abs(durations[index % durations.length] - .2) < .001,
+      `Focus navigation did not use its scoped 200ms ${property} transition: ${style.transitionDuration}`);
     return { native, reduced, properties, durations };
   }
   async function verifyNavigationMotion(toolbox, native, retract = null) {
@@ -979,6 +979,41 @@
     report.checks.push("settings-and-library-share-the-native-page-frame-boundary");
     report.checks.push("actual-light-dark-webpage-and-settings-captures");
     await nativeFullscreen();
+    await newWindowNavigation();
+  }
+  async function newWindowNavigation() {
+    stage("new-window-navigation-ownership");
+    const previous = document.getElementById("fluxion-flow").dataset.state;
+    const evidence = [];
+    try {
+      for (const state of ["focus", "expanded"]) {
+        window.FluxionUI.setSidebarState(state);
+        const child = window.OpenBrowserWindow();
+        try {
+          await wait(() => child.FluxionFocusMode && child.FluxionUI && child.gBrowserInit.delayedStartupFinished,
+            "New window did not initialize its navigation controller");
+          await delay(400);
+          const rail = child.document.getElementById("fluxion-flow");
+          const toolbox = child.document.getElementById("navigator-toolbox");
+          assert(rail.dataset.state === state, "New window did not inherit its saved sidebar mode");
+          if (state === "focus") {
+            await wait(() => !child.FluxionFocusMode.state().revealed && toolbox.getBoundingClientRect().bottom <= 1,
+              "New hidden-sidebar window left its navigation visible without user input");
+            assert(child.document.activeElement !== child.gURLBar.inputField, "New window retained implicit address focus");
+            child.gURLBar.select();
+            await wait(() => child.FluxionFocusMode.state().revealed && child.document.activeElement === child.gURLBar.inputField,
+              "New-window correction blocked later explicit address focus");
+          } else assert(!child.FluxionFocusMode.state().enabled && toolbox.getBoundingClientRect().bottom > 0,
+            "New expanded-sidebar window hid persistent navigation");
+          evidence.push({ sidebar: state, navigation: state === "focus" ? "hidden-before-explicit-focus" : "persistent" });
+        } finally { child.close(); await wait(() => child.closed, "Fixture window did not close"); }
+      }
+    } finally {
+      window.FluxionUI.setSidebarState(previous);
+      window.focus();
+    }
+    report.newWindows = evidence;
+    report.checks.push("new-window-inherits-hidden-or-persistent-navigation-without-stale-address-ownership");
   }
   async function nativeFullscreen() {
     stage("native-browser-fullscreen-focus-and-corners");

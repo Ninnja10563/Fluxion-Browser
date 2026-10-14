@@ -5,8 +5,8 @@
   if (!window.FluxionUI || window.document.getElementById("fluxion-settings")) return;
   const { document } = window;
   const HTML = "http://www.w3.org/1999/xhtml";
-  const PRODUCT_VERSION = "0.78.0";
-  const PRODUCT_RELEASE = "0.78.0-preview.1";
+  const PRODUCT_VERSION = "0.79.0";
+  const PRODUCT_RELEASE = "0.79.0-preview.1";
   const browser = document.getElementById("browser");
   const contentDeck = document.getElementById("tabbrowser-tabbox");
   if (!browser || !contentDeck) return;
@@ -124,7 +124,7 @@
     .fluxion-settings-note { min-height: 18px; margin-top: 12px; color: var(--fluxion-muted); font-size: 12px; }
     .fluxion-settings-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
     .fluxion-settings-actions > .fluxion-settings-button { width: 100%; justify-self: stretch; }
-    .fluxion-import-tabs { display: grid; gap: 8px; min-width: 0; }
+    .fluxion-import-tabs, .fluxion-import-profiles { display: grid; gap: 8px; min-width: 0; }
     .fluxion-import-tabs textarea { box-sizing: border-box; width: 100%; min-height: 100px; resize: vertical;
       color: var(--fluxion-ink); background: var(--fluxion-bg); border: 1px solid var(--fluxion-line);
       border-radius: 4px; padding: 8px; font: inherit; }
@@ -313,6 +313,7 @@
     if (id === "permissions") renderPermissions();
     if (id === "workspaces") renderWorkspaces();
     if (id === "general") refreshDefaultBrowser();
+    if (id === "import") void findImportProfiles();
   }
 
   function section(id, title, description) {
@@ -575,8 +576,9 @@
   });
   addBrowserPreferences(general, "general");
 
-  const importPanel = section("import", "Import data", "Bring your bookmarks, passwords and tab links into Fluxion. Your existing data stays in place; nothing is read until you choose an action.");
+  const importPanel = section("import", "Import data", "Find local browser profiles and bring your data into Fluxion. Opening this page checks profile names and locations only. Nothing is imported until you choose an action.");
   let browserImport = null, importPending = false, importDisposed = false;
+  let discovery = null, discoveryStarted = false, discovering = false, discoveredProfiles = [];
   const importService = () => {
     if (!browserImport) browserImport = ChromeUtils.importESModule("resource://fluxion/modules/FluxionBrowserImport.sys.mjs").forWindow(window);
     return browserImport;
@@ -595,8 +597,51 @@
   sourceHelp.setAttribute("aria-live", "polite");
   importPanel.appendChild(sourceHelp);
   const importButtons = [];
+  const profileChoice = select([], "", () => syncImportSource());
+  profileChoice.classList.add("fluxion-settings-control");
+  profileChoice.id = "fluxion-import-profile";
+  profileChoice.setAttribute("aria-label", "Detected browser profile");
+  const profileStatus = create("p", "fluxion-settings-intro", "Profiles are detected when you open Import data.");
+  profileStatus.id = "fluxion-import-profile-status";
+  profileStatus.setAttribute("role", "status");
+  const profileControls = create("div", "fluxion-import-profiles");
+  const detectButton = create("button", "fluxion-settings-button", "Find profiles again");
+  detectButton.type = "button"; detectButton.id = "fluxion-import-detect";
+  detectButton.addEventListener("click", () => findImportProfiles(true));
+  const profileButton = create("button", "fluxion-settings-button", "Import saved bookmarks…");
+  profileButton.type = "button"; profileButton.id = "fluxion-import-detected";
+  profileButton.addEventListener("click", () => performImport(() => discovery.transfer(profileChoice.value)));
+  profileControls.append(profileChoice, profileButton, detectButton);
+  row(importPanel, "Detected profiles", "Zen and Firefox: latest bookmark backup (recent edits may be missing). Chrome: choose supported data in the native importer. Other data can use the export actions below.", profileControls);
+  importPanel.appendChild(profileStatus);
+  async function findImportProfiles(force = false) {
+    if (importDisposed || discovering || importPending || (discoveryStarted && !force)) return;
+    discoveryStarted = true; discovering = true;
+    syncImportSource();
+    profileStatus.textContent = "Looking for local browser profiles…";
+    try {
+      if (!discovery) discovery = ChromeUtils.importESModule("resource://fluxion/modules/FluxionImportDiscovery.sys.mjs").forWindow(window);
+      const result = await discovery.discover();
+      if (importDisposed) return;
+      discoveredProfiles = result.profiles || [];
+      profileChoice.replaceChildren();
+      for (const p of discoveredProfiles) {
+        const option = create("option", "", `${{ zen: "Zen", firefox: "Firefox", chrome: "Chrome" }[p.source]} — ${p.name}`);
+        option.value = p.id; profileChoice.appendChild(option);
+      }
+      profileChoice.value = discoveredProfiles[0]?.id || "";
+      profileStatus.textContent = [discoveredProfiles.length ? `Found ${discoveredProfiles.length} browser profile${discoveredProfiles.length === 1 ? "" : "s"}. Choose one to continue.`
+        : "No accessible profiles found in the usual locations. You can still use the import actions below.", ...(result.warnings || [])].join(" ");
+    } catch (_) {
+      discoveredProfiles = []; profileChoice.replaceChildren();
+      profileStatus.textContent = "Profile detection is unavailable. Check browser permissions, try again, or use the export actions below.";
+    } finally {
+      discovering = false;
+      if (!importDisposed) syncImportSource();
+    }
+  }
   async function performImport(action) {
-    if (importPending || importDisposed) return;
+    if (importPending || discovering || importDisposed) return;
     importPending = true;
     syncImportSource();
     setNote("Waiting for your import choice…", "import");
@@ -638,10 +683,15 @@
   row(importPanel, "Open tabs", "Paste up to 100 http:// or https:// links, one per line. Duplicates are removed. Tabs are added to the current workspace and load only when selected; login sessions are not copied.", tabsImportGroup);
   function syncImportSource() {
     sourceHelp.textContent = importHelp[sourceChoice.value] || importHelp.other;
-    sourceChoice.disabled = importPending;
-    tabLinks.disabled = importPending;
-    for (const button of importButtons) button.disabled = importPending;
-    browserImportButton.disabled = importPending || !["chrome", "other"].includes(sourceChoice.value);
+    sourceChoice.disabled = importPending || discovering;
+    tabLinks.disabled = importPending || discovering;
+    for (const button of importButtons) button.disabled = importPending || discovering;
+    browserImportButton.disabled = importPending || discovering || !["chrome", "other"].includes(sourceChoice.value);
+    profileChoice.disabled = importPending || discovering || !discoveredProfiles.length;
+    detectButton.disabled = importPending || discovering;
+    const selected = discoveredProfiles.find(p => p.id === profileChoice.value);
+    profileButton.disabled = importPending || discovering || !selected;
+    profileButton.textContent = selected?.kind === "native" ? "Choose browser data…" : "Import saved bookmarks…";
   }
   syncImportSource();
   window.addEventListener("unload", () => { importDisposed = true; }, { once: true });
