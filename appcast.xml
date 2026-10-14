@@ -4,15 +4,15 @@
     <title>Fluxion updates</title>
     <link>https://github.com/Ninnja10563/Fluxion-Browser/releases</link>
     <item>
-      <title>Fluxion 0.78.0-preview.1</title>
-      <pubDate>Wed, 14 Oct 2026 09:35:43 GMT</pubDate>
+      <title>Fluxion 0.79.0-preview.1</title>
+      <pubDate>Wed, 14 Oct 2026 22:42:51 GMT</pubDate>
       <sparkle:channel>preview</sparkle:channel>
       <sparkle:minimumSystemVersion>12.0</sparkle:minimumSystemVersion>
-      <enclosure url="https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.78.0-preview.1/Fluxion-0.78.0-preview.1-macOS-universal.dmg" sparkle:version="0.78.0b1" sparkle:shortVersionString="0.78.0-preview.1" sparkle:installationType="application" sparkle:edSignature="y9LmISMyhZLgoaIOmhrXzY8nHRdLJTY7auJX1585rKw8SS1StGTDdfyz6P45u1o84jBwybP65Og+lxdjt+/oAQ==" length="268875710" type="application/octet-stream"/>
+      <enclosure url="https://github.com/Ninnja10563/Fluxion-Browser/releases/download/v0.79.0-preview.1/Fluxion-0.79.0-preview.1-macOS-universal.dmg" sparkle:version="0.79.0b1" sparkle:shortVersionString="0.79.0-preview.1" sparkle:installationType="application" sparkle:edSignature="bku98kKktFUFlgys8S3pQQiwGFKBM2oukKH7WT99UAGDH8yKbRJKHRt9DeJFCuhV1KYmRLhJuu4bvt8c/LUnBA==" length="268909172" type="application/octet-stream"/>
     </item>
   </channel>
 </rss>
 <!-- sparkle-signatures:
-edSignature: w9O6p1aLk2h4osYkFtmYXX/ANa3+COUCGuCJ+I3QRsMotHcDDXflE7EgTdgaUK53DZdZcPgMpJHOePipI6QPCg==
+edSignature: I1GQ/LG2bR/QVMU63lnAX7l7HkHPNJWMQk0hmfEKWwIvwCPChfjGQH+7dgwKXrjma8giPtLLRdzNqj04CEBHDw==
 length: 939
 -->
