@@ -12,7 +12,7 @@ function block(start, end) {
 }
 
 function fixture() {
-  const timers = new Map(), frames = [], writes = [], listeners = new Map();
+  const timers = new Map(), delays = new Map(), frames = [], writes = [], listeners = new Map();
   let timerId = 0, renders = 0;
   const document = { activeElement: null };
   function node(parent = null) {
@@ -32,7 +32,7 @@ function fixture() {
   const flow = node(), surface = node(flow), modeButton = node(surface), workspaceList = node(surface);
   const selectedTab = {}, selectedRow = node(surface), page = node();
   const window = {
-    setTimeout(fn) { const id = ++timerId; timers.set(id, fn); return id; },
+    setTimeout(fn, delay) { const id = ++timerId; timers.set(id, fn); delays.set(id, delay); return id; },
     clearTimeout(id) { timers.delete(id); },
     requestAnimationFrame(fn) { frames.push(fn); },
   };
@@ -62,7 +62,7 @@ function fixture() {
     for (const listener of listeners.get(flow)?.get(type) || []) listener(event);
     return event;
   }
-  return { context, flow, surface, modeButton, workspaceList, selectedRow, page, document, writes, timers, frames, emit,
+  return { context, flow, surface, modeButton, workspaceList, selectedRow, page, document, writes, timers, delays, frames, emit,
     emitPopup(type, event) { for (const listener of listeners.get(document)?.get(type) || []) listener(event); },
     get renders() { return renders; },
     flushTimers() { const pending = [...timers.values()]; timers.clear(); pending.forEach(fn => fn()); },
@@ -122,6 +122,28 @@ test("reentering the edge cancels a queued hide rather than flickering the revea
   f.flushTimers(); assert.equal(f.flow.dataset.revealed, "true");
 });
 
+test("sidebar departure shares the toolbar's short grace period and idle modes schedule no hide work", () => {
+  const f = fixture();
+  f.emit("pointerleave"); f.emit("focusout");
+  assert.equal(f.timers.size, 0);
+  f.context.setSidebarState("focus"); f.emit("pointerleave");
+  assert.equal(f.timers.size, 0, "an already-hidden sidebar has nothing to retract");
+  f.emit("pointerenter"); f.emit("pointerleave");
+  assert.equal(f.delays.get([...f.timers.keys()][0]), 60);
+  f.flushTimers();
+  f.emit("pointerenter"); f.emit("pointerleave"); f.emit("pointerenter");
+  f.flushTimers(); assert.equal(f.surface.inert, false);
+});
+
+test("a prior mode's keyboard ownership cannot pin a later pointer-opened sidebar", () => {
+  const f = fixture(); f.context.setSidebarState("focus");
+  f.emit("keydown", { key: "Enter" }); f.flushFrames();
+  f.context.setSidebarState("expanded"); f.context.setSidebarState("focus");
+  f.emit("pointerenter"); f.selectedRow.focus(); f.emit("pointerleave"); f.flushTimers();
+  assert.equal(f.flow.dataset.revealed, "false");
+  assert.equal(f.document.activeElement, f.page);
+});
+
 test("canceled appearance-panel opening releases the hover sidebar without waiting for popuphidden", async () => {
   const f = fixture(); f.context.setSidebarState("focus"); f.emit("pointerenter");
   const event = { target: { id: "fluxion-workspace-theme" }, defaultPrevented: false };
@@ -151,6 +173,15 @@ test("an obsolete keyboard reveal frame never refocuses an already hidden sideba
   f.context.hideFocusSurface({ force: true }); f.flushFrames();
   assert.equal(f.surface.contains(f.document.activeElement), false);
   assert.equal(f.flow.dataset.revealed, "false"); assert.equal(f.surface.inert, true);
+});
+
+test("a superseded keyboard frame cannot steal focus after a later pointer reveal", () => {
+  const f = fixture(); f.context.setSidebarState("focus");
+  f.context.revealFocusSurface({ focusActive: true });
+  f.context.hideFocusSurface({ force: true });
+  f.page.focus(); f.emit("pointerenter"); f.flushFrames();
+  assert.equal(f.document.activeElement, f.page);
+  assert.equal(f.flow.dataset.revealed, "true");
 });
 
 test("leaving the pointer never hides a sidebar while keyboard focus remains inside", () => {

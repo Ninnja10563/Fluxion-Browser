@@ -6,6 +6,21 @@ const { join } = require("node:path");
 const source = readFileSync(join(__dirname, "../chrome/fluxion-chrome.js"), "utf8");
 const css = source.match(/style\.textContent = `([\s\S]*?)`;/)[1];
 
+test("sidebar motion does not animate webpage width or expensive shadows", () => {
+  const rail = css.match(/#fluxion-flow \{([^}]+)\}/)[1];
+  assert.match(rail, /transition: none/);
+  assert.match(css, /#fluxion-settings, #fluxion-library \{ transition: none; \}/);
+  assert.doesNotMatch(css, /transition:[^;]*box-shadow/);
+  assert.match(css, /transition: transform var\(--fluxion-fast\), opacity var\(--fluxion-fast\), visibility 0s linear 140ms/);
+});
+
+test("motion-off preference includes the palette and OS Reduce Motion includes folder disclosure", () => {
+  const palette = readFileSync(join(__dirname, "../chrome/fluxion-palette.js"), "utf8");
+  assert.match(palette, /:root\[data-fluxion-no-motion\] #fluxion-palette \{ animation: none !important; \}/);
+  const reduced = css.slice(css.indexOf("@media (prefers-reduced-motion: reduce)"));
+  assert.match(reduced, /\.fluxion-group-disclosure \{ transition: none !important; \}/);
+});
+
 test("workspace context is outside the scrolling rows while New Tab remains after them", () => {
   assert.match(source, /tabScroll\.append\(tabsList, footer\)/);
   assert.match(source, /surface\.append\(\s*workspaceHeading, pinnedLabel, pinnedTabs, tabTree, workspaceBar/);

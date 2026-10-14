@@ -294,13 +294,15 @@
       width: var(--fluxion-sidebar-width); min-width: var(--fluxion-sidebar-width); max-width: var(--fluxion-sidebar-width);
       position: relative; z-index: 4; color: var(--fluxion-ink); background: transparent;
       font: menu; font-size: 13px; overflow: visible;
-      transition: width var(--fluxion-fast), min-width var(--fluxion-fast), max-width var(--fluxion-fast);
+      /* Settle the page column once. Animating rail width resizes every remote
+         webpage and feeds the toolbar ResizeObserver on each painted frame. */
+      transition: none;
     }
     .fluxion-surface {
       position: relative; width: 100%; min-width: 0; height: 100%; display: flex; flex-direction: column;
       overflow: hidden; background: var(--fluxion-bg);
       transform: translateX(0); transform-origin: left center;
-      transition: transform var(--fluxion-fast), box-shadow var(--fluxion-fast);
+      transition: transform var(--fluxion-fast);
     }
     #fluxion-flow[data-state="expanded"] > .fluxion-surface {
       position: fixed; inset-block-start: var(--fluxion-persistent-sidebar-top, 72px);
@@ -329,8 +331,7 @@
       border-radius: 8px;
       visibility: hidden; opacity: 0; pointer-events: none;
       transform: translateX(calc(-100% - 6px)); box-shadow: none;
-      transition: transform var(--fluxion-fast), opacity 100ms ease,
-        box-shadow var(--fluxion-fast), visibility 0s linear 140ms;
+      transition: transform var(--fluxion-fast), opacity var(--fluxion-fast), visibility 0s linear 140ms;
     }
     #fluxion-flow[data-state="focus"][data-revealed="true"] > .fluxion-surface {
       visibility: visible; opacity: 1; pointer-events: auto; transform: translateX(0);
@@ -357,7 +358,7 @@
     #fluxion-sidebar-resizer:focus-visible::after,
     :root[data-fluxion-sidebar-resizing] #fluxion-sidebar-resizer::after { background: var(--fluxion-accent); }
     #fluxion-flow[data-state="compact"] #fluxion-sidebar-resizer { display: none; }
-    #fluxion-settings, #fluxion-library { transition: inset-inline-start var(--fluxion-fast); }
+    #fluxion-settings, #fluxion-library { transition: none; }
     :root[data-fluxion-sidebar-resizing] #fluxion-flow,
     :root[data-fluxion-sidebar-resizing] #fluxion-settings,
     :root[data-fluxion-sidebar-resizing] #fluxion-library { transition: none !important; }
@@ -664,6 +665,7 @@
     #fluxion-flow[data-state="compact"] .fluxion-new-tab { flex: none; width: 30px; text-align: center; }
     @media (prefers-reduced-motion: reduce) {
       .fluxion-workspace-more, .fluxion-workspace-heading, .fluxion-new-tab, .fluxion-keyhint { transition: none !important; }
+      .fluxion-group-disclosure { transition: none !important; }
       #fluxion-flow, .fluxion-surface, .fluxion-tab { transition-duration: 0.01ms !important; transition-delay: 0s !important; }
       #fluxion-settings, #fluxion-library { transition: none !important; }
       .fluxion-status[data-kind="loading"]::before { animation: none !important; }
@@ -1869,6 +1871,7 @@
   }
 
   let focusHideTimer = 0;
+  let focusRevealEpoch = 0;
   let focusPointerInside = false;
   let focusKeyboardOwned = false;
   const focusOpenMenus = new Set();
@@ -1909,13 +1912,14 @@
 
   function revealFocusSurface({ focusActive = false } = {}) {
     if (flow.dataset.state !== "focus") return false;
+    const epoch = ++focusRevealEpoch;
     clearFocusHideTimer();
     flow.dataset.revealed = "true";
     syncSidebarAccessibility(true);
     if (focusActive) {
       focusKeyboardOwned = true;
       window.requestAnimationFrame(() => {
-        if (flow.dataset.state !== "focus" || flow.dataset.revealed !== "true") return;
+        if (epoch !== focusRevealEpoch || flow.dataset.state !== "focus" || flow.dataset.revealed !== "true") return;
         const active = tabElements.get(gBrowser.selectedTab) || renderedTabElements()[0] || modeButton;
         active?.focus();
       });
@@ -1928,6 +1932,7 @@
     clearFocusHideTimer();
     if (!force && (focusPointerInside || focusOpenMenus.size ||
         (focusKeyboardOwned && surface.contains(document.activeElement)))) return false;
+    focusRevealEpoch++;
     if (surface.contains(document.activeElement)) {
       if (force) flow.focus({ preventScroll: true });
       else gBrowser.selectedBrowser.focus();
@@ -1939,18 +1944,21 @@
 
   function scheduleFocusSurfaceHide() {
     clearFocusHideTimer();
+    if (flow.dataset.state !== "focus" || flow.dataset.revealed !== "true") return;
     focusHideTimer = window.setTimeout(() => {
       focusHideTimer = 0;
       hideFocusSurface();
-    }, 160);
+    }, 60);
   }
 
   function setSidebarState(value) {
     const state = SIDEBAR_STATES.includes(value) ? value : "expanded";
+    focusRevealEpoch++;
     flow.dataset.state = state;
     if (state === "focus" && surface.contains(document.activeElement)) flow.focus({ preventScroll: true });
     clearFocusHideTimer();
     focusPointerInside = false;
+    focusKeyboardOwned = false;
     flow.dataset.revealed = "false";
     syncSidebarAccessibility(false);
     Services.prefs.setStringPref(PREF_SIDEBAR, state);

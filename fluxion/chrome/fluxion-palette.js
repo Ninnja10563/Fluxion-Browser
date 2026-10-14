@@ -114,6 +114,7 @@
     @keyframes fluxion-palette-in {
       from { opacity: 0; transform: translateY(-2px); }
     }
+    :root[data-fluxion-no-motion] #fluxion-palette { animation: none !important; }
     @media (prefers-reduced-motion: reduce) {
       #fluxion-palette { animation: none; }
     }

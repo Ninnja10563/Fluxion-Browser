@@ -11,15 +11,16 @@ function fixture({ reduced = false, preference = false } = {}) {
     document: { documentElement: { hasAttribute: () => preference } },
   });
 }
-const motion = { transitionProperty: "transform, opacity, box-shadow, visibility",
-  transitionDuration: "0.14s, 0.1s, 0.14s, 0s", transitionDelay: "0s, 0s, 0s, 0.14s", pointerEvents: "none" };
+const motion = { transitionProperty: "transform, opacity, visibility",
+  transitionDuration: "0.14s, 0.14s, 0s", transitionDelay: "0s, 0s, 0.14s", pointerEvents: "none" };
 test("sidebar motion gate requires delayed exit visibility but immediate reveal and input release", () => {
   const verify = fixture();
-  assert.equal(verify(motion, false).delays[3], .14);
+  assert.equal(verify(motion, false).delays[2], .14);
   assert.equal(verify({ ...motion, transitionDelay: "0s", pointerEvents: "auto" }, true).revealed, true);
   assert.throws(() => verify({ ...motion, transitionDelay: "0s" }, false), /140ms retract/);
   assert.throws(() => verify(motion, true), /reveal immediately/);
   assert.throws(() => verify({ ...motion, pointerEvents: "auto" }, false), /intercepts/);
+  assert.throws(() => verify({ ...motion, transitionProperty: "transform, opacity, visibility, box-shadow" }, false), /paint\/layout-heavy/);
 });
 test("both reduced-motion routes reject lingering visibility delay even with near-zero duration", () => {
   for (const options of [{ reduced: true }, { preference: true }]) {

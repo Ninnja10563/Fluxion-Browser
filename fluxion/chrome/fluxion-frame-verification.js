@@ -142,6 +142,7 @@
         delays[index % delays.length] === (revealed ? 0 : .14),
       "Sidebar visibility must reveal immediately and hide only after its 140ms retract");
       assert(properties.includes("transform") && properties.includes("opacity"), "Sidebar retract has no painted transform/opacity transition");
+      assert(!properties.includes("box-shadow") && !properties.includes("width"), "Sidebar motion animates paint/layout-heavy properties");
     }
     if (!revealed) assert(style.pointerEvents === "none", "Retracting sidebar still intercepts webpage input");
     return { revealed, reduced, properties, durations, delays };
@@ -698,11 +699,20 @@
     const surface = flow.querySelector(".fluxion-surface");
     const pageBefore = rect(gBrowser.tabpanels);
     const outside = { x: rect(deck).right - 20, y: rect(deck).top + 60 };
+    assert(window.getComputedStyle(flow).transitionProperty === "none", "Sidebar column must settle without continuously resizing the page");
     // Move away before approaching the three-pixel edge so native hit testing,
     // not a direct call to revealSidebar(), owns every enter/leave transition.
     gBrowser.selectedBrowser.focus();
     routePointer(outside.x, outside.y);
     await delay(250);
+    const hoverSamples = [];
+    let hoverSampling = true;
+    const sampleHover = () => {
+      if (!hoverSampling) return;
+      hoverSamples.push(rect(gBrowser.tabpanels));
+      window.requestAnimationFrame(sampleHover);
+    };
+    window.requestAnimationFrame(sampleHover);
     for (let cycle = 0; cycle < 3; cycle++) {
       const edge = rect(flow);
       routePointer(edge.left + edge.width / 2, edge.top + Math.min(140, edge.height / 2));
@@ -731,9 +741,27 @@
       routePointer(outside.x, outside.y);
       await wait(() => flow.dataset.revealed === "false" && surface.inert, `Leaving the overlay did not hide sidebar on cycle ${cycle}`);
       report.geometry.push(sidebarMotionEvidence(surface, false));
+      if (cycle === 2) {
+        // Re-enter while the surface is still retracting. CSS must reverse
+        // from its current position, with no stale hide or inert state.
+        await delay(35);
+        const edge = rect(flow);
+        routePointer(edge.left + edge.width / 2, edge.top + 140);
+        await wait(() => flow.dataset.revealed === "true" && !surface.inert, "Sidebar reversal did not restore input ownership");
+        await delay(180);
+        assert(window.getComputedStyle(surface).visibility === "visible" && Number(window.getComputedStyle(surface).opacity) === 1,
+          "A stale sidebar hide interrupted the reversed reveal");
+        routePointer(outside.x, outside.y);
+        await wait(() => flow.dataset.revealed === "false" && surface.inert, "Reversed sidebar did not subsequently hide");
+      }
       await delay(200);
       report.geometry.push(floatingSidebarEvidence(flow, surface, false));
     }
+    hoverSampling = false;
+    assert(hoverSamples.length > 0 && hoverSamples.every(sample => ["left", "top", "width", "height"].every(key => near(sample[key], pageBefore[key]))),
+      "Sidebar hover/reversal changed the page viewport during animation");
+    report.sidebarMotion = { sampledFrames: hoverSamples.length, stableViewport: true, reversal: true };
+    report.checks.push("sidebar-hover-and-rapid-reversal-preserve-viewport-every-sampled-frame");
     assert(report.hoverEvents.filter(event => event.type === "pointerenter" && event.trusted).length >= 3 &&
       report.hoverEvents.filter(event => event.type === "pointerleave" && event.trusted).length >= 3,
     "Repeated edge hover lacks trusted Gecko routed enter/leave evidence");
