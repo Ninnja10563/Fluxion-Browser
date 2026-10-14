@@ -160,8 +160,14 @@
   on(window, "MacFullscreenMenubarRevealUpdate", event => {
     if (!nativeFocus || !event.isTrusted || event.target !== window ||
         !Number.isFinite(event.detail) || event.detail < 0) return;
+    const wasNativeMenuBar = nativeMenuBar;
     nativeMenuBar = event.detail > 0;
-    if (nativeMenuBar) { pointerAbove = true; cancel(); }
+    if (nativeMenuBar) {
+      // Do not re-arm the upward latch on every shrinking animation frame:
+      // the pointer may already have crossed back into the page.
+      if (!wasNativeMenuBar) pointerAbove = true;
+      cancel();
+    }
     // Finishing the native animation isn't a downward pointer departure.
     // Retain pointerAbove until the pointer actually returns below the bar.
     else scheduleHide();

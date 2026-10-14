@@ -9,7 +9,7 @@
   const driver = Services.env.get("FLUXION_FRAME_DRIVER_DIR");
   const report = {
     keyboard: "native macOS System Events Cmd-W, Cmd-Shift-T, Cmd-L and Escape",
-    pointer: "Normal-window menu-bar exit uses native macOS CGEvent movement; other pointer checks use Gecko widget routing",
+    pointer: "Normal-window and fullscreen menu-bar checks use native macOS CGEvent movement; other pointer checks use Gecko widget routing",
     fullscreenTested: false, checks: [], captures: [], geometry: [], keys: [],
   };
   const assert = (value, message) => { if (!value) throw new Error(message); };

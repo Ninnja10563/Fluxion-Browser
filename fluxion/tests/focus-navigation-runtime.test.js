@@ -192,6 +192,8 @@ test("Cocoa menu-bar reveal without DOM hover survives native notifications and 
   // A downward return can precede the last native animation frame.
   f.emit(f.window, "pointermove", f.page, { clientY: 100 }); f.advance(60);
   assert.equal(calls.length, 0, "the menu animation still owns the toolbar");
+  shift(12); shift(4); f.advance(60);
+  assert.equal(calls.length, 0, "shrinking native frames cannot re-arm upward ownership");
   shift(0); f.advance(60);
   assert.deepEqual(calls, [true]);
   calls.length = 0;
