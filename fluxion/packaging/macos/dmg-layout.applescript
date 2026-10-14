@@ -4,7 +4,6 @@ on run arguments
   set mountPath to item 2 of arguments
   if layoutMode is not "configure" and layoutMode is not "verify" then error "Unknown DMG layout mode"
   set mountedFolder to (POSIX file mountPath) as alias
-  set expectedBackground to (POSIX file (mountPath & "/.background/background.tiff")) as alias
   tell application "Finder"
     open mountedFolder
     set installWindow to container window of mountedFolder
@@ -35,12 +34,8 @@ on run arguments
     if icon size of options is not 96 then error "DMG icon size was not saved"
     if position of item "Fluxion.app" of mountedFolder is not {180, 212} then error "Fluxion icon position was not saved"
     if position of item "Applications" of mountedFolder is not {460, 212} then error "Applications icon position was not saved"
-    -- Resolve the Finder property before coercing its returned file. Asking
-    -- Finder to coerce the property specifier itself raises -10000 on macOS 14.
-    set backgroundReference to get background picture of options
-    log backgroundReference
-    set savedBackground to backgroundReference as alias
-    if savedBackground is not expectedBackground then error "DMG background does not resolve inside its own mounted image"
+    -- Finder 14 displays the picture but its background-picture getter raises
+    -- -10000. The shell verifier checks the actual reopened window pixels.
     set savedBounds to bounds of installWindow
     if (item 3 of savedBounds) - (item 1 of savedBounds) is not 640 then error "DMG width was not saved"
     if (item 4 of savedBounds) - (item 2 of savedBounds) is not 444 then error "DMG height was not saved"

@@ -55,6 +55,7 @@ jobs:
         shell: bash
         run: |
           xcrun swiftc -typecheck fluxion/packaging/macos/dmg-background.swift
+          xcrun swiftc -typecheck fluxion/packaging/macos/verify-dmg-background.swift
           osacompile -o "$RUNNER_TEMP/fluxion-dmg-layout.scpt" fluxion/packaging/macos/dmg-layout.applescript
 
       - name: Build Fluxion application

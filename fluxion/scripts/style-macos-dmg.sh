@@ -43,11 +43,19 @@ fi
 [[ -s "$mount_path/.DS_Store" && -s "$mount_path/.background/background.tiff" ]]
 if [[ "$mode" == verify ]]; then
   codesign --verify --deep --strict "$mount_path/Fluxion.app"
+  sleep 1
+  screencapture -x -o -l "$window_id" "$mount_root/install-window.png"
+  [[ -s "$mount_root/install-window.png" ]]
   if [[ -n "${FLUXION_DMG_ARTIFACT_DIR:-}" ]]; then
     mkdir -p "$FLUXION_DMG_ARTIFACT_DIR"
-    sleep 1
-    screencapture -x -l "$window_id" "$FLUXION_DMG_ARTIFACT_DIR/install-window.png"
-    [[ -s "$FLUXION_DMG_ARTIFACT_DIR/install-window.png" ]]
+    cp "$mount_root/install-window.png" "$FLUXION_DMG_ARTIFACT_DIR/install-window.png"
+  fi
+  xcrun swift "$fluxion_root/packaging/macos/verify-dmg-background.swift" \
+    "$mount_path/.background/background.tiff" "$mount_root/install-window.png" > "$mount_root/background-check.txt"
+  if [[ -n "${FLUXION_DMG_ARTIFACT_DIR:-}" ]]; then
+    mkdir -p "$FLUXION_DMG_ARTIFACT_DIR"
+    cp "$mount_root/install-window.png" "$FLUXION_DMG_ARTIFACT_DIR/install-window.png"
+    cp "$mount_root/background-check.txt" "$FLUXION_DMG_ARTIFACT_DIR/background-check.txt"
     printf 'Verified read-only DMG: icon view, 640x444 window, 96px icons at 180/460, embedded Retina background, Applications link, unchanged app signature.\n' > "$FLUXION_DMG_ARTIFACT_DIR/layout.txt"
   fi
 fi

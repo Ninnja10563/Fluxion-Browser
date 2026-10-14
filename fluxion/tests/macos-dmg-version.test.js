@@ -43,7 +43,8 @@ fs.appendFileSync(process.env.FLUXION_PACKAGE_TEST_LOG, JSON.stringify({name,arg
 if(process.env.FLUXION_PACKAGE_FAILED_TOOL===name) process.exit(1);
 if(name==='lipo') console.log('arm64 x86_64');
 if(name==='ditto') fs.cpSync(args[0],args[1],{recursive:true});
-if(name==='xcrun') { for(const file of ['background.png','background@2x.png']) fs.writeFileSync(path.join(args.at(-1),file),'synthetic artwork'); }
+if(name==='xcrun' && args.some(a=>a.endsWith('/dmg-background.swift'))) { for(const file of ['background.png','background@2x.png']) fs.writeFileSync(path.join(args.at(-1),file),'synthetic artwork'); }
+if(name==='screencapture') fs.writeFileSync(args.at(-1),'synthetic capture');
 if(name==='tiffutil') fs.writeFileSync(args.at(-1),'synthetic Retina artwork');
 if(name==='osascript') { fs.writeFileSync(path.join(args.at(-1),'.DS_Store'),'synthetic Finder metadata'); console.log('42'); }
 if(name==='hdiutil') {
@@ -55,7 +56,7 @@ if(name==='hdiutil') {
   }
 }
 `;
-  for (const tool of ["lipo", "codesign", "ditto", "hdiutil", "xcrun", "tiffutil", "osascript"]) fs.writeFileSync(path.join(bin, tool), shim, { mode: 0o755 });
+  for (const tool of ["lipo", "codesign", "ditto", "hdiutil", "xcrun", "tiffutil", "osascript", "screencapture"]) fs.writeFileSync(path.join(bin, tool), shim, { mode: 0o755 });
   return { root, app, output, settings, plist, metadata,
     failTool(name) { failedTool = name; },
     calls: () => fs.existsSync(log) ? fs.readFileSync(log, "utf8").trim().split("\n").map(JSON.parse) : [],
@@ -111,7 +112,8 @@ test("DMG art uses native type and real Finder icons, with reopened read-only la
   assert.match(artwork, /NSFont\.systemFont/);
   assert.match(artwork, /Drag Fluxion to Applications/);
   assert.match(layout, /\{180, 212\}/); assert.match(layout, /\{460, 212\}/);
-  assert.match(layout, /DMG background does not resolve inside its own mounted image/);
+  assert.match(helper, /verify-dmg-background\.swift/);
+  assert.match(helper, /screencapture -x -o -l/);
   assert.match(helper, /attach_options\+=\(-readonly\)/);
   assert.match(helper, /codesign --verify --deep --strict/);
   assert.doesNotMatch(helper, /detach -force/);
