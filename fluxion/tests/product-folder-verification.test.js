@@ -80,6 +80,8 @@ test("native product gate executes folder commands, checks real window serializa
   assert.match(source, /SessionStore\.getWindowState\(window\)/);
   assert.match(source, /state\.windows\[0\]\.extData\?\.\[key\]/);
   assert.match(source, /emptyBox\.bottom <= dividerBox\.top/);
+  assert.match(source, /style\.fill === "none" && style\.stroke === color/);
+  assert.match(source, /evidence\.populated\.icon = folderIcon\(\)/);
   assert.match(source, /await workspaceFolders\(\);/);
   assert.ok(source.indexOf("await workspaceFolders();") < source.indexOf('run().then(() => Services.prefs.setStringPref(`${prefix}.health`'));
 });

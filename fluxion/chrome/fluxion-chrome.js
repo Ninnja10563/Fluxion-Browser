@@ -519,7 +519,8 @@
     .fluxion-folders { padding: 2px var(--fluxion-rail-gutter); min-height: 0;
       max-height: 40%; flex: 0 1 auto; overflow-y: auto; scrollbar-width: thin; }
     .fluxion-folders:empty { display: none; }
-    .fluxion-folder-icon { width: 16px; height: 16px; flex: none; color: var(--group-accent, currentColor); }
+    .fluxion-folder-icon { width: 16px; height: 16px; flex: none; color: var(--group-accent, currentColor);
+      fill: none; stroke: currentColor; stroke-width: 1.35; stroke-linecap: round; stroke-linejoin: round; }
     .fluxion-group-heading {
       width: 100%; height: var(--fluxion-row-height); display: flex; align-items: center; gap: 5px;
       padding: 0 7px; border: 0; border-radius: 3px; color: var(--fluxion-muted);

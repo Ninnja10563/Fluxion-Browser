@@ -7,7 +7,7 @@ const { readFileSync } = require("node:fs");
 const { join } = require("node:path");
 const source = readFileSync(join(__dirname, "../chrome/fluxion-chrome.js"), "utf8");
 const css = source.match(/style\.textContent = `([\s\S]*?)`;/)[1];
-const svg = (path, cls = "fluxion-control-glyph") => `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.35"><path d="${path}"/></svg>`;
+const svg = (path, cls = "fluxion-control-glyph") => `<svg class="${cls}" viewBox="0 0 16 16" aria-hidden="true"${cls === "fluxion-folder-icon" ? "" : ' fill="none" stroke="currentColor" stroke-width="1.35"'}><path d="${path}"/></svg>`;
 const folder = svg("M2 4h5l2 2h5v7H2Z", "fluxion-workspace-symbol");
 const plus = svg("M8 2v12M2 8h12");
 const names = ["Project documentation", "Design references", "Inbox — Research", "Reading list", "Notes from this morning", "Release checklist"];

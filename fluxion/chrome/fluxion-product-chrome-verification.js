@@ -515,6 +515,14 @@
     const divider = document.querySelector(".fluxion-workspace-divider");
     const heading = () => [...region.querySelectorAll(".fluxion-group-heading")]
       .find(node => node.querySelector(".fluxion-group-name")?.textContent === name);
+    const folderIcon = () => {
+      const icon = heading()?.querySelector(".fluxion-folder-icon"), path = icon?.querySelector("path");
+      assert(painted(icon) && path, "Workspace folder icon is missing");
+      const style = window.getComputedStyle(path), color = window.getComputedStyle(icon).color;
+      assert(style.fill === "none" && style.stroke === color && Number.parseFloat(style.strokeWidth) > 0,
+        "Workspace folder icon must use its theme-colored outline, not SVG's black default fill");
+      return { fill: style.fill, stroke: style.stroke, color, strokeWidth: style.strokeWidth };
+    };
     const menu = document.getElementById("fluxion-workspace-context");
     const more = document.querySelector(".fluxion-workspace-more");
     const before = new Set(gBrowser.tabs), nativeGroupsBefore = new Set(gBrowser.tabGroups);
@@ -541,7 +549,7 @@
     assert(emptyBox.bottom <= dividerBox.top + 1 && emptyBox.top >= rect(document.querySelector(".fluxion-workspace-heading")).bottom - 1,
       "Empty folder is not above the workspace divider and below the workspace heading");
     const evidence = report.workspaceFolders = { input: "Folder creation uses shipped XUL command and rendered Gecko prompt automation; moving uses macOS System Events keys in the native submenu; no physical input claimed",
-      empty: { id: folder.id, nativeTabCountUnchanged: true, serialised: true, heading: emptyBox, divider: dividerBox } };
+      empty: { id: folder.id, nativeTabCountUnchanged: true, serialised: true, heading: emptyBox, divider: dividerBox, icon: folderIcon() } };
     await capture("capture-product-folders-empty");
     let tab;
     try {
@@ -616,6 +624,7 @@
         submenu.hidePopup(); tabMenu.hidePopup();
       }
       evidence.populated = folderIdentityEvidence(tab, snapshot);
+      evidence.populated.icon = folderIcon();
       await capture("capture-product-folders-populated");
       await wait(() => serialised().some(item => item.id === folder.id && item.groupId === tab.group.id),
         "Native group linkage is absent from serialized folder metadata");
