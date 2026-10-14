@@ -540,8 +540,9 @@
     const emptyBox = rect(heading()), dividerBox = rect(divider);
     assert(emptyBox.bottom <= dividerBox.top + 1 && emptyBox.top >= rect(document.querySelector(".fluxion-workspace-heading")).bottom - 1,
       "Empty folder is not above the workspace divider and below the workspace heading");
-    const evidence = report.workspaceFolders = { input: "Shipped native XUL commands and rendered Gecko prompt automation; no physical menu input claimed",
+    const evidence = report.workspaceFolders = { input: "Folder creation uses shipped XUL command and rendered Gecko prompt automation; moving uses macOS System Events keys in the native submenu; no physical input claimed",
       empty: { id: folder.id, nativeTabCountUnchanged: true, serialised: true, heading: emptyBox, divider: dividerBox } };
+    await capture("capture-product-folders-empty");
     let tab;
     try {
       tab = gBrowser.addTrustedTab("about:blank", { userContextId: 1, skipAnimation: true });
@@ -566,8 +567,8 @@
       const menuEvidence = evidence.moveMenu = { keys: [], events: [] };
       let selected = null, sequence = 0, command = null;
       const observe = event => {
-        if (event.type === "DOMMenuItemActive") selected = event.target;
-        if (event.type === "command") command = event.target;
+        if (event.type === "DOMMenuItemActive" && event.isTrusted) selected = event.target;
+        if (event.type === "command" && event.isTrusted) command = event.target;
         menuEvidence.events.push({ type: event.type, label: event.target.getAttribute("label"),
           trusted: event.isTrusted, parent: tabMenu.state, submenu: submenu.state });
       };
@@ -615,6 +616,7 @@
         submenu.hidePopup(); tabMenu.hidePopup();
       }
       evidence.populated = folderIdentityEvidence(tab, snapshot);
+      await capture("capture-product-folders-populated");
       await wait(() => serialised().some(item => item.id === folder.id && item.groupId === tab.group.id),
         "Native group linkage is absent from serialized folder metadata");
       heading().click();

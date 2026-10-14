@@ -130,7 +130,8 @@ for ((attempt=0; attempt<720; attempt++)); do
     key-product-workspace-select-3 key-product-workspace-select-4 key-product-workspace-select-5 key-product-workspace-select-6 \
     key-product-workspace-select-7 key-product-workspace-select-8 key-product-workspace-select-9 key-product-workspace-select-return \
     capture-product-workspace-appearance type-product-workspace-dark type-product-workspace-accent type-product-workspace-light \
-    capture-product-workspace-theme capture-product-workspace-picker key-product-workspace-picker-right type-product-workspace-cancel key-product-workspace-escape-theme; do
+    capture-product-workspace-theme capture-product-workspace-picker key-product-workspace-picker-right type-product-workspace-cancel key-product-workspace-escape-theme \
+    capture-product-folders-empty capture-product-folders-populated; do
     if [[ -f "$check_root/$action.ready" && ! -f "$check_root/$action.sent" ]]; then
       native_action "$action"
       owned || exit 1
