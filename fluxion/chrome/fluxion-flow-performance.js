@@ -69,7 +69,9 @@
     const tree = flow?.querySelector('[aria-label="Open tabs in current workspace"]');
     assert(tree, "Flow tab tree did not mount");
     const scrollArea = flow.querySelector(".fluxion-tab-scroll");
-    assert(scrollArea?.contains(tree), "Flow tab tree has no native scrolling container");
+    assert(tree.contains(scrollArea) && scrollArea?.contains(flow.querySelector('.fluxion-tabs[role="group"]')) &&
+      tree.contains(flow.querySelector('.fluxion-folders[role="group"]')),
+    "Flow tree is missing its folder region or native tab scrolling container");
     if (!ui.workspaces().some(workspace => workspace.id !== originalWorkspace)) {
       ownedWorkspace = ui.createWorkspace("Performance reference", { activate: false });
       assert(ownedWorkspace, "Performance fixture could not create its off-workspace destination");

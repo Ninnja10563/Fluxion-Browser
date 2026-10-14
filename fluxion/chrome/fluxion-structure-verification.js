@@ -101,6 +101,7 @@
     const workspace = ui.currentWorkspace();
     const flow = document.getElementById("fluxion-flow");
     const tree = flow.querySelector('[aria-label="Open tabs in current workspace"]');
+    const regular = tree.querySelector('.fluxion-tabs[role="group"]');
     const pinned = flow.querySelector(".fluxion-pinned-tabs");
     const rows = () => new Map([...flow.querySelectorAll(".fluxion-tab")].map(row => [row._fluxionTab, row]));
     for (let index = 0; index < 1000; index++) {
@@ -243,7 +244,7 @@
             focusOwner: fixtures.indexOf(document.activeElement?.closest(".fluxion-tab")?._fluxionTab) };
           throw new Error(`${name} rewrote unaffected row: ${change.type}/${change.attributeName || "children"}`);
         }
-        if (change.type === "childList" && (change.target === tree || change.target === pinned)) {
+        if (change.type === "childList" && (change.target === regular || change.target === pinned)) {
           for (const removed of change.removedNodes) {
             if (removed._fluxionTab && !movable.has(removed._fluxionTab)) throw new Error(`${name} relocated an unrelated row`);
           }
@@ -272,7 +273,7 @@
     const swap = await operation("adjacent-forward-swap-retains-all-rows-and-neighbor-focus", new Set(),
       () => gBrowser.moveTabTo(adjacent, { tabIndex: neighbor._tPos }),
       rows().get(neighbor).querySelector(".fluxion-close"), new Set([adjacent, neighbor]));
-    const relocations = swap.filter(change => change.type === "childList" && change.target === tree)
+    const relocations = swap.filter(change => change.type === "childList" && change.target === regular)
       .flatMap(change => [...change.removedNodes]).filter(node => node._fluxionTab).length;
     assert(relocations === 1, "Adjacent native swap did not use exactly one DOM relocation");
     report.adjacentSwapRelocations = relocations;

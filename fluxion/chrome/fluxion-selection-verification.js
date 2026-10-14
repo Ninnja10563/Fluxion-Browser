@@ -33,7 +33,9 @@
     const workspace = ui.currentWorkspace(), flow = document.getElementById("fluxion-flow");
     const tree = flow.querySelector('[aria-label="Open tabs in current workspace"]');
     const scrollArea = flow.querySelector(".fluxion-tab-scroll");
-    assert(scrollArea?.contains(tree), "Flow tree is not inside its shared tab scroll area");
+    assert(tree?.contains(scrollArea) && scrollArea.contains(flow.querySelector('.fluxion-tabs[role="group"]')) &&
+      tree.contains(flow.querySelector('.fluxion-folders[role="group"]')),
+    "Folder and scrolling tab regions do not share the accessible Flow tree");
     for (let i = 0; i < 1000; i++) {
       const tab = gBrowser.addTrustedTab("about:blank", { skipAnimation: true, createLazyBrowser: i >= 40 });
       ui.setTabWorkspace(tab, workspace); fixtures.push(tab);

@@ -623,7 +623,7 @@
     assert(flow?.dataset.state === "expanded", "Sidebar column check requires expanded Flow");
     const targets = [
       ["workspace-heading", flow.querySelector(".fluxion-workspace-heading > span")],
-      ["ungrouped-tab-title", flow.querySelector('.fluxion-tabs[role="tree"] > .fluxion-tab[aria-level="1"] .fluxion-title')],
+      ["ungrouped-tab-title", flow.querySelector('.fluxion-tab-tree[role="tree"] .fluxion-tabs[role="group"] > .fluxion-tab[aria-level="1"] .fluxion-title')],
       ["new-tab-label", flow.querySelector(".fluxion-new-tab > span:not([aria-hidden])")],
     ];
     const origin = rect(flow).left;
