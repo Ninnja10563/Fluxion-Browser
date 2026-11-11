@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "repository": "Ninnja10563/Fluxion-Browser",
-  "generatedAt": "2026-11-10T19:47:56.420Z",
-  "expiresAt": "2026-11-11T19:47:56.420Z",
+  "generatedAt": "2026-11-11T06:34:10.208Z",
+  "expiresAt": "2026-11-12T06:34:10.208Z",
   "releases": [
     {
       "id": 413246362,
@@ -30,7 +30,7 @@
         }
       ],
       "sourceCommit": "c2c6d1c381f52408b2a9139ca71b378ba8ade9b2",
-      "verifiedAt": "2026-11-10T19:47:55.540Z"
+      "verifiedAt": "2026-11-11T06:34:09.298Z"
     }
   ]
 }
